@@ -1,3 +1,3 @@
-module example/hello
+module hello
 
 go 1.26.4
