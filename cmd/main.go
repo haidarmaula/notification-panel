@@ -14,10 +14,7 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("GET /notifications", h.GetAll)
-	mux.HandleFunc("GET /notifications/{id}", h.GetByID)
-	mux.HandleFunc("POST /notifications", h.Create)
-	mux.HandleFunc("DELETE /notifications/{id}", h.Delete)
+	notifications.RegisterRoutes(mux, h)
 
 	fmt.Println("server running :8080")
 	http.ListenAndServe(":8080", middleware.Logging(mux))
