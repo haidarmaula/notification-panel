@@ -1,14 +1,19 @@
 package notifications
 
 import (
+	"hello/internal/auth"
 	"net/http"
 )
+
+func protected(h http.HandlerFunc) http.HandlerFunc {
+	return auth.JWTMiddleware(h)
+}
 
 func RegisterRoutes(mux *http.ServeMux, handler *NotificationHandler) {
 	const prefix = "/api/v1/notifications"
 
-	mux.HandleFunc("GET "+prefix, handler.GetAll)
-	mux.HandleFunc("GET "+prefix+"/{id}", handler.GetByID)
-	mux.HandleFunc("POST "+prefix, handler.Create)
-	mux.HandleFunc("DELETE "+prefix+"/{id}", handler.Delete)
+	mux.Handle("GET "+prefix, protected(handler.GetAll))
+	mux.Handle("GET "+prefix+"/{id}", protected(handler.GetByID))
+	mux.Handle("POST "+prefix, protected(handler.Create))
+	mux.Handle("DELETE "+prefix+"/{id}", protected(handler.Delete))
 }
