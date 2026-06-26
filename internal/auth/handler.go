@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/golang-jwt/jwt/v5"
 	"hello/pkg/response"
 )
 
@@ -17,7 +18,7 @@ func NewAuthHandler(s *AuthService) *AuthHandler {
 	}
 }
 
-func (h *AuthHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -25,7 +26,7 @@ func (h *AuthHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, found := h.service.GetUser(req.Email, req.Password)
+	user, found := h.service.Login(req.Email, req.Password)
 
 	if !found {
 		response.JSON(w, http.StatusUnauthorized, nil, "invalid credentials")
@@ -49,6 +50,50 @@ func (h *AuthHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	res := LoginResponse{
 		AccessToken:  accessToken,
 		RefreshToken: refreshToken,
+	}
+
+	response.JSON(w, http.StatusOK, res, "success")
+}
+
+func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
+	var req RefreshTokenRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.JSON(w, http.StatusBadRequest, nil, "invalid body")
+		return
+	}
+
+	token, err := jwt.ParseWithClaims(
+		req.RefreshToken,
+		&RefreshClaims{},
+		func(t *jwt.Token) (any, error) {
+			return refreshSecret, nil
+		},
+	)
+	if err != nil || !token.Valid {
+		response.JSON(w, http.StatusUnauthorized, nil, "invalid refresh token")
+		return
+	}
+
+	claims := token.Claims.(*RefreshClaims)
+	if claims.Type != "refresh" {
+		response.JSON(w, http.StatusUnauthorized, nil, "invalid token type")
+		return
+	}
+
+	user, found := h.service.GetUserByID(claims.UserID)
+	if !found {
+		response.JSON(w, http.StatusUnauthorized, nil, "user not found")
+		return
+	}
+
+	accessToken, err := GenerateAccessToken(*user)
+	if err != nil {
+		response.JSON(w, http.StatusInternalServerError, nil, "failed to generate access token")
+		return
+	}
+
+	res := RefreshTokenResponse{
+		AccessToken: accessToken,
 	}
 
 	response.JSON(w, http.StatusOK, res, "success")

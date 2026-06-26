@@ -10,6 +10,14 @@ func NewAuthService(repo *AuthRepository) *AuthService {
 	}
 }
 
-func (s *AuthService) GetUser(email, password string) (*User, bool) {
-	return s.repo.FindUser(email, password)
+func (s *AuthService) Login(email, password string) (*User, bool) {
+	user, found := s.repo.FindByEmail(email)
+	if !found || user.Password != password {
+		return nil, false
+	}
+	return user, true
+}
+
+func (s *AuthService) GetUserByID(id int64) (*User, bool) {
+	return s.repo.FindByID(id)
 }
