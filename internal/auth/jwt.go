@@ -1,8 +1,10 @@
 package auth
 
 import (
-	"github.com/golang-jwt/jwt/v5"
+	"os"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 type AccessClaims struct {
@@ -20,8 +22,8 @@ type RefreshClaims struct {
 	jwt.RegisteredClaims
 }
 
-var accessSecret = []byte("access-secret")
-var refreshSecret = []byte("refresh-secret")
+var accessSecret = []byte(os.Getenv("ACCESS_SECRET"))
+var refreshSecret = []byte(os.Getenv("REFRESH_SECRET"))
 
 const (
 	accessTTL  = 15 * time.Minute
