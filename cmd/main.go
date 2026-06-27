@@ -6,9 +6,12 @@ import (
 	"hello/internal/middleware"
 	"hello/internal/notifications"
 	"net/http"
+
+	"github.com/joho/godotenv"
 )
 
 func main() {
+	godotenv.Load()
 	mux := http.NewServeMux()
 
 	auth.RegisterModule(mux)

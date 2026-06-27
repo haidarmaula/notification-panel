@@ -6,7 +6,7 @@ import (
 )
 
 func protected(h http.HandlerFunc) http.HandlerFunc {
-	return auth.JWTMiddleware(h)
+	return auth.APIKeyMiddleware(auth.JWTMiddleware(h))
 }
 
 func RegisterRoutes(mux *http.ServeMux, handler *NotificationHandler) {

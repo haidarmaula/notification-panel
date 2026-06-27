@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -12,6 +13,26 @@ import (
 type contextKey string
 
 const UserContextKey = contextKey("user")
+
+func APIKeyMiddleware(next http.HandlerFunc) http.HandlerFunc {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		providedAPIKey := r.Header.Get("X-API-Key")
+
+		if providedAPIKey == "" {
+			response.JSON(w, http.StatusUnauthorized, nil, "invalid credentials")
+			return
+		}
+
+		apiKey := os.Getenv("API_KEY")
+
+		if providedAPIKey != apiKey {
+			response.JSON(w, http.StatusUnauthorized, nil, "invalid credentials")
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}
 
 func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
