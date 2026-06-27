@@ -1,12 +1,12 @@
 package notifications
 
 import (
-	"hello/internal/auth"
+	"hello/internal/middleware"
 	"net/http"
 )
 
 func protected(h http.HandlerFunc) http.HandlerFunc {
-	return auth.APIKeyMiddleware(auth.JWTMiddleware(h))
+	return middleware.APIKeyMiddleware(middleware.JWTMiddleware(h))
 }
 
 func RegisterRoutes(mux *http.ServeMux, handler *NotificationHandler) {

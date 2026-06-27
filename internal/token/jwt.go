@@ -1,6 +1,7 @@
-package auth
+package token
 
 import (
+	"errors"
 	"os"
 	"time"
 
@@ -30,10 +31,12 @@ const (
 	refreshTTL = 24 * time.Hour
 )
 
-func GenerateAccessToken(user User) (string, error) {
+var ErrInvalidToken = errors.New("invalid token")
+
+func GenerateAccessToken(userID int64, email string) (string, error) {
 	claims := AccessClaims{
-		UserID: user.ID,
-		Email:  user.Email,
+		UserID: userID,
+		Email:  email,
 		Type:   "access",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTTL)),
@@ -46,9 +49,9 @@ func GenerateAccessToken(user User) (string, error) {
 	return token.SignedString(accessSecret)
 }
 
-func GenerateRefreshToken(user User) (string, error) {
+func GenerateRefreshToken(userID int64) (string, error) {
 	claims := RefreshClaims{
-		UserID: user.ID,
+		UserID: userID,
 		Type:   "refresh",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(refreshTTL)),
@@ -59,4 +62,36 @@ func GenerateRefreshToken(user User) (string, error) {
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
 	return token.SignedString(refreshSecret)
+}
+
+func ParseAccessToken(tokenString string) (*AccessClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &AccessClaims{}, func(t *jwt.Token) (any, error) {
+		return accessSecret, nil
+	})
+
+	claims, ok := token.Claims.(*AccessClaims)
+
+	if err != nil || !token.Valid || !ok || claims.Type != "access" {
+		return nil, ErrInvalidToken
+	}
+
+	return claims, nil
+}
+
+func ParseRefreshToken(tokenString string) (*RefreshClaims, error) {
+	parsedToken, err := jwt.ParseWithClaims(
+		tokenString,
+		&RefreshClaims{},
+		func(t *jwt.Token) (any, error) {
+			return refreshSecret, nil
+		},
+	)
+
+	claims := parsedToken.Claims.(*RefreshClaims)
+
+	if err != nil || !parsedToken.Valid || claims.Type != "refresh" {
+		return nil, ErrInvalidToken
+	}
+
+	return claims, nil
 }

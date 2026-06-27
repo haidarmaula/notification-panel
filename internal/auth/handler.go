@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/golang-jwt/jwt/v5"
+	"hello/internal/token"
 	"hello/pkg/response"
 )
 
@@ -33,14 +33,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := GenerateAccessToken(*user)
+	accessToken, err := token.GenerateAccessToken(user.ID, user.Email)
 
 	if err != nil {
 		response.JSON(w, http.StatusInternalServerError, nil, "failed to access generate token")
 		return
 	}
 
-	refreshToken, err := GenerateRefreshToken(*user)
+	refreshToken, err := token.GenerateRefreshToken(user.ID)
 
 	if err != nil {
 		response.JSON(w, http.StatusInternalServerError, nil, "failed to refresh generate token")
@@ -62,21 +62,9 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := jwt.ParseWithClaims(
-		req.RefreshToken,
-		&RefreshClaims{},
-		func(t *jwt.Token) (any, error) {
-			return refreshSecret, nil
-		},
-	)
-	if err != nil || !token.Valid {
-		response.JSON(w, http.StatusUnauthorized, nil, "invalid refresh token")
-		return
-	}
-
-	claims := token.Claims.(*RefreshClaims)
-	if claims.Type != "refresh" {
-		response.JSON(w, http.StatusUnauthorized, nil, "invalid token type")
+	claims, err := token.ParseRefreshToken(req.RefreshToken)
+	if err != nil {
+		response.JSON(w, http.StatusUnauthorized, nil, "invalid token")
 		return
 	}
 
@@ -86,7 +74,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := GenerateAccessToken(*user)
+	accessToken, err := token.GenerateAccessToken(user.ID, user.Email)
 	if err != nil {
 		response.JSON(w, http.StatusInternalServerError, nil, "failed to generate access token")
 		return
