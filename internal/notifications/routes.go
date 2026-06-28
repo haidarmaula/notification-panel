@@ -5,15 +5,13 @@ import (
 	"net/http"
 )
 
-func protected(h http.HandlerFunc) http.HandlerFunc {
-	return middleware.APIKeyMiddleware(middleware.JWTMiddleware(h))
-}
-
-func RegisterRoutes(mux *http.ServeMux, handler *NotificationHandler) {
+func (m *NotificationModule) RegisterRoutes(mux *http.ServeMux) {
 	const prefix = "/api/v1/notifications"
 
-	mux.Handle("GET "+prefix, protected(handler.GetAll))
-	mux.Handle("GET "+prefix+"/{id}", protected(handler.GetByID))
-	mux.Handle("POST "+prefix, protected(handler.Create))
-	mux.Handle("DELETE "+prefix+"/{id}", protected(handler.Delete))
+	use := middleware.Chain(m.middlewares...)
+
+	mux.Handle("GET "+prefix, use(m.handler.GetAll))
+	mux.Handle("GET "+prefix+"/{id}", use(m.handler.GetByID))
+	mux.Handle("POST "+prefix, use(m.handler.Create))
+	mux.Handle("DELETE "+prefix+"/{id}", use(m.handler.Delete))
 }

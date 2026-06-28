@@ -9,12 +9,14 @@ import (
 )
 
 type AuthHandler struct {
-	service *AuthService
+	service      *AuthService
+	tokenManager *token.TokenManager
 }
 
-func NewAuthHandler(s *AuthService) *AuthHandler {
+func NewAuthHandler(s *AuthService, tm *token.TokenManager) *AuthHandler {
 	return &AuthHandler{
-		service: s,
+		service:      s,
+		tokenManager: tm,
 	}
 }
 
@@ -33,14 +35,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := token.GenerateAccessToken(user.ID, user.Email)
+	accessToken, err := h.tokenManager.GenerateAccessToken(user.ID, user.Email)
 
 	if err != nil {
 		response.JSON(w, http.StatusInternalServerError, nil, "failed to access generate token")
 		return
 	}
 
-	refreshToken, err := token.GenerateRefreshToken(user.ID)
+	refreshToken, err := h.tokenManager.GenerateRefreshToken(user.ID)
 
 	if err != nil {
 		response.JSON(w, http.StatusInternalServerError, nil, "failed to refresh generate token")
@@ -62,7 +64,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	claims, err := token.ParseRefreshToken(req.RefreshToken)
+	claims, err := h.tokenManager.ParseRefreshToken(req.RefreshToken)
 	if err != nil {
 		response.JSON(w, http.StatusUnauthorized, nil, "invalid token")
 		return
@@ -74,7 +76,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	accessToken, err := token.GenerateAccessToken(user.ID, user.Email)
+	accessToken, err := h.tokenManager.GenerateAccessToken(user.ID, user.Email)
 	if err != nil {
 		response.JSON(w, http.StatusInternalServerError, nil, "failed to generate access token")
 		return

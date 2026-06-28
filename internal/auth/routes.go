@@ -5,9 +5,11 @@ import (
 	"net/http"
 )
 
-func RegisterRoutes(mux *http.ServeMux, handler *AuthHandler) {
+func (m *AuthModule) RegisterRoutes(mux *http.ServeMux) {
 	const prefix = "/api/v1/auth"
 
-	mux.HandleFunc("POST "+prefix+"/login", middleware.APIKeyMiddleware(handler.Login))
-	mux.HandleFunc("POST "+prefix+"/refresh", middleware.APIKeyMiddleware(handler.RefreshToken))
+	use := middleware.Chain(m.middlewares...)
+
+	mux.HandleFunc("POST "+prefix+"/login", use(m.handler.Login))
+	mux.HandleFunc("POST "+prefix+"/refresh", use(m.handler.RefreshToken))
 }

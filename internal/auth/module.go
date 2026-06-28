@@ -1,13 +1,22 @@
 package auth
 
 import (
-	"net/http"
+	"hello/internal/middleware"
+	"hello/internal/token"
 )
 
-func RegisterModule(mux *http.ServeMux) {
-	authRepo := NewAuthRepository()
-	authService := NewAuthService(authRepo)
-	authHandler := NewAuthHandler(authService)
+type AuthModule struct {
+	middlewares []middleware.Middleware
+	handler     *AuthHandler
+}
 
-	RegisterRoutes(mux, authHandler)
+func NewAuthModule(tokenManager *token.TokenManager, middlewares ...middleware.Middleware) *AuthModule {
+	repo := NewAuthRepository()
+	service := NewAuthService(repo)
+	handler := NewAuthHandler(service, tokenManager)
+
+	return &AuthModule{
+		middlewares: middlewares,
+		handler:     handler,
+	}
 }

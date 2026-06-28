@@ -1,13 +1,21 @@
 package notifications
 
 import (
-	"net/http"
+	"hello/internal/middleware"
 )
 
-func RegisterModule(mux *http.ServeMux) {
-	notificationRepo := NewNotificationRepository()
-	notificationService := NewNotificationService(notificationRepo)
-	notificationHandler := NewNotificationHandler(notificationService)
+type NotificationModule struct {
+	middlewares []middleware.Middleware
+	handler     *NotificationHandler
+}
 
-	RegisterRoutes(mux, notificationHandler)
+func NewNotificationModule(middlewares ...middleware.Middleware) *NotificationModule {
+	repo := NewNotificationRepository()
+	service := NewNotificationService(repo)
+	handler := NewNotificationHandler(service)
+
+	return &NotificationModule{
+		middlewares: middlewares,
+		handler:     handler,
+	}
 }

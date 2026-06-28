@@ -2,7 +2,6 @@ package token
 
 import (
 	"errors"
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -23,9 +22,6 @@ type RefreshClaims struct {
 	jwt.RegisteredClaims
 }
 
-var accessSecret = []byte(os.Getenv("ACCESS_SECRET"))
-var refreshSecret = []byte(os.Getenv("REFRESH_SECRET"))
-
 const (
 	accessTTL  = 15 * time.Minute
 	refreshTTL = 24 * time.Hour
@@ -33,7 +29,19 @@ const (
 
 var ErrInvalidToken = errors.New("invalid token")
 
-func GenerateAccessToken(userID int64, email string) (string, error) {
+type TokenManager struct {
+	accessSecret  []byte
+	refreshSecret []byte
+}
+
+func NewTokenManager(accessSecret, refreshSecret string) *TokenManager {
+	return &TokenManager{
+		accessSecret:  []byte(accessSecret),
+		refreshSecret: []byte(refreshSecret),
+	}
+}
+
+func (t *TokenManager) GenerateAccessToken(userID int64, email string) (string, error) {
 	claims := AccessClaims{
 		UserID: userID,
 		Email:  email,
@@ -46,10 +54,10 @@ func GenerateAccessToken(userID int64, email string) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	return token.SignedString(accessSecret)
+	return token.SignedString(t.accessSecret)
 }
 
-func GenerateRefreshToken(userID int64) (string, error) {
+func (t *TokenManager) GenerateRefreshToken(userID int64) (string, error) {
 	claims := RefreshClaims{
 		UserID: userID,
 		Type:   "refresh",
@@ -61,12 +69,12 @@ func GenerateRefreshToken(userID int64) (string, error) {
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	return token.SignedString(refreshSecret)
+	return token.SignedString(t.refreshSecret)
 }
 
-func ParseAccessToken(tokenString string) (*AccessClaims, error) {
-	token, err := jwt.ParseWithClaims(tokenString, &AccessClaims{}, func(t *jwt.Token) (any, error) {
-		return accessSecret, nil
+func (t *TokenManager) ParseAccessToken(tokenString string) (*AccessClaims, error) {
+	token, err := jwt.ParseWithClaims(tokenString, &AccessClaims{}, func(_ *jwt.Token) (any, error) {
+		return t.accessSecret, nil
 	})
 
 	claims, ok := token.Claims.(*AccessClaims)
@@ -78,12 +86,12 @@ func ParseAccessToken(tokenString string) (*AccessClaims, error) {
 	return claims, nil
 }
 
-func ParseRefreshToken(tokenString string) (*RefreshClaims, error) {
+func (t *TokenManager) ParseRefreshToken(tokenString string) (*RefreshClaims, error) {
 	parsedToken, err := jwt.ParseWithClaims(
 		tokenString,
 		&RefreshClaims{},
-		func(t *jwt.Token) (any, error) {
-			return refreshSecret, nil
+		func(_ *jwt.Token) (any, error) {
+			return t.refreshSecret, nil
 		},
 	)
 

@@ -2,17 +2,25 @@ package middleware
 
 import (
 	"net/http"
-	"os"
 
 	"hello/pkg/response"
 )
 
-func APIKeyMiddleware(next http.HandlerFunc) http.HandlerFunc {
+type APIKeyMiddleware struct {
+	apiKey string
+}
+
+func NewAPIKeyMiddleware(apiKey string) *APIKeyMiddleware {
+	return &APIKeyMiddleware{
+		apiKey: apiKey,
+	}
+}
+
+func (a *APIKeyMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		providedAPIKey := r.Header.Get("X-API-Key")
-		apiKey := os.Getenv("API_KEY")
 
-		if providedAPIKey == "" || providedAPIKey != apiKey {
+		if providedAPIKey == "" || providedAPIKey != a.apiKey {
 			response.JSON(w, http.StatusUnauthorized, nil, "invalid api key")
 			return
 		}

@@ -13,7 +13,17 @@ type contextKey string
 
 const UserContextKey = contextKey("user")
 
-func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
+type JWTMiddleware struct {
+	tokenManager *token.TokenManager
+}
+
+func NewJWTMiddleware(tokenManager *token.TokenManager) *JWTMiddleware {
+	return &JWTMiddleware{
+		tokenManager: tokenManager,
+	}
+}
+
+func (j *JWTMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -28,7 +38,7 @@ func JWTMiddleware(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		tokenString := parts[1]
-		claims, err := token.ParseAccessToken(tokenString)
+		claims, err := j.tokenManager.ParseAccessToken(tokenString)
 		if err != nil {
 			response.JSON(w, http.StatusUnauthorized, nil, "invalid token")
 			return
