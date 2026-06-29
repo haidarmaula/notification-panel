@@ -1,57 +1,27 @@
 services:
-  sqlserver:
-    image: mcr.microsoft.com/mssql/server:2022-latest
-    platform: linux/amd64
-    container_name: sqlserver-dev
+  postgres:
+    image: postgres:17
+
+    container_name: postgres-dev
 
     restart: unless-stopped
 
     environment:
-      ACCEPT_EULA: "Y"
-      MSSQL_PID: Developer
-      MSSQL_SA_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
 
     ports:
-      - "${DB_PORT}:1433"
+      - "${DB_PORT}:5432"
 
     volumes:
-      - sqlserver_data:/var/opt/mssql
+      - postgres_data:/var/lib/postgresql/data
 
     healthcheck:
-      test:
-        [
-          "CMD",
-          "/opt/mssql-tools/bin/sqlcmd",
-          "-S",
-          "localhost",
-          "-U",
-          "sa",
-          "-P",
-          "${DB_PASSWORD}",
-          "-C",
-          "-Q",
-          "SELECT 1",
-        ]
-      interval: 10s
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
       timeout: 5s
-      retries: 30
-
-  db-init:
-    build:
-      context: ./docker
-
-    depends_on:
-      - sqlserver
-
-    environment:
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
-
-    volumes:
-      - ./docker:/docker
-      - ./migrations:/migrations
-
-    restart: "no"
+      retries: 20
 
 volumes:
-  sqlserver_data:
+  postgres_data:
