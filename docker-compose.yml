@@ -1,0 +1,57 @@
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    platform: linux/amd64
+    container_name: sqlserver-dev
+
+    restart: unless-stopped
+
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${DB_PASSWORD}
+
+    ports:
+      - "${DB_PORT}:1433"
+
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/opt/mssql-tools/bin/sqlcmd",
+          "-S",
+          "localhost",
+          "-U",
+          "sa",
+          "-P",
+          "${DB_PASSWORD}",
+          "-C",
+          "-Q",
+          "SELECT 1",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  db-init:
+    build:
+      context: ./docker
+
+    depends_on:
+      - sqlserver
+
+    environment:
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+
+    volumes:
+      - ./docker:/docker
+      - ./migrations:/migrations
+
+    restart: "no"
+
+volumes:
+  sqlserver_data:

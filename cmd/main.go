@@ -13,14 +13,14 @@ import (
 
 func main() {
 	cfg := config.Load()
-	tm := token.NewTokenManager(cfg.AccessSecret, cfg.RefreshSecret)
+	tokenManager := token.NewTokenManager(cfg.AccessSecret, cfg.RefreshSecret)
 
 	apiKeyMW := middleware.NewAPIKeyMiddleware(cfg.APIKey)
-	jwtMW := middleware.NewJWTMiddleware(tm)
+	jwtMW := middleware.NewJWTMiddleware(tokenManager)
 
 	mux := http.NewServeMux()
 
-	authModule := auth.NewAuthModule(tm, apiKeyMW.Use)
+	authModule := auth.NewAuthModule(tokenManager, apiKeyMW.Use)
 	authModule.RegisterRoutes(mux)
 
 	notificationModule := notifications.NewNotificationModule(apiKeyMW.Use, jwtMW.Use)
