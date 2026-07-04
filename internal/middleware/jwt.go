@@ -23,7 +23,7 @@ func NewJWTMiddleware(tokenManager *token.TokenManager) *JWTMiddleware {
 	}
 }
 
-func (j *JWTMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
+func (m *JWTMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
 		if authHeader == "" {
@@ -38,7 +38,7 @@ func (j *JWTMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		tokenString := parts[1]
-		claims, err := j.tokenManager.ParseAccessToken(tokenString)
+		claims, err := m.tokenManager.ParseAccessToken(tokenString)
 		if err != nil {
 			response.JSON(w, http.StatusUnauthorized, nil, "invalid token")
 			return

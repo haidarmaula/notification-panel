@@ -33,13 +33,8 @@ func (r *StaffRepository) FindByEmail(ctx context.Context, email string) (sqlc.S
 	return r.q.GetStaffUserByEmail(ctx, email)
 }
 
-func (r *StaffRepository) Create(ctx context.Context, roleID int64, name string, email string, passwordHash string) (sqlc.StaffUser, error) {
-	return r.q.CreateStaffUser(ctx, sqlc.CreateStaffUserParams{
-		RoleID:       roleID,
-		Name:         name,
-		Email:        email,
-		PasswordHash: passwordHash,
-	})
+func (r *StaffRepository) Create(ctx context.Context, params sqlc.CreateStaffUserParams) (sqlc.StaffUser, error) {
+	return r.q.CreateStaffUser(ctx, params)
 }
 
 func (r *StaffRepository) UpdatePassword(ctx context.Context, params sqlc.UpdateStaffPasswordParams) error {

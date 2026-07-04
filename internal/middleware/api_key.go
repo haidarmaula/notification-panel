@@ -16,11 +16,11 @@ func NewAPIKeyMiddleware(apiKey string) *APIKeyMiddleware {
 	}
 }
 
-func (a *APIKeyMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
+func (m *APIKeyMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		providedAPIKey := r.Header.Get("X-API-Key")
 
-		if providedAPIKey == "" || providedAPIKey != a.apiKey {
+		if providedAPIKey == "" || providedAPIKey != m.apiKey {
 			response.JSON(w, http.StatusUnauthorized, nil, "invalid api key")
 			return
 		}

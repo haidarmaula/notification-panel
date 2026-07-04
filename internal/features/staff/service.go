@@ -3,8 +3,10 @@ package staff
 import (
 	"context"
 	"errors"
+	"time"
 
 	"hello/internal/database/repository"
+	"hello/internal/database/sqlc"
 
 	"golang.org/x/crypto/bcrypt"
 )
@@ -12,43 +14,69 @@ import (
 var (
 	ErrEmailAlreadyRegistered = errors.New("email already registered")
 	ErrFailedToCreateAccount  = errors.New("failed to create account")
+	ErrInvalidRole            = errors.New("invalid role")
 )
 
-type CreateResult struct {
-	RoleID int64
-	Name   string
-	Email  string
+type CreateStaffUserParams struct {
+	Role     string
+	Name     string
+	Email    string
+	Password string
+}
+
+type CreateStaffUserResult struct {
+	ID        int64
+	RoleID    int64
+	Name      string
+	Email     string
+	IsActive  bool
+	CreatedAt time.Time
 }
 
 type StaffService struct {
-	repo *repository.StaffRepository
+	staffRepo *repository.StaffRepository
+	roleRepo  *repository.RoleRepository
 }
 
-func NewStaffService(repo *repository.StaffRepository) *StaffService {
+func NewStaffService(staffRepo *repository.StaffRepository, roleRepo *repository.RoleRepository) *StaffService {
 	return &StaffService{
-		repo: repo,
+		staffRepo: staffRepo,
+		roleRepo:  roleRepo,
 	}
 }
 
-func (s *StaffService) Create(ctx context.Context, roleID int64, name string, email string, password string) (*CreateResult, error) {
-	_, err := s.repo.FindByEmail(ctx, email)
+func (s *StaffService) Create(ctx context.Context, params CreateStaffUserParams) (*CreateStaffUserResult, error) {
+	_, err := s.staffRepo.FindByEmail(ctx, params.Email)
 	if err == nil {
 		return nil, ErrEmailAlreadyRegistered
 	}
 
-	hashed, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashed, err := bcrypt.GenerateFromPassword([]byte(params.Password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, ErrFailedToCreateAccount
 	}
 
-	staff, err := s.repo.Create(ctx, roleID, name, email, string(hashed))
+	roleEntity, err := s.roleRepo.FindByName(ctx, params.Role)
+	if err != nil {
+		return nil, ErrInvalidRole
+	}
+
+	staff, err := s.staffRepo.Create(ctx, sqlc.CreateStaffUserParams{
+		RoleID:       roleEntity.ID,
+		Name:         params.Name,
+		Email:        params.Email,
+		PasswordHash: string(hashed),
+	})
 	if err != nil {
 		return nil, ErrFailedToCreateAccount
 	}
 
-	return &CreateResult{
-		RoleID: staff.RoleID,
-		Name:   staff.Name,
-		Email:  staff.Email,
+	return &CreateStaffUserResult{
+		ID:        staff.ID,
+		RoleID:    staff.RoleID,
+		Name:      staff.Name,
+		Email:     staff.Email,
+		IsActive:  staff.IsActive,
+		CreatedAt: staff.CreatedAt.Time,
 	}, nil
 }

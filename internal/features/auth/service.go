@@ -58,13 +58,14 @@ func (s *AuthService) Login(
 
 	accessToken, err := s.tokenManager.GenerateAccessToken(
 		admin.ID,
+		admin.RoleID,
 		admin.Email,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := s.tokenManager.GenerateRefreshToken(admin.ID)
+	refreshToken, err := s.tokenManager.GenerateRefreshToken(admin.ID, admin.RoleID)
 	if err != nil {
 		return nil, err
 	}
@@ -95,6 +96,7 @@ func (s *AuthService) RefreshToken(
 
 	accessToken, err := s.tokenManager.GenerateAccessToken(
 		admin.ID,
+		admin.RoleID,
 		admin.Email,
 	)
 	if err != nil {
