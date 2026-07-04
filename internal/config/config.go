@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -8,18 +9,42 @@ import (
 )
 
 type Config struct {
-	APIKey        string
+	APIKey string
+
 	AccessSecret  string
 	RefreshSecret string
+
+	DBHost     string
+	DBPort     string
+	DBUser     string
+	DBPassword string
+	DBName     string
+	DBSSLMode  string
+
+	BootstrapAdminName     string
+	BootstrapAdminEmail    string
+	BootstrapAdminPassword string
 }
 
 func Load() *Config {
 	godotenv.Load()
 
 	cfg := &Config{
-		APIKey:        os.Getenv("API_KEY"),
+		APIKey: os.Getenv("API_KEY"),
+
 		AccessSecret:  os.Getenv("ACCESS_SECRET"),
 		RefreshSecret: os.Getenv("REFRESH_SECRET"),
+
+		DBHost:     os.Getenv("DB_HOST"),
+		DBPort:     os.Getenv("DB_PORT"),
+		DBUser:     os.Getenv("DB_USER"),
+		DBPassword: os.Getenv("DB_PASSWORD"),
+		DBName:     os.Getenv("DB_NAME"),
+		DBSSLMode:  os.Getenv("DB_SSLMODE"),
+
+		BootstrapAdminName:     os.Getenv("BOOTSTRAP_SUPER_ADMIN_NAME"),
+		BootstrapAdminEmail:    os.Getenv("BOOTSTRAP_SUPER_ADMIN_EMAIL"),
+		BootstrapAdminPassword: os.Getenv("BOOTSTRAP_SUPER_ADMIN_PASSWORD"),
 	}
 
 	if cfg.APIKey == "" {
@@ -34,5 +59,41 @@ func Load() *Config {
 		log.Fatal("REFRESH_SECRET is required")
 	}
 
+	if cfg.DBHost == "" {
+		log.Fatal("DB_HOST is required")
+	}
+
+	if cfg.DBPort == "" {
+		log.Fatal("DB_PORT is required")
+	}
+
+	if cfg.DBUser == "" {
+		log.Fatal("DB_USER is required")
+	}
+
+	if cfg.DBPassword == "" {
+		log.Fatal("DB_PASSWORD is required")
+	}
+
+	if cfg.DBName == "" {
+		log.Fatal("DB_NAME is required")
+	}
+
+	if cfg.DBSSLMode == "" {
+		log.Fatal("DB_SSLMODE is required")
+	}
+
 	return cfg
+}
+
+func (c *Config) DatabaseURL() string {
+	return fmt.Sprintf(
+		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		c.DBUser,
+		c.DBPassword,
+		c.DBHost,
+		c.DBPort,
+		c.DBName,
+		c.DBSSLMode,
+	)
 }

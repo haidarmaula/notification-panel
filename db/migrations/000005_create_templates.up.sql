@@ -17,9 +17,9 @@ CREATE TABLE templates (
 
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT fk_templates_admin
+    CONSTRAINT fk_templates_staff
         FOREIGN KEY (created_by)
-        REFERENCES admin_users(id)
+        REFERENCES staff_users(id)
         ON DELETE RESTRICT
 );
 

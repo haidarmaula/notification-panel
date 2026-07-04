@@ -1,4 +1,4 @@
-CREATE TABLE admin_users (
+CREATE TABLE staff_users (
     id BIGSERIAL PRIMARY KEY,
 
     role_id BIGINT NOT NULL,
@@ -15,17 +15,17 @@ CREATE TABLE admin_users (
 
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT fk_admin_users_role
+    CONSTRAINT fk_staff_users_role
         FOREIGN KEY (role_id)
         REFERENCES roles(id)
         ON DELETE RESTRICT
 );
 
-CREATE INDEX idx_admin_users_role
-ON admin_users(role_id);
+CREATE INDEX idx_staff_users_role
+ON staff_users(role_id);
 
-CREATE INDEX idx_admin_users_email
-ON admin_users(email);
+CREATE INDEX idx_staff_users_email
+ON staff_users(email);
 
-CREATE INDEX idx_admin_users_active
-ON admin_users(is_active);
+CREATE INDEX idx_staff_users_active
+ON staff_users(is_active);

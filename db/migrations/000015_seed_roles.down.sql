@@ -1,0 +1,7 @@
+DELETE FROM roles
+WHERE name IN (
+'SUPER_ADMIN',
+'ADMIN',
+'OPERATOR',
+'VIEWER'
+);

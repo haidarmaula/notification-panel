@@ -23,7 +23,7 @@ CREATE TABLE audit_logs (
 
     CONSTRAINT fk_audit_actor
         FOREIGN KEY(actor_user_id)
-        REFERENCES admin_users(id)
+        REFERENCES staff_users(id)
         ON DELETE RESTRICT
 );
 

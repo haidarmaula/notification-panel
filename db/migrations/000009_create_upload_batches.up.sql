@@ -13,9 +13,9 @@ CREATE TABLE upload_batches (
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
 
-    CONSTRAINT fk_upload_batches_admin
+    CONSTRAINT fk_upload_batches_staff
         FOREIGN KEY (uploaded_by)
-        REFERENCES admin_users(id)
+        REFERENCES staff_users(id)
         ON DELETE RESTRICT
 );
 

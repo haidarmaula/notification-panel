@@ -41,3 +41,9 @@ reset:
 	docker compose up -d
 	sleep 5
 	make migrate-up
+
+sqlc:
+	sqlc generate -f db/sqlc.yaml
+
+bootstrap:
+	go run cmd/bootstrap/main.go

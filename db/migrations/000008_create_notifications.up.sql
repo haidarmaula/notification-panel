@@ -54,9 +54,9 @@ CREATE TABLE notifications (
         REFERENCES templates(id)
         ON DELETE SET NULL,
 
-    CONSTRAINT fk_notifications_admin
+    CONSTRAINT fk_notifications_staff
         FOREIGN KEY (created_by)
-        REFERENCES admin_users(id)
+        REFERENCES staff_users(id)
         ON DELETE RESTRICT
 );
 
