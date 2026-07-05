@@ -1,65 +1,57 @@
--- name: GetNotificationTargetByID :one
-SELECT
-    id,
-    notification_id,
-    target_type,
-    segment_id,
-    user_id,
-    upload_batch_id,
-    created_at
-FROM notification_targets
-WHERE id = $1
-LIMIT 1;
-
--- name: GetNotificationTargetsByNotificationID :many
-SELECT
-    id,
-    notification_id,
-    target_type,
-    segment_id,
-    user_id,
-    upload_batch_id,
-    created_at
-FROM notification_targets
-WHERE notification_id = $1
-ORDER BY id;
+-- ==========================================
+-- CREATE
+-- ==========================================
 
 -- name: CreateNotificationTarget :one
 INSERT INTO notification_targets (
     notification_id,
-    target_type,
-    segment_id,
-    user_id,
-    upload_batch_id
+    user_id
 )
 VALUES (
-    $1,
-    $2,
-    $3,
-    $4,
-    $5
+    sqlc.arg('notification_id'),
+    sqlc.arg('user_id')
 )
-RETURNING *;
+RETURNING
+    id,
+    notification_id,
+    user_id,
+    created_at;
 
--- name: DeleteNotificationTarget :exec
-DELETE FROM notification_targets
-WHERE id = $1;
-
--- name: DeleteNotificationTargetsByNotification :exec
-DELETE FROM notification_targets
-WHERE notification_id = $1;
+-- ==========================================
+-- LIST
+-- ==========================================
 
 -- name: ListNotificationTargets :many
 SELECT
-    id,
-    notification_id,
-    target_type,
-    segment_id,
-    user_id,
-    upload_batch_id,
-    created_at
+    nt.id,
+    nt.notification_id,
+    u.id AS user_id,
+    u.external_id,
+    u.name,
+    u.email,
+    nt.created_at
+FROM notification_targets nt
+JOIN users u
+    ON u.id = nt.user_id
+WHERE nt.notification_id = sqlc.arg('notification_id')
+ORDER BY u.name
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
+-- ==========================================
+-- COUNT
+-- ==========================================
+
+-- name: CountNotificationTargets :one
+SELECT COUNT(*)
 FROM notification_targets
-WHERE
-    ($1::bigint IS NULL OR notification_id = $1) AND
-    ($2::text IS NULL OR target_type = $2)
-ORDER BY id;
+WHERE notification_id = sqlc.arg('notification_id');
+
+-- ==========================================
+-- DELETE
+-- ==========================================
+
+-- name: DeleteNotificationTarget :exec
+DELETE
+FROM notification_targets
+WHERE id = sqlc.arg('id');

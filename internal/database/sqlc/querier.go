@@ -11,106 +11,354 @@ import (
 )
 
 type Querier interface {
-	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error)
-	CreateDelivery(ctx context.Context, arg CreateDeliveryParams) (NotificationDelivery, error)
-	CreateDeviceToken(ctx context.Context, arg CreateDeviceTokenParams) (DeviceToken, error)
-	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
-	CreateNotificationTarget(ctx context.Context, arg CreateNotificationTargetParams) (NotificationTarget, error)
-	CreateRead(ctx context.Context, arg CreateReadParams) (NotificationRead, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountAuditLogs(ctx context.Context) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountDeviceTokensByUser(ctx context.Context, userID int64) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountNotificationDeliveries(ctx context.Context, notificationID int64) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountNotificationReads(ctx context.Context, notificationID int64) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountNotificationTargets(ctx context.Context, notificationID int64) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountNotifications(ctx context.Context) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountRoles(ctx context.Context) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountSegmentMembers(ctx context.Context, segmentID int64) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountSegments(ctx context.Context) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountStaffUsers(ctx context.Context) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountTemplates(ctx context.Context) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountUploadBatchRows(ctx context.Context, batchID int64) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountUploadBatches(ctx context.Context) (int64, error)
+	// ==========================================
+	// COUNT
+	// ==========================================
+	CountUsers(ctx context.Context) (int64, error)
+	CountUsersByStatus(ctx context.Context, status string) (int64, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
+	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (CreateAuditLogRow, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
+	CreateDeviceToken(ctx context.Context, arg CreateDeviceTokenParams) (CreateDeviceTokenRow, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
+	CreateNotification(ctx context.Context, arg CreateNotificationParams) (CreateNotificationRow, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
+	CreateNotificationDelivery(ctx context.Context, arg CreateNotificationDeliveryParams) (CreateNotificationDeliveryRow, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
+	CreateNotificationRead(ctx context.Context, arg CreateNotificationReadParams) (NotificationRead, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
+	CreateNotificationTarget(ctx context.Context, arg CreateNotificationTargetParams) (CreateNotificationTargetRow, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
 	CreateRole(ctx context.Context, arg CreateRoleParams) (Role, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
 	CreateSegment(ctx context.Context, arg CreateSegmentParams) (Segment, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
 	CreateSegmentMember(ctx context.Context, arg CreateSegmentMemberParams) (SegmentMember, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
 	CreateStaffUser(ctx context.Context, arg CreateStaffUserParams) (StaffUser, error)
-	CreateTemplate(ctx context.Context, arg CreateTemplateParams) (Template, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
+	CreateTemplate(ctx context.Context, arg CreateTemplateParams) (CreateTemplateRow, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
 	CreateUploadBatch(ctx context.Context, arg CreateUploadBatchParams) (UploadBatch, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
 	CreateUploadBatchRow(ctx context.Context, arg CreateUploadBatchRowParams) (UploadBatchRow, error)
+	// ==========================================
+	// CREATE
+	// ==========================================
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
-	DeleteDelivery(ctx context.Context, id int64) error
+	// ==========================================
+	// DELETE
+	// ==========================================
 	DeleteDeviceToken(ctx context.Context, id int64) error
-	DeleteDeviceTokensByUser(ctx context.Context, userID int64) error
+	// ==========================================
+	// DELETE
+	// ==========================================
 	DeleteNotification(ctx context.Context, id int64) error
+	// ==========================================
+	// DELETE
+	// ==========================================
 	DeleteNotificationTarget(ctx context.Context, id int64) error
-	DeleteNotificationTargetsByNotification(ctx context.Context, notificationID int64) error
-	DeleteRead(ctx context.Context, id int64) error
+	// ==========================================
+	// DELETE
+	// ==========================================
 	DeleteRole(ctx context.Context, id int64) error
+	// ==========================================
+	// DELETE
+	// ==========================================
 	DeleteSegment(ctx context.Context, id int64) error
+	// ==========================================
+	// DELETE
+	// ==========================================
 	DeleteSegmentMember(ctx context.Context, id int64) error
-	DeleteSegmentMembersBySegment(ctx context.Context, segmentID int64) error
-	DeleteSegmentMembersByUser(ctx context.Context, userID int64) error
+	// ==========================================
+	// DELETE
+	// ==========================================
+	DeleteStaffUser(ctx context.Context, id int64) error
+	// ==========================================
+	// DELETE
+	// ==========================================
 	DeleteTemplate(ctx context.Context, id int64) error
-	DeleteUploadBatch(ctx context.Context, id int64) error
-	DeleteUploadBatchRow(ctx context.Context, id int64) error
-	DeleteUploadBatchRowsByBatch(ctx context.Context, batchID int64) error
+	// ==========================================
+	// DELETE
+	// ==========================================
 	DeleteUser(ctx context.Context, id int64) error
-	GetAuditLogByID(ctx context.Context, id int64) (AuditLog, error)
-	GetAuditLogsByActor(ctx context.Context, actorUserID int64) ([]AuditLog, error)
-	GetAuditLogsByEntity(ctx context.Context, arg GetAuditLogsByEntityParams) ([]AuditLog, error)
-	GetDeliveriesByNotificationID(ctx context.Context, notificationID int64) ([]NotificationDelivery, error)
-	GetDeliveriesByStatus(ctx context.Context, status string) ([]NotificationDelivery, error)
-	GetDeliveriesByUserID(ctx context.Context, userID int64) ([]NotificationDelivery, error)
-	GetDeliveryByID(ctx context.Context, id int64) (NotificationDelivery, error)
-	GetDeviceTokenByID(ctx context.Context, id int64) (DeviceToken, error)
-	GetDeviceTokenByPushToken(ctx context.Context, pushToken string) (DeviceToken, error)
-	GetDeviceTokensByUserID(ctx context.Context, userID int64) ([]DeviceToken, error)
-	GetNotificationByID(ctx context.Context, id int64) (Notification, error)
-	GetNotificationTargetByID(ctx context.Context, id int64) (NotificationTarget, error)
-	GetNotificationTargetsByNotificationID(ctx context.Context, notificationID int64) ([]NotificationTarget, error)
-	GetNotificationsByCreatedBy(ctx context.Context, createdBy int64) ([]Notification, error)
-	GetNotificationsByStatus(ctx context.Context, status string) ([]Notification, error)
-	GetReadByID(ctx context.Context, id int64) (NotificationRead, error)
-	GetReadByNotificationAndUser(ctx context.Context, arg GetReadByNotificationAndUserParams) (NotificationRead, error)
-	GetReadsByNotificationID(ctx context.Context, notificationID int64) ([]NotificationRead, error)
-	GetReadsByUserID(ctx context.Context, userID int64) ([]NotificationRead, error)
+	// ==========================================
+	// EXISTS
+	// ==========================================
+	ExistsDeviceToken(ctx context.Context, pushToken string) (bool, error)
+	// ==========================================
+	// EXISTS
+	// ==========================================
+	ExistsNotificationRead(ctx context.Context, arg ExistsNotificationReadParams) (bool, error)
+	// ==========================================
+	// EXISTS
+	// ==========================================
+	ExistsRoleByName(ctx context.Context, name string) (bool, error)
+	// ==========================================
+	// EXISTS
+	// ==========================================
+	ExistsSegmentByName(ctx context.Context, name string) (bool, error)
+	// ==========================================
+	// EXISTS
+	// ==========================================
+	ExistsStaffUserByEmail(ctx context.Context, email string) (bool, error)
+	// ==========================================
+	// EXISTS
+	// ==========================================
+	ExistsTemplateByName(ctx context.Context, name string) (bool, error)
+	ExistsUserByEmail(ctx context.Context, email pgtype.Text) (bool, error)
+	// ==========================================
+	// EXISTS
+	// ==========================================
+	ExistsUserByExternalID(ctx context.Context, externalID string) (bool, error)
+	// ==========================================
+	// GET
+	// ==========================================
+	GetAuditLogByID(ctx context.Context, id int64) (GetAuditLogByIDRow, error)
+	// ==========================================
+	// GET
+	// ==========================================
+	GetDeviceTokenByID(ctx context.Context, id int64) (GetDeviceTokenByIDRow, error)
+	GetDeviceTokenByPushToken(ctx context.Context, pushToken string) (GetDeviceTokenByPushTokenRow, error)
+	// ==========================================
+	// GET
+	// ==========================================
+	GetNotificationByID(ctx context.Context, id int64) (GetNotificationByIDRow, error)
+	// ==========================================
+	// GET
+	// ==========================================
+	GetNotificationDeliveryByID(ctx context.Context, id int64) (GetNotificationDeliveryByIDRow, error)
+	// ==========================================
+	// GET
+	// ==========================================
 	GetRoleByID(ctx context.Context, id int64) (Role, error)
 	GetRoleByName(ctx context.Context, name string) (Role, error)
+	// ==========================================
+	// GET
+	// ==========================================
 	GetSegmentByID(ctx context.Context, id int64) (Segment, error)
 	GetSegmentByName(ctx context.Context, name string) (Segment, error)
+	// ==========================================
+	// GET
+	// ==========================================
 	GetSegmentMemberByID(ctx context.Context, id int64) (SegmentMember, error)
-	GetSegmentMemberBySegmentAndUser(ctx context.Context, arg GetSegmentMemberBySegmentAndUserParams) (SegmentMember, error)
-	GetSegmentMembersBySegmentID(ctx context.Context, segmentID int64) ([]SegmentMember, error)
-	GetSegmentMembersByUserID(ctx context.Context, userID int64) ([]SegmentMember, error)
 	GetStaffUserByEmail(ctx context.Context, email string) (StaffUser, error)
+	// ==========================================
+	// GET
+	// ==========================================
 	GetStaffUserByID(ctx context.Context, id int64) (StaffUser, error)
-	GetTemplateByID(ctx context.Context, id int64) (Template, error)
-	GetTemplateByName(ctx context.Context, name string) (Template, error)
+	// ==========================================
+	// GET
+	// ==========================================
+	GetTemplateByID(ctx context.Context, id int64) (GetTemplateByIDRow, error)
+	GetTemplateByName(ctx context.Context, name string) (GetTemplateByNameRow, error)
+	// ==========================================
+	// GET
+	// ==========================================
 	GetUploadBatchByID(ctx context.Context, id int64) (UploadBatch, error)
-	GetUploadBatchRowByID(ctx context.Context, id int64) (UploadBatchRow, error)
-	GetUploadBatchRowsByBatchID(ctx context.Context, batchID int64) ([]UploadBatchRow, error)
-	GetUploadBatchRowsByExternalID(ctx context.Context, externalID string) ([]UploadBatchRow, error)
-	GetUploadBatchesByUploadedBy(ctx context.Context, uploadedBy int64) ([]UploadBatch, error)
 	GetUserByEmail(ctx context.Context, email pgtype.Text) (User, error)
 	GetUserByExternalID(ctx context.Context, externalID string) (User, error)
+	// ==========================================
+	// GET
+	// ==========================================
 	GetUserByID(ctx context.Context, id int64) (User, error)
-	ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error)
-	ListDeliveries(ctx context.Context, arg ListDeliveriesParams) ([]NotificationDelivery, error)
-	ListDeviceTokens(ctx context.Context, arg ListDeviceTokensParams) ([]DeviceToken, error)
-	ListNotificationTargets(ctx context.Context, arg ListNotificationTargetsParams) ([]NotificationTarget, error)
-	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error)
-	ListReads(ctx context.Context, arg ListReadsParams) ([]NotificationRead, error)
-	ListRoles(ctx context.Context) ([]Role, error)
-	ListSegmentMembers(ctx context.Context, arg ListSegmentMembersParams) ([]SegmentMember, error)
-	ListSegments(ctx context.Context) ([]Segment, error)
-	ListStaffUsers(ctx context.Context) ([]ListStaffUsersRow, error)
-	ListTemplates(ctx context.Context, arg ListTemplatesParams) ([]Template, error)
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]ListAuditLogsRow, error)
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListDeviceTokensByUser(ctx context.Context, arg ListDeviceTokensByUserParams) ([]ListDeviceTokensByUserRow, error)
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListNotificationDeliveries(ctx context.Context, arg ListNotificationDeliveriesParams) ([]ListNotificationDeliveriesRow, error)
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListNotificationReads(ctx context.Context, arg ListNotificationReadsParams) ([]ListNotificationReadsRow, error)
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListNotificationTargets(ctx context.Context, arg ListNotificationTargetsParams) ([]ListNotificationTargetsRow, error)
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error)
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListRoles(ctx context.Context, arg ListRolesParams) ([]Role, error)
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListSegmentMembers(ctx context.Context, arg ListSegmentMembersParams) ([]ListSegmentMembersRow, error)
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListSegments(ctx context.Context, arg ListSegmentsParams) ([]ListSegmentsRow, error)
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListStaffUsers(ctx context.Context, arg ListStaffUsersParams) ([]ListStaffUsersRow, error)
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListTemplates(ctx context.Context, arg ListTemplatesParams) ([]ListTemplatesRow, error)
+	// ==========================================
+	// LIST
+	// ==========================================
 	ListUploadBatchRows(ctx context.Context, arg ListUploadBatchRowsParams) ([]UploadBatchRow, error)
-	ListUploadBatches(ctx context.Context, arg ListUploadBatchesParams) ([]UploadBatch, error)
-	ListUsers(ctx context.Context, dollar_1 []string) ([]User, error)
-	UpdateDelivery(ctx context.Context, arg UpdateDeliveryParams) error
-	UpdateDeliveryStatus(ctx context.Context, arg UpdateDeliveryStatusParams) error
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListUploadBatches(ctx context.Context, arg ListUploadBatchesParams) ([]ListUploadBatchesRow, error)
+	// ==========================================
+	// LIST
+	// ==========================================
+	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
+	// ==========================================
+	// FILTER
+	// ==========================================
+	ListUsersByStatus(ctx context.Context, arg ListUsersByStatusParams) ([]User, error)
+	// ==========================================
+	// UPDATE STATUS
+	// ==========================================
+	MarkNotificationDelivered(ctx context.Context, id int64) error
+	MarkNotificationFailed(ctx context.Context, arg MarkNotificationFailedParams) error
+	MarkNotificationOpened(ctx context.Context, id int64) error
+	MarkNotificationSent(ctx context.Context, id int64) error
+	// ==========================================
+	// SEARCH
+	// ==========================================
+	SearchNotifications(ctx context.Context, arg SearchNotificationsParams) ([]SearchNotificationsRow, error)
+	// ==========================================
+	// SEARCH
+	// ==========================================
+	SearchSegments(ctx context.Context, arg SearchSegmentsParams) ([]SearchSegmentsRow, error)
+	// ==========================================
+	// SEARCH
+	// ==========================================
+	SearchStaffUsers(ctx context.Context, arg SearchStaffUsersParams) ([]SearchStaffUsersRow, error)
+	// ==========================================
+	// SEARCH
+	// ==========================================
+	SearchTemplates(ctx context.Context, arg SearchTemplatesParams) ([]SearchTemplatesRow, error)
+	// ==========================================
+	// SEARCH
+	// ==========================================
+	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]User, error)
+	// ==========================================
+	// UPDATE
+	// ==========================================
 	UpdateDeviceToken(ctx context.Context, arg UpdateDeviceTokenParams) error
-	UpdateDeviceTokenActive(ctx context.Context, arg UpdateDeviceTokenActiveParams) error
-	UpdateDeviceTokenLastSeen(ctx context.Context, arg UpdateDeviceTokenLastSeenParams) error
+	UpdateDeviceTokenStatus(ctx context.Context, arg UpdateDeviceTokenStatusParams) error
+	// ==========================================
+	// UPDATE
+	// ==========================================
 	UpdateNotification(ctx context.Context, arg UpdateNotificationParams) error
-	UpdateNotificationSchedule(ctx context.Context, arg UpdateNotificationScheduleParams) error
 	UpdateNotificationStatus(ctx context.Context, arg UpdateNotificationStatusParams) error
+	// ==========================================
+	// UPDATE
+	// ==========================================
 	UpdateRole(ctx context.Context, arg UpdateRoleParams) error
+	// ==========================================
+	// UPDATE
+	// ==========================================
 	UpdateSegment(ctx context.Context, arg UpdateSegmentParams) error
 	UpdateStaffPassword(ctx context.Context, arg UpdateStaffPasswordParams) error
 	UpdateStaffStatus(ctx context.Context, arg UpdateStaffStatusParams) error
+	// ==========================================
+	// UPDATE
+	// ==========================================
+	UpdateStaffUser(ctx context.Context, arg UpdateStaffUserParams) error
+	// ==========================================
+	// UPDATE
+	// ==========================================
 	UpdateTemplate(ctx context.Context, arg UpdateTemplateParams) error
-	UpdateTemplateActive(ctx context.Context, arg UpdateTemplateActiveParams) error
-	UpdateUploadBatchCounts(ctx context.Context, arg UpdateUploadBatchCountsParams) error
-	UpdateUploadBatchRow(ctx context.Context, arg UpdateUploadBatchRowParams) error
+	UpdateTemplateStatus(ctx context.Context, arg UpdateTemplateStatusParams) error
+	// ==========================================
+	// UPDATE
+	// ==========================================
 	UpdateUser(ctx context.Context, arg UpdateUserParams) error
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error
 }

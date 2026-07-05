@@ -11,7 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countSegments = `-- name: CountSegments :one
+
+SELECT COUNT(*)
+FROM segments
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountSegments(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countSegments)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createSegment = `-- name: CreateSegment :one
+
 INSERT INTO segments (
     name,
     description,
@@ -22,7 +39,13 @@ VALUES (
     $2,
     $3
 )
-RETURNING id, name, description, created_by, created_at, updated_at
+RETURNING
+    id,
+    name,
+    description,
+    created_by,
+    created_at,
+    updated_at
 `
 
 type CreateSegmentParams struct {
@@ -31,6 +54,9 @@ type CreateSegmentParams struct {
 	CreatedBy   int64       `db:"created_by"`
 }
 
+// ==========================================
+// CREATE
+// ==========================================
 func (q *Queries) CreateSegment(ctx context.Context, arg CreateSegmentParams) (Segment, error) {
 	row := q.db.QueryRow(ctx, createSegment, arg.Name, arg.Description, arg.CreatedBy)
 	var i Segment
@@ -46,16 +72,41 @@ func (q *Queries) CreateSegment(ctx context.Context, arg CreateSegmentParams) (S
 }
 
 const deleteSegment = `-- name: DeleteSegment :exec
-DELETE FROM segments
+
+DELETE
+FROM segments
 WHERE id = $1
 `
 
+// ==========================================
+// DELETE
+// ==========================================
 func (q *Queries) DeleteSegment(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteSegment, id)
 	return err
 }
 
+const existsSegmentByName = `-- name: ExistsSegmentByName :one
+
+SELECT EXISTS (
+    SELECT 1
+    FROM segments
+    WHERE name = $1
+)
+`
+
+// ==========================================
+// EXISTS
+// ==========================================
+func (q *Queries) ExistsSegmentByName(ctx context.Context, name string) (bool, error) {
+	row := q.db.QueryRow(ctx, existsSegmentByName, name)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const getSegmentByID = `-- name: GetSegmentByID :one
+
 SELECT
     id,
     name,
@@ -68,6 +119,9 @@ WHERE id = $1
 LIMIT 1
 `
 
+// ==========================================
+// GET
+// ==========================================
 func (q *Queries) GetSegmentByID(ctx context.Context, id int64) (Segment, error) {
 	row := q.db.QueryRow(ctx, getSegmentByID, id)
 	var i Segment
@@ -110,31 +164,117 @@ func (q *Queries) GetSegmentByName(ctx context.Context, name string) (Segment, e
 }
 
 const listSegments = `-- name: ListSegments :many
+
 SELECT
-    id,
-    name,
-    description,
-    created_by,
-    created_at,
-    updated_at
-FROM segments
-ORDER BY id
+    s.id,
+    s.name,
+    s.description,
+    su.name AS created_by_name,
+    s.created_at,
+    s.updated_at
+FROM segments s
+JOIN staff_users su
+    ON su.id = s.created_by
+ORDER BY s.name
+LIMIT $2
+OFFSET $1
 `
 
-func (q *Queries) ListSegments(ctx context.Context) ([]Segment, error) {
-	rows, err := q.db.Query(ctx, listSegments)
+type ListSegmentsParams struct {
+	Offset int32 `db:"offset"`
+	Limit  int32 `db:"limit"`
+}
+
+type ListSegmentsRow struct {
+	ID            int64              `db:"id"`
+	Name          string             `db:"name"`
+	Description   pgtype.Text        `db:"description"`
+	CreatedByName string             `db:"created_by_name"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
+}
+
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListSegments(ctx context.Context, arg ListSegmentsParams) ([]ListSegmentsRow, error) {
+	rows, err := q.db.Query(ctx, listSegments, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Segment{}
+	items := []ListSegmentsRow{}
 	for rows.Next() {
-		var i Segment
+		var i ListSegmentsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
 			&i.Description,
-			&i.CreatedBy,
+			&i.CreatedByName,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchSegments = `-- name: SearchSegments :many
+
+SELECT
+    s.id,
+    s.name,
+    s.description,
+    su.name AS created_by_name,
+    s.created_at,
+    s.updated_at
+FROM segments s
+JOIN staff_users su
+    ON su.id = s.created_by
+WHERE
+    s.name ILIKE '%' || $1 || '%'
+ORDER BY s.name
+LIMIT $3
+OFFSET $2
+`
+
+type SearchSegmentsParams struct {
+	Keyword pgtype.Text `db:"keyword"`
+	Offset  int32       `db:"offset"`
+	Limit   int32       `db:"limit"`
+}
+
+type SearchSegmentsRow struct {
+	ID            int64              `db:"id"`
+	Name          string             `db:"name"`
+	Description   pgtype.Text        `db:"description"`
+	CreatedByName string             `db:"created_by_name"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
+}
+
+// ==========================================
+// SEARCH
+// ==========================================
+func (q *Queries) SearchSegments(ctx context.Context, arg SearchSegmentsParams) ([]SearchSegmentsRow, error) {
+	rows, err := q.db.Query(ctx, searchSegments, arg.Keyword, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchSegmentsRow{}
+	for rows.Next() {
+		var i SearchSegmentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Description,
+			&i.CreatedByName,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -149,21 +289,25 @@ func (q *Queries) ListSegments(ctx context.Context) ([]Segment, error) {
 }
 
 const updateSegment = `-- name: UpdateSegment :exec
+
 UPDATE segments
 SET
-    name = $2,
-    description = $3,
+    name = $1,
+    description = $2,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $3
 `
 
 type UpdateSegmentParams struct {
-	ID          int64       `db:"id"`
 	Name        string      `db:"name"`
 	Description pgtype.Text `db:"description"`
+	ID          int64       `db:"id"`
 }
 
+// ==========================================
+// UPDATE
+// ==========================================
 func (q *Queries) UpdateSegment(ctx context.Context, arg UpdateSegmentParams) error {
-	_, err := q.db.Exec(ctx, updateSegment, arg.ID, arg.Name, arg.Description)
+	_, err := q.db.Exec(ctx, updateSegment, arg.Name, arg.Description, arg.ID)
 	return err
 }

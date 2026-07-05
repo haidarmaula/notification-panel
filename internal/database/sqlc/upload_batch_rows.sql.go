@@ -11,7 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countUploadBatchRows = `-- name: CountUploadBatchRows :one
+
+SELECT COUNT(*)
+FROM upload_batch_rows
+WHERE batch_id = $1
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountUploadBatchRows(ctx context.Context, batchID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countUploadBatchRows, batchID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUploadBatchRow = `-- name: CreateUploadBatchRow :one
+
 INSERT INTO upload_batch_rows (
     batch_id,
     external_id,
@@ -24,7 +42,13 @@ VALUES (
     $3,
     $4
 )
-RETURNING id, batch_id, external_id, is_valid, error_message, created_at
+RETURNING
+    id,
+    batch_id,
+    external_id,
+    is_valid,
+    error_message,
+    created_at
 `
 
 type CreateUploadBatchRowParams struct {
@@ -34,6 +58,9 @@ type CreateUploadBatchRowParams struct {
 	ErrorMessage pgtype.Text `db:"error_message"`
 }
 
+// ==========================================
+// CREATE
+// ==========================================
 func (q *Queries) CreateUploadBatchRow(ctx context.Context, arg CreateUploadBatchRowParams) (UploadBatchRow, error) {
 	row := q.db.QueryRow(ctx, createUploadBatchRow,
 		arg.BatchID,
@@ -53,134 +80,8 @@ func (q *Queries) CreateUploadBatchRow(ctx context.Context, arg CreateUploadBatc
 	return i, err
 }
 
-const deleteUploadBatchRow = `-- name: DeleteUploadBatchRow :exec
-DELETE FROM upload_batch_rows
-WHERE id = $1
-`
-
-func (q *Queries) DeleteUploadBatchRow(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteUploadBatchRow, id)
-	return err
-}
-
-const deleteUploadBatchRowsByBatch = `-- name: DeleteUploadBatchRowsByBatch :exec
-DELETE FROM upload_batch_rows
-WHERE batch_id = $1
-`
-
-func (q *Queries) DeleteUploadBatchRowsByBatch(ctx context.Context, batchID int64) error {
-	_, err := q.db.Exec(ctx, deleteUploadBatchRowsByBatch, batchID)
-	return err
-}
-
-const getUploadBatchRowByID = `-- name: GetUploadBatchRowByID :one
-SELECT
-    id,
-    batch_id,
-    external_id,
-    is_valid,
-    error_message,
-    created_at
-FROM upload_batch_rows
-WHERE id = $1
-LIMIT 1
-`
-
-func (q *Queries) GetUploadBatchRowByID(ctx context.Context, id int64) (UploadBatchRow, error) {
-	row := q.db.QueryRow(ctx, getUploadBatchRowByID, id)
-	var i UploadBatchRow
-	err := row.Scan(
-		&i.ID,
-		&i.BatchID,
-		&i.ExternalID,
-		&i.IsValid,
-		&i.ErrorMessage,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getUploadBatchRowsByBatchID = `-- name: GetUploadBatchRowsByBatchID :many
-SELECT
-    id,
-    batch_id,
-    external_id,
-    is_valid,
-    error_message,
-    created_at
-FROM upload_batch_rows
-WHERE batch_id = $1
-ORDER BY id
-`
-
-func (q *Queries) GetUploadBatchRowsByBatchID(ctx context.Context, batchID int64) ([]UploadBatchRow, error) {
-	rows, err := q.db.Query(ctx, getUploadBatchRowsByBatchID, batchID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []UploadBatchRow{}
-	for rows.Next() {
-		var i UploadBatchRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.BatchID,
-			&i.ExternalID,
-			&i.IsValid,
-			&i.ErrorMessage,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getUploadBatchRowsByExternalID = `-- name: GetUploadBatchRowsByExternalID :many
-SELECT
-    id,
-    batch_id,
-    external_id,
-    is_valid,
-    error_message,
-    created_at
-FROM upload_batch_rows
-WHERE external_id = $1
-ORDER BY batch_id DESC
-`
-
-func (q *Queries) GetUploadBatchRowsByExternalID(ctx context.Context, externalID string) ([]UploadBatchRow, error) {
-	rows, err := q.db.Query(ctx, getUploadBatchRowsByExternalID, externalID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []UploadBatchRow{}
-	for rows.Next() {
-		var i UploadBatchRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.BatchID,
-			&i.ExternalID,
-			&i.IsValid,
-			&i.ErrorMessage,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listUploadBatchRows = `-- name: ListUploadBatchRows :many
+
 SELECT
     id,
     batch_id,
@@ -189,19 +90,23 @@ SELECT
     error_message,
     created_at
 FROM upload_batch_rows
-WHERE
-    ($1::bigint IS NULL OR batch_id = $1) AND
-    ($2::boolean IS NULL OR is_valid = $2)
-ORDER BY id
+WHERE batch_id = $1
+ORDER BY created_at
+LIMIT $3
+OFFSET $2
 `
 
 type ListUploadBatchRowsParams struct {
-	Column1 int64 `db:"column_1"`
-	Column2 bool  `db:"column_2"`
+	BatchID int64 `db:"batch_id"`
+	Offset  int32 `db:"offset"`
+	Limit   int32 `db:"limit"`
 }
 
+// ==========================================
+// LIST
+// ==========================================
 func (q *Queries) ListUploadBatchRows(ctx context.Context, arg ListUploadBatchRowsParams) ([]UploadBatchRow, error) {
-	rows, err := q.db.Query(ctx, listUploadBatchRows, arg.Column1, arg.Column2)
+	rows, err := q.db.Query(ctx, listUploadBatchRows, arg.BatchID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -225,23 +130,4 @@ func (q *Queries) ListUploadBatchRows(ctx context.Context, arg ListUploadBatchRo
 		return nil, err
 	}
 	return items, nil
-}
-
-const updateUploadBatchRow = `-- name: UpdateUploadBatchRow :exec
-UPDATE upload_batch_rows
-SET
-    is_valid = $2,
-    error_message = $3
-WHERE id = $1
-`
-
-type UpdateUploadBatchRowParams struct {
-	ID           int64       `db:"id"`
-	IsValid      bool        `db:"is_valid"`
-	ErrorMessage pgtype.Text `db:"error_message"`
-}
-
-func (q *Queries) UpdateUploadBatchRow(ctx context.Context, arg UpdateUploadBatchRowParams) error {
-	_, err := q.db.Exec(ctx, updateUploadBatchRow, arg.ID, arg.IsValid, arg.ErrorMessage)
-	return err
 }

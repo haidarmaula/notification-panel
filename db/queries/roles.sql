@@ -1,3 +1,7 @@
+-- ==========================================
+-- GET
+-- ==========================================
+
 -- name: GetRoleByID :one
 SELECT
     id,
@@ -6,7 +10,7 @@ SELECT
     created_at,
     updated_at
 FROM roles
-WHERE id = $1
+WHERE id = sqlc.arg('id')
 LIMIT 1;
 
 -- name: GetRoleByName :one
@@ -17,8 +21,23 @@ SELECT
     created_at,
     updated_at
 FROM roles
-WHERE name = $1
+WHERE name = sqlc.arg('name')
 LIMIT 1;
+
+-- ==========================================
+-- EXISTS
+-- ==========================================
+
+-- name: ExistsRoleByName :one
+SELECT EXISTS (
+    SELECT 1
+    FROM roles
+    WHERE name = sqlc.arg('name')
+);
+
+-- ==========================================
+-- CREATE
+-- ==========================================
 
 -- name: CreateRole :one
 INSERT INTO roles (
@@ -26,22 +45,40 @@ INSERT INTO roles (
     description
 )
 VALUES (
-    $1,
-    $2
+    sqlc.arg('name'),
+    sqlc.arg('description')
 )
-RETURNING *;
+RETURNING
+    id,
+    name,
+    description,
+    created_at,
+    updated_at;
+
+-- ==========================================
+-- UPDATE
+-- ==========================================
 
 -- name: UpdateRole :exec
 UPDATE roles
 SET
-    name = $2,
-    description = $3,
+    name = sqlc.arg('name'),
+    description = sqlc.arg('description'),
     updated_at = NOW()
-WHERE id = $1;
+WHERE id = sqlc.arg('id');
+
+-- ==========================================
+-- DELETE
+-- ==========================================
 
 -- name: DeleteRole :exec
-DELETE FROM roles
-WHERE id = $1;
+DELETE
+FROM roles
+WHERE id = sqlc.arg('id');
+
+-- ==========================================
+-- LIST
+-- ==========================================
 
 -- name: ListRoles :many
 SELECT
@@ -51,4 +88,14 @@ SELECT
     created_at,
     updated_at
 FROM roles
-ORDER BY id;
+ORDER BY name
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
+-- ==========================================
+-- COUNT
+-- ==========================================
+
+-- name: CountRoles :one
+SELECT COUNT(*)
+FROM roles;

@@ -11,71 +11,85 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countDeviceTokensByUser = `-- name: CountDeviceTokensByUser :one
+
+SELECT COUNT(*)
+FROM device_tokens
+WHERE user_id = $1
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountDeviceTokensByUser(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countDeviceTokensByUser, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createDeviceToken = `-- name: CreateDeviceToken :one
+
 INSERT INTO device_tokens (
     user_id,
-    provider,
     platform,
     installation_id,
-    push_token,
-    app_version,
-    os_version,
-    device_model,
-    is_active,
-    last_seen_at
+    push_token
 )
 VALUES (
     $1,
     $2,
     $3,
-    $4,
-    $5,
-    $6,
-    $7,
-    $8,
-    $9,
-    $10
+    $4
 )
-RETURNING id, user_id, provider, platform, installation_id, push_token, app_version, os_version, device_model, is_active, last_seen_at, created_at, updated_at
+RETURNING
+    id,
+    user_id,
+    platform,
+    installation_id,
+    push_token,
+    is_active,
+    last_seen_at,
+    created_at,
+    updated_at
 `
 
 type CreateDeviceTokenParams struct {
+	UserID         int64       `db:"user_id"`
+	Platform       string      `db:"platform"`
+	InstallationID pgtype.Text `db:"installation_id"`
+	PushToken      string      `db:"push_token"`
+}
+
+type CreateDeviceTokenRow struct {
+	ID             int64              `db:"id"`
 	UserID         int64              `db:"user_id"`
-	Provider       string             `db:"provider"`
 	Platform       string             `db:"platform"`
 	InstallationID pgtype.Text        `db:"installation_id"`
 	PushToken      string             `db:"push_token"`
-	AppVersion     pgtype.Text        `db:"app_version"`
-	OsVersion      pgtype.Text        `db:"os_version"`
-	DeviceModel    pgtype.Text        `db:"device_model"`
 	IsActive       bool               `db:"is_active"`
 	LastSeenAt     pgtype.Timestamptz `db:"last_seen_at"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `db:"updated_at"`
 }
 
-func (q *Queries) CreateDeviceToken(ctx context.Context, arg CreateDeviceTokenParams) (DeviceToken, error) {
+// ==========================================
+// CREATE
+// ==========================================
+func (q *Queries) CreateDeviceToken(ctx context.Context, arg CreateDeviceTokenParams) (CreateDeviceTokenRow, error) {
 	row := q.db.QueryRow(ctx, createDeviceToken,
 		arg.UserID,
-		arg.Provider,
 		arg.Platform,
 		arg.InstallationID,
 		arg.PushToken,
-		arg.AppVersion,
-		arg.OsVersion,
-		arg.DeviceModel,
-		arg.IsActive,
-		arg.LastSeenAt,
 	)
-	var i DeviceToken
+	var i CreateDeviceTokenRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
-		&i.Provider,
 		&i.Platform,
 		&i.InstallationID,
 		&i.PushToken,
-		&i.AppVersion,
-		&i.OsVersion,
-		&i.DeviceModel,
 		&i.IsActive,
 		&i.LastSeenAt,
 		&i.CreatedAt,
@@ -85,36 +99,47 @@ func (q *Queries) CreateDeviceToken(ctx context.Context, arg CreateDeviceTokenPa
 }
 
 const deleteDeviceToken = `-- name: DeleteDeviceToken :exec
-DELETE FROM device_tokens
+
+DELETE
+FROM device_tokens
 WHERE id = $1
 `
 
+// ==========================================
+// DELETE
+// ==========================================
 func (q *Queries) DeleteDeviceToken(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteDeviceToken, id)
 	return err
 }
 
-const deleteDeviceTokensByUser = `-- name: DeleteDeviceTokensByUser :exec
-DELETE FROM device_tokens
-WHERE user_id = $1
+const existsDeviceToken = `-- name: ExistsDeviceToken :one
+
+SELECT EXISTS (
+    SELECT 1
+    FROM device_tokens
+    WHERE push_token = $1
+)
 `
 
-func (q *Queries) DeleteDeviceTokensByUser(ctx context.Context, userID int64) error {
-	_, err := q.db.Exec(ctx, deleteDeviceTokensByUser, userID)
-	return err
+// ==========================================
+// EXISTS
+// ==========================================
+func (q *Queries) ExistsDeviceToken(ctx context.Context, pushToken string) (bool, error) {
+	row := q.db.QueryRow(ctx, existsDeviceToken, pushToken)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const getDeviceTokenByID = `-- name: GetDeviceTokenByID :one
+
 SELECT
     id,
     user_id,
-    provider,
     platform,
     installation_id,
     push_token,
-    app_version,
-    os_version,
-    device_model,
     is_active,
     last_seen_at,
     created_at,
@@ -124,19 +149,30 @@ WHERE id = $1
 LIMIT 1
 `
 
-func (q *Queries) GetDeviceTokenByID(ctx context.Context, id int64) (DeviceToken, error) {
+type GetDeviceTokenByIDRow struct {
+	ID             int64              `db:"id"`
+	UserID         int64              `db:"user_id"`
+	Platform       string             `db:"platform"`
+	InstallationID pgtype.Text        `db:"installation_id"`
+	PushToken      string             `db:"push_token"`
+	IsActive       bool               `db:"is_active"`
+	LastSeenAt     pgtype.Timestamptz `db:"last_seen_at"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `db:"updated_at"`
+}
+
+// ==========================================
+// GET
+// ==========================================
+func (q *Queries) GetDeviceTokenByID(ctx context.Context, id int64) (GetDeviceTokenByIDRow, error) {
 	row := q.db.QueryRow(ctx, getDeviceTokenByID, id)
-	var i DeviceToken
+	var i GetDeviceTokenByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
-		&i.Provider,
 		&i.Platform,
 		&i.InstallationID,
 		&i.PushToken,
-		&i.AppVersion,
-		&i.OsVersion,
-		&i.DeviceModel,
 		&i.IsActive,
 		&i.LastSeenAt,
 		&i.CreatedAt,
@@ -149,13 +185,9 @@ const getDeviceTokenByPushToken = `-- name: GetDeviceTokenByPushToken :one
 SELECT
     id,
     user_id,
-    provider,
     platform,
     installation_id,
     push_token,
-    app_version,
-    os_version,
-    device_model,
     is_active,
     last_seen_at,
     created_at,
@@ -165,19 +197,27 @@ WHERE push_token = $1
 LIMIT 1
 `
 
-func (q *Queries) GetDeviceTokenByPushToken(ctx context.Context, pushToken string) (DeviceToken, error) {
+type GetDeviceTokenByPushTokenRow struct {
+	ID             int64              `db:"id"`
+	UserID         int64              `db:"user_id"`
+	Platform       string             `db:"platform"`
+	InstallationID pgtype.Text        `db:"installation_id"`
+	PushToken      string             `db:"push_token"`
+	IsActive       bool               `db:"is_active"`
+	LastSeenAt     pgtype.Timestamptz `db:"last_seen_at"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `db:"updated_at"`
+}
+
+func (q *Queries) GetDeviceTokenByPushToken(ctx context.Context, pushToken string) (GetDeviceTokenByPushTokenRow, error) {
 	row := q.db.QueryRow(ctx, getDeviceTokenByPushToken, pushToken)
-	var i DeviceToken
+	var i GetDeviceTokenByPushTokenRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
-		&i.Provider,
 		&i.Platform,
 		&i.InstallationID,
 		&i.PushToken,
-		&i.AppVersion,
-		&i.OsVersion,
-		&i.DeviceModel,
 		&i.IsActive,
 		&i.LastSeenAt,
 		&i.CreatedAt,
@@ -186,17 +226,14 @@ func (q *Queries) GetDeviceTokenByPushToken(ctx context.Context, pushToken strin
 	return i, err
 }
 
-const getDeviceTokensByUserID = `-- name: GetDeviceTokensByUserID :many
+const listDeviceTokensByUser = `-- name: ListDeviceTokensByUser :many
+
 SELECT
     id,
     user_id,
-    provider,
     platform,
     installation_id,
     push_token,
-    app_version,
-    os_version,
-    device_model,
     is_active,
     last_seen_at,
     created_at,
@@ -204,88 +241,46 @@ SELECT
 FROM device_tokens
 WHERE user_id = $1
 ORDER BY created_at DESC
+LIMIT $3
+OFFSET $2
 `
 
-func (q *Queries) GetDeviceTokensByUserID(ctx context.Context, userID int64) ([]DeviceToken, error) {
-	rows, err := q.db.Query(ctx, getDeviceTokensByUserID, userID)
+type ListDeviceTokensByUserParams struct {
+	UserID int64 `db:"user_id"`
+	Offset int32 `db:"offset"`
+	Limit  int32 `db:"limit"`
+}
+
+type ListDeviceTokensByUserRow struct {
+	ID             int64              `db:"id"`
+	UserID         int64              `db:"user_id"`
+	Platform       string             `db:"platform"`
+	InstallationID pgtype.Text        `db:"installation_id"`
+	PushToken      string             `db:"push_token"`
+	IsActive       bool               `db:"is_active"`
+	LastSeenAt     pgtype.Timestamptz `db:"last_seen_at"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `db:"updated_at"`
+}
+
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListDeviceTokensByUser(ctx context.Context, arg ListDeviceTokensByUserParams) ([]ListDeviceTokensByUserRow, error) {
+	rows, err := q.db.Query(ctx, listDeviceTokensByUser, arg.UserID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []DeviceToken{}
+	items := []ListDeviceTokensByUserRow{}
 	for rows.Next() {
-		var i DeviceToken
+		var i ListDeviceTokensByUserRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
-			&i.Provider,
 			&i.Platform,
 			&i.InstallationID,
 			&i.PushToken,
-			&i.AppVersion,
-			&i.OsVersion,
-			&i.DeviceModel,
-			&i.IsActive,
-			&i.LastSeenAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listDeviceTokens = `-- name: ListDeviceTokens :many
-SELECT
-    id,
-    user_id,
-    provider,
-    platform,
-    installation_id,
-    push_token,
-    app_version,
-    os_version,
-    device_model,
-    is_active,
-    last_seen_at,
-    created_at,
-    updated_at
-FROM device_tokens
-WHERE
-    ($1::bigint IS NULL OR user_id = $1) AND
-    ($2::boolean IS NULL OR is_active = $2)
-ORDER BY id
-`
-
-type ListDeviceTokensParams struct {
-	Column1 int64 `db:"column_1"`
-	Column2 bool  `db:"column_2"`
-}
-
-func (q *Queries) ListDeviceTokens(ctx context.Context, arg ListDeviceTokensParams) ([]DeviceToken, error) {
-	rows, err := q.db.Query(ctx, listDeviceTokens, arg.Column1, arg.Column2)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []DeviceToken{}
-	for rows.Next() {
-		var i DeviceToken
-		if err := rows.Scan(
-			&i.ID,
-			&i.UserID,
-			&i.Provider,
-			&i.Platform,
-			&i.InstallationID,
-			&i.PushToken,
-			&i.AppVersion,
-			&i.OsVersion,
-			&i.DeviceModel,
 			&i.IsActive,
 			&i.LastSeenAt,
 			&i.CreatedAt,
@@ -302,82 +297,42 @@ func (q *Queries) ListDeviceTokens(ctx context.Context, arg ListDeviceTokensPara
 }
 
 const updateDeviceToken = `-- name: UpdateDeviceToken :exec
+
 UPDATE device_tokens
 SET
-    provider = $2,
-    platform = $3,
-    installation_id = $4,
-    push_token = $5,
-    app_version = $6,
-    os_version = $7,
-    device_model = $8,
-    is_active = $9,
-    last_seen_at = $10,
+    push_token = $1,
+    last_seen_at = NOW(),
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $2
 `
 
 type UpdateDeviceTokenParams struct {
-	ID             int64              `db:"id"`
-	Provider       string             `db:"provider"`
-	Platform       string             `db:"platform"`
-	InstallationID pgtype.Text        `db:"installation_id"`
-	PushToken      string             `db:"push_token"`
-	AppVersion     pgtype.Text        `db:"app_version"`
-	OsVersion      pgtype.Text        `db:"os_version"`
-	DeviceModel    pgtype.Text        `db:"device_model"`
-	IsActive       bool               `db:"is_active"`
-	LastSeenAt     pgtype.Timestamptz `db:"last_seen_at"`
+	PushToken string `db:"push_token"`
+	ID        int64  `db:"id"`
 }
 
+// ==========================================
+// UPDATE
+// ==========================================
 func (q *Queries) UpdateDeviceToken(ctx context.Context, arg UpdateDeviceTokenParams) error {
-	_, err := q.db.Exec(ctx, updateDeviceToken,
-		arg.ID,
-		arg.Provider,
-		arg.Platform,
-		arg.InstallationID,
-		arg.PushToken,
-		arg.AppVersion,
-		arg.OsVersion,
-		arg.DeviceModel,
-		arg.IsActive,
-		arg.LastSeenAt,
-	)
+	_, err := q.db.Exec(ctx, updateDeviceToken, arg.PushToken, arg.ID)
 	return err
 }
 
-const updateDeviceTokenActive = `-- name: UpdateDeviceTokenActive :exec
+const updateDeviceTokenStatus = `-- name: UpdateDeviceTokenStatus :exec
 UPDATE device_tokens
 SET
-    is_active = $2,
+    is_active = $1,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $2
 `
 
-type UpdateDeviceTokenActiveParams struct {
-	ID       int64 `db:"id"`
+type UpdateDeviceTokenStatusParams struct {
 	IsActive bool  `db:"is_active"`
+	ID       int64 `db:"id"`
 }
 
-func (q *Queries) UpdateDeviceTokenActive(ctx context.Context, arg UpdateDeviceTokenActiveParams) error {
-	_, err := q.db.Exec(ctx, updateDeviceTokenActive, arg.ID, arg.IsActive)
-	return err
-}
-
-const updateDeviceTokenLastSeen = `-- name: UpdateDeviceTokenLastSeen :exec
-UPDATE device_tokens
-SET
-    last_seen_at = $2,
-    updated_at = NOW()
-WHERE id = $1
-`
-
-type UpdateDeviceTokenLastSeenParams struct {
-	ID         int64              `db:"id"`
-	LastSeenAt pgtype.Timestamptz `db:"last_seen_at"`
-}
-
-func (q *Queries) UpdateDeviceTokenLastSeen(ctx context.Context, arg UpdateDeviceTokenLastSeenParams) error {
-	_, err := q.db.Exec(ctx, updateDeviceTokenLastSeen, arg.ID, arg.LastSeenAt)
+func (q *Queries) UpdateDeviceTokenStatus(ctx context.Context, arg UpdateDeviceTokenStatusParams) error {
+	_, err := q.db.Exec(ctx, updateDeviceTokenStatus, arg.IsActive, arg.ID)
 	return err
 }

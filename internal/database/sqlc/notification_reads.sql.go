@@ -11,7 +11,25 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createRead = `-- name: CreateRead :one
+const countNotificationReads = `-- name: CountNotificationReads :one
+
+SELECT COUNT(*)
+FROM notification_reads
+WHERE notification_id = $1
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountNotificationReads(ctx context.Context, notificationID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countNotificationReads, notificationID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const createNotificationRead = `-- name: CreateNotificationRead :one
+
 INSERT INTO notification_reads (
     notification_id,
     user_id,
@@ -20,80 +38,25 @@ INSERT INTO notification_reads (
 VALUES (
     $1,
     $2,
-    $3
+    NOW()
 )
-RETURNING id, notification_id, user_id, read_at
-`
-
-type CreateReadParams struct {
-	NotificationID int64              `db:"notification_id"`
-	UserID         int64              `db:"user_id"`
-	ReadAt         pgtype.Timestamptz `db:"read_at"`
-}
-
-func (q *Queries) CreateRead(ctx context.Context, arg CreateReadParams) (NotificationRead, error) {
-	row := q.db.QueryRow(ctx, createRead, arg.NotificationID, arg.UserID, arg.ReadAt)
-	var i NotificationRead
-	err := row.Scan(
-		&i.ID,
-		&i.NotificationID,
-		&i.UserID,
-		&i.ReadAt,
-	)
-	return i, err
-}
-
-const deleteRead = `-- name: DeleteRead :exec
-DELETE FROM notification_reads
-WHERE id = $1
-`
-
-func (q *Queries) DeleteRead(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteRead, id)
-	return err
-}
-
-const getReadByID = `-- name: GetReadByID :one
-SELECT
+RETURNING
     id,
     notification_id,
     user_id,
     read_at
-FROM notification_reads
-WHERE id = $1
-LIMIT 1
 `
 
-func (q *Queries) GetReadByID(ctx context.Context, id int64) (NotificationRead, error) {
-	row := q.db.QueryRow(ctx, getReadByID, id)
-	var i NotificationRead
-	err := row.Scan(
-		&i.ID,
-		&i.NotificationID,
-		&i.UserID,
-		&i.ReadAt,
-	)
-	return i, err
-}
-
-const getReadByNotificationAndUser = `-- name: GetReadByNotificationAndUser :one
-SELECT
-    id,
-    notification_id,
-    user_id,
-    read_at
-FROM notification_reads
-WHERE notification_id = $1 AND user_id = $2
-LIMIT 1
-`
-
-type GetReadByNotificationAndUserParams struct {
+type CreateNotificationReadParams struct {
 	NotificationID int64 `db:"notification_id"`
 	UserID         int64 `db:"user_id"`
 }
 
-func (q *Queries) GetReadByNotificationAndUser(ctx context.Context, arg GetReadByNotificationAndUserParams) (NotificationRead, error) {
-	row := q.db.QueryRow(ctx, getReadByNotificationAndUser, arg.NotificationID, arg.UserID)
+// ==========================================
+// CREATE
+// ==========================================
+func (q *Queries) CreateNotificationRead(ctx context.Context, arg CreateNotificationReadParams) (NotificationRead, error) {
+	row := q.db.QueryRow(ctx, createNotificationRead, arg.NotificationID, arg.UserID)
 	var i NotificationRead
 	err := row.Scan(
 		&i.ID,
@@ -104,109 +67,77 @@ func (q *Queries) GetReadByNotificationAndUser(ctx context.Context, arg GetReadB
 	return i, err
 }
 
-const getReadsByNotificationID = `-- name: GetReadsByNotificationID :many
-SELECT
-    id,
-    notification_id,
-    user_id,
-    read_at
-FROM notification_reads
-WHERE notification_id = $1
-ORDER BY id
+const existsNotificationRead = `-- name: ExistsNotificationRead :one
+
+SELECT EXISTS (
+    SELECT 1
+    FROM notification_reads
+    WHERE
+        notification_id = $1
+        AND user_id = $2
+)
 `
 
-func (q *Queries) GetReadsByNotificationID(ctx context.Context, notificationID int64) ([]NotificationRead, error) {
-	rows, err := q.db.Query(ctx, getReadsByNotificationID, notificationID)
+type ExistsNotificationReadParams struct {
+	NotificationID int64 `db:"notification_id"`
+	UserID         int64 `db:"user_id"`
+}
+
+// ==========================================
+// EXISTS
+// ==========================================
+func (q *Queries) ExistsNotificationRead(ctx context.Context, arg ExistsNotificationReadParams) (bool, error) {
+	row := q.db.QueryRow(ctx, existsNotificationRead, arg.NotificationID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const listNotificationReads = `-- name: ListNotificationReads :many
+
+SELECT
+    nr.id,
+    u.name,
+    u.email,
+    nr.read_at
+FROM notification_reads nr
+JOIN users u
+    ON u.id = nr.user_id
+WHERE nr.notification_id = $1
+ORDER BY nr.read_at DESC
+LIMIT $3
+OFFSET $2
+`
+
+type ListNotificationReadsParams struct {
+	NotificationID int64 `db:"notification_id"`
+	Offset         int32 `db:"offset"`
+	Limit          int32 `db:"limit"`
+}
+
+type ListNotificationReadsRow struct {
+	ID     int64              `db:"id"`
+	Name   pgtype.Text        `db:"name"`
+	Email  pgtype.Text        `db:"email"`
+	ReadAt pgtype.Timestamptz `db:"read_at"`
+}
+
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListNotificationReads(ctx context.Context, arg ListNotificationReadsParams) ([]ListNotificationReadsRow, error) {
+	rows, err := q.db.Query(ctx, listNotificationReads, arg.NotificationID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []NotificationRead{}
+	items := []ListNotificationReadsRow{}
 	for rows.Next() {
-		var i NotificationRead
+		var i ListNotificationReadsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.NotificationID,
-			&i.UserID,
-			&i.ReadAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getReadsByUserID = `-- name: GetReadsByUserID :many
-SELECT
-    id,
-    notification_id,
-    user_id,
-    read_at
-FROM notification_reads
-WHERE user_id = $1
-ORDER BY read_at DESC
-`
-
-func (q *Queries) GetReadsByUserID(ctx context.Context, userID int64) ([]NotificationRead, error) {
-	rows, err := q.db.Query(ctx, getReadsByUserID, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []NotificationRead{}
-	for rows.Next() {
-		var i NotificationRead
-		if err := rows.Scan(
-			&i.ID,
-			&i.NotificationID,
-			&i.UserID,
-			&i.ReadAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listReads = `-- name: ListReads :many
-SELECT
-    id,
-    notification_id,
-    user_id,
-    read_at
-FROM notification_reads
-WHERE
-    ($1::bigint IS NULL OR notification_id = $1) AND
-    ($2::bigint IS NULL OR user_id = $2)
-ORDER BY read_at DESC
-`
-
-type ListReadsParams struct {
-	Column1 int64 `db:"column_1"`
-	Column2 int64 `db:"column_2"`
-}
-
-func (q *Queries) ListReads(ctx context.Context, arg ListReadsParams) ([]NotificationRead, error) {
-	rows, err := q.db.Query(ctx, listReads, arg.Column1, arg.Column2)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []NotificationRead{}
-	for rows.Next() {
-		var i NotificationRead
-		if err := rows.Scan(
-			&i.ID,
-			&i.NotificationID,
-			&i.UserID,
+			&i.Name,
+			&i.Email,
 			&i.ReadAt,
 		); err != nil {
 			return nil, err

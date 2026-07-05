@@ -11,7 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countUploadBatches = `-- name: CountUploadBatches :one
+
+SELECT COUNT(*)
+FROM upload_batches
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountUploadBatches(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countUploadBatches)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUploadBatch = `-- name: CreateUploadBatch :one
+
 INSERT INTO upload_batches (
     uploaded_by,
     original_filename,
@@ -26,7 +43,14 @@ VALUES (
     $4,
     $5
 )
-RETURNING id, uploaded_by, original_filename, total_rows, valid_rows, invalid_rows, created_at
+RETURNING
+    id,
+    uploaded_by,
+    original_filename,
+    total_rows,
+    valid_rows,
+    invalid_rows,
+    created_at
 `
 
 type CreateUploadBatchParams struct {
@@ -37,6 +61,9 @@ type CreateUploadBatchParams struct {
 	InvalidRows      int32  `db:"invalid_rows"`
 }
 
+// ==========================================
+// CREATE
+// ==========================================
 func (q *Queries) CreateUploadBatch(ctx context.Context, arg CreateUploadBatchParams) (UploadBatch, error) {
 	row := q.db.QueryRow(ctx, createUploadBatch,
 		arg.UploadedBy,
@@ -58,17 +85,8 @@ func (q *Queries) CreateUploadBatch(ctx context.Context, arg CreateUploadBatchPa
 	return i, err
 }
 
-const deleteUploadBatch = `-- name: DeleteUploadBatch :exec
-DELETE FROM upload_batches
-WHERE id = $1
-`
-
-func (q *Queries) DeleteUploadBatch(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteUploadBatch, id)
-	return err
-}
-
 const getUploadBatchByID = `-- name: GetUploadBatchByID :one
+
 SELECT
     id,
     uploaded_by,
@@ -82,6 +100,9 @@ WHERE id = $1
 LIMIT 1
 `
 
+// ==========================================
+// GET
+// ==========================================
 func (q *Queries) GetUploadBatchByID(ctx context.Context, id int64) (UploadBatch, error) {
 	row := q.db.QueryRow(ctx, getUploadBatchByID, id)
 	var i UploadBatch
@@ -97,87 +118,58 @@ func (q *Queries) GetUploadBatchByID(ctx context.Context, id int64) (UploadBatch
 	return i, err
 }
 
-const getUploadBatchesByUploadedBy = `-- name: GetUploadBatchesByUploadedBy :many
-SELECT
-    id,
-    uploaded_by,
-    original_filename,
-    total_rows,
-    valid_rows,
-    invalid_rows,
-    created_at
-FROM upload_batches
-WHERE uploaded_by = $1
-ORDER BY created_at DESC
-`
-
-func (q *Queries) GetUploadBatchesByUploadedBy(ctx context.Context, uploadedBy int64) ([]UploadBatch, error) {
-	rows, err := q.db.Query(ctx, getUploadBatchesByUploadedBy, uploadedBy)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []UploadBatch{}
-	for rows.Next() {
-		var i UploadBatch
-		if err := rows.Scan(
-			&i.ID,
-			&i.UploadedBy,
-			&i.OriginalFilename,
-			&i.TotalRows,
-			&i.ValidRows,
-			&i.InvalidRows,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listUploadBatches = `-- name: ListUploadBatches :many
+
 SELECT
-    id,
-    uploaded_by,
-    original_filename,
-    total_rows,
-    valid_rows,
-    invalid_rows,
-    created_at
-FROM upload_batches
-WHERE
-    ($1::bigint IS NULL OR uploaded_by = $1) AND
-    ($2::timestamptz IS NULL OR created_at >= $2) AND
-    ($3::timestamptz IS NULL OR created_at <= $3)
-ORDER BY created_at DESC
+    ub.id,
+    ub.original_filename,
+    ub.total_rows,
+    ub.valid_rows,
+    ub.invalid_rows,
+    su.name AS uploaded_by_name,
+    ub.created_at
+FROM upload_batches ub
+JOIN staff_users su
+    ON su.id = ub.uploaded_by
+ORDER BY ub.created_at DESC
+LIMIT $2
+OFFSET $1
 `
 
 type ListUploadBatchesParams struct {
-	Column1 int64              `db:"column_1"`
-	Column2 pgtype.Timestamptz `db:"column_2"`
-	Column3 pgtype.Timestamptz `db:"column_3"`
+	Offset int32 `db:"offset"`
+	Limit  int32 `db:"limit"`
 }
 
-func (q *Queries) ListUploadBatches(ctx context.Context, arg ListUploadBatchesParams) ([]UploadBatch, error) {
-	rows, err := q.db.Query(ctx, listUploadBatches, arg.Column1, arg.Column2, arg.Column3)
+type ListUploadBatchesRow struct {
+	ID               int64              `db:"id"`
+	OriginalFilename string             `db:"original_filename"`
+	TotalRows        int32              `db:"total_rows"`
+	ValidRows        int32              `db:"valid_rows"`
+	InvalidRows      int32              `db:"invalid_rows"`
+	UploadedByName   string             `db:"uploaded_by_name"`
+	CreatedAt        pgtype.Timestamptz `db:"created_at"`
+}
+
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListUploadBatches(ctx context.Context, arg ListUploadBatchesParams) ([]ListUploadBatchesRow, error) {
+	rows, err := q.db.Query(ctx, listUploadBatches, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []UploadBatch{}
+	items := []ListUploadBatchesRow{}
 	for rows.Next() {
-		var i UploadBatch
+		var i ListUploadBatchesRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.UploadedBy,
 			&i.OriginalFilename,
 			&i.TotalRows,
 			&i.ValidRows,
 			&i.InvalidRows,
+			&i.UploadedByName,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -188,30 +180,4 @@ func (q *Queries) ListUploadBatches(ctx context.Context, arg ListUploadBatchesPa
 		return nil, err
 	}
 	return items, nil
-}
-
-const updateUploadBatchCounts = `-- name: UpdateUploadBatchCounts :exec
-UPDATE upload_batches
-SET
-    total_rows = $2,
-    valid_rows = $3,
-    invalid_rows = $4
-WHERE id = $1
-`
-
-type UpdateUploadBatchCountsParams struct {
-	ID          int64 `db:"id"`
-	TotalRows   int32 `db:"total_rows"`
-	ValidRows   int32 `db:"valid_rows"`
-	InvalidRows int32 `db:"invalid_rows"`
-}
-
-func (q *Queries) UpdateUploadBatchCounts(ctx context.Context, arg UpdateUploadBatchCountsParams) error {
-	_, err := q.db.Exec(ctx, updateUploadBatchCounts,
-		arg.ID,
-		arg.TotalRows,
-		arg.ValidRows,
-		arg.InvalidRows,
-	)
-	return err
 }

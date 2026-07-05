@@ -1,3 +1,7 @@
+-- ==========================================
+-- GET
+-- ==========================================
+
 -- name: GetUploadBatchByID :one
 SELECT
     id,
@@ -8,21 +12,12 @@ SELECT
     invalid_rows,
     created_at
 FROM upload_batches
-WHERE id = $1
+WHERE id = sqlc.arg('id')
 LIMIT 1;
 
--- name: GetUploadBatchesByUploadedBy :many
-SELECT
-    id,
-    uploaded_by,
-    original_filename,
-    total_rows,
-    valid_rows,
-    invalid_rows,
-    created_at
-FROM upload_batches
-WHERE uploaded_by = $1
-ORDER BY created_at DESC;
+-- ==========================================
+-- CREATE
+-- ==========================================
 
 -- name: CreateUploadBatch :one
 INSERT INTO upload_batches (
@@ -33,38 +28,45 @@ INSERT INTO upload_batches (
     invalid_rows
 )
 VALUES (
-    $1,
-    $2,
-    $3,
-    $4,
-    $5
+    sqlc.arg('uploaded_by'),
+    sqlc.arg('original_filename'),
+    sqlc.arg('total_rows'),
+    sqlc.arg('valid_rows'),
+    sqlc.arg('invalid_rows')
 )
-RETURNING *;
-
--- name: UpdateUploadBatchCounts :exec
-UPDATE upload_batches
-SET
-    total_rows = $2,
-    valid_rows = $3,
-    invalid_rows = $4
-WHERE id = $1;
-
--- name: DeleteUploadBatch :exec
-DELETE FROM upload_batches
-WHERE id = $1;
-
--- name: ListUploadBatches :many
-SELECT
+RETURNING
     id,
     uploaded_by,
     original_filename,
     total_rows,
     valid_rows,
     invalid_rows,
-    created_at
-FROM upload_batches
-WHERE
-    ($1::bigint IS NULL OR uploaded_by = $1) AND
-    ($2::timestamptz IS NULL OR created_at >= $2) AND
-    ($3::timestamptz IS NULL OR created_at <= $3)
-ORDER BY created_at DESC;
+    created_at;
+
+-- ==========================================
+-- LIST
+-- ==========================================
+
+-- name: ListUploadBatches :many
+SELECT
+    ub.id,
+    ub.original_filename,
+    ub.total_rows,
+    ub.valid_rows,
+    ub.invalid_rows,
+    su.name AS uploaded_by_name,
+    ub.created_at
+FROM upload_batches ub
+JOIN staff_users su
+    ON su.id = ub.uploaded_by
+ORDER BY ub.created_at DESC
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
+-- ==========================================
+-- COUNT
+-- ==========================================
+
+-- name: CountUploadBatches :one
+SELECT COUNT(*)
+FROM upload_batches;

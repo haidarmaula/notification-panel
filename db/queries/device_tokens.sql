@@ -1,141 +1,130 @@
+-- ==========================================
+-- GET
+-- ==========================================
+
 -- name: GetDeviceTokenByID :one
 SELECT
     id,
     user_id,
-    provider,
     platform,
     installation_id,
     push_token,
-    app_version,
-    os_version,
-    device_model,
     is_active,
     last_seen_at,
     created_at,
     updated_at
 FROM device_tokens
-WHERE id = $1
+WHERE id = sqlc.arg('id')
 LIMIT 1;
 
 -- name: GetDeviceTokenByPushToken :one
 SELECT
     id,
     user_id,
-    provider,
     platform,
     installation_id,
     push_token,
-    app_version,
-    os_version,
-    device_model,
     is_active,
     last_seen_at,
     created_at,
     updated_at
 FROM device_tokens
-WHERE push_token = $1
+WHERE push_token = sqlc.arg('push_token')
 LIMIT 1;
 
--- name: GetDeviceTokensByUserID :many
-SELECT
-    id,
-    user_id,
-    provider,
-    platform,
-    installation_id,
-    push_token,
-    app_version,
-    os_version,
-    device_model,
-    is_active,
-    last_seen_at,
-    created_at,
-    updated_at
-FROM device_tokens
-WHERE user_id = $1
-ORDER BY created_at DESC;
+-- ==========================================
+-- EXISTS
+-- ==========================================
+
+-- name: ExistsDeviceToken :one
+SELECT EXISTS (
+    SELECT 1
+    FROM device_tokens
+    WHERE push_token = sqlc.arg('push_token')
+);
+
+-- ==========================================
+-- CREATE
+-- ==========================================
 
 -- name: CreateDeviceToken :one
 INSERT INTO device_tokens (
     user_id,
-    provider,
+    platform,
+    installation_id,
+    push_token
+)
+VALUES (
+    sqlc.arg('user_id'),
+    sqlc.arg('platform'),
+    sqlc.arg('installation_id'),
+    sqlc.arg('push_token')
+)
+RETURNING
+    id,
+    user_id,
     platform,
     installation_id,
     push_token,
-    app_version,
-    os_version,
-    device_model,
     is_active,
-    last_seen_at
-)
-VALUES (
-    $1,
-    $2,
-    $3,
-    $4,
-    $5,
-    $6,
-    $7,
-    $8,
-    $9,
-    $10
-)
-RETURNING *;
+    last_seen_at,
+    created_at,
+    updated_at;
+
+-- ==========================================
+-- UPDATE
+-- ==========================================
 
 -- name: UpdateDeviceToken :exec
 UPDATE device_tokens
 SET
-    provider = $2,
-    platform = $3,
-    installation_id = $4,
-    push_token = $5,
-    app_version = $6,
-    os_version = $7,
-    device_model = $8,
-    is_active = $9,
-    last_seen_at = $10,
+    push_token = sqlc.arg('push_token'),
+    last_seen_at = NOW(),
     updated_at = NOW()
-WHERE id = $1;
+WHERE id = sqlc.arg('id');
 
--- name: UpdateDeviceTokenActive :exec
+-- name: UpdateDeviceTokenStatus :exec
 UPDATE device_tokens
 SET
-    is_active = $2,
+    is_active = sqlc.arg('is_active'),
     updated_at = NOW()
-WHERE id = $1;
+WHERE id = sqlc.arg('id');
 
--- name: UpdateDeviceTokenLastSeen :exec
-UPDATE device_tokens
-SET
-    last_seen_at = $2,
-    updated_at = NOW()
-WHERE id = $1;
+-- ==========================================
+-- DELETE
+-- ==========================================
 
 -- name: DeleteDeviceToken :exec
-DELETE FROM device_tokens
-WHERE id = $1;
+DELETE
+FROM device_tokens
+WHERE id = sqlc.arg('id');
 
--- name: DeleteDeviceTokensByUser :exec
-DELETE FROM device_tokens
-WHERE user_id = $1;
+-- ==========================================
+-- LIST
+-- ==========================================
 
--- name: ListDeviceTokens :many
+-- name: ListDeviceTokensByUser :many
 SELECT
     id,
     user_id,
-    provider,
     platform,
     installation_id,
     push_token,
-    app_version,
-    os_version,
-    device_model,
     is_active,
     last_seen_at,
     created_at,
     updated_at
 FROM device_tokens
-WHERE
-    ($1::bigint IS NULL OR user_id = $1) AND
-    ($2::boolean IS NULL OR is_active = $2)
-ORDER BY id;
+WHERE user_id = sqlc.arg('user_id')
+ORDER BY created_at DESC
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
+-- ==========================================
+-- COUNT
+-- ==========================================
+
+-- name: CountDeviceTokensByUser :one
+SELECT COUNT(*)
+FROM device_tokens
+WHERE user_id = sqlc.arg('user_id');

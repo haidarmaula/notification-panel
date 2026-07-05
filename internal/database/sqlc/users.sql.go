@@ -11,7 +11,37 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countUsers = `-- name: CountUsers :one
+
+SELECT COUNT(*)
+FROM users
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountUsers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsers)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countUsersByStatus = `-- name: CountUsersByStatus :one
+SELECT COUNT(*)
+FROM users
+WHERE status = $1
+`
+
+func (q *Queries) CountUsersByStatus(ctx context.Context, status string) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsersByStatus, status)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUser = `-- name: CreateUser :one
+
 INSERT INTO users (
     external_id,
     name,
@@ -24,7 +54,14 @@ VALUES (
     $3,
     $4
 )
-RETURNING id, external_id, name, email, status, created_at, updated_at
+RETURNING
+    id,
+    external_id,
+    name,
+    email,
+    status,
+    created_at,
+    updated_at
 `
 
 type CreateUserParams struct {
@@ -34,6 +71,9 @@ type CreateUserParams struct {
 	Status     string      `db:"status"`
 }
 
+// ==========================================
+// CREATE
+// ==========================================
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
 	row := q.db.QueryRow(ctx, createUser,
 		arg.ExternalID,
@@ -55,13 +95,52 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 }
 
 const deleteUser = `-- name: DeleteUser :exec
-DELETE FROM users
+
+DELETE
+FROM users
 WHERE id = $1
 `
 
+// ==========================================
+// DELETE
+// ==========================================
 func (q *Queries) DeleteUser(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteUser, id)
 	return err
+}
+
+const existsUserByEmail = `-- name: ExistsUserByEmail :one
+SELECT EXISTS (
+    SELECT 1
+    FROM users
+    WHERE email = $1
+)
+`
+
+func (q *Queries) ExistsUserByEmail(ctx context.Context, email pgtype.Text) (bool, error) {
+	row := q.db.QueryRow(ctx, existsUserByEmail, email)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
+const existsUserByExternalID = `-- name: ExistsUserByExternalID :one
+
+SELECT EXISTS (
+    SELECT 1
+    FROM users
+    WHERE external_id = $1
+)
+`
+
+// ==========================================
+// EXISTS
+// ==========================================
+func (q *Queries) ExistsUserByExternalID(ctx context.Context, externalID string) (bool, error) {
+	row := q.db.QueryRow(ctx, existsUserByExternalID, externalID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
@@ -123,6 +202,7 @@ func (q *Queries) GetUserByExternalID(ctx context.Context, externalID string) (U
 }
 
 const getUserByID = `-- name: GetUserByID :one
+
 SELECT
     id,
     external_id,
@@ -136,6 +216,9 @@ WHERE id = $1
 LIMIT 1
 `
 
+// ==========================================
+// GET
+// ==========================================
 func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 	row := q.db.QueryRow(ctx, getUserByID, id)
 	var i User
@@ -152,6 +235,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 }
 
 const listUsers = `-- name: ListUsers :many
+
 SELECT
     id,
     external_id,
@@ -161,12 +245,132 @@ SELECT
     created_at,
     updated_at
 FROM users
-WHERE (CARDINALITY($1::text[]) = 0 OR status = ANY($1))
-ORDER BY id
+ORDER BY name
+LIMIT $2
+OFFSET $1
 `
 
-func (q *Queries) ListUsers(ctx context.Context, dollar_1 []string) ([]User, error) {
-	rows, err := q.db.Query(ctx, listUsers, dollar_1)
+type ListUsersParams struct {
+	Offset int32 `db:"offset"`
+	Limit  int32 `db:"limit"`
+}
+
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsers, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.ExternalID,
+			&i.Name,
+			&i.Email,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsersByStatus = `-- name: ListUsersByStatus :many
+
+SELECT
+    id,
+    external_id,
+    name,
+    email,
+    status,
+    created_at,
+    updated_at
+FROM users
+WHERE status = $1
+ORDER BY name
+LIMIT $3
+OFFSET $2
+`
+
+type ListUsersByStatusParams struct {
+	Status string `db:"status"`
+	Offset int32  `db:"offset"`
+	Limit  int32  `db:"limit"`
+}
+
+// ==========================================
+// FILTER
+// ==========================================
+func (q *Queries) ListUsersByStatus(ctx context.Context, arg ListUsersByStatusParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsersByStatus, arg.Status, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.ExternalID,
+			&i.Name,
+			&i.Email,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchUsers = `-- name: SearchUsers :many
+
+SELECT
+    id,
+    external_id,
+    name,
+    email,
+    status,
+    created_at,
+    updated_at
+FROM users
+WHERE
+    name ILIKE '%' || $1 || '%'
+    OR email ILIKE '%' || $1 || '%'
+    OR external_id ILIKE '%' || $1 || '%'
+ORDER BY name
+LIMIT $3
+OFFSET $2
+`
+
+type SearchUsersParams struct {
+	Keyword pgtype.Text `db:"keyword"`
+	Offset  int32       `db:"offset"`
+	Limit   int32       `db:"limit"`
+}
+
+// ==========================================
+// SEARCH
+// ==========================================
+func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, searchUsers, arg.Keyword, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -194,28 +398,32 @@ func (q *Queries) ListUsers(ctx context.Context, dollar_1 []string) ([]User, err
 }
 
 const updateUser = `-- name: UpdateUser :exec
+
 UPDATE users
 SET
-    name = $2,
-    email = $3,
-    status = $4,
+    name = $1,
+    email = $2,
+    status = $3,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $4
 `
 
 type UpdateUserParams struct {
-	ID     int64       `db:"id"`
 	Name   pgtype.Text `db:"name"`
 	Email  pgtype.Text `db:"email"`
 	Status string      `db:"status"`
+	ID     int64       `db:"id"`
 }
 
+// ==========================================
+// UPDATE
+// ==========================================
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
 	_, err := q.db.Exec(ctx, updateUser,
-		arg.ID,
 		arg.Name,
 		arg.Email,
 		arg.Status,
+		arg.ID,
 	)
 	return err
 }
@@ -223,17 +431,17 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) error {
 const updateUserStatus = `-- name: UpdateUserStatus :exec
 UPDATE users
 SET
-    status = $2,
+    status = $1,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $2
 `
 
 type UpdateUserStatusParams struct {
-	ID     int64  `db:"id"`
 	Status string `db:"status"`
+	ID     int64  `db:"id"`
 }
 
 func (q *Queries) UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error {
-	_, err := q.db.Exec(ctx, updateUserStatus, arg.ID, arg.Status)
+	_, err := q.db.Exec(ctx, updateUserStatus, arg.Status, arg.ID)
 	return err
 }

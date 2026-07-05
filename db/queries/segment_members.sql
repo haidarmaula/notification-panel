@@ -1,3 +1,7 @@
+-- ==========================================
+-- GET
+-- ==========================================
+
 -- name: GetSegmentMemberByID :one
 SELECT
     id,
@@ -5,38 +9,12 @@ SELECT
     user_id,
     created_at
 FROM segment_members
-WHERE id = $1
+WHERE id = sqlc.arg('id')
 LIMIT 1;
 
--- name: GetSegmentMemberBySegmentAndUser :one
-SELECT
-    id,
-    segment_id,
-    user_id,
-    created_at
-FROM segment_members
-WHERE segment_id = $1 AND user_id = $2
-LIMIT 1;
-
--- name: GetSegmentMembersBySegmentID :many
-SELECT
-    id,
-    segment_id,
-    user_id,
-    created_at
-FROM segment_members
-WHERE segment_id = $1
-ORDER BY id;
-
--- name: GetSegmentMembersByUserID :many
-SELECT
-    id,
-    segment_id,
-    user_id,
-    created_at
-FROM segment_members
-WHERE user_id = $1
-ORDER BY id;
+-- ==========================================
+-- CREATE
+-- ==========================================
 
 -- name: CreateSegmentMember :one
 INSERT INTO segment_members (
@@ -44,31 +22,49 @@ INSERT INTO segment_members (
     user_id
 )
 VALUES (
-    $1,
-    $2
+    sqlc.arg('segment_id'),
+    sqlc.arg('user_id')
 )
-RETURNING *;
-
--- name: DeleteSegmentMember :exec
-DELETE FROM segment_members
-WHERE id = $1;
-
--- name: DeleteSegmentMembersBySegment :exec
-DELETE FROM segment_members
-WHERE segment_id = $1;
-
--- name: DeleteSegmentMembersByUser :exec
-DELETE FROM segment_members
-WHERE user_id = $1;
-
--- name: ListSegmentMembers :many
-SELECT
+RETURNING
     id,
     segment_id,
     user_id,
-    created_at
+    created_at;
+
+-- ==========================================
+-- DELETE
+-- ==========================================
+
+-- name: DeleteSegmentMember :exec
+DELETE
 FROM segment_members
-WHERE
-    ($1::bigint IS NULL OR segment_id = $1) AND
-    ($2::bigint IS NULL OR user_id = $2)
-ORDER BY id;
+WHERE id = sqlc.arg('id');
+
+-- ==========================================
+-- LIST
+-- ==========================================
+
+-- name: ListSegmentMembers :many
+SELECT
+    sm.id,
+    sm.segment_id,
+    u.id AS user_id,
+    u.name,
+    u.email,
+    sm.created_at
+FROM segment_members sm
+JOIN users u
+    ON u.id = sm.user_id
+WHERE sm.segment_id = sqlc.arg('segment_id')
+ORDER BY u.name
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
+-- ==========================================
+-- COUNT
+-- ==========================================
+
+-- name: CountSegmentMembers :one
+SELECT COUNT(*)
+FROM segment_members
+WHERE segment_id = sqlc.arg('segment_id');

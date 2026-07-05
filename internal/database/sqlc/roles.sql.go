@@ -11,7 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countRoles = `-- name: CountRoles :one
+
+SELECT COUNT(*)
+FROM roles
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountRoles(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countRoles)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createRole = `-- name: CreateRole :one
+
 INSERT INTO roles (
     name,
     description
@@ -20,7 +37,12 @@ VALUES (
     $1,
     $2
 )
-RETURNING id, name, description, created_at, updated_at
+RETURNING
+    id,
+    name,
+    description,
+    created_at,
+    updated_at
 `
 
 type CreateRoleParams struct {
@@ -28,6 +50,9 @@ type CreateRoleParams struct {
 	Description pgtype.Text `db:"description"`
 }
 
+// ==========================================
+// CREATE
+// ==========================================
 func (q *Queries) CreateRole(ctx context.Context, arg CreateRoleParams) (Role, error) {
 	row := q.db.QueryRow(ctx, createRole, arg.Name, arg.Description)
 	var i Role
@@ -42,16 +67,41 @@ func (q *Queries) CreateRole(ctx context.Context, arg CreateRoleParams) (Role, e
 }
 
 const deleteRole = `-- name: DeleteRole :exec
-DELETE FROM roles
+
+DELETE
+FROM roles
 WHERE id = $1
 `
 
+// ==========================================
+// DELETE
+// ==========================================
 func (q *Queries) DeleteRole(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteRole, id)
 	return err
 }
 
+const existsRoleByName = `-- name: ExistsRoleByName :one
+
+SELECT EXISTS (
+    SELECT 1
+    FROM roles
+    WHERE name = $1
+)
+`
+
+// ==========================================
+// EXISTS
+// ==========================================
+func (q *Queries) ExistsRoleByName(ctx context.Context, name string) (bool, error) {
+	row := q.db.QueryRow(ctx, existsRoleByName, name)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const getRoleByID = `-- name: GetRoleByID :one
+
 SELECT
     id,
     name,
@@ -63,6 +113,9 @@ WHERE id = $1
 LIMIT 1
 `
 
+// ==========================================
+// GET
+// ==========================================
 func (q *Queries) GetRoleByID(ctx context.Context, id int64) (Role, error) {
 	row := q.db.QueryRow(ctx, getRoleByID, id)
 	var i Role
@@ -102,6 +155,7 @@ func (q *Queries) GetRoleByName(ctx context.Context, name string) (Role, error) 
 }
 
 const listRoles = `-- name: ListRoles :many
+
 SELECT
     id,
     name,
@@ -109,11 +163,21 @@ SELECT
     created_at,
     updated_at
 FROM roles
-ORDER BY id
+ORDER BY name
+LIMIT $2
+OFFSET $1
 `
 
-func (q *Queries) ListRoles(ctx context.Context) ([]Role, error) {
-	rows, err := q.db.Query(ctx, listRoles)
+type ListRolesParams struct {
+	Offset int32 `db:"offset"`
+	Limit  int32 `db:"limit"`
+}
+
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListRoles(ctx context.Context, arg ListRolesParams) ([]Role, error) {
+	rows, err := q.db.Query(ctx, listRoles, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -139,21 +203,25 @@ func (q *Queries) ListRoles(ctx context.Context) ([]Role, error) {
 }
 
 const updateRole = `-- name: UpdateRole :exec
+
 UPDATE roles
 SET
-    name = $2,
-    description = $3,
+    name = $1,
+    description = $2,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $3
 `
 
 type UpdateRoleParams struct {
-	ID          int64       `db:"id"`
 	Name        string      `db:"name"`
 	Description pgtype.Text `db:"description"`
+	ID          int64       `db:"id"`
 }
 
+// ==========================================
+// UPDATE
+// ==========================================
 func (q *Queries) UpdateRole(ctx context.Context, arg UpdateRoleParams) error {
-	_, err := q.db.Exec(ctx, updateRole, arg.ID, arg.Name, arg.Description)
+	_, err := q.db.Exec(ctx, updateRole, arg.Name, arg.Description, arg.ID)
 	return err
 }

@@ -1,155 +1,113 @@
--- name: GetDeliveryByID :one
+-- ==========================================
+-- GET
+-- ==========================================
+
+-- name: GetNotificationDeliveryByID :one
 SELECT
     id,
     notification_id,
     user_id,
-    device_token_id,
     provider,
     provider_message_id,
     status,
-    retry_count,
-    failed_reason,
     sent_at,
     delivered_at,
     opened_at,
+    failed_reason,
     created_at,
     updated_at
 FROM notification_deliveries
-WHERE id = $1
+WHERE id = sqlc.arg('id')
 LIMIT 1;
 
--- name: GetDeliveriesByNotificationID :many
-SELECT
-    id,
-    notification_id,
-    user_id,
-    device_token_id,
-    provider,
-    provider_message_id,
-    status,
-    retry_count,
-    failed_reason,
-    sent_at,
-    delivered_at,
-    opened_at,
-    created_at,
-    updated_at
-FROM notification_deliveries
-WHERE notification_id = $1
-ORDER BY id;
+-- ==========================================
+-- CREATE
+-- ==========================================
 
--- name: GetDeliveriesByUserID :many
-SELECT
-    id,
-    notification_id,
-    user_id,
-    device_token_id,
-    provider,
-    provider_message_id,
-    status,
-    retry_count,
-    failed_reason,
-    sent_at,
-    delivered_at,
-    opened_at,
-    created_at,
-    updated_at
-FROM notification_deliveries
-WHERE user_id = $1
-ORDER BY created_at DESC;
-
--- name: GetDeliveriesByStatus :many
-SELECT
-    id,
-    notification_id,
-    user_id,
-    device_token_id,
-    provider,
-    provider_message_id,
-    status,
-    retry_count,
-    failed_reason,
-    sent_at,
-    delivered_at,
-    opened_at,
-    created_at,
-    updated_at
-FROM notification_deliveries
-WHERE status = $1
-ORDER BY created_at;
-
--- name: CreateDelivery :one
+-- name: CreateNotificationDelivery :one
 INSERT INTO notification_deliveries (
     notification_id,
     user_id,
-    device_token_id,
     provider,
     provider_message_id,
-    status,
-    retry_count,
-    failed_reason,
-    sent_at,
-    delivered_at,
-    opened_at
+    status
 )
 VALUES (
-    $1,
-    $2,
-    $3,
-    $4,
-    $5,
-    $6,
-    $7,
-    $8,
-    $9,
-    $10,
-    $11
+    sqlc.arg('notification_id'),
+    sqlc.arg('user_id'),
+    sqlc.arg('provider'),
+    sqlc.arg('provider_message_id'),
+    sqlc.arg('status')
 )
-RETURNING *;
-
--- name: UpdateDelivery :exec
-UPDATE notification_deliveries
-SET
-    provider_message_id = $2,
-    status = $3,
-    retry_count = $4,
-    failed_reason = $5,
-    sent_at = $6,
-    delivered_at = $7,
-    opened_at = $8,
-    updated_at = NOW()
-WHERE id = $1;
-
--- name: UpdateDeliveryStatus :exec
-UPDATE notification_deliveries
-SET
-    status = $2,
-    updated_at = NOW()
-WHERE id = $1;
-
--- name: DeleteDelivery :exec
-DELETE FROM notification_deliveries
-WHERE id = $1;
-
--- name: ListDeliveries :many
-SELECT
+RETURNING
     id,
     notification_id,
     user_id,
-    device_token_id,
     provider,
     provider_message_id,
     status,
-    retry_count,
-    failed_reason,
     sent_at,
     delivered_at,
     opened_at,
+    failed_reason,
     created_at,
-    updated_at
+    updated_at;
+
+-- ==========================================
+-- UPDATE STATUS
+-- ==========================================
+
+-- name: MarkNotificationDelivered :exec
+UPDATE notification_deliveries
+SET
+    status = 'DELIVERED',
+    delivered_at = NOW(),
+    updated_at = NOW()
+WHERE id = sqlc.arg('id');
+
+-- name: MarkNotificationOpened :exec
+UPDATE notification_deliveries
+SET
+    status = 'OPENED',
+    opened_at = NOW(),
+    updated_at = NOW()
+WHERE id = sqlc.arg('id');
+
+-- name: MarkNotificationFailed :exec
+UPDATE notification_deliveries
+SET
+    status = 'FAILED',
+    failed_reason = sqlc.arg('failed_reason'),
+    updated_at = NOW()
+WHERE id = sqlc.arg('id');
+
+-- ==========================================
+-- LIST
+-- ==========================================
+
+-- name: ListNotificationDeliveries :many
+SELECT
+    nd.id,
+    nd.provider,
+    nd.status,
+    u.name,
+    u.email,
+    nd.sent_at,
+    nd.delivered_at,
+    nd.opened_at
+FROM notification_deliveries nd
+JOIN users u
+    ON u.id = nd.user_id
+WHERE nd.notification_id = sqlc.arg('notification_id')
+ORDER BY nd.created_at
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
+-- ==========================================
+-- COUNT
+-- ==========================================
+
+-- name: CountNotificationDeliveries :one
+SELECT COUNT(*)
 FROM notification_deliveries
-WHERE
-    ($1::bigint IS NULL OR notification_id = $1) AND
-    ($2::bigint IS NULL OR user_id = $2) AND
-    ($3::text[] IS NULL OR status = ANY($3))
-ORDER BY created_at DESC;
+WHERE notification_id = sqlc.arg('notification_id');

@@ -7,53 +7,85 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countTemplates = `-- name: CountTemplates :one
+
+SELECT COUNT(*)
+FROM templates
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountTemplates(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countTemplates)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createTemplate = `-- name: CreateTemplate :one
+
 INSERT INTO templates (
     name,
     title_template,
     body_template,
-    variables,
-    created_by,
-    is_active
+    created_by
 )
 VALUES (
     $1,
     $2,
     $3,
-    $4,
-    $5,
-    $6
+    $4
 )
-RETURNING id, name, title_template, body_template, variables, created_by, is_active, created_at, updated_at
+RETURNING
+    id,
+    name,
+    title_template,
+    body_template,
+    created_by,
+    is_active,
+    created_at,
+    updated_at
 `
 
 type CreateTemplateParams struct {
 	Name          string `db:"name"`
 	TitleTemplate string `db:"title_template"`
 	BodyTemplate  string `db:"body_template"`
-	Variables     []byte `db:"variables"`
 	CreatedBy     int64  `db:"created_by"`
-	IsActive      bool   `db:"is_active"`
 }
 
-func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) (Template, error) {
+type CreateTemplateRow struct {
+	ID            int64              `db:"id"`
+	Name          string             `db:"name"`
+	TitleTemplate string             `db:"title_template"`
+	BodyTemplate  string             `db:"body_template"`
+	CreatedBy     int64              `db:"created_by"`
+	IsActive      bool               `db:"is_active"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
+}
+
+// ==========================================
+// CREATE
+// ==========================================
+func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) (CreateTemplateRow, error) {
 	row := q.db.QueryRow(ctx, createTemplate,
 		arg.Name,
 		arg.TitleTemplate,
 		arg.BodyTemplate,
-		arg.Variables,
 		arg.CreatedBy,
-		arg.IsActive,
 	)
-	var i Template
+	var i CreateTemplateRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.TitleTemplate,
 		&i.BodyTemplate,
-		&i.Variables,
 		&i.CreatedBy,
 		&i.IsActive,
 		&i.CreatedAt,
@@ -63,22 +95,46 @@ func (q *Queries) CreateTemplate(ctx context.Context, arg CreateTemplateParams) 
 }
 
 const deleteTemplate = `-- name: DeleteTemplate :exec
-DELETE FROM templates
+
+DELETE
+FROM templates
 WHERE id = $1
 `
 
+// ==========================================
+// DELETE
+// ==========================================
 func (q *Queries) DeleteTemplate(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteTemplate, id)
 	return err
 }
 
+const existsTemplateByName = `-- name: ExistsTemplateByName :one
+
+SELECT EXISTS (
+    SELECT 1
+    FROM templates
+    WHERE name = $1
+)
+`
+
+// ==========================================
+// EXISTS
+// ==========================================
+func (q *Queries) ExistsTemplateByName(ctx context.Context, name string) (bool, error) {
+	row := q.db.QueryRow(ctx, existsTemplateByName, name)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const getTemplateByID = `-- name: GetTemplateByID :one
+
 SELECT
     id,
     name,
     title_template,
     body_template,
-    variables,
     created_by,
     is_active,
     created_at,
@@ -88,15 +144,28 @@ WHERE id = $1
 LIMIT 1
 `
 
-func (q *Queries) GetTemplateByID(ctx context.Context, id int64) (Template, error) {
+type GetTemplateByIDRow struct {
+	ID            int64              `db:"id"`
+	Name          string             `db:"name"`
+	TitleTemplate string             `db:"title_template"`
+	BodyTemplate  string             `db:"body_template"`
+	CreatedBy     int64              `db:"created_by"`
+	IsActive      bool               `db:"is_active"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
+}
+
+// ==========================================
+// GET
+// ==========================================
+func (q *Queries) GetTemplateByID(ctx context.Context, id int64) (GetTemplateByIDRow, error) {
 	row := q.db.QueryRow(ctx, getTemplateByID, id)
-	var i Template
+	var i GetTemplateByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.TitleTemplate,
 		&i.BodyTemplate,
-		&i.Variables,
 		&i.CreatedBy,
 		&i.IsActive,
 		&i.CreatedAt,
@@ -111,7 +180,6 @@ SELECT
     name,
     title_template,
     body_template,
-    variables,
     created_by,
     is_active,
     created_at,
@@ -121,15 +189,25 @@ WHERE name = $1
 LIMIT 1
 `
 
-func (q *Queries) GetTemplateByName(ctx context.Context, name string) (Template, error) {
+type GetTemplateByNameRow struct {
+	ID            int64              `db:"id"`
+	Name          string             `db:"name"`
+	TitleTemplate string             `db:"title_template"`
+	BodyTemplate  string             `db:"body_template"`
+	CreatedBy     int64              `db:"created_by"`
+	IsActive      bool               `db:"is_active"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
+}
+
+func (q *Queries) GetTemplateByName(ctx context.Context, name string) (GetTemplateByNameRow, error) {
 	row := q.db.QueryRow(ctx, getTemplateByName, name)
-	var i Template
+	var i GetTemplateByNameRow
 	err := row.Scan(
 		&i.ID,
 		&i.Name,
 		&i.TitleTemplate,
 		&i.BodyTemplate,
-		&i.Variables,
 		&i.CreatedBy,
 		&i.IsActive,
 		&i.CreatedAt,
@@ -139,45 +217,129 @@ func (q *Queries) GetTemplateByName(ctx context.Context, name string) (Template,
 }
 
 const listTemplates = `-- name: ListTemplates :many
+
 SELECT
-    id,
-    name,
-    title_template,
-    body_template,
-    variables,
-    created_by,
-    is_active,
-    created_at,
-    updated_at
-FROM templates
-WHERE
-    ($1::boolean IS NULL OR is_active = $1) AND
-    ($2::bigint IS NULL OR created_by = $2)
-ORDER BY id
+    t.id,
+    t.name,
+    t.title_template,
+    t.body_template,
+    t.is_active,
+    su.name AS created_by_name,
+    t.created_at,
+    t.updated_at
+FROM templates t
+JOIN staff_users su
+    ON su.id = t.created_by
+ORDER BY t.name
+LIMIT $2
+OFFSET $1
 `
 
 type ListTemplatesParams struct {
-	Column1 bool  `db:"column_1"`
-	Column2 int64 `db:"column_2"`
+	Offset int32 `db:"offset"`
+	Limit  int32 `db:"limit"`
 }
 
-func (q *Queries) ListTemplates(ctx context.Context, arg ListTemplatesParams) ([]Template, error) {
-	rows, err := q.db.Query(ctx, listTemplates, arg.Column1, arg.Column2)
+type ListTemplatesRow struct {
+	ID            int64              `db:"id"`
+	Name          string             `db:"name"`
+	TitleTemplate string             `db:"title_template"`
+	BodyTemplate  string             `db:"body_template"`
+	IsActive      bool               `db:"is_active"`
+	CreatedByName string             `db:"created_by_name"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
+}
+
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListTemplates(ctx context.Context, arg ListTemplatesParams) ([]ListTemplatesRow, error) {
+	rows, err := q.db.Query(ctx, listTemplates, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Template{}
+	items := []ListTemplatesRow{}
 	for rows.Next() {
-		var i Template
+		var i ListTemplatesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
 			&i.TitleTemplate,
 			&i.BodyTemplate,
-			&i.Variables,
-			&i.CreatedBy,
 			&i.IsActive,
+			&i.CreatedByName,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchTemplates = `-- name: SearchTemplates :many
+
+SELECT
+    t.id,
+    t.name,
+    t.title_template,
+    t.body_template,
+    t.is_active,
+    su.name AS created_by_name,
+    t.created_at,
+    t.updated_at
+FROM templates t
+JOIN staff_users su
+    ON su.id = t.created_by
+WHERE
+    t.name ILIKE '%' || $1 || '%'
+ORDER BY t.name
+LIMIT $3
+OFFSET $2
+`
+
+type SearchTemplatesParams struct {
+	Keyword pgtype.Text `db:"keyword"`
+	Offset  int32       `db:"offset"`
+	Limit   int32       `db:"limit"`
+}
+
+type SearchTemplatesRow struct {
+	ID            int64              `db:"id"`
+	Name          string             `db:"name"`
+	TitleTemplate string             `db:"title_template"`
+	BodyTemplate  string             `db:"body_template"`
+	IsActive      bool               `db:"is_active"`
+	CreatedByName string             `db:"created_by_name"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
+}
+
+// ==========================================
+// SEARCH
+// ==========================================
+func (q *Queries) SearchTemplates(ctx context.Context, arg SearchTemplatesParams) ([]SearchTemplatesRow, error) {
+	rows, err := q.db.Query(ctx, searchTemplates, arg.Keyword, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchTemplatesRow{}
+	for rows.Next() {
+		var i SearchTemplatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.TitleTemplate,
+			&i.BodyTemplate,
+			&i.IsActive,
+			&i.CreatedByName,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -192,52 +354,50 @@ func (q *Queries) ListTemplates(ctx context.Context, arg ListTemplatesParams) ([
 }
 
 const updateTemplate = `-- name: UpdateTemplate :exec
+
 UPDATE templates
 SET
-    name = $2,
-    title_template = $3,
-    body_template = $4,
-    variables = $5,
-    is_active = $6,
+    name = $1,
+    title_template = $2,
+    body_template = $3,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $4
 `
 
 type UpdateTemplateParams struct {
-	ID            int64  `db:"id"`
 	Name          string `db:"name"`
 	TitleTemplate string `db:"title_template"`
 	BodyTemplate  string `db:"body_template"`
-	Variables     []byte `db:"variables"`
-	IsActive      bool   `db:"is_active"`
+	ID            int64  `db:"id"`
 }
 
+// ==========================================
+// UPDATE
+// ==========================================
 func (q *Queries) UpdateTemplate(ctx context.Context, arg UpdateTemplateParams) error {
 	_, err := q.db.Exec(ctx, updateTemplate,
-		arg.ID,
 		arg.Name,
 		arg.TitleTemplate,
 		arg.BodyTemplate,
-		arg.Variables,
-		arg.IsActive,
+		arg.ID,
 	)
 	return err
 }
 
-const updateTemplateActive = `-- name: UpdateTemplateActive :exec
+const updateTemplateStatus = `-- name: UpdateTemplateStatus :exec
 UPDATE templates
 SET
-    is_active = $2,
+    is_active = $1,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $2
 `
 
-type UpdateTemplateActiveParams struct {
-	ID       int64 `db:"id"`
+type UpdateTemplateStatusParams struct {
 	IsActive bool  `db:"is_active"`
+	ID       int64 `db:"id"`
 }
 
-func (q *Queries) UpdateTemplateActive(ctx context.Context, arg UpdateTemplateActiveParams) error {
-	_, err := q.db.Exec(ctx, updateTemplateActive, arg.ID, arg.IsActive)
+func (q *Queries) UpdateTemplateStatus(ctx context.Context, arg UpdateTemplateStatusParams) error {
+	_, err := q.db.Exec(ctx, updateTemplateStatus, arg.IsActive, arg.ID)
 	return err
 }

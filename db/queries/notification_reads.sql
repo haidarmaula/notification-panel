@@ -1,68 +1,60 @@
--- name: GetReadByID :one
-SELECT
-    id,
-    notification_id,
-    user_id,
-    read_at
-FROM notification_reads
-WHERE id = $1
-LIMIT 1;
+-- ==========================================
+-- CREATE
+-- ==========================================
 
--- name: GetReadByNotificationAndUser :one
-SELECT
-    id,
-    notification_id,
-    user_id,
-    read_at
-FROM notification_reads
-WHERE notification_id = $1 AND user_id = $2
-LIMIT 1;
-
--- name: GetReadsByNotificationID :many
-SELECT
-    id,
-    notification_id,
-    user_id,
-    read_at
-FROM notification_reads
-WHERE notification_id = $1
-ORDER BY id;
-
--- name: GetReadsByUserID :many
-SELECT
-    id,
-    notification_id,
-    user_id,
-    read_at
-FROM notification_reads
-WHERE user_id = $1
-ORDER BY read_at DESC;
-
--- name: CreateRead :one
+-- name: CreateNotificationRead :one
 INSERT INTO notification_reads (
     notification_id,
     user_id,
     read_at
 )
 VALUES (
-    $1,
-    $2,
-    $3
+    sqlc.arg('notification_id'),
+    sqlc.arg('user_id'),
+    NOW()
 )
-RETURNING *;
-
--- name: DeleteRead :exec
-DELETE FROM notification_reads
-WHERE id = $1;
-
--- name: ListReads :many
-SELECT
+RETURNING
     id,
     notification_id,
     user_id,
-    read_at
+    read_at;
+
+-- ==========================================
+-- EXISTS
+-- ==========================================
+
+-- name: ExistsNotificationRead :one
+SELECT EXISTS (
+    SELECT 1
+    FROM notification_reads
+    WHERE
+        notification_id = sqlc.arg('notification_id')
+        AND user_id = sqlc.arg('user_id')
+);
+
+-- ==========================================
+-- LIST
+-- ==========================================
+
+-- name: ListNotificationReads :many
+SELECT
+    nr.id,
+    u.name,
+    u.email,
+    nr.read_at
+FROM notification_reads nr
+JOIN users u
+    ON u.id = nr.user_id
+WHERE nr.notification_id = sqlc.arg('notification_id')
+ORDER BY nr.read_at DESC
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
+-- ==========================================
+-- COUNT
+-- ==========================================
+
+-- name: CountNotificationReads :one
+SELECT COUNT(*)
 FROM notification_reads
-WHERE
-    ($1::bigint IS NULL OR notification_id = $1) AND
-    ($2::bigint IS NULL OR user_id = $2)
-ORDER BY read_at DESC;
+WHERE notification_id = sqlc.arg('notification_id');

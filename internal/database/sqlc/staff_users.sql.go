@@ -11,7 +11,24 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countStaffUsers = `-- name: CountStaffUsers :one
+
+SELECT COUNT(*)
+FROM staff_users
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountStaffUsers(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countStaffUsers)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createStaffUser = `-- name: CreateStaffUser :one
+
 INSERT INTO staff_users (
     role_id,
     name,
@@ -24,7 +41,15 @@ VALUES (
     $3,
     $4
 )
-RETURNING id, role_id, name, email, password_hash, is_active, created_at, updated_at
+RETURNING
+    id,
+    role_id,
+    name,
+    email,
+    password_hash,
+    is_active,
+    created_at,
+    updated_at
 `
 
 type CreateStaffUserParams struct {
@@ -34,6 +59,9 @@ type CreateStaffUserParams struct {
 	PasswordHash string `db:"password_hash"`
 }
 
+// ==========================================
+// CREATE
+// ==========================================
 func (q *Queries) CreateStaffUser(ctx context.Context, arg CreateStaffUserParams) (StaffUser, error) {
 	row := q.db.QueryRow(ctx, createStaffUser,
 		arg.RoleID,
@@ -53,6 +81,40 @@ func (q *Queries) CreateStaffUser(ctx context.Context, arg CreateStaffUserParams
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const deleteStaffUser = `-- name: DeleteStaffUser :exec
+
+DELETE
+FROM staff_users
+WHERE id = $1
+`
+
+// ==========================================
+// DELETE
+// ==========================================
+func (q *Queries) DeleteStaffUser(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, deleteStaffUser, id)
+	return err
+}
+
+const existsStaffUserByEmail = `-- name: ExistsStaffUserByEmail :one
+
+SELECT EXISTS (
+    SELECT 1
+    FROM staff_users
+    WHERE email = $1
+)
+`
+
+// ==========================================
+// EXISTS
+// ==========================================
+func (q *Queries) ExistsStaffUserByEmail(ctx context.Context, email string) (bool, error) {
+	row := q.db.QueryRow(ctx, existsStaffUserByEmail, email)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const getStaffUserByEmail = `-- name: GetStaffUserByEmail :one
@@ -87,6 +149,7 @@ func (q *Queries) GetStaffUserByEmail(ctx context.Context, email string) (StaffU
 }
 
 const getStaffUserByID = `-- name: GetStaffUserByID :one
+
 SELECT
     id,
     role_id,
@@ -101,6 +164,9 @@ WHERE id = $1
 LIMIT 1
 `
 
+// ==========================================
+// GET
+// ==========================================
 func (q *Queries) GetStaffUserByID(ctx context.Context, id int64) (StaffUser, error) {
 	row := q.db.QueryRow(ctx, getStaffUserByID, id)
 	var i StaffUser
@@ -118,21 +184,33 @@ func (q *Queries) GetStaffUserByID(ctx context.Context, id int64) (StaffUser, er
 }
 
 const listStaffUsers = `-- name: ListStaffUsers :many
+
 SELECT
-    id,
-    role_id,
-    name,
-    email,
-    is_active,
-    created_at,
-    updated_at
-FROM staff_users
-ORDER BY id
+    su.id,
+    su.role_id,
+    r.name AS role_name,
+    su.name,
+    su.email,
+    su.is_active,
+    su.created_at,
+    su.updated_at
+FROM staff_users su
+INNER JOIN roles r
+    ON r.id = su.role_id
+ORDER BY su.name
+LIMIT $2
+OFFSET $1
 `
+
+type ListStaffUsersParams struct {
+	Offset int32 `db:"offset"`
+	Limit  int32 `db:"limit"`
+}
 
 type ListStaffUsersRow struct {
 	ID        int64              `db:"id"`
 	RoleID    int64              `db:"role_id"`
+	RoleName  string             `db:"role_name"`
 	Name      string             `db:"name"`
 	Email     string             `db:"email"`
 	IsActive  bool               `db:"is_active"`
@@ -140,8 +218,11 @@ type ListStaffUsersRow struct {
 	UpdatedAt pgtype.Timestamptz `db:"updated_at"`
 }
 
-func (q *Queries) ListStaffUsers(ctx context.Context) ([]ListStaffUsersRow, error) {
-	rows, err := q.db.Query(ctx, listStaffUsers)
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListStaffUsers(ctx context.Context, arg ListStaffUsersParams) ([]ListStaffUsersRow, error) {
+	rows, err := q.db.Query(ctx, listStaffUsers, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +233,78 @@ func (q *Queries) ListStaffUsers(ctx context.Context) ([]ListStaffUsersRow, erro
 		if err := rows.Scan(
 			&i.ID,
 			&i.RoleID,
+			&i.RoleName,
+			&i.Name,
+			&i.Email,
+			&i.IsActive,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const searchStaffUsers = `-- name: SearchStaffUsers :many
+
+SELECT
+    su.id,
+    su.role_id,
+    r.name AS role_name,
+    su.name,
+    su.email,
+    su.is_active,
+    su.created_at,
+    su.updated_at
+FROM staff_users su
+INNER JOIN roles r
+    ON r.id = su.role_id
+WHERE
+    su.name ILIKE '%' || $1 || '%'
+    OR su.email ILIKE '%' || $1 || '%'
+ORDER BY su.name
+LIMIT $3
+OFFSET $2
+`
+
+type SearchStaffUsersParams struct {
+	Keyword pgtype.Text `db:"keyword"`
+	Offset  int32       `db:"offset"`
+	Limit   int32       `db:"limit"`
+}
+
+type SearchStaffUsersRow struct {
+	ID        int64              `db:"id"`
+	RoleID    int64              `db:"role_id"`
+	RoleName  string             `db:"role_name"`
+	Name      string             `db:"name"`
+	Email     string             `db:"email"`
+	IsActive  bool               `db:"is_active"`
+	CreatedAt pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt pgtype.Timestamptz `db:"updated_at"`
+}
+
+// ==========================================
+// SEARCH
+// ==========================================
+func (q *Queries) SearchStaffUsers(ctx context.Context, arg SearchStaffUsersParams) ([]SearchStaffUsersRow, error) {
+	rows, err := q.db.Query(ctx, searchStaffUsers, arg.Keyword, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchStaffUsersRow{}
+	for rows.Next() {
+		var i SearchStaffUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.RoleID,
+			&i.RoleName,
 			&i.Name,
 			&i.Email,
 			&i.IsActive,
@@ -171,35 +324,66 @@ func (q *Queries) ListStaffUsers(ctx context.Context) ([]ListStaffUsersRow, erro
 const updateStaffPassword = `-- name: UpdateStaffPassword :exec
 UPDATE staff_users
 SET
-    password_hash = $2,
+    password_hash = $1,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $2
 `
 
 type UpdateStaffPasswordParams struct {
-	ID           int64  `db:"id"`
 	PasswordHash string `db:"password_hash"`
+	ID           int64  `db:"id"`
 }
 
 func (q *Queries) UpdateStaffPassword(ctx context.Context, arg UpdateStaffPasswordParams) error {
-	_, err := q.db.Exec(ctx, updateStaffPassword, arg.ID, arg.PasswordHash)
+	_, err := q.db.Exec(ctx, updateStaffPassword, arg.PasswordHash, arg.ID)
 	return err
 }
 
 const updateStaffStatus = `-- name: UpdateStaffStatus :exec
 UPDATE staff_users
 SET
-    is_active = $2,
+    is_active = $1,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $2
 `
 
 type UpdateStaffStatusParams struct {
-	ID       int64 `db:"id"`
 	IsActive bool  `db:"is_active"`
+	ID       int64 `db:"id"`
 }
 
 func (q *Queries) UpdateStaffStatus(ctx context.Context, arg UpdateStaffStatusParams) error {
-	_, err := q.db.Exec(ctx, updateStaffStatus, arg.ID, arg.IsActive)
+	_, err := q.db.Exec(ctx, updateStaffStatus, arg.IsActive, arg.ID)
+	return err
+}
+
+const updateStaffUser = `-- name: UpdateStaffUser :exec
+
+UPDATE staff_users
+SET
+    role_id = $1,
+    name = $2,
+    email = $3,
+    updated_at = NOW()
+WHERE id = $4
+`
+
+type UpdateStaffUserParams struct {
+	RoleID int64  `db:"role_id"`
+	Name   string `db:"name"`
+	Email  string `db:"email"`
+	ID     int64  `db:"id"`
+}
+
+// ==========================================
+// UPDATE
+// ==========================================
+func (q *Queries) UpdateStaffUser(ctx context.Context, arg UpdateStaffUserParams) error {
+	_, err := q.db.Exec(ctx, updateStaffUser,
+		arg.RoleID,
+		arg.Name,
+		arg.Email,
+		arg.ID,
+	)
 	return err
 }

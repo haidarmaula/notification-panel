@@ -11,181 +11,136 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countNotificationTargets = `-- name: CountNotificationTargets :one
+
+SELECT COUNT(*)
+FROM notification_targets
+WHERE notification_id = $1
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountNotificationTargets(ctx context.Context, notificationID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countNotificationTargets, notificationID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createNotificationTarget = `-- name: CreateNotificationTarget :one
+
 INSERT INTO notification_targets (
     notification_id,
-    target_type,
-    segment_id,
-    user_id,
-    upload_batch_id
+    user_id
 )
 VALUES (
     $1,
-    $2,
-    $3,
-    $4,
-    $5
+    $2
 )
-RETURNING id, notification_id, target_type, segment_id, user_id, upload_batch_id, created_at
+RETURNING
+    id,
+    notification_id,
+    user_id,
+    created_at
 `
 
 type CreateNotificationTargetParams struct {
 	NotificationID int64       `db:"notification_id"`
-	TargetType     string      `db:"target_type"`
-	SegmentID      pgtype.Int8 `db:"segment_id"`
 	UserID         pgtype.Int8 `db:"user_id"`
-	UploadBatchID  pgtype.Int8 `db:"upload_batch_id"`
 }
 
-func (q *Queries) CreateNotificationTarget(ctx context.Context, arg CreateNotificationTargetParams) (NotificationTarget, error) {
-	row := q.db.QueryRow(ctx, createNotificationTarget,
-		arg.NotificationID,
-		arg.TargetType,
-		arg.SegmentID,
-		arg.UserID,
-		arg.UploadBatchID,
-	)
-	var i NotificationTarget
+type CreateNotificationTargetRow struct {
+	ID             int64              `db:"id"`
+	NotificationID int64              `db:"notification_id"`
+	UserID         pgtype.Int8        `db:"user_id"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at"`
+}
+
+// ==========================================
+// CREATE
+// ==========================================
+func (q *Queries) CreateNotificationTarget(ctx context.Context, arg CreateNotificationTargetParams) (CreateNotificationTargetRow, error) {
+	row := q.db.QueryRow(ctx, createNotificationTarget, arg.NotificationID, arg.UserID)
+	var i CreateNotificationTargetRow
 	err := row.Scan(
 		&i.ID,
 		&i.NotificationID,
-		&i.TargetType,
-		&i.SegmentID,
 		&i.UserID,
-		&i.UploadBatchID,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const deleteNotificationTarget = `-- name: DeleteNotificationTarget :exec
-DELETE FROM notification_targets
+
+DELETE
+FROM notification_targets
 WHERE id = $1
 `
 
+// ==========================================
+// DELETE
+// ==========================================
 func (q *Queries) DeleteNotificationTarget(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteNotificationTarget, id)
 	return err
 }
 
-const deleteNotificationTargetsByNotification = `-- name: DeleteNotificationTargetsByNotification :exec
-DELETE FROM notification_targets
-WHERE notification_id = $1
-`
-
-func (q *Queries) DeleteNotificationTargetsByNotification(ctx context.Context, notificationID int64) error {
-	_, err := q.db.Exec(ctx, deleteNotificationTargetsByNotification, notificationID)
-	return err
-}
-
-const getNotificationTargetByID = `-- name: GetNotificationTargetByID :one
-SELECT
-    id,
-    notification_id,
-    target_type,
-    segment_id,
-    user_id,
-    upload_batch_id,
-    created_at
-FROM notification_targets
-WHERE id = $1
-LIMIT 1
-`
-
-func (q *Queries) GetNotificationTargetByID(ctx context.Context, id int64) (NotificationTarget, error) {
-	row := q.db.QueryRow(ctx, getNotificationTargetByID, id)
-	var i NotificationTarget
-	err := row.Scan(
-		&i.ID,
-		&i.NotificationID,
-		&i.TargetType,
-		&i.SegmentID,
-		&i.UserID,
-		&i.UploadBatchID,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getNotificationTargetsByNotificationID = `-- name: GetNotificationTargetsByNotificationID :many
-SELECT
-    id,
-    notification_id,
-    target_type,
-    segment_id,
-    user_id,
-    upload_batch_id,
-    created_at
-FROM notification_targets
-WHERE notification_id = $1
-ORDER BY id
-`
-
-func (q *Queries) GetNotificationTargetsByNotificationID(ctx context.Context, notificationID int64) ([]NotificationTarget, error) {
-	rows, err := q.db.Query(ctx, getNotificationTargetsByNotificationID, notificationID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []NotificationTarget{}
-	for rows.Next() {
-		var i NotificationTarget
-		if err := rows.Scan(
-			&i.ID,
-			&i.NotificationID,
-			&i.TargetType,
-			&i.SegmentID,
-			&i.UserID,
-			&i.UploadBatchID,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listNotificationTargets = `-- name: ListNotificationTargets :many
+
 SELECT
-    id,
-    notification_id,
-    target_type,
-    segment_id,
-    user_id,
-    upload_batch_id,
-    created_at
-FROM notification_targets
-WHERE
-    ($1::bigint IS NULL OR notification_id = $1) AND
-    ($2::text IS NULL OR target_type = $2)
-ORDER BY id
+    nt.id,
+    nt.notification_id,
+    u.id AS user_id,
+    u.external_id,
+    u.name,
+    u.email,
+    nt.created_at
+FROM notification_targets nt
+JOIN users u
+    ON u.id = nt.user_id
+WHERE nt.notification_id = $1
+ORDER BY u.name
+LIMIT $3
+OFFSET $2
 `
 
 type ListNotificationTargetsParams struct {
-	Column1 int64  `db:"column_1"`
-	Column2 string `db:"column_2"`
+	NotificationID int64 `db:"notification_id"`
+	Offset         int32 `db:"offset"`
+	Limit          int32 `db:"limit"`
 }
 
-func (q *Queries) ListNotificationTargets(ctx context.Context, arg ListNotificationTargetsParams) ([]NotificationTarget, error) {
-	rows, err := q.db.Query(ctx, listNotificationTargets, arg.Column1, arg.Column2)
+type ListNotificationTargetsRow struct {
+	ID             int64              `db:"id"`
+	NotificationID int64              `db:"notification_id"`
+	UserID         int64              `db:"user_id"`
+	ExternalID     string             `db:"external_id"`
+	Name           pgtype.Text        `db:"name"`
+	Email          pgtype.Text        `db:"email"`
+	CreatedAt      pgtype.Timestamptz `db:"created_at"`
+}
+
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListNotificationTargets(ctx context.Context, arg ListNotificationTargetsParams) ([]ListNotificationTargetsRow, error) {
+	rows, err := q.db.Query(ctx, listNotificationTargets, arg.NotificationID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []NotificationTarget{}
+	items := []ListNotificationTargetsRow{}
 	for rows.Next() {
-		var i NotificationTarget
+		var i ListNotificationTargetsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.NotificationID,
-			&i.TargetType,
-			&i.SegmentID,
 			&i.UserID,
-			&i.UploadBatchID,
+			&i.ExternalID,
+			&i.Name,
+			&i.Email,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

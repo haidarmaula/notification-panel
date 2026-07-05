@@ -7,9 +7,29 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countSegmentMembers = `-- name: CountSegmentMembers :one
+
+SELECT COUNT(*)
+FROM segment_members
+WHERE segment_id = $1
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountSegmentMembers(ctx context.Context, segmentID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countSegmentMembers, segmentID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createSegmentMember = `-- name: CreateSegmentMember :one
+
 INSERT INTO segment_members (
     segment_id,
     user_id
@@ -18,7 +38,11 @@ VALUES (
     $1,
     $2
 )
-RETURNING id, segment_id, user_id, created_at
+RETURNING
+    id,
+    segment_id,
+    user_id,
+    created_at
 `
 
 type CreateSegmentMemberParams struct {
@@ -26,6 +50,9 @@ type CreateSegmentMemberParams struct {
 	UserID    int64 `db:"user_id"`
 }
 
+// ==========================================
+// CREATE
+// ==========================================
 func (q *Queries) CreateSegmentMember(ctx context.Context, arg CreateSegmentMemberParams) (SegmentMember, error) {
 	row := q.db.QueryRow(ctx, createSegmentMember, arg.SegmentID, arg.UserID)
 	var i SegmentMember
@@ -39,36 +66,22 @@ func (q *Queries) CreateSegmentMember(ctx context.Context, arg CreateSegmentMemb
 }
 
 const deleteSegmentMember = `-- name: DeleteSegmentMember :exec
-DELETE FROM segment_members
+
+DELETE
+FROM segment_members
 WHERE id = $1
 `
 
+// ==========================================
+// DELETE
+// ==========================================
 func (q *Queries) DeleteSegmentMember(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteSegmentMember, id)
 	return err
 }
 
-const deleteSegmentMembersBySegment = `-- name: DeleteSegmentMembersBySegment :exec
-DELETE FROM segment_members
-WHERE segment_id = $1
-`
-
-func (q *Queries) DeleteSegmentMembersBySegment(ctx context.Context, segmentID int64) error {
-	_, err := q.db.Exec(ctx, deleteSegmentMembersBySegment, segmentID)
-	return err
-}
-
-const deleteSegmentMembersByUser = `-- name: DeleteSegmentMembersByUser :exec
-DELETE FROM segment_members
-WHERE user_id = $1
-`
-
-func (q *Queries) DeleteSegmentMembersByUser(ctx context.Context, userID int64) error {
-	_, err := q.db.Exec(ctx, deleteSegmentMembersByUser, userID)
-	return err
-}
-
 const getSegmentMemberByID = `-- name: GetSegmentMemberByID :one
+
 SELECT
     id,
     segment_id,
@@ -79,6 +92,9 @@ WHERE id = $1
 LIMIT 1
 `
 
+// ==========================================
+// GET
+// ==========================================
 func (q *Queries) GetSegmentMemberByID(ctx context.Context, id int64) (SegmentMember, error) {
 	row := q.db.QueryRow(ctx, getSegmentMemberByID, id)
 	var i SegmentMember
@@ -91,137 +107,57 @@ func (q *Queries) GetSegmentMemberByID(ctx context.Context, id int64) (SegmentMe
 	return i, err
 }
 
-const getSegmentMemberBySegmentAndUser = `-- name: GetSegmentMemberBySegmentAndUser :one
-SELECT
-    id,
-    segment_id,
-    user_id,
-    created_at
-FROM segment_members
-WHERE segment_id = $1 AND user_id = $2
-LIMIT 1
-`
-
-type GetSegmentMemberBySegmentAndUserParams struct {
-	SegmentID int64 `db:"segment_id"`
-	UserID    int64 `db:"user_id"`
-}
-
-func (q *Queries) GetSegmentMemberBySegmentAndUser(ctx context.Context, arg GetSegmentMemberBySegmentAndUserParams) (SegmentMember, error) {
-	row := q.db.QueryRow(ctx, getSegmentMemberBySegmentAndUser, arg.SegmentID, arg.UserID)
-	var i SegmentMember
-	err := row.Scan(
-		&i.ID,
-		&i.SegmentID,
-		&i.UserID,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
-const getSegmentMembersBySegmentID = `-- name: GetSegmentMembersBySegmentID :many
-SELECT
-    id,
-    segment_id,
-    user_id,
-    created_at
-FROM segment_members
-WHERE segment_id = $1
-ORDER BY id
-`
-
-func (q *Queries) GetSegmentMembersBySegmentID(ctx context.Context, segmentID int64) ([]SegmentMember, error) {
-	rows, err := q.db.Query(ctx, getSegmentMembersBySegmentID, segmentID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []SegmentMember{}
-	for rows.Next() {
-		var i SegmentMember
-		if err := rows.Scan(
-			&i.ID,
-			&i.SegmentID,
-			&i.UserID,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getSegmentMembersByUserID = `-- name: GetSegmentMembersByUserID :many
-SELECT
-    id,
-    segment_id,
-    user_id,
-    created_at
-FROM segment_members
-WHERE user_id = $1
-ORDER BY id
-`
-
-func (q *Queries) GetSegmentMembersByUserID(ctx context.Context, userID int64) ([]SegmentMember, error) {
-	rows, err := q.db.Query(ctx, getSegmentMembersByUserID, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []SegmentMember{}
-	for rows.Next() {
-		var i SegmentMember
-		if err := rows.Scan(
-			&i.ID,
-			&i.SegmentID,
-			&i.UserID,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listSegmentMembers = `-- name: ListSegmentMembers :many
+
 SELECT
-    id,
-    segment_id,
-    user_id,
-    created_at
-FROM segment_members
-WHERE
-    ($1::bigint IS NULL OR segment_id = $1) AND
-    ($2::bigint IS NULL OR user_id = $2)
-ORDER BY id
+    sm.id,
+    sm.segment_id,
+    u.id AS user_id,
+    u.name,
+    u.email,
+    sm.created_at
+FROM segment_members sm
+JOIN users u
+    ON u.id = sm.user_id
+WHERE sm.segment_id = $1
+ORDER BY u.name
+LIMIT $3
+OFFSET $2
 `
 
 type ListSegmentMembersParams struct {
-	Column1 int64 `db:"column_1"`
-	Column2 int64 `db:"column_2"`
+	SegmentID int64 `db:"segment_id"`
+	Offset    int32 `db:"offset"`
+	Limit     int32 `db:"limit"`
 }
 
-func (q *Queries) ListSegmentMembers(ctx context.Context, arg ListSegmentMembersParams) ([]SegmentMember, error) {
-	rows, err := q.db.Query(ctx, listSegmentMembers, arg.Column1, arg.Column2)
+type ListSegmentMembersRow struct {
+	ID        int64              `db:"id"`
+	SegmentID int64              `db:"segment_id"`
+	UserID    int64              `db:"user_id"`
+	Name      pgtype.Text        `db:"name"`
+	Email     pgtype.Text        `db:"email"`
+	CreatedAt pgtype.Timestamptz `db:"created_at"`
+}
+
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListSegmentMembers(ctx context.Context, arg ListSegmentMembersParams) ([]ListSegmentMembersRow, error) {
+	rows, err := q.db.Query(ctx, listSegmentMembers, arg.SegmentID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []SegmentMember{}
+	items := []ListSegmentMembersRow{}
 	for rows.Next() {
-		var i SegmentMember
+		var i ListSegmentMembersRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.SegmentID,
 			&i.UserID,
+			&i.Name,
+			&i.Email,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

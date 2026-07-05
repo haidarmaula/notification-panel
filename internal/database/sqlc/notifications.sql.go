@@ -11,19 +11,31 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countNotifications = `-- name: CountNotifications :one
+
+SELECT COUNT(*)
+FROM notifications
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountNotifications(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countNotifications)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createNotification = `-- name: CreateNotification :one
+
 INSERT INTO notifications (
-    template_id,
-    template_name,
     title,
     body,
-    payload,
-    priority,
+    template_id,
     status,
-    scheduled_at,
-    published_at,
-    completed_at,
-    created_by
+    created_by,
+    scheduled_at
 )
 VALUES (
     $1,
@@ -31,58 +43,62 @@ VALUES (
     $3,
     $4,
     $5,
-    $6,
-    $7,
-    $8,
-    $9,
-    $10,
-    $11
+    $6
 )
-RETURNING id, template_id, template_name, title, body, payload, priority, status, scheduled_at, published_at, completed_at, created_by, created_at, updated_at
+RETURNING
+    id,
+    title,
+    body,
+    template_id,
+    status,
+    created_by,
+    scheduled_at,
+    created_at,
+    updated_at
 `
 
 type CreateNotificationParams struct {
-	TemplateID   pgtype.Int8        `db:"template_id"`
-	TemplateName pgtype.Text        `db:"template_name"`
-	Title        string             `db:"title"`
-	Body         string             `db:"body"`
-	Payload      []byte             `db:"payload"`
-	Priority     string             `db:"priority"`
-	Status       string             `db:"status"`
-	ScheduledAt  pgtype.Timestamptz `db:"scheduled_at"`
-	PublishedAt  pgtype.Timestamptz `db:"published_at"`
-	CompletedAt  pgtype.Timestamptz `db:"completed_at"`
-	CreatedBy    int64              `db:"created_by"`
+	Title       string             `db:"title"`
+	Body        string             `db:"body"`
+	TemplateID  pgtype.Int8        `db:"template_id"`
+	Status      string             `db:"status"`
+	CreatedBy   int64              `db:"created_by"`
+	ScheduledAt pgtype.Timestamptz `db:"scheduled_at"`
 }
 
-func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error) {
+type CreateNotificationRow struct {
+	ID          int64              `db:"id"`
+	Title       string             `db:"title"`
+	Body        string             `db:"body"`
+	TemplateID  pgtype.Int8        `db:"template_id"`
+	Status      string             `db:"status"`
+	CreatedBy   int64              `db:"created_by"`
+	ScheduledAt pgtype.Timestamptz `db:"scheduled_at"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `db:"updated_at"`
+}
+
+// ==========================================
+// CREATE
+// ==========================================
+func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) (CreateNotificationRow, error) {
 	row := q.db.QueryRow(ctx, createNotification,
-		arg.TemplateID,
-		arg.TemplateName,
 		arg.Title,
 		arg.Body,
-		arg.Payload,
-		arg.Priority,
+		arg.TemplateID,
 		arg.Status,
-		arg.ScheduledAt,
-		arg.PublishedAt,
-		arg.CompletedAt,
 		arg.CreatedBy,
+		arg.ScheduledAt,
 	)
-	var i Notification
+	var i CreateNotificationRow
 	err := row.Scan(
 		&i.ID,
-		&i.TemplateID,
-		&i.TemplateName,
 		&i.Title,
 		&i.Body,
-		&i.Payload,
-		&i.Priority,
+		&i.TemplateID,
 		&i.Status,
-		&i.ScheduledAt,
-		&i.PublishedAt,
-		&i.CompletedAt,
 		&i.CreatedBy,
+		&i.ScheduledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -90,29 +106,30 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 }
 
 const deleteNotification = `-- name: DeleteNotification :exec
-DELETE FROM notifications
+
+DELETE
+FROM notifications
 WHERE id = $1
 `
 
+// ==========================================
+// DELETE
+// ==========================================
 func (q *Queries) DeleteNotification(ctx context.Context, id int64) error {
 	_, err := q.db.Exec(ctx, deleteNotification, id)
 	return err
 }
 
 const getNotificationByID = `-- name: GetNotificationByID :one
+
 SELECT
     id,
-    template_id,
-    template_name,
     title,
     body,
-    payload,
-    priority,
+    template_id,
     status,
-    scheduled_at,
-    published_at,
-    completed_at,
     created_by,
+    scheduled_at,
     created_at,
     updated_at
 FROM notifications
@@ -120,201 +137,165 @@ WHERE id = $1
 LIMIT 1
 `
 
-func (q *Queries) GetNotificationByID(ctx context.Context, id int64) (Notification, error) {
+type GetNotificationByIDRow struct {
+	ID          int64              `db:"id"`
+	Title       string             `db:"title"`
+	Body        string             `db:"body"`
+	TemplateID  pgtype.Int8        `db:"template_id"`
+	Status      string             `db:"status"`
+	CreatedBy   int64              `db:"created_by"`
+	ScheduledAt pgtype.Timestamptz `db:"scheduled_at"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `db:"updated_at"`
+}
+
+// ==========================================
+// GET
+// ==========================================
+func (q *Queries) GetNotificationByID(ctx context.Context, id int64) (GetNotificationByIDRow, error) {
 	row := q.db.QueryRow(ctx, getNotificationByID, id)
-	var i Notification
+	var i GetNotificationByIDRow
 	err := row.Scan(
 		&i.ID,
-		&i.TemplateID,
-		&i.TemplateName,
 		&i.Title,
 		&i.Body,
-		&i.Payload,
-		&i.Priority,
+		&i.TemplateID,
 		&i.Status,
-		&i.ScheduledAt,
-		&i.PublishedAt,
-		&i.CompletedAt,
 		&i.CreatedBy,
+		&i.ScheduledAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const getNotificationsByCreatedBy = `-- name: GetNotificationsByCreatedBy :many
-SELECT
-    id,
-    template_id,
-    template_name,
-    title,
-    body,
-    payload,
-    priority,
-    status,
-    scheduled_at,
-    published_at,
-    completed_at,
-    created_by,
-    created_at,
-    updated_at
-FROM notifications
-WHERE created_by = $1
-ORDER BY created_at DESC
-`
-
-func (q *Queries) GetNotificationsByCreatedBy(ctx context.Context, createdBy int64) ([]Notification, error) {
-	rows, err := q.db.Query(ctx, getNotificationsByCreatedBy, createdBy)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Notification{}
-	for rows.Next() {
-		var i Notification
-		if err := rows.Scan(
-			&i.ID,
-			&i.TemplateID,
-			&i.TemplateName,
-			&i.Title,
-			&i.Body,
-			&i.Payload,
-			&i.Priority,
-			&i.Status,
-			&i.ScheduledAt,
-			&i.PublishedAt,
-			&i.CompletedAt,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getNotificationsByStatus = `-- name: GetNotificationsByStatus :many
-SELECT
-    id,
-    template_id,
-    template_name,
-    title,
-    body,
-    payload,
-    priority,
-    status,
-    scheduled_at,
-    published_at,
-    completed_at,
-    created_by,
-    created_at,
-    updated_at
-FROM notifications
-WHERE status = $1
-ORDER BY created_at DESC
-`
-
-func (q *Queries) GetNotificationsByStatus(ctx context.Context, status string) ([]Notification, error) {
-	rows, err := q.db.Query(ctx, getNotificationsByStatus, status)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []Notification{}
-	for rows.Next() {
-		var i Notification
-		if err := rows.Scan(
-			&i.ID,
-			&i.TemplateID,
-			&i.TemplateName,
-			&i.Title,
-			&i.Body,
-			&i.Payload,
-			&i.Priority,
-			&i.Status,
-			&i.ScheduledAt,
-			&i.PublishedAt,
-			&i.CompletedAt,
-			&i.CreatedBy,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listNotifications = `-- name: ListNotifications :many
+
 SELECT
-    id,
-    template_id,
-    template_name,
-    title,
-    body,
-    payload,
-    priority,
-    status,
-    scheduled_at,
-    published_at,
-    completed_at,
-    created_by,
-    created_at,
-    updated_at
-FROM notifications
-WHERE
-    ($1::text[] IS NULL OR status = ANY($1)) AND
-    ($2::bigint IS NULL OR created_by = $2) AND
-    ($3::timestamptz IS NULL OR created_at >= $3) AND
-    ($4::timestamptz IS NULL OR created_at <= $4)
-ORDER BY created_at DESC
+    n.id,
+    n.title,
+    n.status,
+    su.name AS created_by_name,
+    n.scheduled_at,
+    n.created_at
+FROM notifications n
+JOIN staff_users su
+    ON su.id = n.created_by
+ORDER BY n.created_at DESC
+LIMIT $2
+OFFSET $1
 `
 
 type ListNotificationsParams struct {
-	Column1 []string           `db:"column_1"`
-	Column2 int64              `db:"column_2"`
-	Column3 pgtype.Timestamptz `db:"column_3"`
-	Column4 pgtype.Timestamptz `db:"column_4"`
+	Offset int32 `db:"offset"`
+	Limit  int32 `db:"limit"`
 }
 
-func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error) {
-	rows, err := q.db.Query(ctx, listNotifications,
-		arg.Column1,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
-	)
+type ListNotificationsRow struct {
+	ID            int64              `db:"id"`
+	Title         string             `db:"title"`
+	Status        string             `db:"status"`
+	CreatedByName string             `db:"created_by_name"`
+	ScheduledAt   pgtype.Timestamptz `db:"scheduled_at"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+}
+
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error) {
+	rows, err := q.db.Query(ctx, listNotifications, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Notification{}
+	items := []ListNotificationsRow{}
 	for rows.Next() {
-		var i Notification
+		var i ListNotificationsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.TemplateID,
-			&i.TemplateName,
 			&i.Title,
-			&i.Body,
-			&i.Payload,
-			&i.Priority,
 			&i.Status,
+			&i.CreatedByName,
 			&i.ScheduledAt,
-			&i.PublishedAt,
-			&i.CompletedAt,
-			&i.CreatedBy,
 			&i.CreatedAt,
-			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markNotificationSent = `-- name: MarkNotificationSent :exec
+UPDATE notifications
+SET
+    status = 'SENT',
+    updated_at = NOW()
+WHERE id = $1
+`
+
+func (q *Queries) MarkNotificationSent(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markNotificationSent, id)
+	return err
+}
+
+const searchNotifications = `-- name: SearchNotifications :many
+
+SELECT
+    n.id,
+    n.title,
+    n.status,
+    su.name AS created_by_name,
+    n.scheduled_at,
+    n.created_at
+FROM notifications n
+JOIN staff_users su
+    ON su.id = n.created_by
+WHERE
+    n.title ILIKE '%' || $1 || '%'
+ORDER BY n.created_at DESC
+LIMIT $3
+OFFSET $2
+`
+
+type SearchNotificationsParams struct {
+	Keyword pgtype.Text `db:"keyword"`
+	Offset  int32       `db:"offset"`
+	Limit   int32       `db:"limit"`
+}
+
+type SearchNotificationsRow struct {
+	ID            int64              `db:"id"`
+	Title         string             `db:"title"`
+	Status        string             `db:"status"`
+	CreatedByName string             `db:"created_by_name"`
+	ScheduledAt   pgtype.Timestamptz `db:"scheduled_at"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+}
+
+// ==========================================
+// SEARCH
+// ==========================================
+func (q *Queries) SearchNotifications(ctx context.Context, arg SearchNotificationsParams) ([]SearchNotificationsRow, error) {
+	rows, err := q.db.Query(ctx, searchNotifications, arg.Keyword, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SearchNotificationsRow{}
+	for rows.Next() {
+		var i SearchNotificationsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Status,
+			&i.CreatedByName,
+			&i.ScheduledAt,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -327,85 +308,53 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 }
 
 const updateNotification = `-- name: UpdateNotification :exec
+
 UPDATE notifications
 SET
-    template_id = $2,
-    template_name = $3,
-    title = $4,
-    body = $5,
-    payload = $6,
-    priority = $7,
-    status = $8,
-    scheduled_at = $9,
-    published_at = $10,
-    completed_at = $11,
+    title = $1,
+    body = $2,
+    template_id = $3,
+    scheduled_at = $4,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $5
 `
 
 type UpdateNotificationParams struct {
-	ID           int64              `db:"id"`
-	TemplateID   pgtype.Int8        `db:"template_id"`
-	TemplateName pgtype.Text        `db:"template_name"`
-	Title        string             `db:"title"`
-	Body         string             `db:"body"`
-	Payload      []byte             `db:"payload"`
-	Priority     string             `db:"priority"`
-	Status       string             `db:"status"`
-	ScheduledAt  pgtype.Timestamptz `db:"scheduled_at"`
-	PublishedAt  pgtype.Timestamptz `db:"published_at"`
-	CompletedAt  pgtype.Timestamptz `db:"completed_at"`
+	Title       string             `db:"title"`
+	Body        string             `db:"body"`
+	TemplateID  pgtype.Int8        `db:"template_id"`
+	ScheduledAt pgtype.Timestamptz `db:"scheduled_at"`
+	ID          int64              `db:"id"`
 }
 
+// ==========================================
+// UPDATE
+// ==========================================
 func (q *Queries) UpdateNotification(ctx context.Context, arg UpdateNotificationParams) error {
 	_, err := q.db.Exec(ctx, updateNotification,
-		arg.ID,
-		arg.TemplateID,
-		arg.TemplateName,
 		arg.Title,
 		arg.Body,
-		arg.Payload,
-		arg.Priority,
-		arg.Status,
+		arg.TemplateID,
 		arg.ScheduledAt,
-		arg.PublishedAt,
-		arg.CompletedAt,
+		arg.ID,
 	)
-	return err
-}
-
-const updateNotificationSchedule = `-- name: UpdateNotificationSchedule :exec
-UPDATE notifications
-SET
-    scheduled_at = $2,
-    updated_at = NOW()
-WHERE id = $1
-`
-
-type UpdateNotificationScheduleParams struct {
-	ID          int64              `db:"id"`
-	ScheduledAt pgtype.Timestamptz `db:"scheduled_at"`
-}
-
-func (q *Queries) UpdateNotificationSchedule(ctx context.Context, arg UpdateNotificationScheduleParams) error {
-	_, err := q.db.Exec(ctx, updateNotificationSchedule, arg.ID, arg.ScheduledAt)
 	return err
 }
 
 const updateNotificationStatus = `-- name: UpdateNotificationStatus :exec
 UPDATE notifications
 SET
-    status = $2,
+    status = $1,
     updated_at = NOW()
-WHERE id = $1
+WHERE id = $2
 `
 
 type UpdateNotificationStatusParams struct {
-	ID     int64  `db:"id"`
 	Status string `db:"status"`
+	ID     int64  `db:"id"`
 }
 
 func (q *Queries) UpdateNotificationStatus(ctx context.Context, arg UpdateNotificationStatusParams) error {
-	_, err := q.db.Exec(ctx, updateNotificationStatus, arg.ID, arg.Status)
+	_, err := q.db.Exec(ctx, updateNotificationStatus, arg.Status, arg.ID)
 	return err
 }

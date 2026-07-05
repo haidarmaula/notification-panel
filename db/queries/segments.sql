@@ -1,3 +1,7 @@
+-- ==========================================
+-- GET
+-- ==========================================
+
 -- name: GetSegmentByID :one
 SELECT
     id,
@@ -7,7 +11,7 @@ SELECT
     created_at,
     updated_at
 FROM segments
-WHERE id = $1
+WHERE id = sqlc.arg('id')
 LIMIT 1;
 
 -- name: GetSegmentByName :one
@@ -19,8 +23,23 @@ SELECT
     created_at,
     updated_at
 FROM segments
-WHERE name = $1
+WHERE name = sqlc.arg('name')
 LIMIT 1;
+
+-- ==========================================
+-- EXISTS
+-- ==========================================
+
+-- name: ExistsSegmentByName :one
+SELECT EXISTS (
+    SELECT 1
+    FROM segments
+    WHERE name = sqlc.arg('name')
+);
+
+-- ==========================================
+-- CREATE
+-- ==========================================
 
 -- name: CreateSegment :one
 INSERT INTO segments (
@@ -29,31 +48,83 @@ INSERT INTO segments (
     created_by
 )
 VALUES (
-    $1,
-    $2,
-    $3
+    sqlc.arg('name'),
+    sqlc.arg('description'),
+    sqlc.arg('created_by')
 )
-RETURNING *;
-
--- name: UpdateSegment :exec
-UPDATE segments
-SET
-    name = $2,
-    description = $3,
-    updated_at = NOW()
-WHERE id = $1;
-
--- name: DeleteSegment :exec
-DELETE FROM segments
-WHERE id = $1;
-
--- name: ListSegments :many
-SELECT
+RETURNING
     id,
     name,
     description,
     created_by,
     created_at,
-    updated_at
+    updated_at;
+
+-- ==========================================
+-- UPDATE
+-- ==========================================
+
+-- name: UpdateSegment :exec
+UPDATE segments
+SET
+    name = sqlc.arg('name'),
+    description = sqlc.arg('description'),
+    updated_at = NOW()
+WHERE id = sqlc.arg('id');
+
+-- ==========================================
+-- DELETE
+-- ==========================================
+
+-- name: DeleteSegment :exec
+DELETE
 FROM segments
-ORDER BY id;
+WHERE id = sqlc.arg('id');
+
+-- ==========================================
+-- LIST
+-- ==========================================
+
+-- name: ListSegments :many
+SELECT
+    s.id,
+    s.name,
+    s.description,
+    su.name AS created_by_name,
+    s.created_at,
+    s.updated_at
+FROM segments s
+JOIN staff_users su
+    ON su.id = s.created_by
+ORDER BY s.name
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
+-- ==========================================
+-- SEARCH
+-- ==========================================
+
+-- name: SearchSegments :many
+SELECT
+    s.id,
+    s.name,
+    s.description,
+    su.name AS created_by_name,
+    s.created_at,
+    s.updated_at
+FROM segments s
+JOIN staff_users su
+    ON su.id = s.created_by
+WHERE
+    s.name ILIKE '%' || sqlc.arg('keyword') || '%'
+ORDER BY s.name
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
+-- ==========================================
+-- COUNT
+-- ==========================================
+
+-- name: CountSegments :one
+SELECT COUNT(*)
+FROM segments;

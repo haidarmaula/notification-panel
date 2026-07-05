@@ -11,17 +11,32 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countAuditLogs = `-- name: CountAuditLogs :one
+
+SELECT COUNT(*)
+FROM audit_logs
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountAuditLogs(ctx context.Context) (int64, error) {
+	row := q.db.QueryRow(ctx, countAuditLogs)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createAuditLog = `-- name: CreateAuditLog :one
+
 INSERT INTO audit_logs (
     actor_user_id,
     action,
     entity_type,
-    entity_name,
     entity_id,
     before_json,
     after_json,
-    ip_address,
-    user_agent
+    ip_address
 )
 VALUES (
     $1,
@@ -30,250 +45,171 @@ VALUES (
     $4,
     $5,
     $6,
-    $7,
-    $8,
-    $9
+    $7
 )
-RETURNING id, actor_user_id, action, entity_type, entity_name, entity_id, before_json, after_json, ip_address, user_agent, created_at
+RETURNING
+    id,
+    actor_user_id,
+    action,
+    entity_type,
+    entity_id,
+    before_json,
+    after_json,
+    ip_address,
+    created_at
 `
 
 type CreateAuditLogParams struct {
 	ActorUserID int64       `db:"actor_user_id"`
 	Action      string      `db:"action"`
 	EntityType  string      `db:"entity_type"`
-	EntityName  pgtype.Text `db:"entity_name"`
 	EntityID    pgtype.Int8 `db:"entity_id"`
 	BeforeJson  []byte      `db:"before_json"`
 	AfterJson   []byte      `db:"after_json"`
 	IpAddress   pgtype.Text `db:"ip_address"`
-	UserAgent   pgtype.Text `db:"user_agent"`
 }
 
-func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error) {
+type CreateAuditLogRow struct {
+	ID          int64              `db:"id"`
+	ActorUserID int64              `db:"actor_user_id"`
+	Action      string             `db:"action"`
+	EntityType  string             `db:"entity_type"`
+	EntityID    pgtype.Int8        `db:"entity_id"`
+	BeforeJson  []byte             `db:"before_json"`
+	AfterJson   []byte             `db:"after_json"`
+	IpAddress   pgtype.Text        `db:"ip_address"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at"`
+}
+
+// ==========================================
+// CREATE
+// ==========================================
+func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (CreateAuditLogRow, error) {
 	row := q.db.QueryRow(ctx, createAuditLog,
 		arg.ActorUserID,
 		arg.Action,
 		arg.EntityType,
-		arg.EntityName,
 		arg.EntityID,
 		arg.BeforeJson,
 		arg.AfterJson,
 		arg.IpAddress,
-		arg.UserAgent,
 	)
-	var i AuditLog
+	var i CreateAuditLogRow
 	err := row.Scan(
 		&i.ID,
 		&i.ActorUserID,
 		&i.Action,
 		&i.EntityType,
-		&i.EntityName,
 		&i.EntityID,
 		&i.BeforeJson,
 		&i.AfterJson,
 		&i.IpAddress,
-		&i.UserAgent,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
 const getAuditLogByID = `-- name: GetAuditLogByID :one
+
 SELECT
     id,
     actor_user_id,
     action,
     entity_type,
-    entity_name,
     entity_id,
     before_json,
     after_json,
     ip_address,
-    user_agent,
     created_at
 FROM audit_logs
 WHERE id = $1
 LIMIT 1
 `
 
-func (q *Queries) GetAuditLogByID(ctx context.Context, id int64) (AuditLog, error) {
+type GetAuditLogByIDRow struct {
+	ID          int64              `db:"id"`
+	ActorUserID int64              `db:"actor_user_id"`
+	Action      string             `db:"action"`
+	EntityType  string             `db:"entity_type"`
+	EntityID    pgtype.Int8        `db:"entity_id"`
+	BeforeJson  []byte             `db:"before_json"`
+	AfterJson   []byte             `db:"after_json"`
+	IpAddress   pgtype.Text        `db:"ip_address"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at"`
+}
+
+// ==========================================
+// GET
+// ==========================================
+func (q *Queries) GetAuditLogByID(ctx context.Context, id int64) (GetAuditLogByIDRow, error) {
 	row := q.db.QueryRow(ctx, getAuditLogByID, id)
-	var i AuditLog
+	var i GetAuditLogByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.ActorUserID,
 		&i.Action,
 		&i.EntityType,
-		&i.EntityName,
 		&i.EntityID,
 		&i.BeforeJson,
 		&i.AfterJson,
 		&i.IpAddress,
-		&i.UserAgent,
 		&i.CreatedAt,
 	)
 	return i, err
 }
 
-const getAuditLogsByActor = `-- name: GetAuditLogsByActor :many
-SELECT
-    id,
-    actor_user_id,
-    action,
-    entity_type,
-    entity_name,
-    entity_id,
-    before_json,
-    after_json,
-    ip_address,
-    user_agent,
-    created_at
-FROM audit_logs
-WHERE actor_user_id = $1
-ORDER BY created_at DESC
-`
-
-func (q *Queries) GetAuditLogsByActor(ctx context.Context, actorUserID int64) ([]AuditLog, error) {
-	rows, err := q.db.Query(ctx, getAuditLogsByActor, actorUserID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []AuditLog{}
-	for rows.Next() {
-		var i AuditLog
-		if err := rows.Scan(
-			&i.ID,
-			&i.ActorUserID,
-			&i.Action,
-			&i.EntityType,
-			&i.EntityName,
-			&i.EntityID,
-			&i.BeforeJson,
-			&i.AfterJson,
-			&i.IpAddress,
-			&i.UserAgent,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getAuditLogsByEntity = `-- name: GetAuditLogsByEntity :many
-SELECT
-    id,
-    actor_user_id,
-    action,
-    entity_type,
-    entity_name,
-    entity_id,
-    before_json,
-    after_json,
-    ip_address,
-    user_agent,
-    created_at
-FROM audit_logs
-WHERE entity_type = $1 AND entity_id = $2
-ORDER BY created_at DESC
-`
-
-type GetAuditLogsByEntityParams struct {
-	EntityType string      `db:"entity_type"`
-	EntityID   pgtype.Int8 `db:"entity_id"`
-}
-
-func (q *Queries) GetAuditLogsByEntity(ctx context.Context, arg GetAuditLogsByEntityParams) ([]AuditLog, error) {
-	rows, err := q.db.Query(ctx, getAuditLogsByEntity, arg.EntityType, arg.EntityID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []AuditLog{}
-	for rows.Next() {
-		var i AuditLog
-		if err := rows.Scan(
-			&i.ID,
-			&i.ActorUserID,
-			&i.Action,
-			&i.EntityType,
-			&i.EntityName,
-			&i.EntityID,
-			&i.BeforeJson,
-			&i.AfterJson,
-			&i.IpAddress,
-			&i.UserAgent,
-			&i.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listAuditLogs = `-- name: ListAuditLogs :many
+
 SELECT
-    id,
-    actor_user_id,
-    action,
-    entity_type,
-    entity_name,
-    entity_id,
-    before_json,
-    after_json,
-    ip_address,
-    user_agent,
-    created_at
-FROM audit_logs
-WHERE
-    ($1::bigint IS NULL OR actor_user_id = $1) AND
-    ($2::text IS NULL OR entity_type = $2) AND
-    ($3::timestamptz IS NULL OR created_at >= $3) AND
-    ($4::timestamptz IS NULL OR created_at <= $4)
-ORDER BY created_at DESC
+    al.id,
+    su.name AS actor_name,
+    al.action,
+    al.entity_type,
+    al.entity_id,
+    al.ip_address,
+    al.created_at
+FROM audit_logs al
+JOIN staff_users su
+    ON su.id = al.actor_user_id
+ORDER BY al.created_at DESC
+LIMIT $2
+OFFSET $1
 `
 
 type ListAuditLogsParams struct {
-	Column1 int64              `db:"column_1"`
-	Column2 string             `db:"column_2"`
-	Column3 pgtype.Timestamptz `db:"column_3"`
-	Column4 pgtype.Timestamptz `db:"column_4"`
+	Offset int32 `db:"offset"`
+	Limit  int32 `db:"limit"`
 }
 
-func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error) {
-	rows, err := q.db.Query(ctx, listAuditLogs,
-		arg.Column1,
-		arg.Column2,
-		arg.Column3,
-		arg.Column4,
-	)
+type ListAuditLogsRow struct {
+	ID         int64              `db:"id"`
+	ActorName  string             `db:"actor_name"`
+	Action     string             `db:"action"`
+	EntityType string             `db:"entity_type"`
+	EntityID   pgtype.Int8        `db:"entity_id"`
+	IpAddress  pgtype.Text        `db:"ip_address"`
+	CreatedAt  pgtype.Timestamptz `db:"created_at"`
+}
+
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]ListAuditLogsRow, error) {
+	rows, err := q.db.Query(ctx, listAuditLogs, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []AuditLog{}
+	items := []ListAuditLogsRow{}
 	for rows.Next() {
-		var i AuditLog
+		var i ListAuditLogsRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.ActorUserID,
+			&i.ActorName,
 			&i.Action,
 			&i.EntityType,
-			&i.EntityName,
 			&i.EntityID,
-			&i.BeforeJson,
-			&i.AfterJson,
 			&i.IpAddress,
-			&i.UserAgent,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

@@ -11,276 +11,119 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const createDelivery = `-- name: CreateDelivery :one
+const countNotificationDeliveries = `-- name: CountNotificationDeliveries :one
+
+SELECT COUNT(*)
+FROM notification_deliveries
+WHERE notification_id = $1
+`
+
+// ==========================================
+// COUNT
+// ==========================================
+func (q *Queries) CountNotificationDeliveries(ctx context.Context, notificationID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countNotificationDeliveries, notificationID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const createNotificationDelivery = `-- name: CreateNotificationDelivery :one
+
 INSERT INTO notification_deliveries (
     notification_id,
     user_id,
-    device_token_id,
     provider,
     provider_message_id,
-    status,
-    retry_count,
-    failed_reason,
-    sent_at,
-    delivered_at,
-    opened_at
+    status
 )
 VALUES (
     $1,
     $2,
     $3,
     $4,
-    $5,
-    $6,
-    $7,
-    $8,
-    $9,
-    $10,
-    $11
+    $5
 )
-RETURNING id, notification_id, user_id, device_token_id, provider, provider_message_id, status, retry_count, failed_reason, sent_at, delivered_at, opened_at, created_at, updated_at
+RETURNING
+    id,
+    notification_id,
+    user_id,
+    provider,
+    provider_message_id,
+    status,
+    sent_at,
+    delivered_at,
+    opened_at,
+    failed_reason,
+    created_at,
+    updated_at
 `
 
-type CreateDeliveryParams struct {
+type CreateNotificationDeliveryParams struct {
+	NotificationID    int64       `db:"notification_id"`
+	UserID            int64       `db:"user_id"`
+	Provider          string      `db:"provider"`
+	ProviderMessageID pgtype.Text `db:"provider_message_id"`
+	Status            string      `db:"status"`
+}
+
+type CreateNotificationDeliveryRow struct {
+	ID                int64              `db:"id"`
 	NotificationID    int64              `db:"notification_id"`
 	UserID            int64              `db:"user_id"`
-	DeviceTokenID     int64              `db:"device_token_id"`
 	Provider          string             `db:"provider"`
 	ProviderMessageID pgtype.Text        `db:"provider_message_id"`
 	Status            string             `db:"status"`
-	RetryCount        int32              `db:"retry_count"`
-	FailedReason      pgtype.Text        `db:"failed_reason"`
 	SentAt            pgtype.Timestamptz `db:"sent_at"`
 	DeliveredAt       pgtype.Timestamptz `db:"delivered_at"`
 	OpenedAt          pgtype.Timestamptz `db:"opened_at"`
+	FailedReason      pgtype.Text        `db:"failed_reason"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `db:"updated_at"`
 }
 
-func (q *Queries) CreateDelivery(ctx context.Context, arg CreateDeliveryParams) (NotificationDelivery, error) {
-	row := q.db.QueryRow(ctx, createDelivery,
+// ==========================================
+// CREATE
+// ==========================================
+func (q *Queries) CreateNotificationDelivery(ctx context.Context, arg CreateNotificationDeliveryParams) (CreateNotificationDeliveryRow, error) {
+	row := q.db.QueryRow(ctx, createNotificationDelivery,
 		arg.NotificationID,
 		arg.UserID,
-		arg.DeviceTokenID,
 		arg.Provider,
 		arg.ProviderMessageID,
 		arg.Status,
-		arg.RetryCount,
-		arg.FailedReason,
-		arg.SentAt,
-		arg.DeliveredAt,
-		arg.OpenedAt,
 	)
-	var i NotificationDelivery
+	var i CreateNotificationDeliveryRow
 	err := row.Scan(
 		&i.ID,
 		&i.NotificationID,
 		&i.UserID,
-		&i.DeviceTokenID,
 		&i.Provider,
 		&i.ProviderMessageID,
 		&i.Status,
-		&i.RetryCount,
-		&i.FailedReason,
 		&i.SentAt,
 		&i.DeliveredAt,
 		&i.OpenedAt,
+		&i.FailedReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const deleteDelivery = `-- name: DeleteDelivery :exec
-DELETE FROM notification_deliveries
-WHERE id = $1
-`
+const getNotificationDeliveryByID = `-- name: GetNotificationDeliveryByID :one
 
-func (q *Queries) DeleteDelivery(ctx context.Context, id int64) error {
-	_, err := q.db.Exec(ctx, deleteDelivery, id)
-	return err
-}
-
-const getDeliveriesByNotificationID = `-- name: GetDeliveriesByNotificationID :many
 SELECT
     id,
     notification_id,
     user_id,
-    device_token_id,
     provider,
     provider_message_id,
     status,
-    retry_count,
-    failed_reason,
     sent_at,
     delivered_at,
     opened_at,
-    created_at,
-    updated_at
-FROM notification_deliveries
-WHERE notification_id = $1
-ORDER BY id
-`
-
-func (q *Queries) GetDeliveriesByNotificationID(ctx context.Context, notificationID int64) ([]NotificationDelivery, error) {
-	rows, err := q.db.Query(ctx, getDeliveriesByNotificationID, notificationID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []NotificationDelivery{}
-	for rows.Next() {
-		var i NotificationDelivery
-		if err := rows.Scan(
-			&i.ID,
-			&i.NotificationID,
-			&i.UserID,
-			&i.DeviceTokenID,
-			&i.Provider,
-			&i.ProviderMessageID,
-			&i.Status,
-			&i.RetryCount,
-			&i.FailedReason,
-			&i.SentAt,
-			&i.DeliveredAt,
-			&i.OpenedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getDeliveriesByStatus = `-- name: GetDeliveriesByStatus :many
-SELECT
-    id,
-    notification_id,
-    user_id,
-    device_token_id,
-    provider,
-    provider_message_id,
-    status,
-    retry_count,
     failed_reason,
-    sent_at,
-    delivered_at,
-    opened_at,
-    created_at,
-    updated_at
-FROM notification_deliveries
-WHERE status = $1
-ORDER BY created_at
-`
-
-func (q *Queries) GetDeliveriesByStatus(ctx context.Context, status string) ([]NotificationDelivery, error) {
-	rows, err := q.db.Query(ctx, getDeliveriesByStatus, status)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []NotificationDelivery{}
-	for rows.Next() {
-		var i NotificationDelivery
-		if err := rows.Scan(
-			&i.ID,
-			&i.NotificationID,
-			&i.UserID,
-			&i.DeviceTokenID,
-			&i.Provider,
-			&i.ProviderMessageID,
-			&i.Status,
-			&i.RetryCount,
-			&i.FailedReason,
-			&i.SentAt,
-			&i.DeliveredAt,
-			&i.OpenedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getDeliveriesByUserID = `-- name: GetDeliveriesByUserID :many
-SELECT
-    id,
-    notification_id,
-    user_id,
-    device_token_id,
-    provider,
-    provider_message_id,
-    status,
-    retry_count,
-    failed_reason,
-    sent_at,
-    delivered_at,
-    opened_at,
-    created_at,
-    updated_at
-FROM notification_deliveries
-WHERE user_id = $1
-ORDER BY created_at DESC
-`
-
-func (q *Queries) GetDeliveriesByUserID(ctx context.Context, userID int64) ([]NotificationDelivery, error) {
-	rows, err := q.db.Query(ctx, getDeliveriesByUserID, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []NotificationDelivery{}
-	for rows.Next() {
-		var i NotificationDelivery
-		if err := rows.Scan(
-			&i.ID,
-			&i.NotificationID,
-			&i.UserID,
-			&i.DeviceTokenID,
-			&i.Provider,
-			&i.ProviderMessageID,
-			&i.Status,
-			&i.RetryCount,
-			&i.FailedReason,
-			&i.SentAt,
-			&i.DeliveredAt,
-			&i.OpenedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const getDeliveryByID = `-- name: GetDeliveryByID :one
-SELECT
-    id,
-    notification_id,
-    user_id,
-    device_token_id,
-    provider,
-    provider_message_id,
-    status,
-    retry_count,
-    failed_reason,
-    sent_at,
-    delivered_at,
-    opened_at,
     created_at,
     updated_at
 FROM notification_deliveries
@@ -288,82 +131,102 @@ WHERE id = $1
 LIMIT 1
 `
 
-func (q *Queries) GetDeliveryByID(ctx context.Context, id int64) (NotificationDelivery, error) {
-	row := q.db.QueryRow(ctx, getDeliveryByID, id)
-	var i NotificationDelivery
+type GetNotificationDeliveryByIDRow struct {
+	ID                int64              `db:"id"`
+	NotificationID    int64              `db:"notification_id"`
+	UserID            int64              `db:"user_id"`
+	Provider          string             `db:"provider"`
+	ProviderMessageID pgtype.Text        `db:"provider_message_id"`
+	Status            string             `db:"status"`
+	SentAt            pgtype.Timestamptz `db:"sent_at"`
+	DeliveredAt       pgtype.Timestamptz `db:"delivered_at"`
+	OpenedAt          pgtype.Timestamptz `db:"opened_at"`
+	FailedReason      pgtype.Text        `db:"failed_reason"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `db:"updated_at"`
+}
+
+// ==========================================
+// GET
+// ==========================================
+func (q *Queries) GetNotificationDeliveryByID(ctx context.Context, id int64) (GetNotificationDeliveryByIDRow, error) {
+	row := q.db.QueryRow(ctx, getNotificationDeliveryByID, id)
+	var i GetNotificationDeliveryByIDRow
 	err := row.Scan(
 		&i.ID,
 		&i.NotificationID,
 		&i.UserID,
-		&i.DeviceTokenID,
 		&i.Provider,
 		&i.ProviderMessageID,
 		&i.Status,
-		&i.RetryCount,
-		&i.FailedReason,
 		&i.SentAt,
 		&i.DeliveredAt,
 		&i.OpenedAt,
+		&i.FailedReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
 	return i, err
 }
 
-const listDeliveries = `-- name: ListDeliveries :many
+const listNotificationDeliveries = `-- name: ListNotificationDeliveries :many
+
 SELECT
-    id,
-    notification_id,
-    user_id,
-    device_token_id,
-    provider,
-    provider_message_id,
-    status,
-    retry_count,
-    failed_reason,
-    sent_at,
-    delivered_at,
-    opened_at,
-    created_at,
-    updated_at
-FROM notification_deliveries
-WHERE
-    ($1::bigint IS NULL OR notification_id = $1) AND
-    ($2::bigint IS NULL OR user_id = $2) AND
-    ($3::text[] IS NULL OR status = ANY($3))
-ORDER BY created_at DESC
+    nd.id,
+    nd.provider,
+    nd.status,
+    u.name,
+    u.email,
+    nd.sent_at,
+    nd.delivered_at,
+    nd.opened_at
+FROM notification_deliveries nd
+JOIN users u
+    ON u.id = nd.user_id
+WHERE nd.notification_id = $1
+ORDER BY nd.created_at
+LIMIT $3
+OFFSET $2
 `
 
-type ListDeliveriesParams struct {
-	Column1 int64    `db:"column_1"`
-	Column2 int64    `db:"column_2"`
-	Column3 []string `db:"column_3"`
+type ListNotificationDeliveriesParams struct {
+	NotificationID int64 `db:"notification_id"`
+	Offset         int32 `db:"offset"`
+	Limit          int32 `db:"limit"`
 }
 
-func (q *Queries) ListDeliveries(ctx context.Context, arg ListDeliveriesParams) ([]NotificationDelivery, error) {
-	rows, err := q.db.Query(ctx, listDeliveries, arg.Column1, arg.Column2, arg.Column3)
+type ListNotificationDeliveriesRow struct {
+	ID          int64              `db:"id"`
+	Provider    string             `db:"provider"`
+	Status      string             `db:"status"`
+	Name        pgtype.Text        `db:"name"`
+	Email       pgtype.Text        `db:"email"`
+	SentAt      pgtype.Timestamptz `db:"sent_at"`
+	DeliveredAt pgtype.Timestamptz `db:"delivered_at"`
+	OpenedAt    pgtype.Timestamptz `db:"opened_at"`
+}
+
+// ==========================================
+// LIST
+// ==========================================
+func (q *Queries) ListNotificationDeliveries(ctx context.Context, arg ListNotificationDeliveriesParams) ([]ListNotificationDeliveriesRow, error) {
+	rows, err := q.db.Query(ctx, listNotificationDeliveries, arg.NotificationID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []NotificationDelivery{}
+	items := []ListNotificationDeliveriesRow{}
 	for rows.Next() {
-		var i NotificationDelivery
+		var i ListNotificationDeliveriesRow
 		if err := rows.Scan(
 			&i.ID,
-			&i.NotificationID,
-			&i.UserID,
-			&i.DeviceTokenID,
 			&i.Provider,
-			&i.ProviderMessageID,
 			&i.Status,
-			&i.RetryCount,
-			&i.FailedReason,
+			&i.Name,
+			&i.Email,
 			&i.SentAt,
 			&i.DeliveredAt,
 			&i.OpenedAt,
-			&i.CreatedAt,
-			&i.UpdatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -375,59 +238,53 @@ func (q *Queries) ListDeliveries(ctx context.Context, arg ListDeliveriesParams) 
 	return items, nil
 }
 
-const updateDelivery = `-- name: UpdateDelivery :exec
+const markNotificationDelivered = `-- name: MarkNotificationDelivered :exec
+
 UPDATE notification_deliveries
 SET
-    provider_message_id = $2,
-    status = $3,
-    retry_count = $4,
-    failed_reason = $5,
-    sent_at = $6,
-    delivered_at = $7,
-    opened_at = $8,
+    status = 'DELIVERED',
+    delivered_at = NOW(),
     updated_at = NOW()
 WHERE id = $1
 `
 
-type UpdateDeliveryParams struct {
-	ID                int64              `db:"id"`
-	ProviderMessageID pgtype.Text        `db:"provider_message_id"`
-	Status            string             `db:"status"`
-	RetryCount        int32              `db:"retry_count"`
-	FailedReason      pgtype.Text        `db:"failed_reason"`
-	SentAt            pgtype.Timestamptz `db:"sent_at"`
-	DeliveredAt       pgtype.Timestamptz `db:"delivered_at"`
-	OpenedAt          pgtype.Timestamptz `db:"opened_at"`
-}
-
-func (q *Queries) UpdateDelivery(ctx context.Context, arg UpdateDeliveryParams) error {
-	_, err := q.db.Exec(ctx, updateDelivery,
-		arg.ID,
-		arg.ProviderMessageID,
-		arg.Status,
-		arg.RetryCount,
-		arg.FailedReason,
-		arg.SentAt,
-		arg.DeliveredAt,
-		arg.OpenedAt,
-	)
+// ==========================================
+// UPDATE STATUS
+// ==========================================
+func (q *Queries) MarkNotificationDelivered(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markNotificationDelivered, id)
 	return err
 }
 
-const updateDeliveryStatus = `-- name: UpdateDeliveryStatus :exec
+const markNotificationFailed = `-- name: MarkNotificationFailed :exec
 UPDATE notification_deliveries
 SET
-    status = $2,
+    status = 'FAILED',
+    failed_reason = $1,
+    updated_at = NOW()
+WHERE id = $2
+`
+
+type MarkNotificationFailedParams struct {
+	FailedReason pgtype.Text `db:"failed_reason"`
+	ID           int64       `db:"id"`
+}
+
+func (q *Queries) MarkNotificationFailed(ctx context.Context, arg MarkNotificationFailedParams) error {
+	_, err := q.db.Exec(ctx, markNotificationFailed, arg.FailedReason, arg.ID)
+	return err
+}
+
+const markNotificationOpened = `-- name: MarkNotificationOpened :exec
+UPDATE notification_deliveries
+SET
+    status = 'OPENED',
+    opened_at = NOW(),
     updated_at = NOW()
 WHERE id = $1
 `
 
-type UpdateDeliveryStatusParams struct {
-	ID     int64  `db:"id"`
-	Status string `db:"status"`
-}
-
-func (q *Queries) UpdateDeliveryStatus(ctx context.Context, arg UpdateDeliveryStatusParams) error {
-	_, err := q.db.Exec(ctx, updateDeliveryStatus, arg.ID, arg.Status)
+func (q *Queries) MarkNotificationOpened(ctx context.Context, id int64) error {
+	_, err := q.db.Exec(ctx, markNotificationOpened, id)
 	return err
 }

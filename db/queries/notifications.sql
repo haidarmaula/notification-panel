@@ -1,146 +1,135 @@
+-- ==========================================
+-- GET
+-- ==========================================
+
 -- name: GetNotificationByID :one
 SELECT
     id,
-    template_id,
-    template_name,
     title,
     body,
-    payload,
-    priority,
+    template_id,
     status,
-    scheduled_at,
-    published_at,
-    completed_at,
     created_by,
+    scheduled_at,
     created_at,
     updated_at
 FROM notifications
-WHERE id = $1
+WHERE id = sqlc.arg('id')
 LIMIT 1;
 
--- name: GetNotificationsByStatus :many
-SELECT
-    id,
-    template_id,
-    template_name,
-    title,
-    body,
-    payload,
-    priority,
-    status,
-    scheduled_at,
-    published_at,
-    completed_at,
-    created_by,
-    created_at,
-    updated_at
-FROM notifications
-WHERE status = $1
-ORDER BY created_at DESC;
-
--- name: GetNotificationsByCreatedBy :many
-SELECT
-    id,
-    template_id,
-    template_name,
-    title,
-    body,
-    payload,
-    priority,
-    status,
-    scheduled_at,
-    published_at,
-    completed_at,
-    created_by,
-    created_at,
-    updated_at
-FROM notifications
-WHERE created_by = $1
-ORDER BY created_at DESC;
+-- ==========================================
+-- CREATE
+-- ==========================================
 
 -- name: CreateNotification :one
 INSERT INTO notifications (
-    template_id,
-    template_name,
     title,
     body,
-    payload,
-    priority,
+    template_id,
     status,
-    scheduled_at,
-    published_at,
-    completed_at,
-    created_by
+    created_by,
+    scheduled_at
 )
 VALUES (
-    $1,
-    $2,
-    $3,
-    $4,
-    $5,
-    $6,
-    $7,
-    $8,
-    $9,
-    $10,
-    $11
+    sqlc.arg('title'),
+    sqlc.arg('body'),
+    sqlc.arg('template_id'),
+    sqlc.arg('status'),
+    sqlc.arg('created_by'),
+    sqlc.arg('scheduled_at')
 )
-RETURNING *;
+RETURNING
+    id,
+    title,
+    body,
+    template_id,
+    status,
+    created_by,
+    scheduled_at,
+    created_at,
+    updated_at;
+
+-- ==========================================
+-- UPDATE
+-- ==========================================
 
 -- name: UpdateNotification :exec
 UPDATE notifications
 SET
-    template_id = $2,
-    template_name = $3,
-    title = $4,
-    body = $5,
-    payload = $6,
-    priority = $7,
-    status = $8,
-    scheduled_at = $9,
-    published_at = $10,
-    completed_at = $11,
+    title = sqlc.arg('title'),
+    body = sqlc.arg('body'),
+    template_id = sqlc.arg('template_id'),
+    scheduled_at = sqlc.arg('scheduled_at'),
     updated_at = NOW()
-WHERE id = $1;
+WHERE id = sqlc.arg('id');
 
 -- name: UpdateNotificationStatus :exec
 UPDATE notifications
 SET
-    status = $2,
+    status = sqlc.arg('status'),
     updated_at = NOW()
-WHERE id = $1;
+WHERE id = sqlc.arg('id');
 
--- name: UpdateNotificationSchedule :exec
+-- name: MarkNotificationSent :exec
 UPDATE notifications
 SET
-    scheduled_at = $2,
+    status = 'SENT',
     updated_at = NOW()
-WHERE id = $1;
+WHERE id = sqlc.arg('id');
+
+-- ==========================================
+-- DELETE
+-- ==========================================
 
 -- name: DeleteNotification :exec
-DELETE FROM notifications
-WHERE id = $1;
+DELETE
+FROM notifications
+WHERE id = sqlc.arg('id');
+
+-- ==========================================
+-- LIST
+-- ==========================================
 
 -- name: ListNotifications :many
 SELECT
-    id,
-    template_id,
-    template_name,
-    title,
-    body,
-    payload,
-    priority,
-    status,
-    scheduled_at,
-    published_at,
-    completed_at,
-    created_by,
-    created_at,
-    updated_at
-FROM notifications
+    n.id,
+    n.title,
+    n.status,
+    su.name AS created_by_name,
+    n.scheduled_at,
+    n.created_at
+FROM notifications n
+JOIN staff_users su
+    ON su.id = n.created_by
+ORDER BY n.created_at DESC
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
+-- ==========================================
+-- SEARCH
+-- ==========================================
+
+-- name: SearchNotifications :many
+SELECT
+    n.id,
+    n.title,
+    n.status,
+    su.name AS created_by_name,
+    n.scheduled_at,
+    n.created_at
+FROM notifications n
+JOIN staff_users su
+    ON su.id = n.created_by
 WHERE
-    ($1::text[] IS NULL OR status = ANY($1)) AND
-    ($2::bigint IS NULL OR created_by = $2) AND
-    ($3::timestamptz IS NULL OR created_at >= $3) AND
-    ($4::timestamptz IS NULL OR created_at <= $4)
-ORDER BY created_at DESC;
+    n.title ILIKE '%' || sqlc.arg('keyword') || '%'
+ORDER BY n.created_at DESC
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
+-- ==========================================
+-- COUNT
+-- ==========================================
+
+-- name: CountNotifications :one
+SELECT COUNT(*)
+FROM notifications;
