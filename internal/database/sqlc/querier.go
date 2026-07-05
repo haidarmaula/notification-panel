@@ -6,21 +6,113 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type Querier interface {
+	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error)
+	CreateDelivery(ctx context.Context, arg CreateDeliveryParams) (NotificationDelivery, error)
+	CreateDeviceToken(ctx context.Context, arg CreateDeviceTokenParams) (DeviceToken, error)
+	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
+	CreateNotificationTarget(ctx context.Context, arg CreateNotificationTargetParams) (NotificationTarget, error)
+	CreateRead(ctx context.Context, arg CreateReadParams) (NotificationRead, error)
 	CreateRole(ctx context.Context, arg CreateRoleParams) (Role, error)
+	CreateSegment(ctx context.Context, arg CreateSegmentParams) (Segment, error)
+	CreateSegmentMember(ctx context.Context, arg CreateSegmentMemberParams) (SegmentMember, error)
 	CreateStaffUser(ctx context.Context, arg CreateStaffUserParams) (StaffUser, error)
+	CreateTemplate(ctx context.Context, arg CreateTemplateParams) (Template, error)
+	CreateUploadBatch(ctx context.Context, arg CreateUploadBatchParams) (UploadBatch, error)
+	CreateUploadBatchRow(ctx context.Context, arg CreateUploadBatchRowParams) (UploadBatchRow, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeleteDelivery(ctx context.Context, id int64) error
+	DeleteDeviceToken(ctx context.Context, id int64) error
+	DeleteDeviceTokensByUser(ctx context.Context, userID int64) error
+	DeleteNotification(ctx context.Context, id int64) error
+	DeleteNotificationTarget(ctx context.Context, id int64) error
+	DeleteNotificationTargetsByNotification(ctx context.Context, notificationID int64) error
+	DeleteRead(ctx context.Context, id int64) error
 	DeleteRole(ctx context.Context, id int64) error
+	DeleteSegment(ctx context.Context, id int64) error
+	DeleteSegmentMember(ctx context.Context, id int64) error
+	DeleteSegmentMembersBySegment(ctx context.Context, segmentID int64) error
+	DeleteSegmentMembersByUser(ctx context.Context, userID int64) error
+	DeleteTemplate(ctx context.Context, id int64) error
+	DeleteUploadBatch(ctx context.Context, id int64) error
+	DeleteUploadBatchRow(ctx context.Context, id int64) error
+	DeleteUploadBatchRowsByBatch(ctx context.Context, batchID int64) error
+	DeleteUser(ctx context.Context, id int64) error
+	GetAuditLogByID(ctx context.Context, id int64) (AuditLog, error)
+	GetAuditLogsByActor(ctx context.Context, actorUserID int64) ([]AuditLog, error)
+	GetAuditLogsByEntity(ctx context.Context, arg GetAuditLogsByEntityParams) ([]AuditLog, error)
+	GetDeliveriesByNotificationID(ctx context.Context, notificationID int64) ([]NotificationDelivery, error)
+	GetDeliveriesByStatus(ctx context.Context, status string) ([]NotificationDelivery, error)
+	GetDeliveriesByUserID(ctx context.Context, userID int64) ([]NotificationDelivery, error)
+	GetDeliveryByID(ctx context.Context, id int64) (NotificationDelivery, error)
+	GetDeviceTokenByID(ctx context.Context, id int64) (DeviceToken, error)
+	GetDeviceTokenByPushToken(ctx context.Context, pushToken string) (DeviceToken, error)
+	GetDeviceTokensByUserID(ctx context.Context, userID int64) ([]DeviceToken, error)
+	GetNotificationByID(ctx context.Context, id int64) (Notification, error)
+	GetNotificationTargetByID(ctx context.Context, id int64) (NotificationTarget, error)
+	GetNotificationTargetsByNotificationID(ctx context.Context, notificationID int64) ([]NotificationTarget, error)
+	GetNotificationsByCreatedBy(ctx context.Context, createdBy int64) ([]Notification, error)
+	GetNotificationsByStatus(ctx context.Context, status string) ([]Notification, error)
+	GetReadByID(ctx context.Context, id int64) (NotificationRead, error)
+	GetReadByNotificationAndUser(ctx context.Context, arg GetReadByNotificationAndUserParams) (NotificationRead, error)
+	GetReadsByNotificationID(ctx context.Context, notificationID int64) ([]NotificationRead, error)
+	GetReadsByUserID(ctx context.Context, userID int64) ([]NotificationRead, error)
 	GetRoleByID(ctx context.Context, id int64) (Role, error)
 	GetRoleByName(ctx context.Context, name string) (Role, error)
+	GetSegmentByID(ctx context.Context, id int64) (Segment, error)
+	GetSegmentByName(ctx context.Context, name string) (Segment, error)
+	GetSegmentMemberByID(ctx context.Context, id int64) (SegmentMember, error)
+	GetSegmentMemberBySegmentAndUser(ctx context.Context, arg GetSegmentMemberBySegmentAndUserParams) (SegmentMember, error)
+	GetSegmentMembersBySegmentID(ctx context.Context, segmentID int64) ([]SegmentMember, error)
+	GetSegmentMembersByUserID(ctx context.Context, userID int64) ([]SegmentMember, error)
 	GetStaffUserByEmail(ctx context.Context, email string) (StaffUser, error)
 	GetStaffUserByID(ctx context.Context, id int64) (StaffUser, error)
+	GetTemplateByID(ctx context.Context, id int64) (Template, error)
+	GetTemplateByName(ctx context.Context, name string) (Template, error)
+	GetUploadBatchByID(ctx context.Context, id int64) (UploadBatch, error)
+	GetUploadBatchRowByID(ctx context.Context, id int64) (UploadBatchRow, error)
+	GetUploadBatchRowsByBatchID(ctx context.Context, batchID int64) ([]UploadBatchRow, error)
+	GetUploadBatchRowsByExternalID(ctx context.Context, externalID string) ([]UploadBatchRow, error)
+	GetUploadBatchesByUploadedBy(ctx context.Context, uploadedBy int64) ([]UploadBatch, error)
+	GetUserByEmail(ctx context.Context, email pgtype.Text) (User, error)
+	GetUserByExternalID(ctx context.Context, externalID string) (User, error)
+	GetUserByID(ctx context.Context, id int64) (User, error)
+	ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([]AuditLog, error)
+	ListDeliveries(ctx context.Context, arg ListDeliveriesParams) ([]NotificationDelivery, error)
+	ListDeviceTokens(ctx context.Context, arg ListDeviceTokensParams) ([]DeviceToken, error)
+	ListNotificationTargets(ctx context.Context, arg ListNotificationTargetsParams) ([]NotificationTarget, error)
+	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error)
+	ListReads(ctx context.Context, arg ListReadsParams) ([]NotificationRead, error)
 	ListRoles(ctx context.Context) ([]Role, error)
+	ListSegmentMembers(ctx context.Context, arg ListSegmentMembersParams) ([]SegmentMember, error)
+	ListSegments(ctx context.Context) ([]Segment, error)
 	ListStaffUsers(ctx context.Context) ([]ListStaffUsersRow, error)
+	ListTemplates(ctx context.Context, arg ListTemplatesParams) ([]Template, error)
+	ListUploadBatchRows(ctx context.Context, arg ListUploadBatchRowsParams) ([]UploadBatchRow, error)
+	ListUploadBatches(ctx context.Context, arg ListUploadBatchesParams) ([]UploadBatch, error)
+	ListUsers(ctx context.Context, dollar_1 []string) ([]User, error)
+	UpdateDelivery(ctx context.Context, arg UpdateDeliveryParams) error
+	UpdateDeliveryStatus(ctx context.Context, arg UpdateDeliveryStatusParams) error
+	UpdateDeviceToken(ctx context.Context, arg UpdateDeviceTokenParams) error
+	UpdateDeviceTokenActive(ctx context.Context, arg UpdateDeviceTokenActiveParams) error
+	UpdateDeviceTokenLastSeen(ctx context.Context, arg UpdateDeviceTokenLastSeenParams) error
+	UpdateNotification(ctx context.Context, arg UpdateNotificationParams) error
+	UpdateNotificationSchedule(ctx context.Context, arg UpdateNotificationScheduleParams) error
+	UpdateNotificationStatus(ctx context.Context, arg UpdateNotificationStatusParams) error
 	UpdateRole(ctx context.Context, arg UpdateRoleParams) error
+	UpdateSegment(ctx context.Context, arg UpdateSegmentParams) error
 	UpdateStaffPassword(ctx context.Context, arg UpdateStaffPasswordParams) error
 	UpdateStaffStatus(ctx context.Context, arg UpdateStaffStatusParams) error
+	UpdateTemplate(ctx context.Context, arg UpdateTemplateParams) error
+	UpdateTemplateActive(ctx context.Context, arg UpdateTemplateActiveParams) error
+	UpdateUploadBatchCounts(ctx context.Context, arg UpdateUploadBatchCountsParams) error
+	UpdateUploadBatchRow(ctx context.Context, arg UpdateUploadBatchRowParams) error
+	UpdateUser(ctx context.Context, arg UpdateUserParams) error
+	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error
 }
 
 var _ Querier = (*Queries)(nil)
