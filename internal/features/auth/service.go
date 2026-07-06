@@ -21,12 +21,12 @@ type LoginResult struct {
 }
 
 type AuthService struct {
-	repo         *repository.StaffRepository
+	repo         *repository.StaffUserRepository
 	tokenManager *token.TokenManager
 }
 
 func NewAuthService(
-	repo *repository.StaffRepository,
+	repo *repository.StaffUserRepository,
 	tokenManager *token.TokenManager,
 ) *AuthService {
 	return &AuthService{

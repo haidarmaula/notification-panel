@@ -12,7 +12,7 @@ type StaffModule struct {
 }
 
 func NewStaffModule(queries *sqlc.Queries, middlewares ...middleware.Middleware) *StaffModule {
-	staffRepo := repository.NewStaffRepository(queries)
+	staffRepo := repository.NewStaffUserRepository(queries)
 	roleRepo := repository.NewRoleRepository(queries)
 	service := NewStaffService(staffRepo, roleRepo)
 	handler := NewStaffHandler(service)

@@ -3,80 +3,238 @@ package staff
 import (
 	"context"
 	"errors"
-	"time"
-
-	"hello/internal/database/repository"
-	"hello/internal/database/sqlc"
+	"fmt"
 
 	"golang.org/x/crypto/bcrypt"
+	"hello/internal/database/repository"
+	"hello/internal/database/sqlc"
 )
 
 var (
 	ErrEmailAlreadyRegistered = errors.New("email already registered")
-	ErrFailedToCreateAccount  = errors.New("failed to create account")
 	ErrInvalidRole            = errors.New("invalid role")
+	ErrStaffNotFound          = errors.New("staff user not found")
+	ErrEmailAlreadyUsed       = errors.New("email already used by another staff")
 )
 
-type CreateStaffUserParams struct {
+type CreateStaffParams struct {
 	Role     string
 	Name     string
 	Email    string
 	Password string
 }
 
-type CreateStaffUserResult struct {
-	ID        int64
-	RoleID    int64
-	Name      string
-	Email     string
-	IsActive  bool
-	CreatedAt time.Time
+type UpdateStaffParams struct {
+	ID    int64
+	Role  string
+	Name  string
+	Email string
 }
 
 type StaffService struct {
-	staffRepo *repository.StaffRepository
+	staffRepo *repository.StaffUserRepository
 	roleRepo  *repository.RoleRepository
 }
 
-func NewStaffService(staffRepo *repository.StaffRepository, roleRepo *repository.RoleRepository) *StaffService {
+func NewStaffService(staffRepo *repository.StaffUserRepository, roleRepo *repository.RoleRepository) *StaffService {
 	return &StaffService{
 		staffRepo: staffRepo,
 		roleRepo:  roleRepo,
 	}
 }
 
-func (s *StaffService) Create(ctx context.Context, params CreateStaffUserParams) (*CreateStaffUserResult, error) {
-	_, err := s.staffRepo.FindByEmail(ctx, params.Email)
-	if err == nil {
+func (s *StaffService) Create(ctx context.Context, params CreateStaffParams) (*Staff, error) {
+	exists, err := s.staffRepo.ExistsByEmail(ctx, params.Email)
+	if err != nil {
+		return nil, fmt.Errorf("check email: %w", err)
+	}
+	if exists {
 		return nil, ErrEmailAlreadyRegistered
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(params.Password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, ErrFailedToCreateAccount
+		return nil, fmt.Errorf("hash password: %w", err)
 	}
 
-	roleEntity, err := s.roleRepo.FindByName(ctx, params.Role)
+	role, err := s.roleRepo.FindByName(ctx, params.Role)
 	if err != nil {
 		return nil, ErrInvalidRole
 	}
 
 	staff, err := s.staffRepo.Create(ctx, sqlc.CreateStaffUserParams{
-		RoleID:       roleEntity.ID,
+		RoleID:       role.ID,
 		Name:         params.Name,
 		Email:        params.Email,
 		PasswordHash: string(hashed),
 	})
 	if err != nil {
-		return nil, ErrFailedToCreateAccount
+		return nil, fmt.Errorf("create staff: %w", err)
 	}
 
-	return &CreateStaffUserResult{
+	return &Staff{
 		ID:        staff.ID,
 		RoleID:    staff.RoleID,
+		RoleName:  role.Name,
 		Name:      staff.Name,
 		Email:     staff.Email,
 		IsActive:  staff.IsActive,
 		CreatedAt: staff.CreatedAt.Time,
+		UpdatedAt: staff.UpdatedAt.Time,
 	}, nil
+}
+
+func (s *StaffService) GetByID(ctx context.Context, id int64) (*Staff, error) {
+	staff, err := s.staffRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, ErrStaffNotFound
+	}
+
+	role, err := s.roleRepo.FindByID(ctx, staff.RoleID)
+	if err != nil {
+		return nil, fmt.Errorf("get role: %w", err)
+	}
+
+	return &Staff{
+		ID:        staff.ID,
+		RoleID:    staff.RoleID,
+		RoleName:  role.Name,
+		Name:      staff.Name,
+		Email:     staff.Email,
+		IsActive:  staff.IsActive,
+		CreatedAt: staff.CreatedAt.Time,
+		UpdatedAt: staff.UpdatedAt.Time,
+	}, nil
+}
+
+func (s *StaffService) List(ctx context.Context, page, limit int32, search string) ([]Staff, int64, error) {
+	offset := (page - 1) * limit
+
+	var staffs []Staff
+	var total int64
+	var err error
+
+	if search != "" {
+		rows, err := s.staffRepo.Search(ctx, search, offset, limit)
+		if err != nil {
+			return nil, 0, fmt.Errorf("search staff: %w", err)
+		}
+
+		staffs = make([]Staff, len(rows))
+
+		for i, row := range rows {
+			staffs[i] = Staff{
+				ID:        row.ID,
+				RoleID:    row.RoleID,
+				RoleName:  row.RoleName,
+				Name:      row.Name,
+				Email:     row.Email,
+				IsActive:  row.IsActive,
+				CreatedAt: row.CreatedAt.Time,
+				UpdatedAt: row.UpdatedAt.Time,
+			}
+		}
+	} else {
+		rows, err := s.staffRepo.List(ctx, offset, limit)
+		if err != nil {
+			return nil, 0, fmt.Errorf("list staff: %w", err)
+		}
+
+		staffs = make([]Staff, len(rows))
+
+		for i, row := range rows {
+			staffs[i] = Staff{
+				ID:        row.ID,
+				RoleID:    row.RoleID,
+				RoleName:  row.RoleName,
+				Name:      row.Name,
+				Email:     row.Email,
+				IsActive:  row.IsActive,
+				CreatedAt: row.CreatedAt.Time,
+				UpdatedAt: row.UpdatedAt.Time,
+			}
+		}
+	}
+
+	total, err = s.staffRepo.Count(ctx)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count staff: %w", err)
+	}
+
+	return staffs, total, nil
+}
+
+func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*Staff, error) {
+	existing, err := s.staffRepo.FindByID(ctx, params.ID)
+	if err != nil {
+		return nil, ErrStaffNotFound
+	}
+
+	update := sqlc.UpdateStaffUserParams{
+		ID:     params.ID,
+		RoleID: existing.RoleID,
+		Name:   existing.Name,
+		Email:  existing.Email,
+	}
+
+	if params.Role != "" {
+		role, err := s.roleRepo.FindByName(ctx, params.Role)
+		if err != nil {
+			return nil, ErrInvalidRole
+		}
+
+		update.RoleID = role.ID
+	}
+
+	if params.Name != "" {
+		update.Name = params.Name
+	}
+
+	if params.Email != "" && params.Email != existing.Email {
+		exists, err := s.staffRepo.ExistsByEmail(ctx, params.Email)
+		if err != nil {
+			return nil, fmt.Errorf("check email: %w", err)
+		}
+		if exists {
+			return nil, ErrEmailAlreadyUsed
+		}
+
+		update.Email = params.Email
+	}
+
+	if err := s.staffRepo.Update(ctx, update); err != nil {
+		return nil, fmt.Errorf("update staff: %w", err)
+	}
+
+	return s.GetByID(ctx, params.ID)
+}
+
+func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool) (*Staff, error) {
+	_, err := s.staffRepo.FindByID(ctx, id)
+	if err != nil {
+		return nil, ErrStaffNotFound
+	}
+
+	if err := s.staffRepo.UpdateStatus(ctx, sqlc.UpdateStaffStatusParams{ID: id, IsActive: isActive}); err != nil {
+		return nil, fmt.Errorf("update status: %w", err)
+	}
+
+	return s.GetByID(ctx, id)
+}
+
+func (s *StaffService) UpdatePassword(ctx context.Context, id int64, newPassword string) error {
+	_, err := s.staffRepo.FindByID(ctx, id)
+	if err != nil {
+		return ErrStaffNotFound
+	}
+
+	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+
+	return s.staffRepo.UpdatePassword(ctx, sqlc.UpdateStaffPasswordParams{
+		ID:           id,
+		PasswordHash: string(hashed),
+	})
 }

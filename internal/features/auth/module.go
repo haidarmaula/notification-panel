@@ -13,7 +13,7 @@ type AuthModule struct {
 }
 
 func NewAuthModule(queries *sqlc.Queries, tokenManager *token.TokenManager, middlewares ...middleware.Middleware) *AuthModule {
-	repo := repository.NewStaffRepository(queries)
+	repo := repository.NewStaffUserRepository(queries)
 	service := NewAuthService(repo, tokenManager)
 	handler := NewAuthHandler(service)
 
