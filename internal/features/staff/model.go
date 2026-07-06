@@ -2,6 +2,7 @@ package staff
 
 import "time"
 
+// Staff represents the domain model for a staff user.
 type Staff struct {
 	ID        int64
 	RoleID    int64

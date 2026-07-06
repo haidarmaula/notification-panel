@@ -10,14 +10,19 @@ import (
 	"hello/pkg/response"
 )
 
+// StaffHandler handles HTTP requests for staff management.
 type StaffHandler struct {
 	service *StaffService
 }
 
+// NewStaffHandler creates a new StaffHandler instance.
 func NewStaffHandler(service *StaffService) *StaffHandler {
 	return &StaffHandler{service: service}
 }
 
+// Create handles POST /api/v1/staff.
+// It validates the request, creates a new staff user, and returns 201 Created.
+// Returns 400 for validation errors, 409 for duplicate email, and 500 for internal errors.
 func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateStaffRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -49,6 +54,9 @@ func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusCreated, toStaffResponse(staff), "staff created")
 }
 
+// GetByID handles GET /api/v1/staff/{id}.
+// It retrieves a staff user by ID and returns 200 OK with staff data.
+// Returns 404 if the staff user is not found.
 func (h *StaffHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -67,6 +75,9 @@ func (h *StaffHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, toStaffResponse(staff), "success")
 }
 
+// List handles GET /api/v1/staff.
+// It returns a paginated list of staff users with optional search by name/email.
+// Query params: page, limit, search.
 func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, limit := getPaginationParams(r)
 	search := r.URL.Query().Get("search")
@@ -77,7 +88,6 @@ func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Map to response DTO
 	data := make([]StaffResponse, len(items))
 	for i, item := range items {
 		data[i] = toStaffResponse(&item)
@@ -94,6 +104,9 @@ func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, resp, "success")
 }
 
+// Update handles PATCH /api/v1/staff/{id}.
+// It updates a staff user's role, name, or email.
+// Returns 200 OK with updated staff data, 404 if not found, 400 for invalid input.
 func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -130,6 +143,9 @@ func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, toStaffResponse(staff), "staff updated")
 }
 
+// UpdateStatus handles PATCH /api/v1/staff/{id}/status.
+// It updates the active status of a staff user.
+// Returns 200 OK with updated staff data, 404 if not found.
 func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -153,6 +169,9 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, toStaffResponse(staff), "status updated")
 }
 
+// UpdatePassword handles PATCH /api/v1/staff/{id}/password.
+// It updates the password of a staff user.
+// Returns 200 OK on success, 404 if not found, 400 if password is empty.
 func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -179,7 +198,7 @@ func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, nil, "password updated")
 }
 
-// Helper to convert service Staff to response DTO
+// toStaffResponse converts a domain Staff object to a StaffResponse DTO.
 func toStaffResponse(s *Staff) StaffResponse {
 	return StaffResponse{
 		ID:        s.ID,
@@ -193,6 +212,7 @@ func toStaffResponse(s *Staff) StaffResponse {
 	}
 }
 
+// parseInt64FromPath extracts and parses an int64 from a URL path parameter.
 func parseInt64FromPath(r *http.Request, key string) (int64, error) {
 	raw := r.PathValue(key)
 	if raw == "" {
@@ -201,6 +221,7 @@ func parseInt64FromPath(r *http.Request, key string) (int64, error) {
 	return strconv.ParseInt(raw, 10, 64)
 }
 
+// getPaginationParams extracts page and limit from query parameters with defaults.
 func getPaginationParams(r *http.Request) (page, limit int32) {
 	page = 1
 	limit = 10

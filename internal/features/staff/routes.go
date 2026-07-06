@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// RegisterRoutes registers all staff endpoints with the provided ServeMux.
 func (m *StaffModule) RegisterRoutes(mux *http.ServeMux) {
 	const prefix = "/api/v1"
 
