@@ -72,6 +72,55 @@ func (q *Queries) CreateNotificationTarget(ctx context.Context, arg CreateNotifi
 	return i, err
 }
 
+const createNotificationTargetFull = `-- name: CreateNotificationTargetFull :one
+INSERT INTO notification_targets (
+    notification_id,
+    target_type,
+    segment_id,
+    user_id,
+    upload_batch_id
+) VALUES (
+    $1, $2, $3, $4, $5
+)
+RETURNING
+    id,
+    notification_id,
+    target_type,
+    segment_id,
+    user_id,
+    upload_batch_id,
+    created_at
+`
+
+type CreateNotificationTargetFullParams struct {
+	NotificationID int64       `db:"notification_id"`
+	TargetType     string      `db:"target_type"`
+	SegmentID      pgtype.Int8 `db:"segment_id"`
+	UserID         pgtype.Int8 `db:"user_id"`
+	UploadBatchID  pgtype.Int8 `db:"upload_batch_id"`
+}
+
+func (q *Queries) CreateNotificationTargetFull(ctx context.Context, arg CreateNotificationTargetFullParams) (NotificationTarget, error) {
+	row := q.db.QueryRow(ctx, createNotificationTargetFull,
+		arg.NotificationID,
+		arg.TargetType,
+		arg.SegmentID,
+		arg.UserID,
+		arg.UploadBatchID,
+	)
+	var i NotificationTarget
+	err := row.Scan(
+		&i.ID,
+		&i.NotificationID,
+		&i.TargetType,
+		&i.SegmentID,
+		&i.UserID,
+		&i.UploadBatchID,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const deleteNotificationTarget = `-- name: DeleteNotificationTarget :exec
 
 DELETE
@@ -87,21 +136,31 @@ func (q *Queries) DeleteNotificationTarget(ctx context.Context, id int64) error 
 	return err
 }
 
+const deleteNotificationTargetsByNotification = `-- name: DeleteNotificationTargetsByNotification :exec
+DELETE FROM notification_targets WHERE notification_id = $1
+`
+
+func (q *Queries) DeleteNotificationTargetsByNotification(ctx context.Context, notificationID int64) error {
+	_, err := q.db.Exec(ctx, deleteNotificationTargetsByNotification, notificationID)
+	return err
+}
+
 const listNotificationTargets = `-- name: ListNotificationTargets :many
 
 SELECT
     nt.id,
     nt.notification_id,
+    nt.target_type,        -- sudah text
+    nt.segment_id,
     u.id AS user_id,
     u.external_id,
     u.name,
     u.email,
     nt.created_at
 FROM notification_targets nt
-JOIN users u
-    ON u.id = nt.user_id
+LEFT JOIN users u ON u.id = nt.user_id
 WHERE nt.notification_id = $1
-ORDER BY u.name
+ORDER BY u.name NULLS FIRST
 LIMIT $3
 OFFSET $2
 `
@@ -115,8 +174,10 @@ type ListNotificationTargetsParams struct {
 type ListNotificationTargetsRow struct {
 	ID             int64              `db:"id"`
 	NotificationID int64              `db:"notification_id"`
-	UserID         int64              `db:"user_id"`
-	ExternalID     string             `db:"external_id"`
+	TargetType     string             `db:"target_type"`
+	SegmentID      pgtype.Int8        `db:"segment_id"`
+	UserID         pgtype.Int8        `db:"user_id"`
+	ExternalID     pgtype.Text        `db:"external_id"`
 	Name           pgtype.Text        `db:"name"`
 	Email          pgtype.Text        `db:"email"`
 	CreatedAt      pgtype.Timestamptz `db:"created_at"`
@@ -137,6 +198,8 @@ func (q *Queries) ListNotificationTargets(ctx context.Context, arg ListNotificat
 		if err := rows.Scan(
 			&i.ID,
 			&i.NotificationID,
+			&i.TargetType,
+			&i.SegmentID,
 			&i.UserID,
 			&i.ExternalID,
 			&i.Name,

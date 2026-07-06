@@ -35,6 +35,7 @@ type Querier interface {
 	// COUNT
 	// ==========================================
 	CountNotifications(ctx context.Context) (int64, error)
+	CountNotificationsWithFilters(ctx context.Context, arg CountNotificationsWithFiltersParams) (int64, error)
 	// ==========================================
 	// COUNT
 	// ==========================================
@@ -92,6 +93,7 @@ type Querier interface {
 	// CREATE
 	// ==========================================
 	CreateNotificationTarget(ctx context.Context, arg CreateNotificationTargetParams) (CreateNotificationTargetRow, error)
+	CreateNotificationTargetFull(ctx context.Context, arg CreateNotificationTargetFullParams) (NotificationTarget, error)
 	// ==========================================
 	// CREATE
 	// ==========================================
@@ -136,6 +138,7 @@ type Querier interface {
 	// DELETE
 	// ==========================================
 	DeleteNotificationTarget(ctx context.Context, id int64) error
+	DeleteNotificationTargetsByNotification(ctx context.Context, notificationID int64) error
 	// ==========================================
 	// DELETE
 	// ==========================================
@@ -206,6 +209,7 @@ type Querier interface {
 	// GET
 	// ==========================================
 	GetNotificationDeliveryByID(ctx context.Context, id int64) (GetNotificationDeliveryByIDRow, error)
+	GetNotificationStatistics(ctx context.Context, notificationID int64) (GetNotificationStatisticsRow, error)
 	// ==========================================
 	// GET
 	// ==========================================
@@ -264,6 +268,7 @@ type Querier interface {
 	// LIST
 	// ==========================================
 	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error)
+	ListNotificationsWithFilters(ctx context.Context, arg ListNotificationsWithFiltersParams) ([]ListNotificationsWithFiltersRow, error)
 	// ==========================================
 	// LIST
 	// ==========================================

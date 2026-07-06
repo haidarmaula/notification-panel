@@ -20,6 +20,14 @@ func (r *NotificationRepository) Count(ctx context.Context) (int64, error) {
 	return r.q.CountNotifications(ctx)
 }
 
+func (r *NotificationRepository) CountWithFilters(ctx context.Context, status, targetType, keyword string) (int64, error) {
+	return r.q.CountNotificationsWithFilters(ctx, sqlc.CountNotificationsWithFiltersParams{
+		Status:     status,
+		TargetType: targetType,
+		Keyword:    keyword,
+	})
+}
+
 func (r *NotificationRepository) Create(ctx context.Context, params sqlc.CreateNotificationParams) (sqlc.CreateNotificationRow, error) {
 	return r.q.CreateNotification(ctx, params)
 }
@@ -32,6 +40,16 @@ func (r *NotificationRepository) List(ctx context.Context, offset, limit int32) 
 	return r.q.ListNotifications(ctx, sqlc.ListNotificationsParams{
 		Offset: offset,
 		Limit:  limit,
+	})
+}
+
+func (r *NotificationRepository) ListWithFilters(ctx context.Context, status, targetType, keyword string, offset, limit int32) ([]sqlc.ListNotificationsWithFiltersRow, error) {
+	return r.q.ListNotificationsWithFilters(ctx, sqlc.ListNotificationsWithFiltersParams{
+		Status:     status,
+		TargetType: targetType,
+		Keyword:    keyword,
+		Offset:     offset,
+		Limit:      limit,
 	})
 }
 
@@ -57,4 +75,8 @@ func (r *NotificationRepository) MarkSent(ctx context.Context, id int64) error {
 
 func (r *NotificationRepository) Delete(ctx context.Context, id int64) error {
 	return r.q.DeleteNotification(ctx, id)
+}
+
+func (r *NotificationRepository) GetStatistics(ctx context.Context, id int64) (sqlc.GetNotificationStatisticsRow, error) {
+	return r.q.GetNotificationStatistics(ctx, id)
 }

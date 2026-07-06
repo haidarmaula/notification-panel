@@ -27,6 +27,29 @@ func (q *Queries) CountNotifications(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countNotificationsWithFilters = `-- name: CountNotificationsWithFilters :one
+SELECT COUNT(DISTINCT n.id)
+FROM notifications n
+LEFT JOIN notification_targets nt ON nt.notification_id = n.id
+WHERE 
+    ($1::text = '' OR n.status = $1)
+    AND ($2::text = '' OR nt.target_type = $2)
+    AND ($3::text = '' OR n.title ILIKE '%' || $3 || '%')
+`
+
+type CountNotificationsWithFiltersParams struct {
+	Status     string `db:"status"`
+	TargetType string `db:"target_type"`
+	Keyword    string `db:"keyword"`
+}
+
+func (q *Queries) CountNotificationsWithFilters(ctx context.Context, arg CountNotificationsWithFiltersParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countNotificationsWithFilters, arg.Status, arg.TargetType, arg.Keyword)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createNotification = `-- name: CreateNotification :one
 
 INSERT INTO notifications (
@@ -127,9 +150,14 @@ SELECT
     title,
     body,
     template_id,
+    template_name,
+    payload,
+    priority,
     status,
     created_by,
     scheduled_at,
+    published_at,
+    completed_at,
     created_at,
     updated_at
 FROM notifications
@@ -138,15 +166,20 @@ LIMIT 1
 `
 
 type GetNotificationByIDRow struct {
-	ID          int64              `db:"id"`
-	Title       string             `db:"title"`
-	Body        string             `db:"body"`
-	TemplateID  pgtype.Int8        `db:"template_id"`
-	Status      string             `db:"status"`
-	CreatedBy   int64              `db:"created_by"`
-	ScheduledAt pgtype.Timestamptz `db:"scheduled_at"`
-	CreatedAt   pgtype.Timestamptz `db:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `db:"updated_at"`
+	ID           int64              `db:"id"`
+	Title        string             `db:"title"`
+	Body         string             `db:"body"`
+	TemplateID   pgtype.Int8        `db:"template_id"`
+	TemplateName pgtype.Text        `db:"template_name"`
+	Payload      []byte             `db:"payload"`
+	Priority     string             `db:"priority"`
+	Status       string             `db:"status"`
+	CreatedBy    int64              `db:"created_by"`
+	ScheduledAt  pgtype.Timestamptz `db:"scheduled_at"`
+	PublishedAt  pgtype.Timestamptz `db:"published_at"`
+	CompletedAt  pgtype.Timestamptz `db:"completed_at"`
+	CreatedAt    pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt    pgtype.Timestamptz `db:"updated_at"`
 }
 
 // ==========================================
@@ -160,12 +193,40 @@ func (q *Queries) GetNotificationByID(ctx context.Context, id int64) (GetNotific
 		&i.Title,
 		&i.Body,
 		&i.TemplateID,
+		&i.TemplateName,
+		&i.Payload,
+		&i.Priority,
 		&i.Status,
 		&i.CreatedBy,
 		&i.ScheduledAt,
+		&i.PublishedAt,
+		&i.CompletedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
+	return i, err
+}
+
+const getNotificationStatistics = `-- name: GetNotificationStatistics :one
+SELECT
+    COUNT(DISTINCT nt.user_id) AS targeted,
+    COUNT(CASE WHEN nd.status = 'DELIVERED' OR nd.status = 'OPENED' THEN 1 END) AS delivered,
+    COUNT(CASE WHEN nd.status = 'OPENED' THEN 1 END) AS opened
+FROM notification_targets nt
+LEFT JOIN notification_deliveries nd ON nd.notification_id = nt.notification_id AND nd.user_id = nt.user_id
+WHERE nt.notification_id = $1
+`
+
+type GetNotificationStatisticsRow struct {
+	Targeted  int64 `db:"targeted"`
+	Delivered int64 `db:"delivered"`
+	Opened    int64 `db:"opened"`
+}
+
+func (q *Queries) GetNotificationStatistics(ctx context.Context, notificationID int64) (GetNotificationStatisticsRow, error) {
+	row := q.db.QueryRow(ctx, getNotificationStatistics, notificationID)
+	var i GetNotificationStatisticsRow
+	err := row.Scan(&i.Targeted, &i.Delivered, &i.Opened)
 	return i, err
 }
 
@@ -219,6 +280,89 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 			&i.CreatedByName,
 			&i.ScheduledAt,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listNotificationsWithFilters = `-- name: ListNotificationsWithFilters :many
+SELECT
+    n.id,
+    n.title,
+    n.status,
+    su.name AS created_by_name,
+    n.scheduled_at,
+    n.created_at,
+    COALESCE(
+        (SELECT DISTINCT nt.target_type 
+         FROM notification_targets nt 
+         WHERE nt.notification_id = n.id 
+         LIMIT 1), 
+        'BROADCAST'
+    )::text AS target_type
+FROM notifications n
+JOIN staff_users su ON su.id = n.created_by
+WHERE 
+    ($1::text = '' OR n.status = $1)
+    AND ($2::text = '' OR COALESCE(
+        (SELECT DISTINCT nt.target_type 
+         FROM notification_targets nt 
+         WHERE nt.notification_id = n.id 
+         LIMIT 1), 
+        'BROADCAST'
+    ) = $2)
+    AND ($3::text = '' OR n.title ILIKE '%' || $3 || '%')
+ORDER BY n.created_at DESC
+LIMIT $5 OFFSET $4
+`
+
+type ListNotificationsWithFiltersParams struct {
+	Status     string `db:"status"`
+	TargetType string `db:"target_type"`
+	Keyword    string `db:"keyword"`
+	Offset     int32  `db:"offset"`
+	Limit      int32  `db:"limit"`
+}
+
+type ListNotificationsWithFiltersRow struct {
+	ID            int64              `db:"id"`
+	Title         string             `db:"title"`
+	Status        string             `db:"status"`
+	CreatedByName string             `db:"created_by_name"`
+	ScheduledAt   pgtype.Timestamptz `db:"scheduled_at"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	TargetType    string             `db:"target_type"`
+}
+
+func (q *Queries) ListNotificationsWithFilters(ctx context.Context, arg ListNotificationsWithFiltersParams) ([]ListNotificationsWithFiltersRow, error) {
+	rows, err := q.db.Query(ctx, listNotificationsWithFilters,
+		arg.Status,
+		arg.TargetType,
+		arg.Keyword,
+		arg.Offset,
+		arg.Limit,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListNotificationsWithFiltersRow{}
+	for rows.Next() {
+		var i ListNotificationsWithFiltersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Status,
+			&i.CreatedByName,
+			&i.ScheduledAt,
+			&i.CreatedAt,
+			&i.TargetType,
 		); err != nil {
 			return nil, err
 		}

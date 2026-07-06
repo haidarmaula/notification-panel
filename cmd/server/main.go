@@ -43,7 +43,7 @@ func main() {
 	profileModule := profile.NewProfileModule(queries, apiKeyMW.Use, jwtMW.Use)
 	profileModule.RegisterRoutes(mux)
 
-	notificationModule := notifications.NewNotificationModule(apiKeyMW.Use, jwtMW.Use)
+	notificationModule := notifications.NewNotificationModule(queries, apiKeyMW.Use, jwtMW.Use)
 	notificationModule.RegisterRoutes(mux)
 
 	server := &http.Server{

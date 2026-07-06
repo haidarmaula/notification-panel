@@ -8,14 +8,28 @@ SELECT
     title,
     body,
     template_id,
+    template_name,
+    payload,
+    priority,
     status,
     created_by,
     scheduled_at,
+    published_at,
+    completed_at,
     created_at,
     updated_at
 FROM notifications
 WHERE id = sqlc.arg('id')
 LIMIT 1;
+
+-- name: GetNotificationStatistics :one
+SELECT
+    COUNT(DISTINCT nt.user_id) AS targeted,
+    COUNT(CASE WHEN nd.status = 'DELIVERED' OR nd.status = 'OPENED' THEN 1 END) AS delivered,
+    COUNT(CASE WHEN nd.status = 'OPENED' THEN 1 END) AS opened
+FROM notification_targets nt
+LEFT JOIN notification_deliveries nd ON nd.notification_id = nt.notification_id AND nd.user_id = nt.user_id
+WHERE nt.notification_id = $1;
 
 -- ==========================================
 -- CREATE
@@ -105,6 +119,36 @@ ORDER BY n.created_at DESC
 LIMIT sqlc.arg('limit')
 OFFSET sqlc.arg('offset');
 
+-- name: ListNotificationsWithFilters :many
+SELECT
+    n.id,
+    n.title,
+    n.status,
+    su.name AS created_by_name,
+    n.scheduled_at,
+    n.created_at,
+    COALESCE(
+        (SELECT DISTINCT nt.target_type 
+         FROM notification_targets nt 
+         WHERE nt.notification_id = n.id 
+         LIMIT 1), 
+        'BROADCAST'
+    )::text AS target_type
+FROM notifications n
+JOIN staff_users su ON su.id = n.created_by
+WHERE 
+    (sqlc.arg('status')::text = '' OR n.status = sqlc.arg('status'))
+    AND (sqlc.arg('target_type')::text = '' OR COALESCE(
+        (SELECT DISTINCT nt.target_type 
+         FROM notification_targets nt 
+         WHERE nt.notification_id = n.id 
+         LIMIT 1), 
+        'BROADCAST'
+    ) = sqlc.arg('target_type'))
+    AND (sqlc.arg('keyword')::text = '' OR n.title ILIKE '%' || sqlc.arg('keyword') || '%')
+ORDER BY n.created_at DESC
+LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+
 -- ==========================================
 -- SEARCH
 -- ==========================================
@@ -133,3 +177,12 @@ OFFSET sqlc.arg('offset');
 -- name: CountNotifications :one
 SELECT COUNT(*)
 FROM notifications;
+
+-- name: CountNotificationsWithFilters :one
+SELECT COUNT(DISTINCT n.id)
+FROM notifications n
+LEFT JOIN notification_targets nt ON nt.notification_id = n.id
+WHERE 
+    (sqlc.arg('status')::text = '' OR n.status = sqlc.arg('status'))
+    AND (sqlc.arg('target_type')::text = '' OR nt.target_type = sqlc.arg('target_type'))
+    AND (sqlc.arg('keyword')::text = '' OR n.title ILIKE '%' || sqlc.arg('keyword') || '%');
