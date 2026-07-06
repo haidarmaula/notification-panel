@@ -8,18 +8,18 @@ import (
 )
 
 type AccessClaims struct {
-	UserID int64  `json:"user_id"`
-	RoleID int64  `json:"role_id"`
-	Email  string `json:"email"`
-	Type   string `json:"type"`
+	StaffID int64  `json:"user_id"`
+	RoleID  int64  `json:"role_id"`
+	Email   string `json:"email"`
+	Type    string `json:"type"`
 
 	jwt.RegisteredClaims
 }
 
 type RefreshClaims struct {
-	UserID int64  `json:"user_id"`
-	RoleID int64  `json:"role_id"`
-	Type   string `json:"type"`
+	StaffID int64  `json:"user_id"`
+	RoleID  int64  `json:"role_id"`
+	Type    string `json:"type"`
 
 	jwt.RegisteredClaims
 }
@@ -43,12 +43,12 @@ func NewTokenManager(accessSecret, refreshSecret string) *TokenManager {
 	}
 }
 
-func (t *TokenManager) GenerateAccessToken(userID int64, roleID int64, email string) (string, error) {
+func (t *TokenManager) GenerateAccessToken(StaffID int64, roleID int64, email string) (string, error) {
 	claims := AccessClaims{
-		UserID: userID,
-		RoleID: roleID,
-		Email:  email,
-		Type:   "access",
+		StaffID: StaffID,
+		RoleID:  roleID,
+		Email:   email,
+		Type:    "access",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(accessTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
@@ -60,11 +60,11 @@ func (t *TokenManager) GenerateAccessToken(userID int64, roleID int64, email str
 	return token.SignedString(t.accessSecret)
 }
 
-func (t *TokenManager) GenerateRefreshToken(userID int64, roleID int64) (string, error) {
+func (t *TokenManager) GenerateRefreshToken(StaffID int64, roleID int64) (string, error) {
 	claims := RefreshClaims{
-		UserID: userID,
-		RoleID: roleID,
-		Type:   "refresh",
+		StaffID: StaffID,
+		RoleID:  roleID,
+		Type:    "refresh",
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(time.Now().Add(refreshTTL)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

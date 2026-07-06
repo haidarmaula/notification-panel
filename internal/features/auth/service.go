@@ -85,7 +85,7 @@ func (s *AuthService) RefreshToken(
 		return nil, token.ErrInvalidToken
 	}
 
-	admin, err := s.repo.FindByID(ctx, claims.UserID)
+	admin, err := s.repo.FindByID(ctx, claims.StaffID)
 	if err != nil {
 		return nil, ErrInvalidCredentials
 	}

@@ -13,6 +13,7 @@ import (
 
 	"hello/internal/features/auth"
 	"hello/internal/features/notifications"
+	"hello/internal/features/profile"
 	"hello/internal/features/staff"
 )
 
@@ -38,6 +39,9 @@ func main() {
 
 	staffModule := staff.NewStaffModule(queries, apiKeyMW.Use, jwtMW.Use, middleware.SuperAdminMiddleware)
 	staffModule.RegisterRoutes(mux)
+
+	profileModule := profile.NewProfileModule(queries, apiKeyMW.Use, jwtMW.Use)
+	profileModule.RegisterRoutes(mux)
 
 	notificationModule := notifications.NewNotificationModule(apiKeyMW.Use, jwtMW.Use)
 	notificationModule.RegisterRoutes(mux)
