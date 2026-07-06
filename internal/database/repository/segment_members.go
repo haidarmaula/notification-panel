@@ -37,3 +37,10 @@ func (r *SegmentMemberRepository) Create(ctx context.Context, params sqlc.Create
 func (r *SegmentMemberRepository) Delete(ctx context.Context, id int64) error {
 	return r.q.DeleteSegmentMember(ctx, id)
 }
+
+func (r *SegmentMemberRepository) DeleteBySegmentAndUser(ctx context.Context, segmentID, userID int64) error {
+	return r.q.DeleteSegmentMemberBySegmentAndUser(ctx, sqlc.DeleteSegmentMemberBySegmentAndUserParams{
+		SegmentID: segmentID,
+		UserID:    userID,
+	})
+}

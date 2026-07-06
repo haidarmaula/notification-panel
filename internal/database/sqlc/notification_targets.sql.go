@@ -150,7 +150,7 @@ const listNotificationTargets = `-- name: ListNotificationTargets :many
 SELECT
     nt.id,
     nt.notification_id,
-    nt.target_type,        -- sudah text
+    nt.target_type,
     nt.segment_id,
     u.id AS user_id,
     u.external_id,

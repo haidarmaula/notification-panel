@@ -230,19 +230,25 @@ func (s *NotificationService) Create(ctx context.Context, params CreateParams) (
 		status = string(StatusScheduled)
 	}
 
+	// Prepare scheduled_at safely
+	var scheduledAt pgtype.Timestamptz
+	if params.ScheduledAt != nil {
+		scheduledAt = pgtype.Timestamptz{Time: *params.ScheduledAt, Valid: true}
+	}
+
 	notif, err := s.notifRepo.Create(ctx, sqlc.CreateNotificationParams{
 		Title:       params.Title,
 		Body:        params.Body,
 		TemplateID:  templateID,
 		Status:      status,
 		CreatedBy:   params.CreatedBy,
-		ScheduledAt: pgtype.Timestamptz{Time: *params.ScheduledAt, Valid: params.ScheduledAt != nil},
+		ScheduledAt: scheduledAt,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create notification: %w", err)
 	}
 
-	// Create targets using CreateNotificationTargetFull query.
+	// Create targets based on type
 	if params.TargetType == string(TargetIndividual) {
 		if len(params.UserIDs) == 0 {
 			_ = s.notifRepo.Delete(ctx, notif.ID)
@@ -281,9 +287,7 @@ func (s *NotificationService) Create(ctx context.Context, params CreateParams) (
 			return nil, fmt.Errorf("create target for segment: %w", err)
 		}
 	} else if params.TargetType == string(TargetBroadcast) {
-		// For broadcast, no target needed. Statistics will handle all users.
-		// Optionally, you could create a placeholder target with target_type 'BROADCAST'
-		// to simplify statistics, but it's not required.
+		// No target needed for broadcast.
 	}
 
 	return &CreateNotificationResponse{

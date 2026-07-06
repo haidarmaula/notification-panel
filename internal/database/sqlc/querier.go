@@ -151,6 +151,7 @@ type Querier interface {
 	// DELETE
 	// ==========================================
 	DeleteSegmentMember(ctx context.Context, id int64) error
+	DeleteSegmentMemberBySegmentAndUser(ctx context.Context, arg DeleteSegmentMemberBySegmentAndUserParams) error
 	// ==========================================
 	// DELETE
 	// ==========================================

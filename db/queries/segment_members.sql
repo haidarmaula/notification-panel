@@ -40,6 +40,10 @@ DELETE
 FROM segment_members
 WHERE id = sqlc.arg('id');
 
+-- name: DeleteSegmentMemberBySegmentAndUser :exec
+DELETE FROM segment_members
+WHERE segment_id = $1 AND user_id = $2;
+
 -- ==========================================
 -- LIST
 -- ==========================================

@@ -80,6 +80,21 @@ func (q *Queries) DeleteSegmentMember(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteSegmentMemberBySegmentAndUser = `-- name: DeleteSegmentMemberBySegmentAndUser :exec
+DELETE FROM segment_members
+WHERE segment_id = $1 AND user_id = $2
+`
+
+type DeleteSegmentMemberBySegmentAndUserParams struct {
+	SegmentID int64 `db:"segment_id"`
+	UserID    int64 `db:"user_id"`
+}
+
+func (q *Queries) DeleteSegmentMemberBySegmentAndUser(ctx context.Context, arg DeleteSegmentMemberBySegmentAndUserParams) error {
+	_, err := q.db.Exec(ctx, deleteSegmentMemberBySegmentAndUser, arg.SegmentID, arg.UserID)
+	return err
+}
+
 const getSegmentMemberByID = `-- name: GetSegmentMemberByID :one
 
 SELECT

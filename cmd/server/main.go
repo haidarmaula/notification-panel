@@ -14,6 +14,7 @@ import (
 	"hello/internal/features/auth"
 	"hello/internal/features/notifications"
 	"hello/internal/features/profile"
+	"hello/internal/features/segments"
 	"hello/internal/features/staff"
 )
 
@@ -42,6 +43,9 @@ func main() {
 
 	profileModule := profile.NewProfileModule(queries, apiKeyMW.Use, jwtMW.Use)
 	profileModule.RegisterRoutes(mux)
+
+	segmentModule := segments.NewSegmentModule(queries, apiKeyMW.Use, jwtMW.Use)
+	segmentModule.RegisterRoutes(mux)
 
 	notificationModule := notifications.NewNotificationModule(queries, apiKeyMW.Use, jwtMW.Use)
 	notificationModule.RegisterRoutes(mux)
