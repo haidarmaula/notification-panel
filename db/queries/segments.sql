@@ -90,12 +90,12 @@ SELECT
     s.id,
     s.name,
     s.description,
+    s.created_by,
     su.name AS created_by_name,
     s.created_at,
     s.updated_at
 FROM segments s
-JOIN staff_users su
-    ON su.id = s.created_by
+JOIN staff_users su ON su.id = s.created_by
 ORDER BY s.name
 LIMIT sqlc.arg('limit')
 OFFSET sqlc.arg('offset');
@@ -109,14 +109,13 @@ SELECT
     s.id,
     s.name,
     s.description,
+    s.created_by,
     su.name AS created_by_name,
     s.created_at,
     s.updated_at
 FROM segments s
-JOIN staff_users su
-    ON su.id = s.created_by
-WHERE
-    s.name ILIKE '%' || sqlc.arg('keyword') || '%'
+JOIN staff_users su ON su.id = s.created_by
+WHERE s.name ILIKE '%' || sqlc.arg('keyword') || '%'
 ORDER BY s.name
 LIMIT sqlc.arg('limit')
 OFFSET sqlc.arg('offset');

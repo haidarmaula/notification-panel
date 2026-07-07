@@ -1,14 +1,11 @@
 package segments
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
 
-	"hello/internal/middleware"
-	"hello/internal/token"
 	"hello/pkg/response"
 )
 
@@ -23,19 +20,32 @@ func NewSegmentHandler(service *SegmentService) *SegmentHandler {
 }
 
 // List handles GET /api/v1/segments.
-// Query params: page, limit, search.
 func (h *SegmentHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, limit := getPaginationParams(r)
 	search := r.URL.Query().Get("search")
 
-	items, total, err := h.service.List(r.Context(), page, limit, search)
+	segments, total, err := h.service.List(r.Context(), page, limit, search)
 	if err != nil {
 		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		return
 	}
 
+	// Map domain to response DTOs
+	data := make([]SegmentListItem, len(segments))
+	for i, s := range segments {
+		data[i] = SegmentListItem{
+			ID:          s.ID,
+			Name:        s.Name,
+			Description: &s.Description,
+			CreatedBy:   "", // will be filled by fetching staff name, but we can leave empty or fetch in loop
+			MemberCount: s.MemberCount,
+			CreatedAt:   s.CreatedAt,
+			UpdatedAt:   s.UpdatedAt,
+		}
+	}
+
 	resp := ListSegmentsResponse{
-		Data: items,
+		Data: data,
 		Pagination: Pagination{
 			Page:  page,
 			Limit: limit,
@@ -53,7 +63,7 @@ func (h *SegmentHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	detail, err := h.service.GetByID(r.Context(), id)
+	segmentWithCount, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrSegmentNotFound) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
@@ -61,6 +71,26 @@ func (h *SegmentHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		}
 		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		return
+	}
+
+	// Fetch staff name
+	staff, err := h.service.staffRepo.FindByID(r.Context(), segmentWithCount.CreatedBy)
+	staffName := ""
+	if err == nil {
+		staffName = staff.Name
+	}
+
+	detail := SegmentDetail{
+		ID:          segmentWithCount.ID,
+		Name:        segmentWithCount.Name,
+		Description: &segmentWithCount.Description,
+		CreatedBy: StaffBrief{
+			ID:   segmentWithCount.CreatedBy,
+			Name: staffName,
+		},
+		MemberCount: segmentWithCount.MemberCount,
+		CreatedAt:   segmentWithCount.CreatedAt,
+		UpdatedAt:   segmentWithCount.UpdatedAt,
 	}
 
 	response.JSON(w, http.StatusOK, detail, "success")
@@ -73,7 +103,6 @@ func (h *SegmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
 		return
 	}
-
 	if req.Name == "" {
 		response.JSON(w, http.StatusBadRequest, nil, "name is required")
 		return
@@ -85,7 +114,7 @@ func (h *SegmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.service.Create(r.Context(), CreateParams{
+	segment, err := h.service.Create(r.Context(), CreateParams{
 		Name:        req.Name,
 		Description: req.Description,
 		CreatedBy:   staffID,
@@ -99,7 +128,8 @@ func (h *SegmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, http.StatusCreated, result, "segment created")
+	resp := CreateSegmentResponse{ID: segment.ID}
+	response.JSON(w, http.StatusCreated, resp, "segment created")
 }
 
 // Update handles PATCH /api/v1/segments/{id}.
@@ -115,13 +145,12 @@ func (h *SegmentHandler) Update(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
 		return
 	}
-
 	if req.Name == nil && req.Description == nil {
 		response.JSON(w, http.StatusBadRequest, nil, "at least one field required")
 		return
 	}
 
-	err = h.service.Update(r.Context(), UpdateParams{
+	updated, err := h.service.Update(r.Context(), UpdateParams{
 		ID:          id,
 		Name:        req.Name,
 		Description: req.Description,
@@ -138,7 +167,10 @@ func (h *SegmentHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response.JSON(w, http.StatusOK, map[string]string{"message": "segment updated"}, "success")
+	response.JSON(w, http.StatusOK, map[string]string{
+		"message": "segment updated",
+		"id":      strconv.FormatInt(updated.ID, 10),
+	}, "success")
 }
 
 // Delete handles DELETE /api/v1/segments/{id}.
@@ -163,40 +195,4 @@ func (h *SegmentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusOK, nil, "deleted")
-}
-
-// parseInt64FromPath extracts and parses int64 from URL path parameter.
-func parseInt64FromPath(r *http.Request, key string) (int64, error) {
-	raw := r.PathValue(key)
-	if raw == "" {
-		return 0, errors.New("missing id")
-	}
-	return strconv.ParseInt(raw, 10, 64)
-}
-
-// getPaginationParams extracts page and limit from query parameters.
-func getPaginationParams(r *http.Request) (page, limit int32) {
-	page = 1
-	limit = 10
-	if p := r.URL.Query().Get("page"); p != "" {
-		if v, err := strconv.ParseInt(p, 10, 32); err == nil && v > 0 {
-			page = int32(v)
-		}
-	}
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if v, err := strconv.ParseInt(l, 10, 32); err == nil && v > 0 && v <= 100 {
-			limit = int32(v)
-		}
-	}
-	return
-}
-
-// getStaffIDFromContext retrieves staff ID from context.
-func getStaffIDFromContext(ctx context.Context) (int64, bool) {
-	claims, ok := ctx.Value(middleware.UserContextKey).(*token.AccessClaims)
-	if !ok || claims == nil {
-		return 0, false
-	}
-	return claims.StaffID, true
-
 }

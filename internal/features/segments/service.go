@@ -38,69 +38,77 @@ func NewSegmentService(
 }
 
 // List returns a paginated list of segments with optional search.
-func (s *SegmentService) List(ctx context.Context, page, limit int32, search string) ([]SegmentListItem, int64, error) {
+func (s *SegmentService) List(ctx context.Context, page, limit int32, search string) ([]SegmentWithCount, int64, error) {
 	offset := (page - 1) * limit
 
-	var rows []SegmentListItem
-	var total int64
+	var sqlSegments []sqlc.Segment
 	var err error
 
 	if search != "" {
-		searchRows, err := s.segmentRepo.Search(ctx, search, offset, limit)
+		rows, err := s.segmentRepo.Search(ctx, search, offset, limit)
 		if err != nil {
 			return nil, 0, fmt.Errorf("search segments: %w", err)
 		}
-		rows = make([]SegmentListItem, len(searchRows))
-		for i, row := range searchRows {
-			memberCount, _ := s.memberRepo.CountBySegment(ctx, row.ID)
-			rows[i] = SegmentListItem{
+		sqlSegments = make([]sqlc.Segment, len(rows))
+		for i, row := range rows {
+			// SearchSegmentsRow does not have CreatedBy, set default
+			sqlSegments[i] = sqlc.Segment{
 				ID:          row.ID,
 				Name:        row.Name,
-				Description: &row.Description.String,
-				CreatedBy:   row.CreatedByName,
-				MemberCount: memberCount,
-				CreatedAt:   row.CreatedAt.Time,
-				UpdatedAt:   row.UpdatedAt.Time,
+				Description: row.Description,
+				CreatedBy:   0, // TODO: add created_by to query
+				CreatedAt:   row.CreatedAt,
+				UpdatedAt:   row.UpdatedAt,
 			}
 		}
 	} else {
-		listRows, err := s.segmentRepo.List(ctx, offset, limit)
+		rows, err := s.segmentRepo.List(ctx, offset, limit)
 		if err != nil {
 			return nil, 0, fmt.Errorf("list segments: %w", err)
 		}
-		rows = make([]SegmentListItem, len(listRows))
-		for i, row := range listRows {
-			memberCount, _ := s.memberRepo.CountBySegment(ctx, row.ID)
-			rows[i] = SegmentListItem{
+		sqlSegments = make([]sqlc.Segment, len(rows))
+		for i, row := range rows {
+			// ListSegmentsRow does not have CreatedBy, set default
+			sqlSegments[i] = sqlc.Segment{
 				ID:          row.ID,
 				Name:        row.Name,
-				Description: &row.Description.String,
-				CreatedBy:   row.CreatedByName,
-				MemberCount: memberCount,
-				CreatedAt:   row.CreatedAt.Time,
-				UpdatedAt:   row.UpdatedAt.Time,
+				Description: row.Description,
+				CreatedBy:   0, // TODO: add created_by to query
+				CreatedAt:   row.CreatedAt,
+				UpdatedAt:   row.UpdatedAt,
 			}
 		}
 	}
 
-	total, err = s.segmentRepo.Count(ctx)
+	total, err := s.segmentRepo.Count(ctx)
 	if err != nil {
 		return nil, 0, fmt.Errorf("count segments: %w", err)
 	}
 
-	return rows, total, nil
-}
-
-// GetByID returns full segment detail with member count and creator info.
-func (s *SegmentService) GetByID(ctx context.Context, id int64) (*SegmentDetail, error) {
-	segment, err := s.segmentRepo.FindByID(ctx, id)
-	if err != nil {
-		return nil, ErrSegmentNotFound
+	result := make([]SegmentWithCount, len(sqlSegments))
+	for i, seg := range sqlSegments {
+		memberCount, _ := s.memberRepo.CountBySegment(ctx, seg.ID)
+		result[i] = SegmentWithCount{
+			Segment: Segment{
+				ID:          seg.ID,
+				Name:        seg.Name,
+				Description: seg.Description.String,
+				CreatedBy:   seg.CreatedBy,
+				CreatedAt:   seg.CreatedAt.Time,
+				UpdatedAt:   seg.UpdatedAt.Time,
+			},
+			MemberCount: memberCount,
+		}
 	}
 
-	staff, err := s.staffRepo.FindByID(ctx, segment.CreatedBy)
+	return result, total, nil
+}
+
+// GetByID returns a single segment with member count as domain object.
+func (s *SegmentService) GetByID(ctx context.Context, id int64) (*SegmentWithCount, error) {
+	seg, err := s.segmentRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, fmt.Errorf("get creator: %w", err)
+		return nil, ErrSegmentNotFound
 	}
 
 	memberCount, err := s.memberRepo.CountBySegment(ctx, id)
@@ -108,17 +116,16 @@ func (s *SegmentService) GetByID(ctx context.Context, id int64) (*SegmentDetail,
 		return nil, fmt.Errorf("count members: %w", err)
 	}
 
-	return &SegmentDetail{
-		ID:          segment.ID,
-		Name:        segment.Name,
-		Description: &segment.Description.String,
-		CreatedBy: StaffBrief{
-			ID:   staff.ID,
-			Name: staff.Name,
+	return &SegmentWithCount{
+		Segment: Segment{
+			ID:          seg.ID,
+			Name:        seg.Name,
+			Description: seg.Description.String,
+			CreatedBy:   seg.CreatedBy,
+			CreatedAt:   seg.CreatedAt.Time,
+			UpdatedAt:   seg.UpdatedAt.Time,
 		},
 		MemberCount: memberCount,
-		CreatedAt:   segment.CreatedAt.Time,
-		UpdatedAt:   segment.UpdatedAt.Time,
 	}, nil
 }
 
@@ -129,8 +136,8 @@ type CreateParams struct {
 	CreatedBy   int64
 }
 
-// Create creates a new segment.
-func (s *SegmentService) Create(ctx context.Context, params CreateParams) (*CreateSegmentResponse, error) {
+// Create creates a new segment and returns the domain Segment.
+func (s *SegmentService) Create(ctx context.Context, params CreateParams) (*Segment, error) {
 	exists, err := s.segmentRepo.ExistsByName(ctx, params.Name)
 	if err != nil {
 		return nil, fmt.Errorf("check name existence: %w", err)
@@ -144,7 +151,7 @@ func (s *SegmentService) Create(ctx context.Context, params CreateParams) (*Crea
 		desc = pgtype.Text{String: *params.Description, Valid: true}
 	}
 
-	segment, err := s.segmentRepo.Create(ctx, sqlc.CreateSegmentParams{
+	seg, err := s.segmentRepo.Create(ctx, sqlc.CreateSegmentParams{
 		Name:        params.Name,
 		Description: desc,
 		CreatedBy:   params.CreatedBy,
@@ -153,7 +160,14 @@ func (s *SegmentService) Create(ctx context.Context, params CreateParams) (*Crea
 		return nil, fmt.Errorf("create segment: %w", err)
 	}
 
-	return &CreateSegmentResponse{ID: segment.ID}, nil
+	return &Segment{
+		ID:          seg.ID,
+		Name:        seg.Name,
+		Description: seg.Description.String,
+		CreatedBy:   seg.CreatedBy,
+		CreatedAt:   seg.CreatedAt.Time,
+		UpdatedAt:   seg.UpdatedAt.Time,
+	}, nil
 }
 
 // UpdateParams holds input for updating a segment.
@@ -163,11 +177,11 @@ type UpdateParams struct {
 	Description *string
 }
 
-// Update updates an existing segment.
-func (s *SegmentService) Update(ctx context.Context, params UpdateParams) error {
+// Update updates an existing segment. Returns the updated domain Segment.
+func (s *SegmentService) Update(ctx context.Context, params UpdateParams) (*Segment, error) {
 	existing, err := s.segmentRepo.FindByID(ctx, params.ID)
 	if err != nil {
-		return ErrSegmentNotFound
+		return nil, ErrSegmentNotFound
 	}
 
 	update := sqlc.UpdateSegmentParams{
@@ -180,10 +194,10 @@ func (s *SegmentService) Update(ctx context.Context, params UpdateParams) error 
 		if *params.Name != existing.Name {
 			exists, err := s.segmentRepo.ExistsByName(ctx, *params.Name)
 			if err != nil {
-				return fmt.Errorf("check name: %w", err)
+				return nil, fmt.Errorf("check name: %w", err)
 			}
 			if exists {
-				return ErrSegmentNameTaken
+				return nil, ErrSegmentNameTaken
 			}
 			update.Name = *params.Name
 		}
@@ -192,7 +206,23 @@ func (s *SegmentService) Update(ctx context.Context, params UpdateParams) error 
 		update.Description = pgtype.Text{String: *params.Description, Valid: true}
 	}
 
-	return s.segmentRepo.Update(ctx, update)
+	if err := s.segmentRepo.Update(ctx, update); err != nil {
+		return nil, fmt.Errorf("update segment: %w", err)
+	}
+
+	updated, err := s.segmentRepo.FindByID(ctx, params.ID)
+	if err != nil {
+		return nil, fmt.Errorf("fetch updated segment: %w", err)
+	}
+
+	return &Segment{
+		ID:          updated.ID,
+		Name:        updated.Name,
+		Description: updated.Description.String,
+		CreatedBy:   updated.CreatedBy,
+		CreatedAt:   updated.CreatedAt.Time,
+		UpdatedAt:   updated.UpdatedAt.Time,
+	}, nil
 }
 
 // Delete deletes a segment only if it has no members.

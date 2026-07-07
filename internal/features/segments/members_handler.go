@@ -28,7 +28,7 @@ func (h *MembersHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 
 	page, limit := getPaginationParams(r)
 
-	items, total, err := h.service.ListMembers(r.Context(), segmentID, page, limit)
+	members, total, err := h.service.ListMembers(r.Context(), segmentID, page, limit)
 	if err != nil {
 		if errors.Is(err, ErrSegmentNotFound) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
@@ -38,8 +38,19 @@ func (h *MembersHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	data := make([]MemberListItem, len(members))
+	for i, m := range members {
+		data[i] = MemberListItem{
+			ID:        m.ID,
+			UserID:    m.UserID,
+			Name:      m.Name,
+			Email:     m.Email,
+			CreatedAt: m.CreatedAt.Format("2006-01-02T15:04:05Z"),
+		}
+	}
+
 	resp := ListMembersResponse{
-		Data: items,
+		Data: data,
 		Pagination: Pagination{
 			Page:  page,
 			Limit: limit,
@@ -62,7 +73,6 @@ func (h *MembersHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
 		return
 	}
-
 	if req.UserID == 0 {
 		response.JSON(w, http.StatusBadRequest, nil, "user_id is required")
 		return

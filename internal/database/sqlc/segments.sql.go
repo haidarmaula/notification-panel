@@ -169,12 +169,12 @@ SELECT
     s.id,
     s.name,
     s.description,
+    s.created_by,
     su.name AS created_by_name,
     s.created_at,
     s.updated_at
 FROM segments s
-JOIN staff_users su
-    ON su.id = s.created_by
+JOIN staff_users su ON su.id = s.created_by
 ORDER BY s.name
 LIMIT $2
 OFFSET $1
@@ -189,6 +189,7 @@ type ListSegmentsRow struct {
 	ID            int64              `db:"id"`
 	Name          string             `db:"name"`
 	Description   pgtype.Text        `db:"description"`
+	CreatedBy     int64              `db:"created_by"`
 	CreatedByName string             `db:"created_by_name"`
 	CreatedAt     pgtype.Timestamptz `db:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
@@ -210,6 +211,7 @@ func (q *Queries) ListSegments(ctx context.Context, arg ListSegmentsParams) ([]L
 			&i.ID,
 			&i.Name,
 			&i.Description,
+			&i.CreatedBy,
 			&i.CreatedByName,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -230,14 +232,13 @@ SELECT
     s.id,
     s.name,
     s.description,
+    s.created_by,
     su.name AS created_by_name,
     s.created_at,
     s.updated_at
 FROM segments s
-JOIN staff_users su
-    ON su.id = s.created_by
-WHERE
-    s.name ILIKE '%' || $1 || '%'
+JOIN staff_users su ON su.id = s.created_by
+WHERE s.name ILIKE '%' || $1 || '%'
 ORDER BY s.name
 LIMIT $3
 OFFSET $2
@@ -253,6 +254,7 @@ type SearchSegmentsRow struct {
 	ID            int64              `db:"id"`
 	Name          string             `db:"name"`
 	Description   pgtype.Text        `db:"description"`
+	CreatedBy     int64              `db:"created_by"`
 	CreatedByName string             `db:"created_by_name"`
 	CreatedAt     pgtype.Timestamptz `db:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
@@ -274,6 +276,7 @@ func (q *Queries) SearchSegments(ctx context.Context, arg SearchSegmentsParams) 
 			&i.ID,
 			&i.Name,
 			&i.Description,
+			&i.CreatedBy,
 			&i.CreatedByName,
 			&i.CreatedAt,
 			&i.UpdatedAt,
