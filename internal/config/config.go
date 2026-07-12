@@ -24,6 +24,10 @@ type Config struct {
 	BootstrapAdminName     string
 	BootstrapAdminEmail    string
 	BootstrapAdminPassword string
+
+	KafkaBroker string
+	SendTopic   string
+	UpdateTopic string
 }
 
 func Load() *Config {
@@ -45,6 +49,10 @@ func Load() *Config {
 		BootstrapAdminName:     os.Getenv("BOOTSTRAP_SUPER_ADMIN_NAME"),
 		BootstrapAdminEmail:    os.Getenv("BOOTSTRAP_SUPER_ADMIN_EMAIL"),
 		BootstrapAdminPassword: os.Getenv("BOOTSTRAP_SUPER_ADMIN_PASSWORD"),
+
+		KafkaBroker: os.Getenv("KAFKA_BROKER"),
+		SendTopic:   os.Getenv("KAFKA_SEND_TOPIC"),
+		UpdateTopic: os.Getenv("KAFKA_UPDATE_TOPIC"),
 	}
 
 	if cfg.APIKey == "" {
@@ -81,6 +89,18 @@ func Load() *Config {
 
 	if cfg.DBSSLMode == "" {
 		log.Fatal("DB_SSLMODE is required")
+	}
+
+	if cfg.KafkaBroker == "" {
+		log.Fatal("KafkaBroker is required")
+	}
+
+	if cfg.SendTopic == "" {
+		log.Fatal("SendTopic is required")
+	}
+
+	if cfg.UpdateTopic == "" {
+		log.Fatal("UpdateTopic is required")
 	}
 
 	return cfg

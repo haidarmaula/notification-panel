@@ -1,8 +1,10 @@
 package notifications
 
 import (
+	"hello/internal/config"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
+	"hello/internal/kafka"
 	"hello/internal/middleware"
 )
 
@@ -13,7 +15,7 @@ type NotificationModule struct {
 }
 
 // NewNotificationModule creates a new NotificationModule instance.
-func NewNotificationModule(queries *sqlc.Queries, middlewares ...middleware.Middleware) *NotificationModule {
+func NewNotificationModule(queries *sqlc.Queries, cfg config.Config, middlewares ...middleware.Middleware) *NotificationModule {
 	notifRepo := repository.NewNotificationRepository(queries)
 	targetRepo := repository.NewNotificationTargetRepository(queries)
 	deliveryRepo := repository.NewNotificationDeliveryRepository(queries)
@@ -26,7 +28,10 @@ func NewNotificationModule(queries *sqlc.Queries, middlewares ...middleware.Midd
 		notifRepo, targetRepo, deliveryRepo, readRepo,
 		staffRepo, templateRepo, segmentRepo,
 	)
-	handler := NewNotificationHandler(service)
+
+	producer := kafka.NewProducer(cfg.KafkaBroker, cfg.SendTopic)
+
+	handler := NewNotificationHandler(service, producer)
 
 	return &NotificationModule{
 		middlewares: middlewares,

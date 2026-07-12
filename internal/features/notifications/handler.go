@@ -6,7 +6,9 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"time"
 
+	"hello/internal/kafka"
 	"hello/internal/middleware"
 	"hello/internal/token"
 	"hello/pkg/response"
@@ -16,12 +18,16 @@ type contextKeyStaffID struct{}
 
 // NotificationHandler handles HTTP requests for notifications.
 type NotificationHandler struct {
-	service *NotificationService
+	service  *NotificationService
+	producer *kafka.Producer
 }
 
 // NewNotificationHandler creates a new NotificationHandler instance.
-func NewNotificationHandler(service *NotificationService) *NotificationHandler {
-	return &NotificationHandler{service: service}
+func NewNotificationHandler(service *NotificationService, producer *kafka.Producer) *NotificationHandler {
+	return &NotificationHandler{
+		service:  service,
+		producer: producer,
+	}
 }
 
 // List handles GET /api/v1/notifications.
@@ -191,6 +197,45 @@ func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.JSON(w, http.StatusOK, nil, "deleted")
+}
+
+// Send handles POST /api/v1/notifications/{id}/send.
+// It publishes a send requested event to Kafka.
+func (h *NotificationHandler) Send(w http.ResponseWriter, r *http.Request) {
+	id, err := parseInt64FromPath(r, "id")
+	if err != nil {
+		response.JSON(w, http.StatusBadRequest, nil, "invalid notification id")
+		return
+	}
+
+	// Check if notification exists and is in DRAFT status
+	notif, err := h.service.GetByID(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, ErrNotificationNotFound) {
+			response.JSON(w, http.StatusNotFound, nil, err.Error())
+			return
+		}
+		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		return
+	}
+	if notif.Status != "DRAFT" {
+		response.JSON(w, http.StatusBadRequest, nil, "notification must be in DRAFT status")
+		return
+	}
+
+	// Publish event to Kafka
+	event := kafka.NotificationSendRequested{
+		NotificationID: notif.ID,
+		RequestedAt:    time.Now(),
+	}
+	if err := h.producer.PublishSendRequested(r.Context(), event); err != nil {
+		response.JSON(w, http.StatusInternalServerError, nil, "failed to queue notification")
+		return
+	}
+
+	// Update notification status to SENDING (optional, or wait for worker to update)
+	// For now, we just return success.
+	response.JSON(w, http.StatusAccepted, map[string]string{"message": "notification queued for sending"}, "success")
 }
 
 // parseInt64FromPath extracts and parses int64 from URL path parameter.
