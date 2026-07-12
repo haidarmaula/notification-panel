@@ -3,6 +3,7 @@ package kafka
 import (
 	"context"
 	"encoding/json"
+	"strconv"
 
 	"github.com/segmentio/kafka-go"
 )
@@ -31,7 +32,7 @@ func (p *Producer) PublishSendRequested(ctx context.Context, event NotificationS
 		return err
 	}
 
-	key := []byte("notification_" + string(rune(event.NotificationID)))
+	key := []byte("notification_" + strconv.FormatInt(event.NotificationID, 10))
 	msg := kafka.Message{
 		Key:   key,
 		Value: value,
