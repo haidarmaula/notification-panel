@@ -64,6 +64,17 @@ ORDER BY u.name
 LIMIT sqlc.arg('limit')
 OFFSET sqlc.arg('offset');
 
+-- name: ListSegmentMembersByUser :many
+SELECT
+    s.id,
+    s.name
+FROM segments s
+JOIN segment_members sm ON sm.segment_id = s.id
+WHERE sm.user_id = sqlc.arg('user_id')
+ORDER BY s.name
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
 -- ==========================================
 -- COUNT
 -- ==========================================
@@ -72,3 +83,8 @@ OFFSET sqlc.arg('offset');
 SELECT COUNT(*)
 FROM segment_members
 WHERE segment_id = sqlc.arg('segment_id');
+
+-- name: CountSegmentMembersByUser :one
+SELECT COUNT(*)
+FROM segment_members
+WHERE user_id = sqlc.arg('user_id');

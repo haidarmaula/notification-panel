@@ -28,6 +28,19 @@ func (q *Queries) CountSegmentMembers(ctx context.Context, segmentID int64) (int
 	return count, err
 }
 
+const countSegmentMembersByUser = `-- name: CountSegmentMembersByUser :one
+SELECT COUNT(*)
+FROM segment_members
+WHERE user_id = $1
+`
+
+func (q *Queries) CountSegmentMembersByUser(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countSegmentMembersByUser, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createSegmentMember = `-- name: CreateSegmentMember :one
 
 INSERT INTO segment_members (
@@ -175,6 +188,49 @@ func (q *Queries) ListSegmentMembers(ctx context.Context, arg ListSegmentMembers
 			&i.Email,
 			&i.CreatedAt,
 		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSegmentMembersByUser = `-- name: ListSegmentMembersByUser :many
+SELECT
+    s.id,
+    s.name
+FROM segments s
+JOIN segment_members sm ON sm.segment_id = s.id
+WHERE sm.user_id = $1
+ORDER BY s.name
+LIMIT $3
+OFFSET $2
+`
+
+type ListSegmentMembersByUserParams struct {
+	UserID int64 `db:"user_id"`
+	Offset int32 `db:"offset"`
+	Limit  int32 `db:"limit"`
+}
+
+type ListSegmentMembersByUserRow struct {
+	ID   int64  `db:"id"`
+	Name string `db:"name"`
+}
+
+func (q *Queries) ListSegmentMembersByUser(ctx context.Context, arg ListSegmentMembersByUserParams) ([]ListSegmentMembersByUserRow, error) {
+	rows, err := q.db.Query(ctx, listSegmentMembersByUser, arg.UserID, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListSegmentMembersByUserRow{}
+	for rows.Next() {
+		var i ListSegmentMembersByUserRow
+		if err := rows.Scan(&i.ID, &i.Name); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

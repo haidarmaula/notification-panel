@@ -16,6 +16,7 @@ import (
 	"hello/internal/features/profile"
 	"hello/internal/features/segments"
 	"hello/internal/features/staff"
+	"hello/internal/features/users"
 )
 
 func main() {
@@ -34,6 +35,9 @@ func main() {
 	jwtMW := middleware.NewJWTMiddleware(tokenManager)
 
 	mux := http.NewServeMux()
+
+	userModule := users.NewUserModule(queries, apiKeyMW.Use, jwtMW.Use)
+	userModule.RegisterRoutes(mux)
 
 	authModule := auth.NewAuthModule(queries, tokenManager, apiKeyMW.Use)
 	authModule.RegisterRoutes(mux)

@@ -34,13 +34,20 @@ INSERT INTO device_tokens (
     user_id,
     platform,
     installation_id,
-    push_token
-)
-VALUES (
+    push_token,
+    provider,
+    app_version,
+    os_version,
+    device_model
+) VALUES (
     $1,
     $2,
     $3,
-    $4
+    $4,
+    $5,
+    $6,
+    $7,
+    $8
 )
 RETURNING
     id,
@@ -48,6 +55,10 @@ RETURNING
     platform,
     installation_id,
     push_token,
+    provider,
+    app_version,
+    os_version,
+    device_model,
     is_active,
     last_seen_at,
     created_at,
@@ -59,6 +70,10 @@ type CreateDeviceTokenParams struct {
 	Platform       string      `db:"platform"`
 	InstallationID pgtype.Text `db:"installation_id"`
 	PushToken      string      `db:"push_token"`
+	Provider       string      `db:"provider"`
+	AppVersion     pgtype.Text `db:"app_version"`
+	OsVersion      pgtype.Text `db:"os_version"`
+	DeviceModel    pgtype.Text `db:"device_model"`
 }
 
 type CreateDeviceTokenRow struct {
@@ -67,6 +82,10 @@ type CreateDeviceTokenRow struct {
 	Platform       string             `db:"platform"`
 	InstallationID pgtype.Text        `db:"installation_id"`
 	PushToken      string             `db:"push_token"`
+	Provider       string             `db:"provider"`
+	AppVersion     pgtype.Text        `db:"app_version"`
+	OsVersion      pgtype.Text        `db:"os_version"`
+	DeviceModel    pgtype.Text        `db:"device_model"`
 	IsActive       bool               `db:"is_active"`
 	LastSeenAt     pgtype.Timestamptz `db:"last_seen_at"`
 	CreatedAt      pgtype.Timestamptz `db:"created_at"`
@@ -82,6 +101,10 @@ func (q *Queries) CreateDeviceToken(ctx context.Context, arg CreateDeviceTokenPa
 		arg.Platform,
 		arg.InstallationID,
 		arg.PushToken,
+		arg.Provider,
+		arg.AppVersion,
+		arg.OsVersion,
+		arg.DeviceModel,
 	)
 	var i CreateDeviceTokenRow
 	err := row.Scan(
@@ -90,6 +113,10 @@ func (q *Queries) CreateDeviceToken(ctx context.Context, arg CreateDeviceTokenPa
 		&i.Platform,
 		&i.InstallationID,
 		&i.PushToken,
+		&i.Provider,
+		&i.AppVersion,
+		&i.OsVersion,
+		&i.DeviceModel,
 		&i.IsActive,
 		&i.LastSeenAt,
 		&i.CreatedAt,
@@ -137,9 +164,13 @@ const getDeviceTokenByID = `-- name: GetDeviceTokenByID :one
 SELECT
     id,
     user_id,
+    provider,
     platform,
     installation_id,
     push_token,
+    app_version,
+    os_version,
+    device_model,
     is_active,
     last_seen_at,
     created_at,
@@ -149,30 +180,22 @@ WHERE id = $1
 LIMIT 1
 `
 
-type GetDeviceTokenByIDRow struct {
-	ID             int64              `db:"id"`
-	UserID         int64              `db:"user_id"`
-	Platform       string             `db:"platform"`
-	InstallationID pgtype.Text        `db:"installation_id"`
-	PushToken      string             `db:"push_token"`
-	IsActive       bool               `db:"is_active"`
-	LastSeenAt     pgtype.Timestamptz `db:"last_seen_at"`
-	CreatedAt      pgtype.Timestamptz `db:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `db:"updated_at"`
-}
-
 // ==========================================
 // GET
 // ==========================================
-func (q *Queries) GetDeviceTokenByID(ctx context.Context, id int64) (GetDeviceTokenByIDRow, error) {
+func (q *Queries) GetDeviceTokenByID(ctx context.Context, id int64) (DeviceToken, error) {
 	row := q.db.QueryRow(ctx, getDeviceTokenByID, id)
-	var i GetDeviceTokenByIDRow
+	var i DeviceToken
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
+		&i.Provider,
 		&i.Platform,
 		&i.InstallationID,
 		&i.PushToken,
+		&i.AppVersion,
+		&i.OsVersion,
+		&i.DeviceModel,
 		&i.IsActive,
 		&i.LastSeenAt,
 		&i.CreatedAt,
@@ -185,9 +208,13 @@ const getDeviceTokenByPushToken = `-- name: GetDeviceTokenByPushToken :one
 SELECT
     id,
     user_id,
+    provider,
     platform,
     installation_id,
     push_token,
+    app_version,
+    os_version,
+    device_model,
     is_active,
     last_seen_at,
     created_at,
@@ -197,27 +224,19 @@ WHERE push_token = $1
 LIMIT 1
 `
 
-type GetDeviceTokenByPushTokenRow struct {
-	ID             int64              `db:"id"`
-	UserID         int64              `db:"user_id"`
-	Platform       string             `db:"platform"`
-	InstallationID pgtype.Text        `db:"installation_id"`
-	PushToken      string             `db:"push_token"`
-	IsActive       bool               `db:"is_active"`
-	LastSeenAt     pgtype.Timestamptz `db:"last_seen_at"`
-	CreatedAt      pgtype.Timestamptz `db:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `db:"updated_at"`
-}
-
-func (q *Queries) GetDeviceTokenByPushToken(ctx context.Context, pushToken string) (GetDeviceTokenByPushTokenRow, error) {
+func (q *Queries) GetDeviceTokenByPushToken(ctx context.Context, pushToken string) (DeviceToken, error) {
 	row := q.db.QueryRow(ctx, getDeviceTokenByPushToken, pushToken)
-	var i GetDeviceTokenByPushTokenRow
+	var i DeviceToken
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
+		&i.Provider,
 		&i.Platform,
 		&i.InstallationID,
 		&i.PushToken,
+		&i.AppVersion,
+		&i.OsVersion,
+		&i.DeviceModel,
 		&i.IsActive,
 		&i.LastSeenAt,
 		&i.CreatedAt,
@@ -231,9 +250,13 @@ const listDeviceTokensByUser = `-- name: ListDeviceTokensByUser :many
 SELECT
     id,
     user_id,
+    provider,
     platform,
     installation_id,
     push_token,
+    app_version,
+    os_version,
+    device_model,
     is_active,
     last_seen_at,
     created_at,
@@ -251,36 +274,28 @@ type ListDeviceTokensByUserParams struct {
 	Limit  int32 `db:"limit"`
 }
 
-type ListDeviceTokensByUserRow struct {
-	ID             int64              `db:"id"`
-	UserID         int64              `db:"user_id"`
-	Platform       string             `db:"platform"`
-	InstallationID pgtype.Text        `db:"installation_id"`
-	PushToken      string             `db:"push_token"`
-	IsActive       bool               `db:"is_active"`
-	LastSeenAt     pgtype.Timestamptz `db:"last_seen_at"`
-	CreatedAt      pgtype.Timestamptz `db:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `db:"updated_at"`
-}
-
 // ==========================================
 // LIST
 // ==========================================
-func (q *Queries) ListDeviceTokensByUser(ctx context.Context, arg ListDeviceTokensByUserParams) ([]ListDeviceTokensByUserRow, error) {
+func (q *Queries) ListDeviceTokensByUser(ctx context.Context, arg ListDeviceTokensByUserParams) ([]DeviceToken, error) {
 	rows, err := q.db.Query(ctx, listDeviceTokensByUser, arg.UserID, arg.Offset, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListDeviceTokensByUserRow{}
+	items := []DeviceToken{}
 	for rows.Next() {
-		var i ListDeviceTokensByUserRow
+		var i DeviceToken
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
+			&i.Provider,
 			&i.Platform,
 			&i.InstallationID,
 			&i.PushToken,
+			&i.AppVersion,
+			&i.OsVersion,
+			&i.DeviceModel,
 			&i.IsActive,
 			&i.LastSeenAt,
 			&i.CreatedAt,
@@ -316,6 +331,46 @@ type UpdateDeviceTokenParams struct {
 // ==========================================
 func (q *Queries) UpdateDeviceToken(ctx context.Context, arg UpdateDeviceTokenParams) error {
 	_, err := q.db.Exec(ctx, updateDeviceToken, arg.PushToken, arg.ID)
+	return err
+}
+
+const updateDeviceTokenFull = `-- name: UpdateDeviceTokenFull :exec
+UPDATE device_tokens
+SET
+    platform = $1,
+    installation_id = $2,
+    push_token = $3,
+    provider = $4,
+    app_version = $5,
+    os_version = $6,
+    device_model = $7,
+    last_seen_at = NOW(),
+    updated_at = NOW()
+WHERE id = $8
+`
+
+type UpdateDeviceTokenFullParams struct {
+	Platform       string      `db:"platform"`
+	InstallationID pgtype.Text `db:"installation_id"`
+	PushToken      string      `db:"push_token"`
+	Provider       string      `db:"provider"`
+	AppVersion     pgtype.Text `db:"app_version"`
+	OsVersion      pgtype.Text `db:"os_version"`
+	DeviceModel    pgtype.Text `db:"device_model"`
+	ID             int64       `db:"id"`
+}
+
+func (q *Queries) UpdateDeviceTokenFull(ctx context.Context, arg UpdateDeviceTokenFullParams) error {
+	_, err := q.db.Exec(ctx, updateDeviceTokenFull,
+		arg.Platform,
+		arg.InstallationID,
+		arg.PushToken,
+		arg.Provider,
+		arg.AppVersion,
+		arg.OsVersion,
+		arg.DeviceModel,
+		arg.ID,
+	)
 	return err
 }
 

@@ -22,15 +22,20 @@ func (r *DeviceTokenRepository) Create(ctx context.Context, params sqlc.CreateDe
 	return r.q.CreateDeviceToken(ctx, params)
 }
 
-func (r *DeviceTokenRepository) FindByID(ctx context.Context, id int64) (sqlc.GetDeviceTokenByIDRow, error) {
+// UpdateFull updates all device token metadata including platform, app_version, etc.
+func (r *DeviceTokenRepository) UpdateFull(ctx context.Context, params sqlc.UpdateDeviceTokenFullParams) error {
+	return r.q.UpdateDeviceTokenFull(ctx, params)
+}
+
+func (r *DeviceTokenRepository) FindByID(ctx context.Context, id int64) (sqlc.DeviceToken, error) {
 	return r.q.GetDeviceTokenByID(ctx, id)
 }
 
-func (r *DeviceTokenRepository) FindByPushToken(ctx context.Context, pushToken string) (sqlc.GetDeviceTokenByPushTokenRow, error) {
+func (r *DeviceTokenRepository) FindByPushToken(ctx context.Context, pushToken string) (sqlc.DeviceToken, error) {
 	return r.q.GetDeviceTokenByPushToken(ctx, pushToken)
 }
 
-func (r *DeviceTokenRepository) ListByUser(ctx context.Context, userID int64, offset, limit int32) ([]sqlc.ListDeviceTokensByUserRow, error) {
+func (r *DeviceTokenRepository) ListByUser(ctx context.Context, userID int64, offset, limit int32) ([]sqlc.DeviceToken, error) {
 	return r.q.ListDeviceTokensByUser(ctx, sqlc.ListDeviceTokensByUserParams{
 		UserID: userID,
 		Offset: offset,

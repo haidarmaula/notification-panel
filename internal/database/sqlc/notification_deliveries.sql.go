@@ -28,6 +28,19 @@ func (q *Queries) CountNotificationDeliveries(ctx context.Context, notificationI
 	return count, err
 }
 
+const countUserNotifications = `-- name: CountUserNotifications :one
+SELECT COUNT(*)
+FROM notification_deliveries
+WHERE user_id = $1
+`
+
+func (q *Queries) CountUserNotifications(ctx context.Context, userID int64) (int64, error) {
+	row := q.db.QueryRow(ctx, countUserNotifications, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createNotificationDelivery = `-- name: CreateNotificationDelivery :one
 
 INSERT INTO notification_deliveries (
@@ -226,6 +239,58 @@ func (q *Queries) ListNotificationDeliveries(ctx context.Context, arg ListNotifi
 			&i.Email,
 			&i.SentAt,
 			&i.DeliveredAt,
+			&i.OpenedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUserNotifications = `-- name: ListUserNotifications :many
+SELECT
+    n.id AS notification_id,
+    n.title,
+    nd.status,
+    nd.opened_at
+FROM notification_deliveries nd
+JOIN notifications n ON n.id = nd.notification_id
+WHERE nd.user_id = $1
+ORDER BY nd.created_at DESC
+LIMIT $3
+OFFSET $2
+`
+
+type ListUserNotificationsParams struct {
+	UserID int64 `db:"user_id"`
+	Offset int32 `db:"offset"`
+	Limit  int32 `db:"limit"`
+}
+
+type ListUserNotificationsRow struct {
+	NotificationID int64              `db:"notification_id"`
+	Title          string             `db:"title"`
+	Status         string             `db:"status"`
+	OpenedAt       pgtype.Timestamptz `db:"opened_at"`
+}
+
+func (q *Queries) ListUserNotifications(ctx context.Context, arg ListUserNotificationsParams) ([]ListUserNotificationsRow, error) {
+	rows, err := q.db.Query(ctx, listUserNotifications, arg.UserID, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUserNotificationsRow{}
+	for rows.Next() {
+		var i ListUserNotificationsRow
+		if err := rows.Scan(
+			&i.NotificationID,
+			&i.Title,
+			&i.Status,
 			&i.OpenedAt,
 		); err != nil {
 			return nil, err

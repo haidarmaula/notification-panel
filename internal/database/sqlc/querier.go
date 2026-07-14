@@ -44,6 +44,7 @@ type Querier interface {
 	// COUNT
 	// ==========================================
 	CountSegmentMembers(ctx context.Context, segmentID int64) (int64, error)
+	CountSegmentMembersByUser(ctx context.Context, userID int64) (int64, error)
 	// ==========================================
 	// COUNT
 	// ==========================================
@@ -64,6 +65,7 @@ type Querier interface {
 	// COUNT
 	// ==========================================
 	CountUploadBatches(ctx context.Context) (int64, error)
+	CountUserNotifications(ctx context.Context, userID int64) (int64, error)
 	// ==========================================
 	// COUNT
 	// ==========================================
@@ -200,8 +202,8 @@ type Querier interface {
 	// ==========================================
 	// GET
 	// ==========================================
-	GetDeviceTokenByID(ctx context.Context, id int64) (GetDeviceTokenByIDRow, error)
-	GetDeviceTokenByPushToken(ctx context.Context, pushToken string) (GetDeviceTokenByPushTokenRow, error)
+	GetDeviceTokenByID(ctx context.Context, id int64) (DeviceToken, error)
+	GetDeviceTokenByPushToken(ctx context.Context, pushToken string) (DeviceToken, error)
 	// ==========================================
 	// GET
 	// ==========================================
@@ -252,7 +254,7 @@ type Querier interface {
 	// ==========================================
 	// LIST
 	// ==========================================
-	ListDeviceTokensByUser(ctx context.Context, arg ListDeviceTokensByUserParams) ([]ListDeviceTokensByUserRow, error)
+	ListDeviceTokensByUser(ctx context.Context, arg ListDeviceTokensByUserParams) ([]DeviceToken, error)
 	// ==========================================
 	// LIST
 	// ==========================================
@@ -278,6 +280,7 @@ type Querier interface {
 	// LIST
 	// ==========================================
 	ListSegmentMembers(ctx context.Context, arg ListSegmentMembersParams) ([]ListSegmentMembersRow, error)
+	ListSegmentMembersByUser(ctx context.Context, arg ListSegmentMembersByUserParams) ([]ListSegmentMembersByUserRow, error)
 	// ==========================================
 	// LIST
 	// ==========================================
@@ -298,6 +301,7 @@ type Querier interface {
 	// LIST
 	// ==========================================
 	ListUploadBatches(ctx context.Context, arg ListUploadBatchesParams) ([]ListUploadBatchesRow, error)
+	ListUserNotifications(ctx context.Context, arg ListUserNotificationsParams) ([]ListUserNotificationsRow, error)
 	// ==========================================
 	// LIST
 	// ==========================================
@@ -337,6 +341,7 @@ type Querier interface {
 	// UPDATE
 	// ==========================================
 	UpdateDeviceToken(ctx context.Context, arg UpdateDeviceTokenParams) error
+	UpdateDeviceTokenFull(ctx context.Context, arg UpdateDeviceTokenFullParams) error
 	UpdateDeviceTokenStatus(ctx context.Context, arg UpdateDeviceTokenStatusParams) error
 	// ==========================================
 	// UPDATE

@@ -6,9 +6,13 @@
 SELECT
     id,
     user_id,
+    provider,
     platform,
     installation_id,
     push_token,
+    app_version,
+    os_version,
+    device_model,
     is_active,
     last_seen_at,
     created_at,
@@ -21,9 +25,13 @@ LIMIT 1;
 SELECT
     id,
     user_id,
+    provider,
     platform,
     installation_id,
     push_token,
+    app_version,
+    os_version,
+    device_model,
     is_active,
     last_seen_at,
     created_at,
@@ -52,13 +60,20 @@ INSERT INTO device_tokens (
     user_id,
     platform,
     installation_id,
-    push_token
-)
-VALUES (
+    push_token,
+    provider,
+    app_version,
+    os_version,
+    device_model
+) VALUES (
     sqlc.arg('user_id'),
     sqlc.arg('platform'),
     sqlc.arg('installation_id'),
-    sqlc.arg('push_token')
+    sqlc.arg('push_token'),
+    sqlc.arg('provider'),
+    sqlc.arg('app_version'),
+    sqlc.arg('os_version'),
+    sqlc.arg('device_model')
 )
 RETURNING
     id,
@@ -66,6 +81,10 @@ RETURNING
     platform,
     installation_id,
     push_token,
+    provider,
+    app_version,
+    os_version,
+    device_model,
     is_active,
     last_seen_at,
     created_at,
@@ -90,6 +109,20 @@ SET
     updated_at = NOW()
 WHERE id = sqlc.arg('id');
 
+-- name: UpdateDeviceTokenFull :exec
+UPDATE device_tokens
+SET
+    platform = sqlc.arg('platform'),
+    installation_id = sqlc.arg('installation_id'),
+    push_token = sqlc.arg('push_token'),
+    provider = sqlc.arg('provider'),
+    app_version = sqlc.arg('app_version'),
+    os_version = sqlc.arg('os_version'),
+    device_model = sqlc.arg('device_model'),
+    last_seen_at = NOW(),
+    updated_at = NOW()
+WHERE id = sqlc.arg('id');
+
 -- ==========================================
 -- DELETE
 -- ==========================================
@@ -107,9 +140,13 @@ WHERE id = sqlc.arg('id');
 SELECT
     id,
     user_id,
+    provider,
     platform,
     installation_id,
     push_token,
+    app_version,
+    os_version,
+    device_model,
     is_active,
     last_seen_at,
     created_at,

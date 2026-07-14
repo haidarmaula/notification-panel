@@ -103,6 +103,19 @@ ORDER BY nd.created_at
 LIMIT sqlc.arg('limit')
 OFFSET sqlc.arg('offset');
 
+-- name: ListUserNotifications :many
+SELECT
+    n.id AS notification_id,
+    n.title,
+    nd.status,
+    nd.opened_at
+FROM notification_deliveries nd
+JOIN notifications n ON n.id = nd.notification_id
+WHERE nd.user_id = sqlc.arg('user_id')
+ORDER BY nd.created_at DESC
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
 -- ==========================================
 -- COUNT
 -- ==========================================
@@ -111,3 +124,8 @@ OFFSET sqlc.arg('offset');
 SELECT COUNT(*)
 FROM notification_deliveries
 WHERE notification_id = sqlc.arg('notification_id');
+
+-- name: CountUserNotifications :one
+SELECT COUNT(*)
+FROM notification_deliveries
+WHERE user_id = sqlc.arg('user_id');
