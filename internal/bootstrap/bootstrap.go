@@ -6,6 +6,7 @@ import (
 
 	"hello/internal/config"
 	"hello/internal/database/repository"
+	"hello/internal/database/sqlc"
 
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -13,13 +14,13 @@ import (
 
 type Bootstrap struct {
 	roleRepo  *repository.RoleRepository
-	staffRepo *repository.StaffRepository
+	staffRepo *repository.StaffUserRepository
 	cfg       *config.Config
 }
 
 func New(
 	roleRepo *repository.RoleRepository,
-	staffRepo *repository.StaffRepository,
+	staffRepo *repository.StaffUserRepository,
 	cfg *config.Config,
 ) *Bootstrap {
 	return &Bootstrap{
@@ -61,10 +62,12 @@ func (b *Bootstrap) Run(ctx context.Context) error {
 
 	_, err = b.staffRepo.Create(
 		ctx,
-		role.ID,
-		b.cfg.BootstrapAdminName,
-		b.cfg.BootstrapAdminEmail,
-		string(hash),
+		sqlc.CreateStaffUserParams{
+			RoleID:       role.ID,
+			Name:         b.cfg.BootstrapAdminName,
+			Email:        b.cfg.BootstrapAdminEmail,
+			PasswordHash: string(hash),
+		},
 	)
 
 	return err

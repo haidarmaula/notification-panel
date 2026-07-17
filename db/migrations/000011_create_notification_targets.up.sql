@@ -6,9 +6,9 @@ CREATE TABLE notification_targets (
     target_type VARCHAR(20) NOT NULL
         CHECK (
             target_type IN (
-                'GLOBAL',
+                'BROADCAST',
                 'SEGMENT',
-                'USER',
+                'INDIVIDUAL',
                 'UPLOAD'
             )
         ),
@@ -43,7 +43,7 @@ CREATE TABLE notification_targets (
 
     CONSTRAINT chk_notification_target
     CHECK (
-        (target_type='GLOBAL' AND segment_id IS NULL AND user_id IS NULL AND upload_batch_id IS NULL)
+        (target_type='BROADCAST' AND segment_id IS NULL AND user_id IS NULL AND upload_batch_id IS NULL)
 
         OR
 
@@ -51,7 +51,7 @@ CREATE TABLE notification_targets (
 
         OR
 
-        (target_type='USER' AND user_id IS NOT NULL)
+        (target_type='INDIVIDUAL' AND user_id IS NOT NULL)
 
         OR
 

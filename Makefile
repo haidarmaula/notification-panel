@@ -12,7 +12,7 @@ down:
 	docker compose down
 
 run:
-	go run cmd/main.go
+	go run cmd/server/main.go
 
 restart:
 	docker compose down

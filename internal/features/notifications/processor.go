@@ -172,7 +172,7 @@ func (p *Processor) expandTargets(ctx context.Context, notificationID int64) ([]
 	var userIDs []int64
 	for _, t := range targets {
 		switch t.TargetType {
-		case "GLOBAL":
+		case "BROADCAST":
 			users, err := p.userRepo.ListByStatus(ctx, "ACTIVE", 0, 1000000)
 			if err != nil {
 				return nil, fmt.Errorf("list active users: %w", err)
@@ -191,7 +191,7 @@ func (p *Processor) expandTargets(ctx context.Context, notificationID int64) ([]
 			for _, m := range members {
 				userIDs = append(userIDs, m.UserID)
 			}
-		case "USER":
+		case "INDIVIDUAL":
 			if t.UserID.Valid {
 				userIDs = append(userIDs, t.UserID.Int64)
 			}

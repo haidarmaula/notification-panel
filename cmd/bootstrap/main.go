@@ -12,7 +12,6 @@ import (
 )
 
 func main() {
-
 	cfg := config.Load()
 	ctx := context.Background()
 
@@ -25,7 +24,7 @@ func main() {
 	queries := sqlc.New(db)
 
 	roleRepo := repository.NewRoleRepository(queries)
-	staffRepo := repository.NewStaffRepository(queries)
+	staffRepo := repository.NewStaffUserRepository(queries)
 
 	bs := bootstrap.New(
 		roleRepo,

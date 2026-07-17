@@ -289,7 +289,7 @@ func (s *NotificationService) Create(ctx context.Context, params CreateParams) (
 	} else if params.TargetType == string(TargetBroadcast) {
 		_, err := s.targetRepo.CreateFull(ctx, sqlc.CreateNotificationTargetFullParams{
 			NotificationID: notif.ID,
-			TargetType:     "GLOBAL",
+			TargetType:     params.TargetType,
 			SegmentID:      pgtype.Int8{Valid: false},
 			UserID:         pgtype.Int8{Valid: false},
 			UploadBatchID:  pgtype.Int8{Valid: false},
