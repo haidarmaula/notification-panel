@@ -18,8 +18,28 @@ func (r *DeviceTokenRepository) CountByUser(ctx context.Context, userID int64) (
 	return r.q.CountDeviceTokensByUser(ctx, userID)
 }
 
-func (r *DeviceTokenRepository) Create(ctx context.Context, params sqlc.CreateDeviceTokenParams) (sqlc.CreateDeviceTokenRow, error) {
-	return r.q.CreateDeviceToken(ctx, params)
+// Create inserts a new device token and returns the full DeviceToken model.
+func (r *DeviceTokenRepository) Create(ctx context.Context, params sqlc.CreateDeviceTokenParams) (sqlc.DeviceToken, error) {
+	row, err := r.q.CreateDeviceToken(ctx, params)
+	if err != nil {
+		return sqlc.DeviceToken{}, err
+	}
+	// Convert from CreateDeviceTokenRow to DeviceToken
+	return sqlc.DeviceToken{
+		ID:             row.ID,
+		UserID:         row.UserID,
+		Provider:       row.Provider,
+		Platform:       row.Platform,
+		InstallationID: row.InstallationID,
+		PushToken:      row.PushToken,
+		AppVersion:     row.AppVersion,
+		OsVersion:      row.OsVersion,
+		DeviceModel:    row.DeviceModel,
+		IsActive:       row.IsActive,
+		LastSeenAt:     row.LastSeenAt,
+		CreatedAt:      row.CreatedAt,
+		UpdatedAt:      row.UpdatedAt,
+	}, nil
 }
 
 // UpdateFull updates all device token metadata including platform, app_version, etc.

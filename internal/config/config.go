@@ -14,6 +14,9 @@ type Config struct {
 	AccessSecret  string
 	RefreshSecret string
 
+	// JWT shared secret with Laravel backend
+	MobileJWTSecret string
+
 	DBHost     string
 	DBPort     string
 	DBUser     string
@@ -36,8 +39,9 @@ func Load() *Config {
 	cfg := &Config{
 		APIKey: os.Getenv("API_KEY"),
 
-		AccessSecret:  os.Getenv("ACCESS_SECRET"),
-		RefreshSecret: os.Getenv("REFRESH_SECRET"),
+		AccessSecret:    os.Getenv("ACCESS_SECRET"),
+		RefreshSecret:   os.Getenv("REFRESH_SECRET"),
+		MobileJWTSecret: os.Getenv("MOBILE_JWT_SECRET"),
 
 		DBHost:     os.Getenv("DB_HOST"),
 		DBPort:     os.Getenv("DB_PORT"),
@@ -65,6 +69,10 @@ func Load() *Config {
 
 	if cfg.RefreshSecret == "" {
 		log.Fatal("REFRESH_SECRET is required")
+	}
+
+	if cfg.MobileJWTSecret == "" {
+		log.Fatal("MOBILE_JWT_SECRET is required")
 	}
 
 	if cfg.DBHost == "" {

@@ -12,6 +12,7 @@ import (
 	"hello/internal/token"
 
 	"hello/internal/features/auth"
+	"hello/internal/features/mobile"
 	"hello/internal/features/notifications"
 	"hello/internal/features/profile"
 	"hello/internal/features/segments"
@@ -35,6 +36,9 @@ func main() {
 	jwtMW := middleware.NewJWTMiddleware(tokenManager)
 
 	mux := http.NewServeMux()
+
+	mobileModule := mobile.NewMobileModule(queries, cfg)
+	mobileModule.RegisterRoutes(mux)
 
 	userModule := users.NewUserModule(queries, apiKeyMW.Use, jwtMW.Use)
 	userModule.RegisterRoutes(mux)
