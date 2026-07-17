@@ -287,7 +287,16 @@ func (s *NotificationService) Create(ctx context.Context, params CreateParams) (
 			return nil, fmt.Errorf("create target for segment: %w", err)
 		}
 	} else if params.TargetType == string(TargetBroadcast) {
-		// No target needed for broadcast.
+		_, err := s.targetRepo.CreateFull(ctx, sqlc.CreateNotificationTargetFullParams{
+			NotificationID: notif.ID,
+			TargetType:     "GLOBAL",
+			SegmentID:      pgtype.Int8{Valid: false},
+			UserID:         pgtype.Int8{Valid: false},
+			UploadBatchID:  pgtype.Int8{Valid: false},
+		})
+		if err != nil {
+			return nil, fmt.Errorf("create global target: %w", err)
+		}
 	}
 
 	return &CreateNotificationResponse{

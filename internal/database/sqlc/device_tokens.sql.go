@@ -311,6 +311,61 @@ func (q *Queries) ListDeviceTokensByUser(ctx context.Context, arg ListDeviceToke
 	return items, nil
 }
 
+const listDeviceTokensByUserIDs = `-- name: ListDeviceTokensByUserIDs :many
+SELECT
+    id,
+    user_id,
+    provider,
+    platform,
+    installation_id,
+    push_token,
+    app_version,
+    os_version,
+    device_model,
+    is_active,
+    last_seen_at,
+    created_at,
+    updated_at
+FROM device_tokens
+WHERE user_id = ANY($1::bigint[])
+    AND is_active = true
+ORDER BY user_id, created_at DESC
+`
+
+func (q *Queries) ListDeviceTokensByUserIDs(ctx context.Context, userIds []int64) ([]DeviceToken, error) {
+	rows, err := q.db.Query(ctx, listDeviceTokensByUserIDs, userIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []DeviceToken{}
+	for rows.Next() {
+		var i DeviceToken
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.Provider,
+			&i.Platform,
+			&i.InstallationID,
+			&i.PushToken,
+			&i.AppVersion,
+			&i.OsVersion,
+			&i.DeviceModel,
+			&i.IsActive,
+			&i.LastSeenAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateDeviceToken = `-- name: UpdateDeviceToken :exec
 
 UPDATE device_tokens

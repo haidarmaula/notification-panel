@@ -63,6 +63,11 @@ func (r *DeviceTokenRepository) ListByUser(ctx context.Context, userID int64, of
 	})
 }
 
+// ListByUserIDs returns all active device tokens for a list of user IDs.
+func (r *DeviceTokenRepository) ListByUserIDs(ctx context.Context, userIDs []int64) ([]sqlc.DeviceToken, error) {
+	return r.q.ListDeviceTokensByUserIDs(ctx, userIDs)
+}
+
 func (r *DeviceTokenRepository) Update(ctx context.Context, params sqlc.UpdateDeviceTokenParams) error {
 	return r.q.UpdateDeviceToken(ctx, params)
 }

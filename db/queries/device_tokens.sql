@@ -157,6 +157,26 @@ ORDER BY created_at DESC
 LIMIT sqlc.arg('limit')
 OFFSET sqlc.arg('offset');
 
+-- name: ListDeviceTokensByUserIDs :many
+SELECT
+    id,
+    user_id,
+    provider,
+    platform,
+    installation_id,
+    push_token,
+    app_version,
+    os_version,
+    device_model,
+    is_active,
+    last_seen_at,
+    created_at,
+    updated_at
+FROM device_tokens
+WHERE user_id = ANY(sqlc.arg('user_ids')::bigint[])
+    AND is_active = true
+ORDER BY user_id, created_at DESC;
+
 -- ==========================================
 -- COUNT
 -- ==========================================

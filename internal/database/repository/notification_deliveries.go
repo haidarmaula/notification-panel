@@ -23,7 +23,7 @@ func (r *NotificationDeliveryRepository) CountByUser(ctx context.Context, userID
 	return r.q.CountUserNotifications(ctx, userID)
 }
 
-func (r *NotificationDeliveryRepository) Create(ctx context.Context, params sqlc.CreateNotificationDeliveryParams) (sqlc.CreateNotificationDeliveryRow, error) {
+func (r *NotificationDeliveryRepository) Create(ctx context.Context, params sqlc.CreateNotificationDeliveryParams) (sqlc.NotificationDelivery, error) {
 	return r.q.CreateNotificationDelivery(ctx, params)
 }
 

@@ -28,13 +28,14 @@ LIMIT 1;
 INSERT INTO notification_deliveries (
     notification_id,
     user_id,
+    device_token_id,
     provider,
     provider_message_id,
     status
-)
-VALUES (
+) VALUES (
     sqlc.arg('notification_id'),
     sqlc.arg('user_id'),
+    sqlc.arg('device_token_id'),
     sqlc.arg('provider'),
     sqlc.arg('provider_message_id'),
     sqlc.arg('status')
@@ -43,13 +44,15 @@ RETURNING
     id,
     notification_id,
     user_id,
+    device_token_id,
     provider,
     provider_message_id,
     status,
+    retry_count,
+    failed_reason,
     sent_at,
     delivered_at,
     opened_at,
-    failed_reason,
     created_at,
     updated_at;
 

@@ -86,7 +86,7 @@ type Querier interface {
 	// ==========================================
 	// CREATE
 	// ==========================================
-	CreateNotificationDelivery(ctx context.Context, arg CreateNotificationDeliveryParams) (CreateNotificationDeliveryRow, error)
+	CreateNotificationDelivery(ctx context.Context, arg CreateNotificationDeliveryParams) (NotificationDelivery, error)
 	// ==========================================
 	// CREATE
 	// ==========================================
@@ -255,6 +255,7 @@ type Querier interface {
 	// LIST
 	// ==========================================
 	ListDeviceTokensByUser(ctx context.Context, arg ListDeviceTokensByUserParams) ([]DeviceToken, error)
+	ListDeviceTokensByUserIDs(ctx context.Context, userIds []int64) ([]DeviceToken, error)
 	// ==========================================
 	// LIST
 	// ==========================================

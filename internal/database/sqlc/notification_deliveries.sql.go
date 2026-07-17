@@ -46,28 +46,31 @@ const createNotificationDelivery = `-- name: CreateNotificationDelivery :one
 INSERT INTO notification_deliveries (
     notification_id,
     user_id,
+    device_token_id,
     provider,
     provider_message_id,
     status
-)
-VALUES (
+) VALUES (
     $1,
     $2,
     $3,
     $4,
-    $5
+    $5,
+    $6
 )
 RETURNING
     id,
     notification_id,
     user_id,
+    device_token_id,
     provider,
     provider_message_id,
     status,
+    retry_count,
+    failed_reason,
     sent_at,
     delivered_at,
     opened_at,
-    failed_reason,
     created_at,
     updated_at
 `
@@ -75,49 +78,38 @@ RETURNING
 type CreateNotificationDeliveryParams struct {
 	NotificationID    int64       `db:"notification_id"`
 	UserID            int64       `db:"user_id"`
+	DeviceTokenID     int64       `db:"device_token_id"`
 	Provider          string      `db:"provider"`
 	ProviderMessageID pgtype.Text `db:"provider_message_id"`
 	Status            string      `db:"status"`
 }
 
-type CreateNotificationDeliveryRow struct {
-	ID                int64              `db:"id"`
-	NotificationID    int64              `db:"notification_id"`
-	UserID            int64              `db:"user_id"`
-	Provider          string             `db:"provider"`
-	ProviderMessageID pgtype.Text        `db:"provider_message_id"`
-	Status            string             `db:"status"`
-	SentAt            pgtype.Timestamptz `db:"sent_at"`
-	DeliveredAt       pgtype.Timestamptz `db:"delivered_at"`
-	OpenedAt          pgtype.Timestamptz `db:"opened_at"`
-	FailedReason      pgtype.Text        `db:"failed_reason"`
-	CreatedAt         pgtype.Timestamptz `db:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `db:"updated_at"`
-}
-
 // ==========================================
 // CREATE
 // ==========================================
-func (q *Queries) CreateNotificationDelivery(ctx context.Context, arg CreateNotificationDeliveryParams) (CreateNotificationDeliveryRow, error) {
+func (q *Queries) CreateNotificationDelivery(ctx context.Context, arg CreateNotificationDeliveryParams) (NotificationDelivery, error) {
 	row := q.db.QueryRow(ctx, createNotificationDelivery,
 		arg.NotificationID,
 		arg.UserID,
+		arg.DeviceTokenID,
 		arg.Provider,
 		arg.ProviderMessageID,
 		arg.Status,
 	)
-	var i CreateNotificationDeliveryRow
+	var i NotificationDelivery
 	err := row.Scan(
 		&i.ID,
 		&i.NotificationID,
 		&i.UserID,
+		&i.DeviceTokenID,
 		&i.Provider,
 		&i.ProviderMessageID,
 		&i.Status,
+		&i.RetryCount,
+		&i.FailedReason,
 		&i.SentAt,
 		&i.DeliveredAt,
 		&i.OpenedAt,
-		&i.FailedReason,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
