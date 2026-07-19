@@ -23,7 +23,19 @@ func main() {
 	cfg := config.Load()
 	ctx := context.Background()
 
-	db, err := database.New(ctx, cfg.DatabaseURL())
+	// // Decode FCM credentials
+	// fcmCreds, err := cfg.GetFCMCredentialsBytes()
+	// if err != nil {
+	// 	log.Fatal("Failed to decode FCM credentials:", err)
+	// }
+	//
+	// // Initialize FCM provider
+	// provider, err := notifications.NewFCMProvider(fcmCreds)
+	// if err != nil {
+	// 	log.Fatal("Failed to initialize FCM provider:", err)
+	// }
+
+	db, err := database.New(ctx, cfg.GetDatabaseURL())
 	if err != nil {
 		log.Fatal("Failed to connect to database:", err)
 	}
@@ -39,7 +51,8 @@ func main() {
 	segmentRepo := repository.NewSegmentRepository(queries)
 	memberRepo := repository.NewSegmentMemberRepository(queries)
 
-	provider := notifications.NewMockProvider()
+	// provider := notifications.NewMockProvider()
+	provider := notifications.NewOneSignalProvider(cfg.OneSignalAppID, cfg.OneSignalAPIKey)
 	producer := kafka.NewProducer(cfg.KafkaBroker, cfg.UpdateTopic)
 
 	processor := notifications.NewProcessor(
@@ -98,4 +111,3 @@ func main() {
 	<-sigCh
 	log.Println("Shutting down worker...")
 }
-

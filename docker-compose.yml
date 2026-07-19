@@ -96,9 +96,14 @@ services:
       KAFKA_SEND_TOPIC: ${KAFKA_SEND_TOPIC}
       KAFKA_UPDATE_TOPIC: ${KAFKA_UPDATE_TOPIC}
       MOBILE_JWT_SECRET: ${MOBILE_JWT_SECRET}
+      FCM_CREDENTIALS: ${FCM_CREDENTIALS}
+      ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID}
+      ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY}
     volumes:
       - .:/app
       - /app/tmp
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     networks:
       - notification-network
 
@@ -130,9 +135,14 @@ services:
       KAFKA_SEND_TOPIC: ${KAFKA_SEND_TOPIC}
       KAFKA_UPDATE_TOPIC: ${KAFKA_UPDATE_TOPIC}
       MOBILE_JWT_SECRET: ${MOBILE_JWT_SECRET}
+      FCM_CREDENTIALS: ${FCM_CREDENTIALS}
+      ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID}
+      ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY}
     volumes:
       - .:/app
       - /app/tmp
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
     networks:
       - notification-network
     logging:
@@ -144,6 +154,8 @@ services:
 volumes:
   postgres_data:
   kafka_data:
+  go-mod-cache:
+  go-build-cache:
 
 networks:
   notification-network:

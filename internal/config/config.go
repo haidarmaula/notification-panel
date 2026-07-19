@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/base64"
 	"fmt"
 	"log"
 	"os"
@@ -16,6 +17,10 @@ type Config struct {
 
 	// JWT shared secret with Laravel backend
 	MobileJWTSecret string
+	// base64 encoded service account JSON
+	FCMCredentials  string
+	OneSignalAppID  string
+	OneSignalAPIKey string
 
 	DBHost     string
 	DBPort     string
@@ -42,6 +47,9 @@ func Load() *Config {
 		AccessSecret:    os.Getenv("ACCESS_SECRET"),
 		RefreshSecret:   os.Getenv("REFRESH_SECRET"),
 		MobileJWTSecret: os.Getenv("MOBILE_JWT_SECRET"),
+		FCMCredentials:  os.Getenv("FCM_CREDENTIALS"),
+		OneSignalAppID:  os.Getenv("ONESIGNAL_APP_ID"),
+		OneSignalAPIKey: os.Getenv("ONESIGNAL_API_KEY"),
 
 		DBHost:     os.Getenv("DB_HOST"),
 		DBPort:     os.Getenv("DB_PORT"),
@@ -73,6 +81,17 @@ func Load() *Config {
 
 	if cfg.MobileJWTSecret == "" {
 		log.Fatal("MOBILE_JWT_SECRET is required")
+	}
+
+	// if cfg.FCMCredentials == "" {
+	// 	log.Fatal("FCM_CREDENTIALS is required")
+	// }
+	if cfg.OneSignalAppID == "" {
+		log.Fatal("ONESIGNAL_APP_ID is required")
+	}
+
+	if cfg.OneSignalAPIKey == "" {
+		log.Fatal("ONESIGNAL_API_KEY is required")
 	}
 
 	if cfg.DBHost == "" {
@@ -114,7 +133,7 @@ func Load() *Config {
 	return cfg
 }
 
-func (c *Config) DatabaseURL() string {
+func (c *Config) GetDatabaseURL() string {
 	return fmt.Sprintf(
 		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
 		c.DBUser,
@@ -124,4 +143,9 @@ func (c *Config) DatabaseURL() string {
 		c.DBName,
 		c.DBSSLMode,
 	)
+}
+
+// GetFCMCredentialsBytes returns decoded FCM credentials.
+func (c *Config) GetFCMCredentialsBytes() ([]byte, error) {
+	return base64.StdEncoding.DecodeString(c.FCMCredentials)
 }

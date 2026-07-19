@@ -23,7 +23,7 @@ import (
 func main() {
 	cfg := config.Load()
 	ctx := context.Background()
-	db, err := database.New(ctx, cfg.DatabaseURL())
+	db, err := database.New(ctx, cfg.GetDatabaseURL())
 	queries := sqlc.New(db)
 
 	if err != nil {

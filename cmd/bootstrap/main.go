@@ -15,7 +15,7 @@ func main() {
 	cfg := config.Load()
 	ctx := context.Background()
 
-	db, err := database.New(ctx, cfg.DatabaseURL())
+	db, err := database.New(ctx, cfg.GetDatabaseURL())
 	if err != nil {
 		log.Fatal(err)
 	}
