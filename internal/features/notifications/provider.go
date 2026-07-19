@@ -11,6 +11,7 @@ type SendRequest struct {
 	Title          string
 	Body           string
 	Tokens         []DeviceTokenInfo
+	ClickAction    string
 }
 
 type DeviceTokenInfo struct {

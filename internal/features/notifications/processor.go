@@ -108,6 +108,7 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 		Title:          notif.Title,
 		Body:           notif.Body,
 		Tokens:         make([]DeviceTokenInfo, len(tokens)),
+		ClickAction:    "NOTIFICATION_CLICK",
 	}
 	for i, t := range tokens {
 		req.Tokens[i] = DeviceTokenInfo{
@@ -143,7 +144,7 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 			NotificationID:    notif.ID,
 			UserID:            r.UserID,
 			DeviceTokenID:     deviceTokenID,
-			Provider:          "FCM",
+			Provider:          "Onesignal",
 			ProviderMessageID: pgtype.Text{String: r.ProviderMessageID, Valid: r.ProviderMessageID != ""},
 			Status:            status,
 		})

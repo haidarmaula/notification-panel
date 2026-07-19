@@ -28,13 +28,13 @@ func NewOneSignalProvider(appID, apiKey string) *OneSignalProvider {
 
 // OneSignalRequest represents the payload for OneSignal API.
 type OneSignalRequest struct {
-	AppID            string                 `json:"app_id"`
-	IncludePlayerIDs []string               `json:"include_player_ids"`
-	Headings         map[string]string      `json:"headings"`
-	Contents         map[string]string      `json:"contents"`
-	Data             map[string]interface{} `json:"data,omitempty"`
-	AndroidChannelID string                 `json:"android_channel_id,omitempty"`
-	Priority         int                    `json:"priority,omitempty"`
+	AppID            string            `json:"app_id"`
+	IncludePlayerIDs []string          `json:"include_player_ids"`
+	Headings         map[string]string `json:"headings"`
+	Contents         map[string]string `json:"contents"`
+	Data             map[string]any    `json:"data,omitempty"`
+	AndroidChannelID string            `json:"android_channel_id,omitempty"`
+	Priority         int               `json:"priority,omitempty"`
 }
 
 // OneSignalResponse represents the response from OneSignal API.
@@ -78,9 +78,9 @@ func (p *OneSignalProvider) Send(ctx context.Context, req SendRequest) ([]SendRe
 		Contents: map[string]string{
 			"en": req.Body,
 		},
-		Data: map[string]interface{}{
+		Data: map[string]any{
 			"notification_id": req.NotificationID,
-			"click_action":    "FLUTTER_NOTIFICATION_CLICK",
+			"click_action":    req.ClickAction,
 		},
 		Priority: 10,
 	}
