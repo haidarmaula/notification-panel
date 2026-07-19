@@ -1,0 +1,22 @@
+# Unified dev Dockerfile for server & worker (hot reload via air).
+# Build with: docker build -f Dockerfile.dev --build-arg AIR_CONFIG=.air.server.toml -t notification-server-dev .
+#             docker build -f Dockerfile.dev --build-arg AIR_CONFIG=.air.worker.toml -t notification-worker-dev .
+FROM golang:1.26-alpine
+
+RUN apk add --no-cache git ca-certificates build-base
+RUN go install github.com/air-verse/air@latest
+
+WORKDIR /app
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+# Air config files are hidden dotfiles: .air.server.toml / .air.worker.toml
+ARG AIR_CONFIG=.air.server.toml
+ENV AIR_CONFIG=${AIR_CONFIG}
+
+EXPOSE 8080
+
+CMD ["sh", "-c", "exec air -c $AIR_CONFIG"]

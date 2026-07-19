@@ -1,0 +1,17 @@
+.git
+.gitignore
+.env
+.env.*
+.vscode
+.idea
+*.md
+*.log
+coverage.out
+__debug_bin
+.air/
+node_modules
+dist/
+build/
+tmp/
+docker-compose.yml
+Dockerfile*

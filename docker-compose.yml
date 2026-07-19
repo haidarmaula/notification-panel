@@ -16,6 +16,8 @@ services:
       interval: 5s
       timeout: 5s
       retries: 20
+    networks:
+      - notification-network
 
   kafka:
     image: apache/kafka:4.3.1
@@ -46,6 +48,8 @@ services:
       timeout: 10s
       retries: 10
       start_period: 30s
+    networks:
+      - notification-network
 
   kafka-ui:
     image: ghcr.io/kafbat/kafka-ui:latest
@@ -59,7 +63,88 @@ services:
     environment:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9094
+    networks:
+      - notification-network
+
+  # hot reload via air, source mounted
+  server-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        AIR_CONFIG: .air.server.toml
+    container_name: notification-server-dev
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSLMODE: ${DB_SSLMODE}
+      API_KEY: ${API_KEY}
+      ACCESS_SECRET: ${ACCESS_SECRET}
+      REFRESH_SECRET: ${REFRESH_SECRET}
+      KAFKA_BROKER: kafka:9094
+      KAFKA_SEND_TOPIC: ${KAFKA_SEND_TOPIC}
+      KAFKA_UPDATE_TOPIC: ${KAFKA_UPDATE_TOPIC}
+      MOBILE_JWT_SECRET: ${MOBILE_JWT_SECRET}
+    volumes:
+      - .:/app
+      - /app/tmp
+    networks:
+      - notification-network
+
+  # hot reload via air, source mounted
+  worker-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        AIR_CONFIG: .air.worker.toml
+    container_name: notification-worker-dev
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSLMODE: ${DB_SSLMODE}
+      API_KEY: ${API_KEY}
+      ACCESS_SECRET: ${ACCESS_SECRET}
+      REFRESH_SECRET: ${REFRESH_SECRET}
+      KAFKA_BROKER: kafka:9094
+      KAFKA_SEND_TOPIC: ${KAFKA_SEND_TOPIC}
+      KAFKA_UPDATE_TOPIC: ${KAFKA_UPDATE_TOPIC}
+      MOBILE_JWT_SECRET: ${MOBILE_JWT_SECRET}
+    volumes:
+      - .:/app
+      - /app/tmp
+    networks:
+      - notification-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
 
 volumes:
   postgres_data:
   kafka_data:
+
+networks:
+  notification-network:
+    driver: bridge
