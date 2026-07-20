@@ -357,4 +357,4 @@ The `statistics` object in the detail response shows:
 
 | Version | Date | Description |
 |---------|------|-------------|
-| 1.0 | 2025-07-17 | Initial API documentation for Notifications feature |
+| 1.0 | 2026-07-17 | Initial API documentation for Notifications feature |

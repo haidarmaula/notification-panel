@@ -438,4 +438,4 @@ Permanently deletes a device token. This should be called when a user logs out o
 
 | Version | Date | Description |
 |---------|------|-------------|
-| 1.0 | 2025-07-14 | Initial API documentation for Users & Device Tokens feature |
+| 1.0 | 2026-07-14 | Initial API documentation for Users & Device Tokens feature |

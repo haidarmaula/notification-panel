@@ -332,4 +332,4 @@ Removes a user from a segment. The user must currently be a member.
 
 | Version | Date | Description |
 |---------|------|-------------|
-| 1.0 | 2025-07-07 | Initial API documentation for Segments feature |
+| 1.0 | 2026-07-07 | Initial API documentation for Segments feature |

@@ -125,7 +125,7 @@ When the access token expires (usually after a short time), use the refresh toke
 
 | Version | Date | Description |
 |---------|------|-------------|
-| 1.0 | 2025-07-20 | Initial API documentation for Authentication feature |
+| 1.0 | 2026-07-20 | Initial API documentation for Authentication feature |
 
 ---
 
