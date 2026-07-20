@@ -19,21 +19,10 @@ import (
 	kafkago "github.com/segmentio/kafka-go"
 )
 
+// main runs the Kafka consumer worker that processes notification send requests.
 func main() {
 	cfg := config.Load()
 	ctx := context.Background()
-
-	// // Decode FCM credentials
-	// fcmCreds, err := cfg.GetFCMCredentialsBytes()
-	// if err != nil {
-	// 	log.Fatal("Failed to decode FCM credentials:", err)
-	// }
-	//
-	// // Initialize FCM provider
-	// provider, err := notifications.NewFCMProvider(fcmCreds)
-	// if err != nil {
-	// 	log.Fatal("Failed to initialize FCM provider:", err)
-	// }
 
 	db, err := database.New(ctx, cfg.GetDatabaseURL())
 	if err != nil {
@@ -43,6 +32,7 @@ func main() {
 
 	queries := sqlc.New(db)
 
+	// Initialize repositories.
 	notifRepo := repository.NewNotificationRepository(queries)
 	targetRepo := repository.NewNotificationTargetRepository(queries)
 	deliveryRepo := repository.NewNotificationDeliveryRepository(queries)
@@ -51,22 +41,17 @@ func main() {
 	segmentRepo := repository.NewSegmentRepository(queries)
 	memberRepo := repository.NewSegmentMemberRepository(queries)
 
-	// provider := notifications.NewMockProvider()
+	// Use OneSignal as the push provider.
 	provider := notifications.NewOneSignalProvider(cfg.OneSignalAppID, cfg.OneSignalAPIKey)
 	producer := kafka.NewProducer(cfg.KafkaBroker, cfg.UpdateTopic)
 
 	processor := notifications.NewProcessor(
-		notifRepo,
-		targetRepo,
-		deliveryRepo,
-		deviceRepo,
-		userRepo,
-		segmentRepo,
-		memberRepo,
-		provider,
-		producer,
+		notifRepo, targetRepo, deliveryRepo, deviceRepo,
+		userRepo, segmentRepo, memberRepo,
+		provider, producer,
 	)
 
+	// Kafka consumer configuration.
 	consumer := kafkago.NewReader(kafkago.ReaderConfig{
 		Brokers:  []string{cfg.KafkaBroker},
 		Topic:    cfg.SendTopic,

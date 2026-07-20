@@ -11,6 +11,7 @@ import (
 	"hello/internal/kafka"
 )
 
+// Processor orchestrates the end-to-end delivery of a notification.
 type Processor struct {
 	notifRepo    *repository.NotificationRepository
 	targetRepo   *repository.NotificationTargetRepository
@@ -23,6 +24,7 @@ type Processor struct {
 	producer     *kafka.Producer
 }
 
+// NewProcessor creates a new Processor with all required dependencies.
 func NewProcessor(
 	notifRepo *repository.NotificationRepository,
 	targetRepo *repository.NotificationTargetRepository,
@@ -47,6 +49,10 @@ func NewProcessor(
 	}
 }
 
+// ProcessSendRequested handles a Kafka event to deliver a notification.
+// It expands targets, fetches tokens, calls the provider, records deliveries,
+// and updates the notification status. Idempotent: skips if already terminal.
+// On failure, the notification status is set to FAILED.
 func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.NotificationSendRequested) error {
 	log.Printf("[Worker] Processing notification %d", event.NotificationID)
 
@@ -55,6 +61,7 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 		return fmt.Errorf("fetch notification: %w", err)
 	}
 
+	// Idempotency: skip if already processed.
 	if notif.Status == "COMPLETED" || notif.Status == "FAILED" {
 		log.Printf("[Worker] Notification %d already processed, skipping", event.NotificationID)
 		return nil
@@ -76,6 +83,7 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 		return fmt.Errorf("expand targets: %w", err)
 	}
 
+	// No users targeted → nothing to send.
 	if len(userIDs) == 0 {
 		log.Printf("[Worker] No users targeted, marking as COMPLETED")
 		_ = p.notifRepo.UpdateStatus(ctx, sqlc.UpdateNotificationStatusParams{
@@ -127,7 +135,7 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 		return fmt.Errorf("provider send: %w", err)
 	}
 
-	// Build and insert deliveries
+	// Record each delivery result.
 	for _, r := range results {
 		var deviceTokenID int64
 		for _, t := range tokens {
@@ -144,7 +152,7 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 			NotificationID:    notif.ID,
 			UserID:            r.UserID,
 			DeviceTokenID:     deviceTokenID,
-			Provider:          "Onesignal",
+			Provider:          "ONESIGNAL",
 			ProviderMessageID: pgtype.Text{String: r.ProviderMessageID, Valid: r.ProviderMessageID != ""},
 			Status:            status,
 		})
@@ -164,6 +172,8 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 	return nil
 }
 
+// expandTargets resolves all user IDs targeted by the notification.
+// Supported target types: BROADCAST, SEGMENT, INDIVIDUAL. Deduplicates results.
 func (p *Processor) expandTargets(ctx context.Context, notificationID int64) ([]int64, error) {
 	targets, err := p.targetRepo.ListByNotification(ctx, notificationID, 0, 10000)
 	if err != nil {
@@ -199,11 +209,10 @@ func (p *Processor) expandTargets(ctx context.Context, notificationID int64) ([]
 		case "UPLOAD":
 			// TODO: implement later
 			continue
-		default:
-			continue
 		}
 	}
 
+	// Deduplicate to avoid multiple deliveries to same user.
 	seen := make(map[int64]bool)
 	unique := make([]int64, 0, len(userIDs))
 	for _, id := range userIDs {
