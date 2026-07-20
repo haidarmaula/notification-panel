@@ -15,7 +15,7 @@ type NotificationModule struct {
 }
 
 // NewNotificationModule creates a new NotificationModule instance.
-func NewNotificationModule(queries *sqlc.Queries, cfg config.Config, middlewares ...middleware.Middleware) *NotificationModule {
+func NewNotificationModule(queries *sqlc.Queries, cfg *config.ServerConfig, middlewares ...middleware.Middleware) *NotificationModule {
 	notifRepo := repository.NewNotificationRepository(queries)
 	targetRepo := repository.NewNotificationTargetRepository(queries)
 	deliveryRepo := repository.NewNotificationDeliveryRepository(queries)

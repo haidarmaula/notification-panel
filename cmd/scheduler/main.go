@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg := config.LoadSchedulerConfig()
 	ctx := context.Background()
 
 	// Connect database

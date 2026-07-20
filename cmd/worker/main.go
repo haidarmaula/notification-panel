@@ -21,7 +21,7 @@ import (
 
 // main runs the Kafka consumer worker that processes notification send requests.
 func main() {
-	cfg := config.Load()
+	cfg := config.LoadWorkerConfig()
 	ctx := context.Background()
 
 	db, err := database.New(ctx, cfg.GetDatabaseURL())

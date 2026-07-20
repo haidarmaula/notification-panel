@@ -21,7 +21,7 @@ import (
 )
 
 func main() {
-	cfg := config.Load()
+	cfg := config.LoadServerConfig()
 	ctx := context.Background()
 	db, err := database.New(ctx, cfg.GetDatabaseURL())
 	queries := sqlc.New(db)
@@ -55,7 +55,7 @@ func main() {
 	segmentModule := segments.NewSegmentModule(queries, apiKeyMW.Use, jwtMW.Use)
 	segmentModule.RegisterRoutes(mux)
 
-	notificationModule := notifications.NewNotificationModule(queries, *cfg, apiKeyMW.Use, jwtMW.Use)
+	notificationModule := notifications.NewNotificationModule(queries, cfg, apiKeyMW.Use, jwtMW.Use)
 	notificationModule.RegisterRoutes(mux)
 
 	server := &http.Server{

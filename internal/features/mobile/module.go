@@ -16,7 +16,7 @@ type MobileModule struct {
 // NewMobileModule creates a new MobileModule instance.
 func NewMobileModule(
 	queries *sqlc.Queries,
-	cfg *config.Config,
+	cfg *config.ServerConfig,
 	middlewares ...middleware.Middleware,
 ) *MobileModule {
 	userRepo := repository.NewUserRepository(queries)
