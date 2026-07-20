@@ -5,6 +5,7 @@ import (
 	"net/http"
 )
 
+// RegisterRoutes registers all authentication endpoints with the provided ServeMux.
 func (m *AuthModule) RegisterRoutes(mux *http.ServeMux) {
 	const prefix = "/api/v1/auth"
 

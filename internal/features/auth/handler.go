@@ -9,16 +9,20 @@ import (
 	"hello/pkg/response"
 )
 
+// AuthHandler handles HTTP requests for authentication endpoints.
 type AuthHandler struct {
 	service *AuthService
 }
 
+// NewAuthHandler creates a new AuthHandler instance.
 func NewAuthHandler(service *AuthService) *AuthHandler {
 	return &AuthHandler{
 		service: service,
 	}
 }
 
+// Login handles POST /api/v1/auth/login.
+// It authenticates staff credentials and returns access/refresh tokens.
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 
@@ -48,6 +52,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	}, "success")
 }
 
+// RefreshToken handles POST /api/v1/auth/refresh.
+// It accepts a valid refresh token and returns a new access token.
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	var req RefreshTokenRequest
 
