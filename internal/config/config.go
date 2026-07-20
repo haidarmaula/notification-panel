@@ -15,12 +15,12 @@ type Config struct {
 	AccessSecret  string
 	RefreshSecret string
 
-	// JWT shared secret with Laravel backend
-	MobileJWTSecret string
-	// base64 encoded service account JSON
-	FCMCredentials  string
+	MobileJWTSecret string // JWT shared secret with Laravel backend
+	FCMCredentials  string // base64 encoded service account JSON
 	OneSignalAppID  string
 	OneSignalAPIKey string
+
+	SchedulerInterval string // interval between scheduler runs (e.g., "30s")
 
 	DBHost     string
 	DBPort     string
@@ -50,6 +50,8 @@ func Load() *Config {
 		FCMCredentials:  os.Getenv("FCM_CREDENTIALS"),
 		OneSignalAppID:  os.Getenv("ONESIGNAL_APP_ID"),
 		OneSignalAPIKey: os.Getenv("ONESIGNAL_API_KEY"),
+
+		SchedulerInterval: os.Getenv("SCHEDULER_INTERVAL"),
 
 		DBHost:     os.Getenv("DB_HOST"),
 		DBPort:     os.Getenv("DB_PORT"),
@@ -86,12 +88,17 @@ func Load() *Config {
 	// if cfg.FCMCredentials == "" {
 	// 	log.Fatal("FCM_CREDENTIALS is required")
 	// }
+
 	if cfg.OneSignalAppID == "" {
 		log.Fatal("ONESIGNAL_APP_ID is required")
 	}
 
 	if cfg.OneSignalAPIKey == "" {
 		log.Fatal("ONESIGNAL_API_KEY is required")
+	}
+
+	if cfg.SchedulerInterval == "" {
+		cfg.SchedulerInterval = "30s"
 	}
 
 	if cfg.DBHost == "" {

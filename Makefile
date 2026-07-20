@@ -41,7 +41,7 @@ help:
 # ============================================
 # DOCKER
 # ============================================
-.PHONY: up up-fg down restart logs logs-server logs-worker reset
+.PHONY: up up-fg down restart logs logs-server logs-worker logs-scheduler reset
 
 up:
 	docker compose up -d
@@ -63,6 +63,9 @@ logs-server:
 logs-worker:
 	docker compose logs -f worker-dev
 
+logs-scheduler:
+	docker compose logs -f scheduler-dev
+
 reset:
 	docker compose down -v
 	docker compose up -d
@@ -72,7 +75,7 @@ reset:
 # ============================================
 # DEVELOPMENT
 # ============================================
-.PHONY: bootstrap sh-server sh-worker build-server-dev build-worker-dev build-all
+.PHONY: bootstrap sh-server sh-worker build-server build-worker build-scheduler build-all
 
 bootstrap:
 	docker compose exec server-dev go run ./cmd/bootstrap/main.go
@@ -89,7 +92,10 @@ build-server:
 build-worker:
 	docker build -f Dockerfile.dev --build-arg AIR_CONFIG=.air.worker.toml -t notification-worker-dev:latest .
 
-build-all: build-server build-worker
+build-scheduler:
+	docker build -f Dockerfile.dev --build-arg AIR_CONFIG=.air.scheduler.toml -t notification-scheduler-dev:latest .
+
+build-all: build-server build-worker build-scheduler
 
 # ============================================
 # DATABASE MIGRATION

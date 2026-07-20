@@ -53,6 +53,11 @@ func (r *NotificationRepository) ListWithFilters(ctx context.Context, status, ta
 	})
 }
 
+// ListScheduledNotificationsDue returns scheduled notifications that are ready to be sent.
+func (r *NotificationRepository) ListScheduledNotificationsDue(ctx context.Context, limit int32) ([]sqlc.ListScheduledNotificationsDueRow, error) {
+	return r.q.ListScheduledNotificationsDue(ctx, limit)
+}
+
 func (r *NotificationRepository) Search(ctx context.Context, keyword string, offset, limit int32) ([]sqlc.SearchNotificationsRow, error) {
 	return r.q.SearchNotifications(ctx, sqlc.SearchNotificationsParams{
 		Keyword: pgtype.Text{String: keyword, Valid: true},
@@ -67,6 +72,15 @@ func (r *NotificationRepository) Update(ctx context.Context, params sqlc.UpdateN
 
 func (r *NotificationRepository) UpdateStatus(ctx context.Context, params sqlc.UpdateNotificationStatusParams) error {
 	return r.q.UpdateNotificationStatus(ctx, params)
+}
+
+// UpdateStatusIfScheduled updates notification status only if it's currently SCHEDULED.
+// Returns the number of rows affected.
+func (r *NotificationRepository) UpdateStatusIfScheduled(ctx context.Context, id int64, status string) (int64, error) {
+	return r.q.UpdateNotificationStatusIfScheduled(ctx, sqlc.UpdateNotificationStatusIfScheduledParams{
+		ID:     id,
+		Status: status,
+	})
 }
 
 func (r *NotificationRepository) MarkSent(ctx context.Context, id int64) error {

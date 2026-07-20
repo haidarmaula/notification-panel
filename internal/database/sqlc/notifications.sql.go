@@ -374,6 +374,66 @@ func (q *Queries) ListNotificationsWithFilters(ctx context.Context, arg ListNoti
 	return items, nil
 }
 
+const listScheduledNotificationsDue = `-- name: ListScheduledNotificationsDue :many
+SELECT
+    id,
+    title,
+    body,
+    template_id,
+    status,
+    created_by,
+    scheduled_at,
+    created_at,
+    updated_at
+FROM notifications
+WHERE status = 'SCHEDULED'
+  AND scheduled_at <= NOW()
+ORDER BY scheduled_at ASC
+LIMIT $1
+`
+
+type ListScheduledNotificationsDueRow struct {
+	ID          int64              `db:"id"`
+	Title       string             `db:"title"`
+	Body        string             `db:"body"`
+	TemplateID  pgtype.Int8        `db:"template_id"`
+	Status      string             `db:"status"`
+	CreatedBy   int64              `db:"created_by"`
+	ScheduledAt pgtype.Timestamptz `db:"scheduled_at"`
+	CreatedAt   pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt   pgtype.Timestamptz `db:"updated_at"`
+}
+
+func (q *Queries) ListScheduledNotificationsDue(ctx context.Context, limit int32) ([]ListScheduledNotificationsDueRow, error) {
+	rows, err := q.db.Query(ctx, listScheduledNotificationsDue, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListScheduledNotificationsDueRow{}
+	for rows.Next() {
+		var i ListScheduledNotificationsDueRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Title,
+			&i.Body,
+			&i.TemplateID,
+			&i.Status,
+			&i.CreatedBy,
+			&i.ScheduledAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markNotificationSent = `-- name: MarkNotificationSent :exec
 UPDATE notifications
 SET
@@ -501,4 +561,26 @@ type UpdateNotificationStatusParams struct {
 func (q *Queries) UpdateNotificationStatus(ctx context.Context, arg UpdateNotificationStatusParams) error {
 	_, err := q.db.Exec(ctx, updateNotificationStatus, arg.Status, arg.ID)
 	return err
+}
+
+const updateNotificationStatusIfScheduled = `-- name: UpdateNotificationStatusIfScheduled :execrows
+UPDATE notifications
+SET
+    status = $1,
+    updated_at = NOW()
+WHERE id = $2
+  AND status = 'SCHEDULED'
+`
+
+type UpdateNotificationStatusIfScheduledParams struct {
+	Status string `db:"status"`
+	ID     int64  `db:"id"`
+}
+
+func (q *Queries) UpdateNotificationStatusIfScheduled(ctx context.Context, arg UpdateNotificationStatusIfScheduledParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateNotificationStatusIfScheduled, arg.Status, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

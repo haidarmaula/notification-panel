@@ -84,6 +84,14 @@ SET
     updated_at = NOW()
 WHERE id = sqlc.arg('id');
 
+-- name: UpdateNotificationStatusIfScheduled :execrows
+UPDATE notifications
+SET
+    status = sqlc.arg('status'),
+    updated_at = NOW()
+WHERE id = sqlc.arg('id')
+  AND status = 'SCHEDULED';
+
 -- name: MarkNotificationSent :exec
 UPDATE notifications
 SET
@@ -148,6 +156,23 @@ WHERE
     AND (sqlc.arg('keyword')::text = '' OR n.title ILIKE '%' || sqlc.arg('keyword') || '%')
 ORDER BY n.created_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+
+-- name: ListScheduledNotificationsDue :many
+SELECT
+    id,
+    title,
+    body,
+    template_id,
+    status,
+    created_by,
+    scheduled_at,
+    created_at,
+    updated_at
+FROM notifications
+WHERE status = 'SCHEDULED'
+  AND scheduled_at <= NOW()
+ORDER BY scheduled_at ASC
+LIMIT sqlc.arg('limit');
 
 -- ==========================================
 -- SEARCH

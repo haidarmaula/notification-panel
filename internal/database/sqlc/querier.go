@@ -277,6 +277,7 @@ type Querier interface {
 	// LIST
 	// ==========================================
 	ListRoles(ctx context.Context, arg ListRolesParams) ([]Role, error)
+	ListScheduledNotificationsDue(ctx context.Context, limit int32) ([]ListScheduledNotificationsDueRow, error)
 	// ==========================================
 	// LIST
 	// ==========================================
@@ -349,6 +350,7 @@ type Querier interface {
 	// ==========================================
 	UpdateNotification(ctx context.Context, arg UpdateNotificationParams) error
 	UpdateNotificationStatus(ctx context.Context, arg UpdateNotificationStatusParams) error
+	UpdateNotificationStatusIfScheduled(ctx context.Context, arg UpdateNotificationStatusIfScheduledParams) (int64, error)
 	// ==========================================
 	// UPDATE
 	// ==========================================

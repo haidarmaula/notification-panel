@@ -151,6 +151,51 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # hot reload via air, source mounted
+  scheduler-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+      args:
+        AIR_CONFIG: .air.scheduler.toml
+    container_name: notification-scheduler-dev
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSLMODE: ${DB_SSLMODE}
+      API_KEY: ${API_KEY}
+      ACCESS_SECRET: ${ACCESS_SECRET}
+      REFRESH_SECRET: ${REFRESH_SECRET}
+      KAFKA_BROKER: kafka:9094
+      KAFKA_SEND_TOPIC: ${KAFKA_SEND_TOPIC}
+      KAFKA_UPDATE_TOPIC: ${KAFKA_UPDATE_TOPIC}
+      MOBILE_JWT_SECRET: ${MOBILE_JWT_SECRET}
+      FCM_CREDENTIALS: ${FCM_CREDENTIALS}
+      ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID}
+      ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY}
+      SCHEDULER_INTERVAL: ${SCHEDULER_INTERVAL}
+    volumes:
+      - .:/app
+      - /app/tmp
+      - go-mod-cache:/go/pkg/mod
+      - go-build-cache:/root/.cache/go-build
+    networks:
+      - notification-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
 volumes:
   postgres_data:
   kafka_data:
