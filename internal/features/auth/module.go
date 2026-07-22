@@ -15,8 +15,9 @@ type AuthModule struct {
 
 // NewAuthModule creates a new AuthModule instance with the required dependencies.
 func NewAuthModule(queries *sqlc.Queries, tokenManager *token.TokenManager, middlewares ...middleware.Middleware) *AuthModule {
-	repo := repository.NewStaffUserRepository(queries)
-	service := NewAuthService(repo, tokenManager)
+	staffRepo := repository.NewStaffUserRepository(queries)
+	roleRepo := repository.NewRoleRepository(queries)
+	service := NewAuthService(staffRepo, roleRepo, tokenManager)
 	handler := NewAuthHandler(service)
 
 	return &AuthModule{

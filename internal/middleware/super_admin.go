@@ -6,9 +6,17 @@ import (
 	"net/http"
 )
 
-var superAdminID = 1
+type SuperAdminMiddleware struct {
+	superAdminRole string
+}
 
-func SuperAdminMiddleware(next http.HandlerFunc) http.HandlerFunc {
+func NewSuperAdminMiddleware(superAdminRole string) *SuperAdminMiddleware {
+	return &SuperAdminMiddleware{
+		superAdminRole: superAdminRole,
+	}
+}
+
+func (m *SuperAdminMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		claims, ok := r.Context().Value(UserContextKey).(*token.AccessClaims)
 		if !ok {
@@ -16,7 +24,7 @@ func SuperAdminMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			return
 		}
 
-		if claims.RoleID != int64(superAdminID) {
+		if claims.RoleName != m.superAdminRole {
 			response.JSON(w, http.StatusForbidden, nil, "insufficient permissions")
 			return
 		}

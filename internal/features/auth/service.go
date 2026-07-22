@@ -14,6 +14,7 @@ import (
 var (
 	ErrInvalidCredentials     = errors.New("invalid email or password")
 	ErrEmailAlreadyRegistered = errors.New("email already registered")
+	ErrInvalidStaffRoleID     = errors.New("invalid staff role id")
 )
 
 // LoginResult holds the tokens returned after a successful login.
@@ -24,17 +25,20 @@ type LoginResult struct {
 
 // AuthService handles staff authentication and token management.
 type AuthService struct {
-	repo         *repository.StaffUserRepository
+	staffRepo    *repository.StaffUserRepository
+	roleRepo     *repository.RoleRepository
 	tokenManager *token.TokenManager
 }
 
 // NewAuthService creates a new AuthService instance with the required dependencies.
 func NewAuthService(
-	repo *repository.StaffUserRepository,
+	staffRepo *repository.StaffUserRepository,
+	roleRepo *repository.RoleRepository,
 	tokenManager *token.TokenManager,
 ) *AuthService {
 	return &AuthService{
-		repo:         repo,
+		staffRepo:    staffRepo,
+		roleRepo:     roleRepo,
 		tokenManager: tokenManager,
 	}
 }
@@ -47,32 +51,37 @@ func (s *AuthService) Login(
 	email string,
 	password string,
 ) (*LoginResult, error) {
-	admin, err := s.repo.FindByEmail(ctx, email)
+	staff, err := s.staffRepo.FindByEmail(ctx, email)
 	if err != nil {
 		return nil, ErrInvalidCredentials
 	}
 
-	if !admin.IsActive {
+	if !staff.IsActive {
 		return nil, ErrInvalidCredentials
 	}
 
 	if err := bcrypt.CompareHashAndPassword(
-		[]byte(admin.PasswordHash),
+		[]byte(staff.PasswordHash),
 		[]byte(password),
 	); err != nil {
 		return nil, ErrInvalidCredentials
 	}
 
+	role, err := s.roleRepo.FindByID(ctx, staff.ID)
+	if err != nil {
+		return nil, ErrInvalidStaffRoleID
+	}
+
 	accessToken, err := s.tokenManager.GenerateAccessToken(
-		admin.ID,
-		admin.RoleID,
-		admin.Email,
+		staff.ID,
+		role.Name,
+		staff.Email,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, err := s.tokenManager.GenerateRefreshToken(admin.ID, admin.RoleID)
+	refreshToken, err := s.tokenManager.GenerateRefreshToken(staff.ID, role.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -95,19 +104,24 @@ func (s *AuthService) RefreshToken(
 		return nil, token.ErrInvalidToken
 	}
 
-	admin, err := s.repo.FindByID(ctx, claims.StaffID)
+	staff, err := s.staffRepo.FindByID(ctx, claims.StaffID)
 	if err != nil {
 		return nil, ErrInvalidCredentials
 	}
 
-	if !admin.IsActive {
+	if !staff.IsActive {
 		return nil, ErrInvalidCredentials
 	}
 
+	role, err := s.roleRepo.FindByID(ctx, staff.ID)
+	if err != nil {
+		return nil, ErrInvalidStaffRoleID
+	}
+
 	accessToken, err := s.tokenManager.GenerateAccessToken(
-		admin.ID,
-		admin.RoleID,
-		admin.Email,
+		staff.ID,
+		role.Name,
+		staff.Email,
 	)
 	if err != nil {
 		return nil, err

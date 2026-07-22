@@ -34,6 +34,7 @@ func main() {
 	tokenManager := token.NewTokenManager(cfg.AccessSecret, cfg.RefreshSecret)
 	apiKeyMW := middleware.NewAPIKeyMiddleware(cfg.APIKey)
 	jwtMW := middleware.NewJWTMiddleware(tokenManager)
+	superAdminMW := middleware.NewSuperAdminMiddleware(cfg.SuperAdminRole)
 
 	mux := http.NewServeMux()
 
@@ -46,7 +47,7 @@ func main() {
 	authModule := auth.NewAuthModule(queries, tokenManager, apiKeyMW.Use)
 	authModule.RegisterRoutes(mux)
 
-	staffModule := staff.NewStaffModule(queries, apiKeyMW.Use, jwtMW.Use, middleware.SuperAdminMiddleware)
+	staffModule := staff.NewStaffModule(queries, apiKeyMW.Use, jwtMW.Use, superAdminMW.Use)
 	staffModule.RegisterRoutes(mux)
 
 	profileModule := profile.NewProfileModule(queries, apiKeyMW.Use, jwtMW.Use)

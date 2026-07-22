@@ -12,6 +12,7 @@ type ServerConfig struct {
 	AccessSecret    string
 	RefreshSecret   string
 	MobileJWTSecret string // JWT shared secret with Laravel backend
+	SuperAdminRole  string
 
 	BootstrapAdminName     string
 	BootstrapAdminEmail    string
@@ -31,6 +32,7 @@ func LoadServerConfig() *ServerConfig {
 		AccessSecret:    os.Getenv("ACCESS_SECRET"),
 		RefreshSecret:   os.Getenv("REFRESH_SECRET"),
 		MobileJWTSecret: os.Getenv("MOBILE_JWT_SECRET"),
+		SuperAdminRole:  os.Getenv("SUPER_ADMIN_ROLE"),
 
 		BootstrapAdminName:     os.Getenv("BOOTSTRAP_SUPER_ADMIN_NAME"),
 		BootstrapAdminEmail:    os.Getenv("BOOTSTRAP_SUPER_ADMIN_EMAIL"),
@@ -54,6 +56,10 @@ func LoadServerConfig() *ServerConfig {
 
 	if cfg.MobileJWTSecret == "" {
 		log.Fatal("MOBILE_JWT_SECRET is required")
+	}
+
+	if cfg.SuperAdminRole == "" {
+		log.Fatal("SUPER_ADMIN_ROLE is required")
 	}
 
 	if cfg.KafkaBroker == "" {
