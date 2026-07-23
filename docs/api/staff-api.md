@@ -24,7 +24,7 @@ The authenticated staff ID is extracted from the JWT and used for authorization 
 |-------------|---------|-------------|
 | `400` | Invalid request body | Malformed JSON or validation error |
 | `401` | Unauthorized | Missing or invalid API Key / JWT |
-| `403` | Forbidden | Insufficient permissions (not SUPER_ADMIN) |
+| `403` | Forbidden | Insufficient permissions (not SUPER_ADMIN) or self-deletion attempt |
 | `404` | Resource not found | Staff user does not exist |
 | `409` | Conflict | Email already registered |
 | `500` | Internal server error | Unexpected server error |
@@ -341,12 +341,46 @@ Updates the password of a staff user.
 
 ---
 
+## 7. Delete Staff
+
+**`DELETE /staff/{id}`**
+
+Permanently deletes a staff user from the system.
+
+**Important:** Administrators cannot delete their own account (self-deletion is forbidden).
+
+### Path Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `id` | integer (int64) | Staff user ID |
+
+### Request Body
+
+No request body.
+
+### Success Response (200 OK)
+
+```json
+{
+  "message": "staff user deleted"
+}
+```
+
+### Error Responses
+
+| Status | Message | Condition |
+|--------|---------|-----------|
+| `400` | invalid id | Invalid ID format |
+| `403` | cannot delete your own account | Actor attempted to delete their own account |
+| `404` | staff user not found | Staff does not exist |
+| `500` | Internal server error | Database delete failed |
+
+---
+
 ## Changelog
 
 | Version | Date | Description |
 |---------|------|-------------|
 | 1.0 | 2026-07-20 | Initial API documentation for Staff Management feature |
-
----
-
-**Note:** These endpoints are restricted to SUPER_ADMIN users. Regular staff members cannot access staff management functions. The `role` field corresponds to the `name` column in the `roles` table. Ensure valid role names are used.
+| 1.0 | 2026-07-23 | Added DELETE /staff/{id} endpoint with self-deletion prevention |
