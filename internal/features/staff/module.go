@@ -1,6 +1,7 @@
 package staff
 
 import (
+	"hello/internal/audit"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 	"hello/internal/middleware"
@@ -16,8 +17,12 @@ type StaffModule struct {
 func NewStaffModule(queries *sqlc.Queries, middlewares ...middleware.Middleware) *StaffModule {
 	staffRepo := repository.NewStaffUserRepository(queries)
 	roleRepo := repository.NewRoleRepository(queries)
-	service := NewStaffService(staffRepo, roleRepo)
-	handler := NewStaffHandler(service)
+	auditRepo := repository.NewAuditLogRepository(queries)
+
+	auditService := audit.NewAuditService(auditRepo)
+	staffService := NewStaffService(staffRepo, roleRepo, auditService)
+
+	handler := NewStaffHandler(staffService)
 
 	return &StaffModule{
 		middlewares: middlewares,

@@ -11,7 +11,7 @@ import (
 
 type contextKey string
 
-const UserContextKey = contextKey("user")
+const UserContextKey = contextKey("staff")
 
 type JWTMiddleware struct {
 	tokenManager *token.TokenManager

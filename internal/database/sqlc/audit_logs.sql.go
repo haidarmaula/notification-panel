@@ -33,10 +33,12 @@ INSERT INTO audit_logs (
     actor_user_id,
     action,
     entity_type,
+    entity_name,
     entity_id,
     before_json,
     after_json,
-    ip_address
+    ip_address,
+    user_agent
 )
 VALUES (
     $1,
@@ -45,17 +47,21 @@ VALUES (
     $4,
     $5,
     $6,
-    $7
+    $7,
+    $8,
+    $9
 )
 RETURNING
     id,
     actor_user_id,
     action,
     entity_type,
+    entity_name,
     entity_id,
     before_json,
     after_json,
     ip_address,
+    user_agent,
     created_at
 `
 
@@ -63,47 +69,41 @@ type CreateAuditLogParams struct {
 	ActorUserID int64       `db:"actor_user_id"`
 	Action      string      `db:"action"`
 	EntityType  string      `db:"entity_type"`
+	EntityName  pgtype.Text `db:"entity_name"`
 	EntityID    pgtype.Int8 `db:"entity_id"`
 	BeforeJson  []byte      `db:"before_json"`
 	AfterJson   []byte      `db:"after_json"`
 	IpAddress   pgtype.Text `db:"ip_address"`
-}
-
-type CreateAuditLogRow struct {
-	ID          int64              `db:"id"`
-	ActorUserID int64              `db:"actor_user_id"`
-	Action      string             `db:"action"`
-	EntityType  string             `db:"entity_type"`
-	EntityID    pgtype.Int8        `db:"entity_id"`
-	BeforeJson  []byte             `db:"before_json"`
-	AfterJson   []byte             `db:"after_json"`
-	IpAddress   pgtype.Text        `db:"ip_address"`
-	CreatedAt   pgtype.Timestamptz `db:"created_at"`
+	UserAgent   pgtype.Text `db:"user_agent"`
 }
 
 // ==========================================
 // CREATE
 // ==========================================
-func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (CreateAuditLogRow, error) {
+func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error) {
 	row := q.db.QueryRow(ctx, createAuditLog,
 		arg.ActorUserID,
 		arg.Action,
 		arg.EntityType,
+		arg.EntityName,
 		arg.EntityID,
 		arg.BeforeJson,
 		arg.AfterJson,
 		arg.IpAddress,
+		arg.UserAgent,
 	)
-	var i CreateAuditLogRow
+	var i AuditLog
 	err := row.Scan(
 		&i.ID,
 		&i.ActorUserID,
 		&i.Action,
 		&i.EntityType,
+		&i.EntityName,
 		&i.EntityID,
 		&i.BeforeJson,
 		&i.AfterJson,
 		&i.IpAddress,
+		&i.UserAgent,
 		&i.CreatedAt,
 	)
 	return i, err

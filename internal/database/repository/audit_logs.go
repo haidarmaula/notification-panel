@@ -18,7 +18,7 @@ func (r *AuditLogRepository) Count(ctx context.Context) (int64, error) {
 	return r.q.CountAuditLogs(ctx)
 }
 
-func (r *AuditLogRepository) Create(ctx context.Context, params sqlc.CreateAuditLogParams) (sqlc.CreateAuditLogRow, error) {
+func (r *AuditLogRepository) Create(ctx context.Context, params sqlc.CreateAuditLogParams) (sqlc.AuditLog, error) {
 	return r.q.CreateAuditLog(ctx, params)
 }
 

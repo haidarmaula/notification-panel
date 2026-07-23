@@ -17,7 +17,9 @@ type StaffHandler struct {
 
 // NewStaffHandler creates a new StaffHandler instance.
 func NewStaffHandler(service *StaffService) *StaffHandler {
-	return &StaffHandler{service: service}
+	return &StaffHandler{
+		service: service,
+	}
 }
 
 // Create handles POST /api/v1/staff.
@@ -51,6 +53,7 @@ func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+
 	response.JSON(w, http.StatusCreated, toStaffResponse(staff), "staff created")
 }
 

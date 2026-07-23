@@ -4,10 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 
-	"golang.org/x/crypto/bcrypt"
+	"hello/internal/audit"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
+
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Domain errors for staff service.
@@ -36,15 +39,17 @@ type UpdateStaffParams struct {
 
 // StaffService provides business logic for staff management.
 type StaffService struct {
-	staffRepo *repository.StaffUserRepository
-	roleRepo  *repository.RoleRepository
+	staffRepo    *repository.StaffUserRepository
+	roleRepo     *repository.RoleRepository
+	auditService *audit.AuditService
 }
 
 // NewStaffService creates a new StaffService instance.
-func NewStaffService(staffRepo *repository.StaffUserRepository, roleRepo *repository.RoleRepository) *StaffService {
+func NewStaffService(staffRepo *repository.StaffUserRepository, roleRepo *repository.RoleRepository, auditService *audit.AuditService) *StaffService {
 	return &StaffService{
-		staffRepo: staffRepo,
-		roleRepo:  roleRepo,
+		staffRepo:    staffRepo,
+		roleRepo:     roleRepo,
+		auditService: auditService,
 	}
 }
 
@@ -79,6 +84,23 @@ func (s *StaffService) Create(ctx context.Context, params CreateStaffParams) (*S
 	})
 	if err != nil {
 		return nil, fmt.Errorf("create staff: %w", err)
+	}
+
+	if errLog := s.auditService.Log(ctx, audit.LogParams{
+		Action:     audit.ACTION_STAFF_CREATE,
+		EntityType: audit.ENTITY_TYPE_STAFF,
+		EntityName: staff.Name,
+		EntityID:   staff.ID,
+		After:      staff,
+	}); errLog != nil {
+		log.Printf(
+			"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
+			audit.ACTION_STAFF_CREATE,
+			audit.ENTITY_TYPE_STAFF,
+			staff.ID,
+			staff.Name,
+			errLog,
+		)
 	}
 
 	return &Staff{
@@ -218,14 +240,35 @@ func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*S
 		return nil, fmt.Errorf("update staff: %w", err)
 	}
 
-	return s.GetByID(ctx, params.ID)
+	staff, err := s.GetByID(ctx, params.ID)
+	if err == nil {
+		if errLog := s.auditService.Log(ctx, audit.LogParams{
+			Action:     audit.ACTION_STAFF_UPDATE,
+			EntityType: audit.ENTITY_TYPE_STAFF,
+			EntityName: staff.Name,
+			EntityID:   staff.ID,
+			Before:     existing,
+			After:      staff,
+		}); errLog != nil {
+			log.Printf(
+				"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
+				audit.ACTION_STAFF_UPDATE,
+				audit.ENTITY_TYPE_STAFF,
+				staff.ID,
+				staff.Name,
+				errLog,
+			)
+		}
+	}
+
+	return staff, err
 }
 
 // UpdateStatus changes the active status of a staff user.
 // Returns the updated Staff object or an error.
 // Possible error: ErrStaffNotFound.
 func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool) (*Staff, error) {
-	_, err := s.staffRepo.FindByID(ctx, id)
+	existing, err := s.staffRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, ErrStaffNotFound
 	}
@@ -234,14 +277,35 @@ func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool
 		return nil, fmt.Errorf("update status: %w", err)
 	}
 
-	return s.GetByID(ctx, id)
+	staff, err := s.GetByID(ctx, id)
+	if err == nil {
+		if errLog := s.auditService.Log(ctx, audit.LogParams{
+			Action:     audit.ACTION_STAFF_UPDATE_STATUS,
+			EntityType: audit.ENTITY_TYPE_STAFF,
+			EntityName: staff.Name,
+			EntityID:   staff.ID,
+			Before:     existing,
+			After:      staff,
+		}); errLog != nil {
+			log.Printf(
+				"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
+				audit.ACTION_STAFF_UPDATE_STATUS,
+				audit.ENTITY_TYPE_STAFF,
+				staff.ID,
+				staff.Name,
+				errLog,
+			)
+		}
+	}
+
+	return staff, err
 }
 
 // UpdatePassword hashes and updates the password of a staff user.
 // Returns an error if the user is not found or hashing fails.
 // Possible error: ErrStaffNotFound.
 func (s *StaffService) UpdatePassword(ctx context.Context, id int64, newPassword string) error {
-	_, err := s.staffRepo.FindByID(ctx, id)
+	existing, err := s.staffRepo.FindByID(ctx, id)
 	if err != nil {
 		return ErrStaffNotFound
 	}
@@ -251,8 +315,28 @@ func (s *StaffService) UpdatePassword(ctx context.Context, id int64, newPassword
 		return fmt.Errorf("hash password: %w", err)
 	}
 
-	return s.staffRepo.UpdatePassword(ctx, sqlc.UpdateStaffPasswordParams{
+	err = s.staffRepo.UpdatePassword(ctx, sqlc.UpdateStaffPasswordParams{
 		ID:           id,
 		PasswordHash: string(hashed),
 	})
+
+	if err == nil {
+		if errLog := s.auditService.Log(ctx, audit.LogParams{
+			Action:     audit.ACTION_STAFF_UPDATE_PASSWORD,
+			EntityType: audit.ENTITY_TYPE_STAFF,
+			EntityName: existing.Name,
+			EntityID:   existing.ID,
+		}); errLog != nil {
+			log.Printf(
+				"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
+				audit.ACTION_STAFF_UPDATE_PASSWORD,
+				audit.ENTITY_TYPE_STAFF,
+				existing.ID,
+				existing.Name,
+				errLog,
+			)
+		}
+	}
+
+	return err
 }

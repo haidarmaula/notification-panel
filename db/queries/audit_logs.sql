@@ -26,29 +26,35 @@ INSERT INTO audit_logs (
     actor_user_id,
     action,
     entity_type,
+    entity_name,
     entity_id,
     before_json,
     after_json,
-    ip_address
+    ip_address,
+    user_agent
 )
 VALUES (
     sqlc.arg('actor_user_id'),
     sqlc.arg('action'),
     sqlc.arg('entity_type'),
+    sqlc.arg('entity_name'),
     sqlc.arg('entity_id'),
     sqlc.arg('before_json'),
     sqlc.arg('after_json'),
-    sqlc.arg('ip_address')
+    sqlc.arg('ip_address'),
+    sqlc.arg('user_agent')
 )
 RETURNING
     id,
     actor_user_id,
     action,
     entity_type,
+    entity_name,
     entity_id,
     before_json,
     after_json,
     ip_address,
+    user_agent,
     created_at;
 
 -- ==========================================

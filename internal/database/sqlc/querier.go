@@ -74,7 +74,7 @@ type Querier interface {
 	// ==========================================
 	// CREATE
 	// ==========================================
-	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (CreateAuditLogRow, error)
+	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error)
 	// ==========================================
 	// CREATE
 	// ==========================================

@@ -47,7 +47,7 @@ func main() {
 	authModule := auth.NewAuthModule(queries, tokenManager, apiKeyMW.Use)
 	authModule.RegisterRoutes(mux)
 
-	staffModule := staff.NewStaffModule(queries, apiKeyMW.Use, jwtMW.Use, superAdminMW.Use)
+	staffModule := staff.NewStaffModule(queries, apiKeyMW.Use, jwtMW.Use, superAdminMW.Use, middleware.AuditMiddleware)
 	staffModule.RegisterRoutes(mux)
 
 	profileModule := profile.NewProfileModule(queries, apiKeyMW.Use, jwtMW.Use)
