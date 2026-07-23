@@ -19,7 +19,7 @@ type AuditMiddleware struct {
 
 func NewAuditMiddleware() *AuditMiddleware {
 	return &AuditMiddleware{
-		IPHeader: "X-Forwarder-For",
+		IPHeader: "X-Forwarded-For",
 	}
 }
 

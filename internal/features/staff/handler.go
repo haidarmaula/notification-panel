@@ -201,7 +201,11 @@ func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, nil, "password updated")
 }
 
-// DELETE /staff/{id}
+// Delete handles DELETE /api/v1/staff/{id}.
+// It removes a staff user from the system.
+// Returns 200 OK on successful deletion, 400 for invalid ID format,
+// 403 if the actor attempts to delete their own account,
+// 404 if the staff user does not exist, and 500 for internal errors.
 func (h *StaffHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -209,14 +213,17 @@ func (h *StaffHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = h.service.Delete(r.Context(), id); err != nil {
-		if errors.Is(err, ErrStaffNotFound) {
+		switch {
+		case errors.Is(err, ErrStaffNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
-			return
+		case errors.Is(err, ErrCannotDeleteSelf):
+			response.JSON(w, http.StatusForbidden, nil, err.Error())
+		default:
+			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		return
 	}
-	response.JSON(w, http.StatusOK, nil, "staff deleted")
+	response.JSON(w, http.StatusOK, nil, "staff user deleted")
 }
 
 // toStaffResponse converts a domain Staff object to a StaffResponse DTO.

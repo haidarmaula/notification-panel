@@ -19,6 +19,7 @@ var (
 	ErrInvalidRole            = errors.New("invalid role")
 	ErrStaffNotFound          = errors.New("staff user not found")
 	ErrEmailAlreadyUsed       = errors.New("email already used by another staff")
+	ErrCannotDeleteSelf       = errors.New("cannot delete your own account")
 )
 
 // CreateStaffParams holds the input for creating a new staff user.
@@ -341,10 +342,18 @@ func (s *StaffService) UpdatePassword(ctx context.Context, id int64, newPassword
 	return err
 }
 
+// Delete removes a staff user by ID.
+// Prevents self-deletion and logs an audit entry on success.
+// Returns ErrStaffNotFound or ErrCannotDeleteSelf.
 func (s *StaffService) Delete(ctx context.Context, id int64) error {
 	existing, err := s.staffRepo.FindByID(ctx, id)
 	if err != nil {
 		return ErrStaffNotFound
+	}
+
+	actorID, ok := audit.GetStaffID(ctx)
+	if ok && actorID == id {
+		return ErrCannotDeleteSelf
 	}
 
 	err = s.staffRepo.Delete(ctx, id)
