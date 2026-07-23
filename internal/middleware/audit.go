@@ -13,9 +13,19 @@ const (
 	AuditUserAgentKey auditContextKey = "audit_user_agent"
 )
 
-func AuditMiddleware(next http.HandlerFunc) http.HandlerFunc {
+type AuditMiddleware struct {
+	IPHeader string
+}
+
+func NewAuditMiddleware() *AuditMiddleware {
+	return &AuditMiddleware{
+		IPHeader: "X-Forwarder-For",
+	}
+}
+
+func (m *AuditMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := r.Header.Get("X-Forwarder-For")
+		ip := r.Header.Get(m.IPHeader)
 		if ip == "" {
 			ip = r.RemoteAddr
 		}
