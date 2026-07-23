@@ -201,6 +201,24 @@ func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, nil, "password updated")
 }
 
+// DELETE /staff/{id}
+func (h *StaffHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	id, err := parseInt64FromPath(r, "id")
+	if err != nil {
+		response.JSON(w, http.StatusBadRequest, nil, "invalid id")
+		return
+	}
+	if err = h.service.Delete(r.Context(), id); err != nil {
+		if errors.Is(err, ErrStaffNotFound) {
+			response.JSON(w, http.StatusNotFound, nil, err.Error())
+			return
+		}
+		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		return
+	}
+	response.JSON(w, http.StatusOK, nil, "staff deleted")
+}
+
 // toStaffResponse converts a domain Staff object to a StaffResponse DTO.
 func toStaffResponse(s *Staff) StaffResponse {
 	return StaffResponse{

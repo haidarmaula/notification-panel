@@ -340,3 +340,32 @@ func (s *StaffService) UpdatePassword(ctx context.Context, id int64, newPassword
 
 	return err
 }
+
+func (s *StaffService) Delete(ctx context.Context, id int64) error {
+	existing, err := s.staffRepo.FindByID(ctx, id)
+	if err != nil {
+		return ErrStaffNotFound
+	}
+
+	err = s.staffRepo.Delete(ctx, id)
+	if err == nil {
+		if errLog := s.auditService.Log(ctx, audit.LogParams{
+			Action:     audit.ACTION_STAFF_DELETE,
+			EntityType: audit.ENTITY_TYPE_STAFF,
+			EntityName: existing.Name,
+			EntityID:   existing.ID,
+			Before:     existing,
+		}); errLog != nil {
+			log.Printf(
+				"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
+				audit.ACTION_STAFF_DELETE,
+				audit.ENTITY_TYPE_STAFF,
+				existing.ID,
+				existing.Name,
+				errLog,
+			)
+		}
+	}
+
+	return err
+}

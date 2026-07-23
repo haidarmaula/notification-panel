@@ -17,4 +17,5 @@ func (m *StaffModule) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PATCH "+prefix+"/staff/{id}", use(m.handler.Update))
 	mux.HandleFunc("PATCH "+prefix+"/staff/{id}/status", use(m.handler.UpdateStatus))
 	mux.HandleFunc("PATCH "+prefix+"/staff/{id}/password", use(m.handler.UpdatePassword))
+	mux.HandleFunc("DELETE "+prefix+"/staff/{id}", use(m.handler.Delete))
 }
