@@ -98,6 +98,7 @@ services:
       BOOTSTRAP_SUPER_ADMIN_PASSWORD: ${BOOTSTRAP_SUPER_ADMIN_PASSWORD}
       KAFKA_BROKER: kafka:9094
       KAFKA_SEND_TOPIC: ${KAFKA_SEND_TOPIC}
+      SUPER_ADMIN_ROLE: ${SUPER_ADMIN_ROLE}
     volumes:
       - .:/app
       - /app/tmp

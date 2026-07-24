@@ -67,7 +67,7 @@ func (s *AuthService) Login(
 		return nil, ErrInvalidCredentials
 	}
 
-	role, err := s.roleRepo.FindByID(ctx, staff.ID)
+	role, err := s.roleRepo.FindByID(ctx, staff.RoleID)
 	if err != nil {
 		return nil, ErrInvalidStaffRoleID
 	}
