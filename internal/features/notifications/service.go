@@ -4,23 +4,29 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgtype"
+	"hello/internal/audit"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
+	"hello/internal/kafka"
+
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 // Domain errors.
 var (
-	ErrNotificationNotFound = errors.New("notification not found")
-	ErrNotificationNotDraft = errors.New("notification must be in DRAFT status")
-	ErrInvalidTargetType    = errors.New("invalid target type")
-	ErrTemplateNotFound     = errors.New("template not found")
-	ErrSegmentNotFound      = errors.New("segment not found")
-	ErrInvalidScheduledTime = errors.New("scheduled time must be in the future")
-	ErrCannotDeleteSent     = errors.New("cannot delete sent notification")
-	ErrTargetsRequired      = errors.New("user_ids required for INDIVIDUAL type")
+	ErrStaffNotFoundOrInactive = errors.New("staff account not found or inactive")
+	ErrNotificationNotFound    = errors.New("notification not found")
+	ErrNotificationNotDraft    = errors.New("notification must be in DRAFT status")
+	ErrInvalidTargetType       = errors.New("invalid target type")
+	ErrTemplateNotFound        = errors.New("template not found")
+	ErrSegmentNotFound         = errors.New("segment not found")
+	ErrSegmentIDRequired       = errors.New("segment_id required for SEGMENT type")
+	ErrInvalidScheduledTime    = errors.New("scheduled time must be in the future")
+	ErrCannotDeleteSent        = errors.New("cannot delete sent notification")
+	ErrTargetsRequired         = errors.New("user_ids required for INDIVIDUAL type")
 )
 
 // NotificationService provides business logic for notifications.
@@ -32,6 +38,8 @@ type NotificationService struct {
 	staffRepo    *repository.StaffUserRepository
 	templateRepo *repository.TemplateRepository
 	segmentRepo  *repository.SegmentRepository
+	auditService *audit.AuditService
+	producer     *kafka.Producer
 }
 
 // NewNotificationService creates a new NotificationService instance.
@@ -43,6 +51,8 @@ func NewNotificationService(
 	staffRepo *repository.StaffUserRepository,
 	templateRepo *repository.TemplateRepository,
 	segmentRepo *repository.SegmentRepository,
+	auditService *audit.AuditService,
+	producer *kafka.Producer,
 ) *NotificationService {
 	return &NotificationService{
 		notifRepo:    notifRepo,
@@ -52,6 +62,8 @@ func NewNotificationService(
 		staffRepo:    staffRepo,
 		templateRepo: templateRepo,
 		segmentRepo:  segmentRepo,
+		auditService: auditService,
+		producer:     producer,
 	}
 }
 
@@ -112,14 +124,18 @@ func (s *NotificationService) List(ctx context.Context, page, limit int32, statu
 
 // GetByID returns full notification detail with statistics.
 func (s *NotificationService) GetByID(ctx context.Context, id int64) (*NotificationDetail, error) {
+	actorID, ok := audit.GetStaffID(ctx)
+	if !ok {
+		return nil, ErrStaffNotFoundOrInactive
+	}
+	staff, err := s.staffRepo.FindByID(ctx, actorID)
+	if err != nil {
+		return nil, ErrStaffNotFoundOrInactive
+	}
+
 	notif, err := s.notifRepo.FindByID(ctx, id)
 	if err != nil {
 		return nil, ErrNotificationNotFound
-	}
-
-	staff, err := s.staffRepo.FindByID(ctx, notif.CreatedBy)
-	if err != nil {
-		return nil, fmt.Errorf("get created by: %w", err)
 	}
 
 	var template *TemplateBrief
@@ -206,6 +222,15 @@ type CreateParams struct {
 
 // Create creates a new notification draft.
 func (s *NotificationService) Create(ctx context.Context, params CreateParams) (*CreateNotificationResponse, error) {
+	actorID, ok := audit.GetStaffID(ctx)
+	if !ok {
+		return nil, ErrStaffNotFoundOrInactive
+	}
+	_, err := s.staffRepo.FindByID(ctx, actorID)
+	if err != nil {
+		return nil, ErrStaffNotFoundOrInactive
+	}
+
 	if params.TargetType != string(TargetBroadcast) &&
 		params.TargetType != string(TargetSegment) &&
 		params.TargetType != string(TargetIndividual) {
@@ -214,6 +239,20 @@ func (s *NotificationService) Create(ctx context.Context, params CreateParams) (
 
 	if params.ScheduledAt != nil && params.ScheduledAt.Before(time.Now()) {
 		return nil, ErrInvalidScheduledTime
+	}
+
+	if params.TargetType == string(TargetIndividual) {
+		if len(params.UserIDs) == 0 {
+			return nil, ErrTargetsRequired
+		}
+	} else if params.TargetType == string(TargetSegment) {
+		if params.SegmentID == nil {
+			return nil, ErrSegmentIDRequired
+		}
+		_, err := s.segmentRepo.FindByID(ctx, *params.SegmentID)
+		if err != nil {
+			return nil, ErrSegmentNotFound
+		}
 	}
 
 	var templateID pgtype.Int8
@@ -248,12 +287,25 @@ func (s *NotificationService) Create(ctx context.Context, params CreateParams) (
 		return nil, fmt.Errorf("create notification: %w", err)
 	}
 
+	if errLog := s.auditService.Log(ctx, audit.LogParams{
+		Action:     audit.ACTION_NOTIFICATION_CREATE,
+		EntityType: audit.ENTITY_TYPE_NOTIFICATION,
+		EntityName: notif.Title,
+		EntityID:   notif.ID,
+		After:      notif,
+	}); errLog != nil {
+		log.Printf(
+			"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
+			audit.ACTION_NOTIFICATION_CREATE,
+			audit.ENTITY_TYPE_NOTIFICATION,
+			notif.ID,
+			notif.Title,
+			errLog,
+		)
+	}
+
 	// Create targets based on type
 	if params.TargetType == string(TargetIndividual) {
-		if len(params.UserIDs) == 0 {
-			_ = s.notifRepo.Delete(ctx, notif.ID)
-			return nil, ErrTargetsRequired
-		}
 		for _, userID := range params.UserIDs {
 			_, err := s.targetRepo.CreateFull(ctx, sqlc.CreateNotificationTargetFullParams{
 				NotificationID: notif.ID,
@@ -263,20 +315,12 @@ func (s *NotificationService) Create(ctx context.Context, params CreateParams) (
 				UploadBatchID:  pgtype.Int8{Valid: false},
 			})
 			if err != nil {
+				_ = s.notifRepo.Delete(ctx, notif.ID)
 				return nil, fmt.Errorf("create target for user %d: %w", userID, err)
 			}
 		}
 	} else if params.TargetType == string(TargetSegment) {
-		if params.SegmentID == nil {
-			_ = s.notifRepo.Delete(ctx, notif.ID)
-			return nil, errors.New("segment_id required for SEGMENT type")
-		}
-		_, err := s.segmentRepo.FindByID(ctx, *params.SegmentID)
-		if err != nil {
-			_ = s.notifRepo.Delete(ctx, notif.ID)
-			return nil, ErrSegmentNotFound
-		}
-		_, err = s.targetRepo.CreateFull(ctx, sqlc.CreateNotificationTargetFullParams{
+		_, err := s.targetRepo.CreateFull(ctx, sqlc.CreateNotificationTargetFullParams{
 			NotificationID: notif.ID,
 			TargetType:     params.TargetType,
 			SegmentID:      pgtype.Int8{Int64: *params.SegmentID, Valid: true},
@@ -284,6 +328,7 @@ func (s *NotificationService) Create(ctx context.Context, params CreateParams) (
 			UploadBatchID:  pgtype.Int8{Valid: false},
 		})
 		if err != nil {
+			_ = s.notifRepo.Delete(ctx, notif.ID)
 			return nil, fmt.Errorf("create target for segment: %w", err)
 		}
 	} else if params.TargetType == string(TargetBroadcast) {
@@ -295,6 +340,7 @@ func (s *NotificationService) Create(ctx context.Context, params CreateParams) (
 			UploadBatchID:  pgtype.Int8{Valid: false},
 		})
 		if err != nil {
+			_ = s.notifRepo.Delete(ctx, notif.ID)
 			return nil, fmt.Errorf("create global target: %w", err)
 		}
 	}
@@ -315,6 +361,15 @@ type UpdateParams struct {
 
 // Update updates a draft notification.
 func (s *NotificationService) Update(ctx context.Context, id int64, params UpdateParams) error {
+	actorID, ok := audit.GetStaffID(ctx)
+	if !ok {
+		return ErrStaffNotFoundOrInactive
+	}
+	_, err := s.staffRepo.FindByID(ctx, actorID)
+	if err != nil {
+		return ErrStaffNotFoundOrInactive
+	}
+
 	notif, err := s.notifRepo.FindByID(ctx, id)
 	if err != nil {
 		return ErrNotificationNotFound
@@ -351,11 +406,47 @@ func (s *NotificationService) Update(ctx context.Context, id int64, params Updat
 		update.ScheduledAt = pgtype.Timestamptz{Time: *params.ScheduledAt, Valid: true}
 	}
 
-	return s.notifRepo.Update(ctx, update)
+	if err := s.notifRepo.Update(ctx, update); err != nil {
+		return fmt.Errorf("update notification: %w", err)
+	}
+
+	newNotif, err := s.notifRepo.FindByID(ctx, id)
+	if err != nil {
+		return ErrNotificationNotFound
+	}
+
+	if errLog := s.auditService.Log(ctx, audit.LogParams{
+		Action:     audit.ACTION_NOTIFICATION_UPDATE,
+		EntityType: audit.ENTITY_TYPE_NOTIFICATION,
+		EntityName: newNotif.Title,
+		EntityID:   newNotif.ID,
+		Before:     notif,
+		After:      newNotif,
+	}); errLog != nil {
+		log.Printf(
+			"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
+			audit.ACTION_NOTIFICATION_UPDATE,
+			audit.ENTITY_TYPE_NOTIFICATION,
+			newNotif.ID,
+			newNotif.Title,
+			errLog,
+		)
+	}
+
+	return nil
 }
 
 // Delete deletes a draft notification and its targets.
 func (s *NotificationService) Delete(ctx context.Context, id int64) error {
+	actorID, ok := audit.GetStaffID(ctx)
+	if !ok {
+		return ErrStaffNotFoundOrInactive
+	}
+	_, err := s.staffRepo.FindByID(ctx, actorID)
+	if err != nil {
+		return ErrStaffNotFoundOrInactive
+	}
+
 	notif, err := s.notifRepo.FindByID(ctx, id)
 	if err != nil {
 		return ErrNotificationNotFound
@@ -368,5 +459,74 @@ func (s *NotificationService) Delete(ctx context.Context, id int64) error {
 	if err := s.targetRepo.DeleteByNotification(ctx, id); err != nil {
 		return fmt.Errorf("delete targets: %w", err)
 	}
-	return s.notifRepo.Delete(ctx, id)
+	if err := s.notifRepo.Delete(ctx, id); err != nil {
+		return fmt.Errorf("delete notification: %w", err)
+	}
+
+	if errLog := s.auditService.Log(ctx, audit.LogParams{
+		Action:     audit.ACTION_NOTIFICATION_DELETE,
+		EntityType: audit.ENTITY_TYPE_NOTIFICATION,
+		EntityName: notif.Title,
+		EntityID:   notif.ID,
+		Before:     notif,
+	}); errLog != nil {
+		log.Printf(
+			"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
+			audit.ACTION_NOTIFICATION_DELETE,
+			audit.ENTITY_TYPE_NOTIFICATION,
+			notif.ID,
+			notif.Title,
+			errLog,
+		)
+	}
+
+	return nil
+}
+
+func (s *NotificationService) Send(ctx context.Context, id int64) error {
+	actorID, ok := audit.GetStaffID(ctx)
+	if !ok {
+		return ErrStaffNotFoundOrInactive
+	}
+	_, err := s.staffRepo.FindByID(ctx, actorID)
+	if err != nil {
+		return ErrStaffNotFoundOrInactive
+	}
+
+	// Check if notification exists and is in DRAFT status
+	notif, err := s.GetByID(ctx, id)
+	if err != nil {
+		return ErrNotificationNotFound
+	}
+	if notif.Status != "DRAFT" {
+		return ErrNotificationNotDraft
+	}
+
+	// Publish event to Kafka
+	event := kafka.NotificationSendRequested{
+		NotificationID: id,
+		RequestedAt:    time.Now(),
+	}
+	if err := s.producer.PublishSendRequested(ctx, event); err != nil {
+		return fmt.Errorf("send notification: %w", err)
+	}
+
+	if errLog := s.auditService.Log(ctx, audit.LogParams{
+		Action:     audit.ACTION_NOTIFICATION_SEND,
+		EntityType: audit.ENTITY_TYPE_NOTIFICATION,
+		EntityName: notif.Title,
+		EntityID:   notif.ID,
+		Before:     notif,
+	}); errLog != nil {
+		log.Printf(
+			"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
+			audit.ACTION_NOTIFICATION_SEND,
+			audit.ENTITY_TYPE_NOTIFICATION,
+			notif.ID,
+			notif.Title,
+			errLog,
+		)
+	}
+
+	return nil
 }

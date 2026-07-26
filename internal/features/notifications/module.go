@@ -1,6 +1,7 @@
 package notifications
 
 import (
+	"hello/internal/audit"
 	"hello/internal/config"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
@@ -24,14 +25,16 @@ func NewNotificationModule(queries *sqlc.Queries, cfg *config.ServerConfig, midd
 	templateRepo := repository.NewTemplateRepository(queries)
 	segmentRepo := repository.NewSegmentRepository(queries)
 
-	service := NewNotificationService(
-		notifRepo, targetRepo, deliveryRepo, readRepo,
-		staffRepo, templateRepo, segmentRepo,
-	)
+	auditRepo := repository.NewAuditLogRepository(queries)
+	auditService := audit.NewAuditService(auditRepo)
 
 	producer := kafka.NewProducer(cfg.KafkaBroker, cfg.SendTopic)
+	service := NewNotificationService(
+		notifRepo, targetRepo, deliveryRepo, readRepo,
+		staffRepo, templateRepo, segmentRepo, auditService, producer,
+	)
 
-	handler := NewNotificationHandler(service, producer)
+	handler := NewNotificationHandler(service)
 
 	return &NotificationModule{
 		middlewares: middlewares,

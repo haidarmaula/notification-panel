@@ -6,9 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"time"
 
-	"hello/internal/kafka"
 	"hello/internal/middleware"
 	"hello/internal/token"
 	"hello/pkg/response"
@@ -18,15 +16,13 @@ type contextKeyStaffID struct{}
 
 // NotificationHandler handles HTTP requests for notifications.
 type NotificationHandler struct {
-	service  *NotificationService
-	producer *kafka.Producer
+	service *NotificationService
 }
 
 // NewNotificationHandler creates a new NotificationHandler instance.
-func NewNotificationHandler(service *NotificationService, producer *kafka.Producer) *NotificationHandler {
+func NewNotificationHandler(service *NotificationService) *NotificationHandler {
 	return &NotificationHandler{
-		service:  service,
-		producer: producer,
+		service: service,
 	}
 }
 
@@ -59,7 +55,7 @@ func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 func (h *NotificationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid id")
+		response.JSON(w, http.StatusBadRequest, nil, "invalid notification id")
 		return
 	}
 
@@ -124,6 +120,8 @@ func (h *NotificationHandler) Create(w http.ResponseWriter, r *http.Request) {
 			errors.Is(err, ErrSegmentNotFound), errors.Is(err, ErrInvalidScheduledTime),
 			errors.Is(err, ErrTargetsRequired):
 			response.JSON(w, http.StatusBadRequest, nil, err.Error())
+		case errors.Is(err, ErrStaffNotFoundOrInactive):
+			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
 			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		}
@@ -137,7 +135,7 @@ func (h *NotificationHandler) Create(w http.ResponseWriter, r *http.Request) {
 func (h *NotificationHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid id")
+		response.JSON(w, http.StatusBadRequest, nil, "invalid notification id")
 		return
 	}
 
@@ -166,6 +164,8 @@ func (h *NotificationHandler) Update(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusConflict, nil, err.Error())
 		case errors.Is(err, ErrTemplateNotFound), errors.Is(err, ErrInvalidScheduledTime):
 			response.JSON(w, http.StatusBadRequest, nil, err.Error())
+		case errors.Is(err, ErrStaffNotFoundOrInactive):
+			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
 			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		}
@@ -179,7 +179,7 @@ func (h *NotificationHandler) Update(w http.ResponseWriter, r *http.Request) {
 func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid id")
+		response.JSON(w, http.StatusBadRequest, nil, "invalid notification id")
 		return
 	}
 
@@ -190,6 +190,8 @@ func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 		case errors.Is(err, ErrCannotDeleteSent):
 			response.JSON(w, http.StatusConflict, nil, err.Error())
+		case errors.Is(err, ErrStaffNotFoundOrInactive):
+			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
 			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		}
@@ -208,28 +210,18 @@ func (h *NotificationHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if notification exists and is in DRAFT status
-	notif, err := h.service.GetByID(r.Context(), id)
+	err = h.service.Send(r.Context(), id)
 	if err != nil {
-		if errors.Is(err, ErrNotificationNotFound) {
+		switch {
+		case errors.Is(err, ErrNotificationNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
-			return
+		case errors.Is(err, ErrNotificationNotDraft):
+			response.JSON(w, http.StatusConflict, nil, err.Error())
+		case errors.Is(err, ErrStaffNotFoundOrInactive):
+			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
+		default:
+			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
-		return
-	}
-	if notif.Status != "DRAFT" {
-		response.JSON(w, http.StatusBadRequest, nil, "notification must be in DRAFT status")
-		return
-	}
-
-	// Publish event to Kafka
-	event := kafka.NotificationSendRequested{
-		NotificationID: notif.ID,
-		RequestedAt:    time.Now(),
-	}
-	if err := h.producer.PublishSendRequested(r.Context(), event); err != nil {
-		response.JSON(w, http.StatusInternalServerError, nil, "failed to queue notification")
 		return
 	}
 
