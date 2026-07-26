@@ -54,7 +54,7 @@ func main() {
 	profileModule := profile.NewProfileModule(queries, apiKeyMW.Use, jwtMW.Use)
 	profileModule.RegisterRoutes(mux)
 
-	segmentModule := segments.NewSegmentModule(queries, apiKeyMW.Use, jwtMW.Use)
+	segmentModule := segments.NewSegmentModule(queries, apiKeyMW.Use, jwtMW.Use, auditMW.Use)
 	segmentModule.RegisterRoutes(mux)
 
 	notificationModule := notifications.NewNotificationModule(queries, cfg, apiKeyMW.Use, jwtMW.Use, auditMW.Use)

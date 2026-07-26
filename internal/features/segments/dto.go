@@ -16,13 +16,13 @@ type UpdateSegmentRequest struct {
 
 // SegmentListItem represents a segment in a list view.
 type SegmentListItem struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Description *string   `json:"description,omitempty"`
-	CreatedBy   string    `json:"created_by"`
-	MemberCount int64     `json:"member_count"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID          int64      `json:"id"`
+	Name        string     `json:"name"`
+	Description *string    `json:"description,omitempty"`
+	CreatedBy   StaffBrief `json:"created_by"`
+	MemberCount int64      `json:"member_count"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
 // SegmentDetail represents full segment detail.

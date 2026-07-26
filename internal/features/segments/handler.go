@@ -37,7 +37,10 @@ func (h *SegmentHandler) List(w http.ResponseWriter, r *http.Request) {
 			ID:          s.ID,
 			Name:        s.Name,
 			Description: &s.Description,
-			CreatedBy:   "", // will be filled by fetching staff name, but we can leave empty or fetch in loop
+			CreatedBy: StaffBrief{
+				ID:   s.CreatedBy.ID,
+				Name: s.CreatedBy.Name,
+			},
 			MemberCount: s.MemberCount,
 			CreatedAt:   s.CreatedAt,
 			UpdatedAt:   s.UpdatedAt,
@@ -73,20 +76,13 @@ func (h *SegmentHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Fetch staff name
-	staff, err := h.service.staffRepo.FindByID(r.Context(), segmentWithCount.CreatedBy)
-	staffName := ""
-	if err == nil {
-		staffName = staff.Name
-	}
-
 	detail := SegmentDetail{
 		ID:          segmentWithCount.ID,
 		Name:        segmentWithCount.Name,
 		Description: &segmentWithCount.Description,
 		CreatedBy: StaffBrief{
-			ID:   segmentWithCount.CreatedBy,
-			Name: staffName,
+			ID:   segmentWithCount.CreatedBy.ID,
+			Name: segmentWithCount.CreatedBy.Name,
 		},
 		MemberCount: segmentWithCount.MemberCount,
 		CreatedAt:   segmentWithCount.CreatedAt,
@@ -120,11 +116,14 @@ func (h *SegmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CreatedBy:   staffID,
 	})
 	if err != nil {
-		if errors.Is(err, ErrSegmentNameTaken) {
+		switch {
+		case errors.Is(err, ErrSegmentNameTaken):
 			response.JSON(w, http.StatusConflict, nil, err.Error())
-			return
+		case errors.Is(err, ErrStaffNotFoundOrInactive):
+			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
+		default:
+			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		return
 	}
 
@@ -161,6 +160,8 @@ func (h *SegmentHandler) Update(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 		case errors.Is(err, ErrSegmentNameTaken):
 			response.JSON(w, http.StatusConflict, nil, err.Error())
+		case errors.Is(err, ErrStaffNotFoundOrInactive):
+			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
 			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		}
@@ -188,6 +189,8 @@ func (h *SegmentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 		case errors.Is(err, ErrSegmentHasMembers):
 			response.JSON(w, http.StatusConflict, nil, err.Error())
+		case errors.Is(err, ErrStaffNotFoundOrInactive):
+			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
 			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		}

@@ -49,7 +49,10 @@ Retrieves a paginated list of segments with optional search by name.
       "id": 1,
       "name": "Premium Users",
       "description": "Users with premium subscription",
-      "created_by": "Admin",
+      "created_by": {
+        "id": 5,
+        "name": "Admin"
+      },
       "member_count": 150,
       "created_at": "2025-07-01T10:00:00Z",
       "updated_at": "2025-07-01T10:00:00Z"

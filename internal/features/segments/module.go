@@ -1,6 +1,7 @@
 package segments
 
 import (
+	"hello/internal/audit"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 	"hello/internal/middleware"
@@ -20,7 +21,10 @@ func NewSegmentModule(queries *sqlc.Queries, middlewares ...middleware.Middlewar
 	staffRepo := repository.NewStaffUserRepository(queries)
 	userRepo := repository.NewUserRepository(queries)
 
-	segmentService := NewSegmentService(segmentRepo, memberRepo, staffRepo)
+	auditRepo := repository.NewAuditLogRepository(queries)
+	auditService := audit.NewAuditService(auditRepo)
+
+	segmentService := NewSegmentService(segmentRepo, memberRepo, staffRepo, auditService)
 	segmentHandler := NewSegmentHandler(segmentService)
 
 	membersService := NewMembersService(segmentRepo, memberRepo, userRepo)

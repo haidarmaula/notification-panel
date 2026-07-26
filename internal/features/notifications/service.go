@@ -287,23 +287,6 @@ func (s *NotificationService) Create(ctx context.Context, params CreateParams) (
 		return nil, fmt.Errorf("create notification: %w", err)
 	}
 
-	if errLog := s.auditService.Log(ctx, audit.LogParams{
-		Action:     audit.ACTION_NOTIFICATION_CREATE,
-		EntityType: audit.ENTITY_TYPE_NOTIFICATION,
-		EntityName: notif.Title,
-		EntityID:   notif.ID,
-		After:      notif,
-	}); errLog != nil {
-		log.Printf(
-			"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
-			audit.ACTION_NOTIFICATION_CREATE,
-			audit.ENTITY_TYPE_NOTIFICATION,
-			notif.ID,
-			notif.Title,
-			errLog,
-		)
-	}
-
 	// Create targets based on type
 	if params.TargetType == string(TargetIndividual) {
 		for _, userID := range params.UserIDs {
@@ -343,6 +326,23 @@ func (s *NotificationService) Create(ctx context.Context, params CreateParams) (
 			_ = s.notifRepo.Delete(ctx, notif.ID)
 			return nil, fmt.Errorf("create global target: %w", err)
 		}
+	}
+
+	if errLog := s.auditService.Log(ctx, audit.LogParams{
+		Action:     audit.ACTION_NOTIFICATION_CREATE,
+		EntityType: audit.ENTITY_TYPE_NOTIFICATION,
+		EntityName: notif.Title,
+		EntityID:   notif.ID,
+		After:      notif,
+	}); errLog != nil {
+		log.Printf(
+			"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
+			audit.ACTION_NOTIFICATION_CREATE,
+			audit.ENTITY_TYPE_NOTIFICATION,
+			notif.ID,
+			notif.Title,
+			errLog,
+		)
 	}
 
 	return &CreateNotificationResponse{

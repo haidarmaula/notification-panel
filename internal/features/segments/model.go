@@ -2,12 +2,17 @@ package segments
 
 import "time"
 
+type Actor struct {
+	ID   int64
+	Name string
+}
+
 // Segment represents the domain model for a user segment.
 type Segment struct {
 	ID          int64
 	Name        string
 	Description string
-	CreatedBy   int64
+	CreatedBy   Actor
 	CreatedAt   time.Time
 	UpdatedAt   time.Time
 }
