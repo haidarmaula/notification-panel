@@ -1,0 +1,10 @@
+packages:
+  hello/internal/features/staff:
+    config:
+      dir: internal/features/staff/mocks
+      pkgname: mocks
+      filename: "mocks.go"
+    interfaces:
+      StaffUserRepository: {}
+      RoleRepository: {}
+      AuditService: {}

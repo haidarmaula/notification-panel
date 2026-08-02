@@ -7,7 +7,6 @@ import (
 	"log"
 
 	"hello/internal/audit"
-	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 
 	"golang.org/x/crypto/bcrypt"
@@ -40,13 +39,13 @@ type UpdateStaffParams struct {
 
 // StaffService provides business logic for staff management.
 type StaffService struct {
-	staffRepo    *repository.StaffUserRepository
-	roleRepo     *repository.RoleRepository
-	auditService *audit.AuditService
+	staffRepo    StaffUserRepository
+	roleRepo     RoleRepository
+	auditService AuditService
 }
 
 // NewStaffService creates a new StaffService instance.
-func NewStaffService(staffRepo *repository.StaffUserRepository, roleRepo *repository.RoleRepository, auditService *audit.AuditService) *StaffService {
+func NewStaffService(staffRepo StaffUserRepository, roleRepo RoleRepository, auditService AuditService) *StaffService {
 	return &StaffService{
 		staffRepo:    staffRepo,
 		roleRepo:     roleRepo,

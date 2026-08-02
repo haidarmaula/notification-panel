@@ -1,6 +1,7 @@
 package staff
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
@@ -10,13 +11,23 @@ import (
 	"hello/pkg/response"
 )
 
+type StaffServicer interface {
+	Create(ctx context.Context, params CreateStaffParams) (*Staff, error)
+	GetByID(ctx context.Context, id int64) (*Staff, error)
+	List(ctx context.Context, page, limit int32, search string) ([]Staff, int64, error)
+	Update(ctx context.Context, params UpdateStaffParams) (*Staff, error)
+	UpdateStatus(ctx context.Context, id int64, isActive bool) (*Staff, error)
+	UpdatePassword(ctx context.Context, id int64, newPassword string) error
+	Delete(ctx context.Context, id int64) error
+}
+
 // StaffHandler handles HTTP requests for staff management.
 type StaffHandler struct {
-	service *StaffService
+	service StaffServicer
 }
 
 // NewStaffHandler creates a new StaffHandler instance.
-func NewStaffHandler(service *StaffService) *StaffHandler {
+func NewStaffHandler(service StaffServicer) *StaffHandler {
 	return &StaffHandler{
 		service: service,
 	}
