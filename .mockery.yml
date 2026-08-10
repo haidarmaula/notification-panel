@@ -8,3 +8,13 @@ packages:
       StaffUserRepository: {}
       RoleRepository: {}
       AuditService: {}
+  hello/internal/features/segments:
+    config:
+      dir: internal/features/segments/mocks
+      pkgname: mocks
+      filename: "mocks.go"
+    interfaces:
+      SegmentRepository: {}
+      SegmentMemberRepository: {}
+      StaffUserRepository: {}
+      AuditService: {}

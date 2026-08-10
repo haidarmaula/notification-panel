@@ -7,7 +7,6 @@ import (
 	"log"
 
 	"hello/internal/audit"
-	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -23,18 +22,18 @@ var (
 
 // SegmentService provides business logic for segment management.
 type SegmentService struct {
-	segmentRepo  *repository.SegmentRepository
-	memberRepo   *repository.SegmentMemberRepository
-	staffRepo    *repository.StaffUserRepository
-	auditService *audit.AuditService
+	segmentRepo  SegmentRepository
+	memberRepo   SegmentMemberRepository
+	staffRepo    StaffUserRepository
+	auditService AuditService
 }
 
 // NewSegmentService creates a new SegmentService instance.
 func NewSegmentService(
-	segmentRepo *repository.SegmentRepository,
-	memberRepo *repository.SegmentMemberRepository,
-	staffRepo *repository.StaffUserRepository,
-	auditService *audit.AuditService,
+	segmentRepo SegmentRepository,
+	memberRepo SegmentMemberRepository,
+	staffRepo StaffUserRepository,
+	auditService AuditService,
 ) *SegmentService {
 	return &SegmentService{
 		segmentRepo:  segmentRepo,
