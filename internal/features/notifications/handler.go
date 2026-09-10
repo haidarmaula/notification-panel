@@ -12,14 +12,61 @@ import (
 	"hello/pkg/response"
 )
 
+// contextKeyStaffID is a private type reserved for future use as a context
+// key for staff identity within the notifications feature.
+//
+// It is currently declared but not referenced anywhere in this package. The
+// handler reads the staff identity through getStaffIDFromContext, which
+// uses middleware.UserContextKey — the same key the audit package uses —
+// rather than this type. If a future revision needs a notifications-local
+// context key distinct from the shared middleware key, this is where to
+// add it; until then, the declaration is dead code and can be removed
+// without behavioural effect.
 type contextKeyStaffID struct{}
 
 // NotificationHandler handles HTTP requests for notifications.
+//
+// It is the HTTP adapter for the notification feature: it parses URL path
+// parameters and query strings, decodes and partially validates the JSON
+// request bodies, delegates business logic to NotificationService, and maps
+// service errors to HTTP status codes and the standard response envelope.
+//
+// # Validation split
+//
+// Presence and format checks that can be made without domain knowledge live
+// here: the title and body must be non-empty on create, at least one field
+// must be present on update, the target-type-specific fields must be
+// present for the corresponding type, and the numeric path parameter must
+// parse. Cross-row checks — does the template exist, is the notification in
+// DRAFT, is the scheduled time in the future — live in the service.
+//
+// # Error mapping
+//
+// Every handler maps a set of service sentinels to specific status codes
+// (404, 409, 400, 401) and falls through to a 500 with err.Error() as the
+// message for anything unrecognised. As with the mobile feature's handler,
+// this means any error not explicitly listed is served verbatim to the
+// client — including database errors and wrapped repository errors. The
+// auth feature's handler follows the safer convention of replacing the 500
+// message with a generic string; the two handlers are inconsistent on this
+// point.
+//
+// # Concurrency
+//
+// A NotificationHandler holds only a pointer to its service and is safe for
+// concurrent use. net/http invokes Handle methods from a distinct goroutine
+// per connection; the handler shares no mutable state across those
+// invocations.
 type NotificationHandler struct {
 	service *NotificationService
 }
 
 // NewNotificationHandler creates a new NotificationHandler instance.
+//
+// service must be non-nil; it is stored directly and dereferenced on the
+// first request, so a nil value will panic at request time rather than at
+// construction. In practice the service is wired by the notification
+// module's constructor from the shared dependencies.
 func NewNotificationHandler(service *NotificationService) *NotificationHandler {
 	return &NotificationHandler{
 		service: service,
@@ -28,6 +75,30 @@ func NewNotificationHandler(service *NotificationService) *NotificationHandler {
 
 // List handles GET /api/v1/notifications.
 // Query params: page, limit, status, type (target type), keyword.
+//
+// # Query parameters
+//
+// All four parameters are optional. Page and limit are parsed by
+// getPaginationParams, which applies defaults and clamps out-of-range
+// values; see that function for the exact rules. Status, type, and keyword
+// are passed through to the service as-is. An empty string for any of them
+// is treated as "no filter on that column" by the service's underlying
+// query.
+//
+// # Responses
+//
+//   - 200 OK: a ListNotificationsResponse carrying the current page and the
+//     total matching row count.
+//   - 500 Internal Server Error: any service error, including a repository
+//     failure. The error message is served verbatim from err.Error().
+//
+// The handler does not distinguish "no matching rows" from "empty page of a
+// larger result set"; the client must inspect Pagination.Total.
+//
+// # Concurrency
+//
+// Safe for concurrent use. Each invocation operates on its own request and
+// response writer.
 func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, limit := getPaginationParams(r)
 	status := r.URL.Query().Get("status")
@@ -52,6 +123,24 @@ func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // GetByID handles GET /api/v1/notifications/{id}.
+//
+// # Path parameters
+//
+// The id must be a parseable int64; a missing or malformed value is
+// rejected with 400 before the service is called.
+//
+// # Responses
+//
+//   - 400 Bad Request: the path's id parameter is missing or not a valid
+//     int64.
+//   - 404 Not Found: the service returned ErrNotificationNotFound.
+//   - 500 Internal Server Error: any other service error, served with
+//     err.Error() as the message.
+//   - 200 OK: a NotificationDetail.
+//
+// # Concurrency
+//
+// Safe for concurrent use.
 func (h *NotificationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -73,6 +162,40 @@ func (h *NotificationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 // Create handles POST /api/v1/notifications.
+//
+// # Validation sequence
+//
+// The handler performs the following checks in order, each returning 400
+// with a specific message before the next:
+//
+//  1. The body must decode as JSON.
+//  2. Title and Body must both be non-empty.
+//  3. The staff user must be present in the context (see
+//     getStaffIDFromContext); missing identity yields 401.
+//  4. Type defaults to "BROADCAST" if empty.
+//  5. If Type is "INDIVIDUAL", UserIDs must be non-empty.
+//  6. If Type is "SEGMENT", SegmentID must be non-nil.
+//
+// Cross-row validation (template existence, segment existence, future
+// scheduling time) is performed by the service and surfaced through its
+// sentinels.
+//
+// # Responses
+//
+//   - 400 Bad Request: a JSON decode failure, a missing Title or Body, a
+//     missing target-type-specific field, or a service validation error
+//     (ErrInvalidTargetType, ErrTemplateNotFound, ErrSegmentNotFound,
+//     ErrInvalidScheduledTime, ErrTargetsRequired).
+//   - 401 Unauthorized: the request context lacks a staff identity, or the
+//     service reports the staff user is missing or inactive
+//     (ErrStaffNotFoundOrInactive).
+//   - 500 Internal Server Error: any other service error, served with
+//     err.Error() as the message.
+//   - 201 Created: a CreateNotificationResponse.
+//
+// # Concurrency
+//
+// Safe for concurrent use.
 func (h *NotificationHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateNotificationRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -132,6 +255,32 @@ func (h *NotificationHandler) Create(w http.ResponseWriter, r *http.Request) {
 }
 
 // Update handles PATCH /api/v1/notifications/{id}.
+//
+// # Validation sequence
+//
+//  1. The path's id must parse as int64.
+//  2. The body must decode as JSON.
+//  3. At least one of Title, Body, TemplateID, or ScheduledAt must be
+//     non-nil. An entirely empty update body is rejected with 400.
+//
+// # Responses
+//
+//   - 400 Bad Request: a malformed id, a JSON decode failure, an empty
+//     update body, or a service validation error (ErrTemplateNotFound,
+//     ErrInvalidScheduledTime).
+//   - 404 Not Found: the service returned ErrNotificationNotFound.
+//   - 409 Conflict: the service returned ErrNotificationNotDraft — the
+//     notification has moved past DRAFT and cannot be edited.
+//   - 401 Unauthorized: the service returned ErrStaffNotFoundOrInactive.
+//   - 500 Internal Server Error: any other service error, served with
+//     err.Error() as the message.
+//   - 200 OK: a JSON object with a "message" field. This response does not
+//     echo the updated notification — the client must re-fetch to obtain
+//     the current state.
+//
+// # Concurrency
+//
+// Safe for concurrent use.
 func (h *NotificationHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -176,6 +325,24 @@ func (h *NotificationHandler) Update(w http.ResponseWriter, r *http.Request) {
 }
 
 // Delete handles DELETE /api/v1/notifications/{id}.
+//
+// # Responses
+//
+//   - 400 Bad Request: the path's id parameter is missing or malformed.
+//   - 404 Not Found: the service returned ErrNotificationNotFound.
+//   - 409 Conflict: the service returned ErrCannotDeleteSent — the
+//     notification has been sent and cannot be deleted. Only notifications
+//     in DRAFT (and, depending on the service's rules, SCHEDULED) are
+//     eligible for deletion.
+//   - 401 Unauthorized: the service returned ErrStaffNotFoundOrInactive.
+//   - 500 Internal Server Error: any other service error, served with
+//     err.Error() as the message.
+//   - 200 OK: no payload; the "deleted" message accompanies a nil data
+//     field.
+//
+// # Concurrency
+//
+// Safe for concurrent use.
 func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -203,6 +370,46 @@ func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 // Send handles POST /api/v1/notifications/{id}/send.
 // It publishes a send requested event to Kafka.
+//
+// # Flow
+//
+// The handler parses the id, calls the service's Send method, and — on
+// success — returns 202 Accepted. The 202 status is deliberate: the send
+// endpoint does not wait for delivery to complete, only for the notification
+// to be queued. Actual dispatch happens asynchronously via the Kafka
+// pipeline, and the client is expected to poll the detail endpoint to
+// observe the notification's status transitions from QUEUED through
+// COMPLETED.
+//
+// # Responses
+//
+//   - 400 Bad Request: the path's id parameter is missing or malformed.
+//   - 404 Not Found: the service returned ErrNotificationNotFound.
+//   - 409 Conflict: the service returned ErrNotificationNotDraft — the
+//     notification is not in DRAFT, so it cannot be sent. Notably this
+//     includes a notification that has already been sent: the caller must
+//     check status before retrying.
+//   - 401 Unauthorized: the service returned ErrStaffNotFoundOrInactive.
+//   - 500 Internal Server Error: any other service error, served with
+//     err.Error() as the message.
+//   - 202 Accepted: a JSON object with a "message" field confirming that
+//     the notification has been queued for sending. The 202 does not
+//     guarantee that the Kafka publish succeeded — see below.
+//
+// # Kafka publish failure
+//
+// The service's Send method is responsible for publishing the Kafka event.
+// A publish failure is currently surfaced to the handler's default branch
+// and served as a 500; a client that receives a 202 can therefore be
+// reasonably confident that the event was published. The service's
+// implementation should be consulted for the exact ordering — whether the
+// status transition to QUEUED occurs before or after the publish — because
+// a failure between the two would leave the notification queued in the
+// database with no corresponding Kafka event.
+//
+// # Concurrency
+//
+// Safe for concurrent use.
 func (h *NotificationHandler) Send(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -231,6 +438,24 @@ func (h *NotificationHandler) Send(w http.ResponseWriter, r *http.Request) {
 }
 
 // parseInt64FromPath extracts and parses int64 from URL path parameter.
+//
+// # Parameters
+//
+// r is the incoming request; key is the name of the path parameter as
+// declared in the ServeMux pattern — for example, "id" for a route
+// registered as "GET /api/v1/notifications/{id}". The function reads the
+// value via r.PathValue, which is only populated for patterns registered
+// with the Go 1.22 method-and-wildcard syntax.
+//
+// # Behaviour
+//
+// An empty path value (unlikely for a matched route) or a non-numeric
+// string both produce a non-nil error; the caller is expected to map any
+// error to a 400. The returned int64 on error is 0, but callers should
+// treat the value as unspecified when the error is non-nil.
+//
+// The function does not range-check the parsed value; a caller-supplied
+// negative number is accepted and returned as-is.
 func parseInt64FromPath(r *http.Request, key string) (int64, error) {
 	raw := r.PathValue(key)
 	if raw == "" {
@@ -240,6 +465,33 @@ func parseInt64FromPath(r *http.Request, key string) (int64, error) {
 }
 
 // getPaginationParams extracts page and limit from query parameters.
+//
+// # Defaults and clamping
+//
+// The function applies a default of page=1 and limit=10 when a parameter is
+// absent. It also silently clamps out-of-range values rather than rejecting
+// them:
+//
+//   - A page value that fails to parse, or that parses to zero or a
+//     negative number, is replaced by 1. The client receives the default
+//     page without any indication that the requested page was invalid.
+//   - A limit value that fails to parse, or that parses to zero, a
+//     negative number, or a value greater than 100, is replaced by 10. A
+//     client requesting limit=5000 therefore receives a page of 10 items
+//     with no indication that its requested limit was rejected.
+//
+// This silent-clamping behaviour is a deliberate API design choice — the
+// alternative would be a 400 for out-of-range values — but it means the
+// values echoed back in the Pagination response are not necessarily the
+// values the client sent. Clients should treat the response's Limit field
+// as authoritative.
+//
+// # Not validated here
+//
+// The function does not validate the interaction between page and limit;
+// an out-of-range page (for example, page 100 when only 3 pages exist)
+// yields an empty Data slice with a non-zero Total, which the client must
+// interpret.
 func getPaginationParams(r *http.Request) (page, limit int32) {
 	page = 1
 	limit = 10
@@ -257,6 +509,32 @@ func getPaginationParams(r *http.Request) (page, limit int32) {
 }
 
 // getStaffIDFromContext retrieves staff ID from context.
+//
+// It reads middleware.UserContextKey and type-asserts the value to
+// *token.AccessClaims, returning the StaffID field and a boolean
+// indicating whether a valid claim was found. An empty claims value, a
+// wrong type at the key, or a missing key all yield (0, false); the
+// handler treats that result as an unauthenticated request and returns
+// 401.
+//
+// # Duplication with the audit package
+//
+// This function is semantically identical to audit.GetStaffID: both read
+// the same context key, perform the same type assertion, and return the
+// same two values. The two exist because the notifications package cannot
+// import the audit package without creating a cycle — the audit package
+// imports middleware, and the notifications package imports both. A
+// future refactor that moves the extraction helper into a shared
+// dependency-free location would eliminate the duplication; the comment
+// here documents the state so that a change to the context representation
+// is applied in both places.
+//
+// # Staff ID semantics
+//
+// The returned ID is the internal staff_users.id, not any external
+// identifier. A returned value of 0 with ok == true is theoretically
+// possible (a token with a StaffID of 0) but is treated as unauthenticated
+// by the callers, which check both ok and staffID != 0.
 func getStaffIDFromContext(ctx context.Context) (int64, bool) {
 	claims, ok := ctx.Value(middleware.UserContextKey).(*token.AccessClaims)
 	if !ok || claims == nil {

@@ -6,6 +6,44 @@ import (
 )
 
 // RegisterRoutes registers all staff endpoints with the provided ServeMux.
+//
+// # Endpoints
+//
+//   - GET    /api/v1/staff                    — StaffHandler.List
+//   - GET    /api/v1/staff/{id}               — StaffHandler.GetByID
+//   - POST   /api/v1/staff                    — StaffHandler.Create
+//   - PATCH  /api/v1/staff/{id}               — StaffHandler.Update
+//   - PATCH  /api/v1/staff/{id}/status        — StaffHandler.UpdateStatus
+//   - PATCH  /api/v1/staff/{id}/password      — StaffHandler.UpdatePassword
+//   - DELETE /api/v1/staff/{id}               — StaffHandler.Delete
+//
+// Every route is wrapped by the module's middleware chain, which the
+// caller supplied at construction time — in the current wiring the
+// API-key, JWT, super-admin, and audit middlewares. The super-admin gate
+// is what makes these endpoints administrative: only a super-admin can
+// invoke any of them. There is no unauthenticated or role-unrestricted
+// route in this feature.
+//
+// # Prefix convention
+//
+// As with the profile module, this module declares only the "/api/v1"
+// prefix and appends the "staff" segment per route, rather than declaring
+// the full "/api/v1/staff" prefix as a constant. The two conventions are
+// equivalent in effect; the difference is stylistic and worth knowing
+// when scanning route registrations across the codebase.
+//
+// # Routing syntax
+//
+// The patterns use the method-aware ServeMux syntax introduced in Go 1.22.
+// A GET to a PATCH-only route and vice versa is answered with 405 rather
+// than being routed. The {id} segment is a wildcard whose value is read
+// by the handlers via r.PathValue.
+//
+// # Concurrency
+//
+// RegisterRoutes is expected to be invoked once during startup, before the
+// HTTP server begins listening. It is not safe to call concurrently with
+// requests being served.
 func (m *StaffModule) RegisterRoutes(mux *http.ServeMux) {
 	const prefix = "/api/v1"
 

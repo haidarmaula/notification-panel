@@ -11,22 +11,105 @@ import (
 	"hello/pkg/response"
 )
 
+// StaffServicer is the service contract the StaffHandler depends on.
+//
+// It is declared here rather than in interfaces.go, and it is unusual in
+// two respects. First, it is the only handler-side interface in the
+// codebase: every other feature module wires its handler to a concrete
+// *Service type. Second, its method set is exactly the public API of the
+// staff service, so the interface is a full abstraction rather than a
+// narrow slice of what the handler needs.
+//
+// # Rationale
+//
+// The interface exists for testability. A test can substitute a fake
+// implementation of StaffServicer without constructing the real service,
+// its repositories, or their dependencies. The trade-off is that the
+// interface must be kept in sync with the concrete service: adding a
+// method to *StaffService does not automatically expose it to the
+// handler, and a signature mismatch between an interface method and its
+// concrete implementation surfaces as a compile error at the wiring site
+// rather than here.
+//
+// # Context passing
+//
+// Every method takes a context.Context as its first parameter. This is
+// the request context from the HTTP layer, and it carries the acting
+// staff user's identity (via middleware.UserContextKey). The service
+// reads that identity for the self-deletion check (see Delete) and for
+// audit-log attribution.
 type StaffServicer interface {
+	// Create provisions a new staff account. See StaffService.Create for
+	// the validation and error semantics.
 	Create(ctx context.Context, params CreateStaffParams) (*Staff, error)
+
+	// GetByID loads a single staff user by ID. See StaffService.GetByID.
 	GetByID(ctx context.Context, id int64) (*Staff, error)
+
+	// List returns a page of staff users, optionally filtered by a search
+	// keyword. See StaffService.List.
 	List(ctx context.Context, page, limit int32, search string) ([]Staff, int64, error)
+
+	// Update applies a metadata update to an existing staff user. See
+	// StaffService.Update.
 	Update(ctx context.Context, params UpdateStaffParams) (*Staff, error)
+
+	// UpdateStatus activates or deactivates a staff account. See
+	// StaffService.UpdateStatus.
 	UpdateStatus(ctx context.Context, id int64, isActive bool) (*Staff, error)
+
+	// UpdatePassword replaces the stored bcrypt hash for a staff account.
+	// See StaffService.UpdatePassword.
 	UpdatePassword(ctx context.Context, id int64, newPassword string) error
+
+	// Delete removes a staff account. See StaffService.Delete for the
+	// self-deletion guard.
 	Delete(ctx context.Context, id int64) error
 }
 
 // StaffHandler handles HTTP requests for staff management.
+//
+// It is the HTTP adapter for the staff feature: it parses URL path
+// parameters and query strings, decodes and validates JSON request
+// bodies, delegates business logic to a StaffServicer, and maps the
+// service's domain errors to HTTP status codes and the standard response
+// envelope.
+//
+// # Dependency on an interface
+//
+// As documented on StaffServicer, this handler depends on an interface
+// rather than on the concrete *StaffService type. Every other handler in
+// the codebase wires directly to a concrete service. The interface is a
+// testability seam; the concrete implementation passed by the module is
+// *StaffService.
+//
+// # Error mapping
+//
+// Each method recognises a small set of service sentinels
+// (ErrStaffNotFound, ErrEmailAlreadyRegistered, ErrInvalidRole,
+// ErrCannotDeleteSelf) and maps them to status codes. Any unrecognised
+// error — including repository failures and wrapped errors from the
+// service — falls through to a 500 whose response body carries
+// err.Error() verbatim. This is the same disclosure pattern used by the
+// notifications, mobile, segments, and profile features; the auth feature
+// is the only handler that replaces the 500 message with a generic string.
+//
+// # Concurrency
+//
+// A StaffHandler holds only a StaffServicer and is safe for concurrent
+// use. net/http invokes Handle methods from a distinct goroutine per
+// connection; the handler shares no mutable state across those
+// invocations.
 type StaffHandler struct {
 	service StaffServicer
 }
 
 // NewStaffHandler creates a new StaffHandler instance.
+//
+// service must be non-nil; it is stored directly and dereferenced on the
+// first request, so a nil value will panic at request time rather than at
+// construction. In practice the service is wired by the staff module's
+// constructor from the concrete *StaffService; a test may pass a fake.
 func NewStaffHandler(service StaffServicer) *StaffHandler {
 	return &StaffHandler{
 		service: service,
@@ -36,6 +119,31 @@ func NewStaffHandler(service StaffServicer) *StaffHandler {
 // Create handles POST /api/v1/staff.
 // It validates the request, creates a new staff user, and returns 201 Created.
 // Returns 400 for validation errors, 409 for duplicate email, and 500 for internal errors.
+//
+// # Validation
+//
+// The handler decodes the body and rejects a request where any of Role,
+// Name, Email, or Password is empty. Deeper validation — role existence,
+// email uniqueness, password strength — is the service's responsibility.
+//
+// # Responses
+//
+//   - 400 Bad Request: the body could not be decoded, a required field
+//     was empty, or the service returned ErrInvalidRole (the role name
+//     did not resolve to a row).
+//   - 409 Conflict: the service returned ErrEmailAlreadyRegistered — a
+//     staff user with the same email already exists. The check is
+//     advisory; a concurrent create with the same email can race past
+//     it, and the resulting outcome depends on the schema's unique
+//     constraint — see the service's Create for details.
+//   - 500 Internal Server Error: any other service error, served with
+//     err.Error() as the message.
+//   - 201 Created: the created StaffResponse, under the message "staff
+//     created".
+//
+// # Concurrency
+//
+// Safe for concurrent use.
 func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateStaffRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -71,6 +179,19 @@ func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 // GetByID handles GET /api/v1/staff/{id}.
 // It retrieves a staff user by ID and returns 200 OK with staff data.
 // Returns 404 if the staff user is not found.
+//
+// # Responses
+//
+//   - 400 Bad Request: the path's id parameter is missing or not a valid
+//     int64.
+//   - 404 Not Found: the service returned ErrStaffNotFound.
+//   - 500 Internal Server Error: any other service error, served with
+//     err.Error() as the message.
+//   - 200 OK: the StaffResponse for the identified user.
+//
+// # Concurrency
+//
+// Safe for concurrent use.
 func (h *StaffHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -92,6 +213,32 @@ func (h *StaffHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // List handles GET /api/v1/staff.
 // It returns a paginated list of staff users with optional search by name/email.
 // Query params: page, limit, search.
+//
+// # Query parameters
+//
+// page and limit are parsed by getPaginationParams with the defaults and
+// clamping policy documented on that helper. search is an optional
+// keyword passed through to the service; an empty search selects the
+// unfiltered list path.
+//
+// # TotalPages computation
+//
+// The handler computes TotalPages as ceiling division of Total by Limit.
+// Unlike the segments and notifications features, which leave this
+// computation to the client, this response carries the pre-computed
+// value. The two conventions coexist in the codebase; a client that
+// consumes multiple list endpoints must not assume a uniform shape.
+//
+// # Responses
+//
+//   - 200 OK: a ListStaffResponse with the current page, total, and page
+//     count.
+//   - 500 Internal Server Error: any service error, served with
+//     err.Error() as the message.
+//
+// # Concurrency
+//
+// Safe for concurrent use.
 func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 	page, limit := getPaginationParams(r)
 	search := r.URL.Query().Get("search")
@@ -121,6 +268,29 @@ func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 // Update handles PATCH /api/v1/staff/{id}.
 // It updates a staff user's role, name, or email.
 // Returns 200 OK with updated staff data, 404 if not found, 400 for invalid input.
+//
+// # Validation
+//
+// The handler decodes the body and rejects a request where all three of
+// Role, Name, and Email are empty. Because the DTO's fields are plain
+// strings, an empty value for one field means "leave that field
+// unchanged" at the service layer — a client that supplies only Role
+// leaves Name and Email untouched. A client that wants to change a field
+// to the empty string cannot do so through this API.
+//
+// # Responses
+//
+//   - 400 Bad Request: a malformed id, a JSON decode failure, a body with
+//     all three fields empty, or the service returned ErrInvalidRole.
+//   - 404 Not Found: the service returned ErrStaffNotFound.
+//   - 500 Internal Server Error: any other service error, served with
+//     err.Error() as the message.
+//   - 200 OK: the updated StaffResponse, under the message "staff
+//     updated".
+//
+// # Concurrency
+//
+// Safe for concurrent use.
 func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -160,6 +330,28 @@ func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 // UpdateStatus handles PATCH /api/v1/staff/{id}/status.
 // It updates the active status of a staff user.
 // Returns 200 OK with updated staff data, 404 if not found.
+//
+// # Absent-field behaviour
+//
+// Because UpdateStatusRequest.IsActive is a plain bool, a request body
+// that omits the field is indistinguishable from a body that explicitly
+// sets it to false. Both deactivate the account. A client that intends to
+// leave the status unchanged cannot express that intent through this
+// endpoint.
+//
+// # Responses
+//
+//   - 400 Bad Request: a malformed id or a JSON decode failure.
+//   - 404 Not Found: the service returned ErrStaffNotFound.
+//   - 500 Internal Server Error: any other service error, served with
+//     err.Error() as the message.
+//   - 200 OK: the updated StaffResponse, under the message "status
+//     updated".
+//
+// # Concurrency
+//
+// Safe for concurrent use. Two concurrent status changes on the same
+// account are not serialised; the last write wins.
 func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -186,6 +378,38 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 // UpdatePassword handles PATCH /api/v1/staff/{id}/password.
 // It updates the password of a staff user.
 // Returns 200 OK on success, 404 if not found, 400 if password is empty.
+//
+// # Administrative reset
+//
+// This is an administrative password reset: the endpoint accepts the new
+// password without requiring the current one, on the assumption that the
+// caller is a super-admin acting on someone else's account. This is the
+// distinction from the profile feature's UpdatePassword, which requires
+// the caller to supply their current password — the two features have
+// distinct authorisation models.
+//
+// # Existing sessions
+//
+// A successful password change does not invalidate the target account's
+// existing access or refresh tokens. Any active session on the account
+// continues to work until its tokens expire; the new password is required
+// only for the next login. This is the codebase's no-revocation model,
+// and it means an admin-triggered password reset is not sufficient on its
+// own to force a compromised session to end.
+//
+// # Responses
+//
+//   - 400 Bad Request: a malformed id, a JSON decode failure, or an empty
+//     password.
+//   - 404 Not Found: the service returned ErrStaffNotFound.
+//   - 500 Internal Server Error: any other service error, served with
+//     err.Error() as the message.
+//   - 200 OK: no data payload; the message "password updated" accompanies
+//     a nil data field.
+//
+// # Concurrency
+//
+// Safe for concurrent use.
 func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -217,6 +441,33 @@ func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 // Returns 200 OK on successful deletion, 400 for invalid ID format,
 // 403 if the actor attempts to delete their own account,
 // 404 if the staff user does not exist, and 500 for internal errors.
+//
+// # Self-deletion guard
+//
+// The handler does not itself check whether the acting staff user is the
+// target of the delete. That check is performed by the service, which
+// reads the acting identity from the request context and compares it to
+// the path's id. When the two match, the service returns
+// ErrCannotDeleteSelf, which the handler maps to 403 Forbidden.
+//
+// The reason for the guard is practical: a super-admin who deleted their
+// own account would be unable to log in again, and no other account may
+// exist to restore them. The service prevents the lockout at the source.
+//
+// # Responses
+//
+//   - 400 Bad Request: the path's id parameter is missing or malformed.
+//   - 403 Forbidden: the service returned ErrCannotDeleteSelf — the
+//     acting staff user attempted to delete their own account.
+//   - 404 Not Found: the service returned ErrStaffNotFound.
+//   - 500 Internal Server Error: any other service error, served with
+//     err.Error() as the message.
+//   - 200 OK: no data payload; the message "staff user deleted"
+//     accompanies a nil data field.
+//
+// # Concurrency
+//
+// Safe for concurrent use.
 func (h *StaffHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -238,6 +489,21 @@ func (h *StaffHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // toStaffResponse converts a domain Staff object to a StaffResponse DTO.
+//
+// The conversion is a field-by-field copy with one transformation beyond
+// the direct assignment: CreatedAt and UpdatedAt are formatted to RFC3339
+// strings. This is why StaffResponse's timestamp fields are typed as
+// string rather than time.Time — the formatting is done here rather than
+// relying on encoding/json's default time.Time marshalling.
+//
+// The two encodings produce the same wire format for UTC timestamps, so no
+// client-visible difference arises from this choice. The function is
+// unexported because the conversion is an implementation detail of this
+// package's response shaping.
+//
+// s must be non-nil; the function dereferences it immediately. In the
+// current call sites the service guarantees a non-nil Staff on a nil
+// error, so the precondition is honoured by construction.
 func toStaffResponse(s *Staff) StaffResponse {
 	return StaffResponse{
 		ID:        s.ID,
@@ -252,6 +518,28 @@ func toStaffResponse(s *Staff) StaffResponse {
 }
 
 // parseInt64FromPath extracts and parses an int64 from a URL path parameter.
+//
+// # Behaviour
+//
+// The function reads the path parameter named by key via r.PathValue,
+// which is populated only for routes registered with the Go 1.22
+// method-and-wildcard ServeMux syntax. An empty value or a non-numeric
+// string both produce a non-nil error; the caller is expected to map any
+// error to a 400. The returned int64 on error is 0, but callers should
+// treat the value as unspecified when the error is non-nil.
+//
+// The function does not range-check the parsed value; a caller-supplied
+// negative number is accepted and returned as-is. It also does not
+// distinguish "the parameter was missing" from "the parameter was not a
+// number" — both produce an error whose message is "missing id".
+//
+// # Duplication
+//
+// This is at least the fifth copy of this helper in the codebase — the
+// others appear in the notifications, segments, and (depending on the
+// file layout) mobile and users features. All five are unexported and
+// identical. A future refactor that extracts these into a shared
+// request-parsing helper package would collapse the copies into one.
 func parseInt64FromPath(r *http.Request, key string) (int64, error) {
 	raw := r.PathValue(key)
 	if raw == "" {
@@ -261,6 +549,28 @@ func parseInt64FromPath(r *http.Request, key string) (int64, error) {
 }
 
 // getPaginationParams extracts page and limit from query parameters with defaults.
+//
+// # Defaults and clamping
+//
+// The function applies a default of page=1 and limit=10 when a parameter
+// is absent, and silently clamps out-of-range values rather than rejecting
+// them:
+//
+//   - A page value that fails to parse, or that parses to zero or a
+//     negative number, is replaced by 1.
+//   - A limit value that fails to parse, or that parses to zero, a
+//     negative number, or a value greater than 100, is replaced by 10.
+//
+// Clients should treat the values echoed in the response's Page and Limit
+// fields as authoritative, not the values they sent.
+//
+// # Duplication
+//
+// This function is byte-for-byte identical to the versions in
+// notifications, segments, and (if present) mobile and users. As with
+// parseInt64FromPath, the duplication is due to the helpers being
+// unexported in each package; a shared request-parsing helper package
+// would collapse them.
 func getPaginationParams(r *http.Request) (page, limit int32) {
 	page = 1
 	limit = 10
