@@ -124,12 +124,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 //   - 400 Bad Request: the request body could not be decoded as JSON.
 //   - 401 Unauthorized: the refresh token was missing, malformed, expired,
 //     signed with the wrong secret, or of the wrong class (for example, an
-//     access token presented as a refresh token). All of these collapse to
-//     token.ErrInvalidToken, and the message is taken from that sentinel;
-//     the response does not distinguish the cases.
-//   - 500 Internal Server Error: any other service error — typically a
-//     database failure while re-reading the staff user to confirm the
-//     current role.
+//     access token presented as a refresh token); or the token was valid but
+//     the referenced staff account no longer exists or has been deactivated.
+//     The first class collapses to token.ErrInvalidToken and the second to
+//     ErrInvalidCredentials, but both are served the same 401 status so the
+//     client cannot distinguish the cases.
+//   - 500 Internal Server Error: any other service error — a database or
+//     role-resolution failure during token refresh.
 //   - 200 OK: a RefreshTokenResponse with a newly minted access token. The
 //     refresh token is not rotated and is not returned again.
 //
@@ -161,7 +162,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		switch {
-		case errors.Is(err, token.ErrInvalidToken):
+		case errors.Is(err, token.ErrInvalidToken), errors.Is(err, ErrInvalidCredentials):
 			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
 			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
