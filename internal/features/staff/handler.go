@@ -283,6 +283,8 @@ func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 //   - 400 Bad Request: a malformed id, a JSON decode failure, a body with
 //     all three fields empty, or the service returned ErrInvalidRole.
 //   - 404 Not Found: the service returned ErrStaffNotFound.
+//   - 409 Conflict: the service returned ErrEmailAlreadyUsed — the new
+//     email collides with another staff user's email.
 //   - 500 Internal Server Error: any other service error, served with
 //     err.Error() as the message.
 //   - 200 OK: the updated StaffResponse, under the message "staff
@@ -319,6 +321,8 @@ func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 		case errors.Is(err, ErrInvalidRole):
 			response.JSON(w, http.StatusBadRequest, nil, err.Error())
+		case errors.Is(err, ErrEmailAlreadyUsed):
+			response.JSON(w, http.StatusConflict, nil, err.Error())
 		default:
 			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
 		}
