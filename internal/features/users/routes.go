@@ -27,15 +27,11 @@ import (
 //   - PATCH  /api/v1/device-tokens/{id}          — DeviceTokenHandler.Update
 //   - DELETE /api/v1/device-tokens/{id}          — DeviceTokenHandler.Delete
 //
-// Every route is wrapped by the module's middleware chain, which the
-// caller supplied at construction time — in the current wiring the
-// API-key and JWT middlewares. There is no unauthenticated route in this
-// feature, but note the divergence in trust model between the two
-// families: the /users/* routes are admin-facing (the caller is expected
-// to be an authenticated staff user), while the /device-tokens/* routes
-// are the mobile-facing registration surface documented on
-// DeviceTokenHandler, where authentication is by API key only and the
-// target user ID is supplied by the caller.
+// The /users/* routes use the admin middleware chain (API key plus staff
+// JWT in the current wiring). The /device-tokens/* routes instead use the
+// mobile middleware chain, which verifies a Laravel JWT and derives the
+// caller's external user ID from its claims. No device-token operation
+// trusts a user ID supplied by the request.
 //
 // # Routing precedence
 //
@@ -51,9 +47,8 @@ import (
 // The module registers routes under two path prefixes: the user-facing
 // /api/v1/users/* group and the top-level /api/v1/device-tokens group.
 // The device-tokens group is not nested under /users/ because a device
-// token is addressed by its own ID, not by the user it belongs to — the
-// Register endpoint accepts the user ID from the request body rather than
-// the URL.
+// token is addressed by its own ID, not by the user it belongs to. The
+// authenticated user comes from the mobile JWT rather than the URL or body.
 //
 // # Concurrency
 //
@@ -62,20 +57,21 @@ import (
 // requests being served.
 func (m *UserModule) RegisterRoutes(mux *http.ServeMux) {
 	const prefix = "/api/v1"
-	use := middleware.Chain(m.middlewares...)
+	useAdmin := middleware.Chain(m.adminMiddlewares...)
+	useDevice := middleware.Chain(m.deviceMiddlewares...)
 
 	// User endpoints (admin)
-	mux.HandleFunc("GET "+prefix+"/users", use(m.handler.List))
-	mux.HandleFunc("GET "+prefix+"/users/search", use(m.handler.Search))
-	mux.HandleFunc("GET "+prefix+"/users/{id}", use(m.handler.GetByID))
-	mux.HandleFunc("GET "+prefix+"/users/{id}/segments", use(m.handler.GetUserSegments))
-	mux.HandleFunc("GET "+prefix+"/users/{id}/notifications", use(m.handler.GetUserNotifications))
+	mux.HandleFunc("GET "+prefix+"/users", useAdmin(m.handler.List))
+	mux.HandleFunc("GET "+prefix+"/users/search", useAdmin(m.handler.Search))
+	mux.HandleFunc("GET "+prefix+"/users/{id}", useAdmin(m.handler.GetByID))
+	mux.HandleFunc("GET "+prefix+"/users/{id}/segments", useAdmin(m.handler.GetUserSegments))
+	mux.HandleFunc("GET "+prefix+"/users/{id}/notifications", useAdmin(m.handler.GetUserNotifications))
 
 	// User device tokens (admin view)
-	mux.HandleFunc("GET "+prefix+"/users/{id}/device-tokens", use(m.deviceTokenHandler.ListByUser))
+	mux.HandleFunc("GET "+prefix+"/users/{id}/device-tokens", useAdmin(m.deviceTokenHandler.ListByUser))
 
 	// Device token management (mobile API)
-	mux.HandleFunc("POST "+prefix+"/device-tokens", use(m.deviceTokenHandler.Register))
-	mux.HandleFunc("PATCH "+prefix+"/device-tokens/{id}", use(m.deviceTokenHandler.Update))
-	mux.HandleFunc("DELETE "+prefix+"/device-tokens/{id}", use(m.deviceTokenHandler.Delete))
+	mux.HandleFunc("POST "+prefix+"/device-tokens", useDevice(m.deviceTokenHandler.Register))
+	mux.HandleFunc("PATCH "+prefix+"/device-tokens/{id}", useDevice(m.deviceTokenHandler.Update))
+	mux.HandleFunc("DELETE "+prefix+"/device-tokens/{id}", useDevice(m.deviceTokenHandler.Delete))
 }

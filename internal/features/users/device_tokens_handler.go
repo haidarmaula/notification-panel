@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"time"
 
+	"hello/internal/middleware"
 	"hello/pkg/response"
 )
 
@@ -13,36 +14,23 @@ import (
 //
 // It is the HTTP adapter for the device-token CRUD surface: listing a
 // user's tokens, registering a new one, updating a token's metadata, and
-// deleting a token. It shares the UserService with UserHandler; the two
-// handlers are wired into the same module and apply the same middleware
-// chain.
+// deleting a token. It shares the UserService with UserHandler, but the
+// direct device-token routes use a mobile JWT middleware chain while the
+// administrative user routes use staff authentication.
 //
 // # Relationship to the mobile feature's sync endpoint
 //
-// The Register method on this handler overlaps in function with the
-// mobile feature's POST /api/v1/mobile/sync endpoint. Both end up
-// creating or refreshing a device_tokens row for a user. The two differ
-// in authentication model:
-//
-//   - The mobile feature's sync endpoint authenticates the caller with a
-//     Laravel-issued JWT and derives the user ID from the token's
-//     claims. The caller cannot register a device for a user other than
-//     themselves; the trust boundary is the JWT.
-//   - This handler's Register endpoint accepts the target user ID from
-//     the request body and does not authenticate the caller beyond the
-//     shared API key. The trust boundary is the API key.
-//
-// The Register endpoint is therefore intended for first-party
-// server-to-server integrations — a trusted backend that knows the user
-// ID and is authorised to register a device on the user's behalf. It
-// must not be exposed to untrusted clients, because any caller able to
-// present the API key can register a device for any user.
+// The Register, Update, and Delete methods overlap with the mobile
+// feature's POST /api/v1/mobile/sync endpoint. Direct device-token routes
+// require a Laravel-issued bearer JWT; their authenticated external_id is
+// resolved to the local user and is used for every ownership decision.
+// Request bodies and paths never supply the authenticated user identity.
 //
 // # Error mapping
 //
 // Each method recognises a small set of service sentinels
-// (ErrUserNotFound, ErrDeviceTokenNotFound, ErrDeviceTokenDuplicate,
-// ErrInvalidPlatform) and maps them to status codes. Any unrecognised
+// (ErrUserNotFound, ErrDeviceTokenNotFound, ErrDeviceTokenForbidden,
+// ErrDeviceTokenDuplicate, ErrInvalidPlatform) and maps them to status codes. Any unrecognised
 // error falls through to a 500 whose response body carries err.Error()
 // verbatim — the same disclosure pattern used elsewhere in this
 // codebase.
@@ -143,35 +131,21 @@ func (h *DeviceTokenHandler) ListByUser(w http.ResponseWriter, r *http.Request) 
 //
 // # Request shape
 //
-// The body is decoded into an anonymous struct that embeds
-// RegisterDeviceTokenRequest and adds a top-level UserID field. The
-// effect is that the JSON body is flat — user_id, platform, push_token,
-// installation_id, etc. all appear at the top level — rather than
-// nesting the device fields under a device_token key as the mobile
-// feature's sync request does. This is a wire-format divergence between
-// the two registration endpoints; a client targeting one cannot
-// trivially reuse its request builder for the other.
+// The JSON body is RegisterDeviceTokenRequest. It contains device metadata
+// only; user_id is deliberately absent because ownership comes from the
+// verified mobile JWT rather than client-controlled input.
 //
 // # Trust model
 //
-// The endpoint authenticates the caller only with the shared API key; it
-// does not inspect a JWT and does not verify that the caller is
-// authorised to register a device on behalf of the supplied user_id. Any
-// caller able to present the API key can register a device for any user.
-//
-// This is materially weaker than the mobile feature's sync endpoint,
-// which derives the user identity from a verified JWT. The Register
-// endpoint is intended for trusted first-party callers, and the API-key
-// gate is the only thing standing between an attacker who obtains the
-// key and the ability to attach arbitrary devices to arbitrary accounts.
-// The endpoint should not be exposed to client-side or third-party
-// integrations.
+// MobileJWTMiddleware verifies the Laravel JWT before this handler runs and
+// puts its external_id in context. The handler resolves that identity through
+// the service, so a caller cannot register a device for another user.
 //
 // # Validation
 //
-// Three presence checks are performed before the service is called:
-// user_id must be non-zero, push_token must be non-empty, and platform
-// must be non-empty. Deeper validation — that the user exists, that the
+// Two presence checks are performed before the service is called:
+// push_token must be non-empty and platform must be non-empty. Deeper
+// validation — that the authenticated user exists, that the
 // platform is a recognised value, that the push token is not already
 // registered — is the service's responsibility.
 //
@@ -187,11 +161,11 @@ func (h *DeviceTokenHandler) ListByUser(w http.ResponseWriter, r *http.Request) 
 //
 // # Responses
 //
-//   - 400 Bad Request: the body could not be decoded, user_id was
-//     zero, push_token was empty, platform was empty, or the service
+//   - 400 Bad Request: the body could not be decoded, push_token was empty,
+//     platform was empty, or the service
 //     returned ErrInvalidPlatform.
 //   - 404 Not Found: the service returned ErrUserNotFound — the
-//     supplied user_id does not resolve to a row.
+//     authenticated user does not resolve to a local row.
 //   - 409 Conflict: the service returned ErrDeviceTokenDuplicate — a
 //     device with the same push token is already registered. The check
 //     is advisory; see the service's RegisterDeviceToken for the
@@ -204,16 +178,9 @@ func (h *DeviceTokenHandler) ListByUser(w http.ResponseWriter, r *http.Request) 
 //
 // Safe for concurrent use.
 func (h *DeviceTokenHandler) Register(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		UserID int64 `json:"user_id"`
-		RegisterDeviceTokenRequest
-	}
+	var req RegisterDeviceTokenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
-		return
-	}
-	if req.UserID == 0 {
-		response.JSON(w, http.StatusBadRequest, nil, "user_id is required")
 		return
 	}
 	if req.PushToken == "" {
@@ -225,7 +192,13 @@ func (h *DeviceTokenHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := h.service.RegisterDeviceToken(r.Context(), req.UserID, req.RegisterDeviceTokenRequest)
+	externalID, ok := middleware.GetMobileExternalID(r.Context())
+	if !ok {
+		response.JSON(w, http.StatusUnauthorized, nil, "invalid mobile token")
+		return
+	}
+
+	token, err := h.service.RegisterDeviceTokenForExternalID(r.Context(), externalID, req)
 	if err != nil {
 		switch {
 		case errors.Is(err, ErrUserNotFound):
@@ -265,6 +238,9 @@ func (h *DeviceTokenHandler) Register(w http.ResponseWriter, r *http.Request) {
 // passes, and a client that supplies none is rejected without the service
 // being called.
 //
+// The authenticated external_id is supplied by MobileJWTMiddleware. The
+// service rejects an update when the token belongs to another user.
+//
 // # Response shape
 //
 // The success response is a small map containing a "message" key, not
@@ -278,6 +254,7 @@ func (h *DeviceTokenHandler) Register(w http.ResponseWriter, r *http.Request) {
 //   - 400 Bad Request: a malformed id, a JSON decode failure, a body
 //     with every field nil, or the service returned ErrInvalidPlatform.
 //   - 404 Not Found: the service returned ErrDeviceTokenNotFound.
+//   - 403 Forbidden: the token belongs to another user.
 //   - 409 Conflict: the service returned ErrDeviceTokenDuplicate — the
 //     new push_token collides with another token's. The check is
 //     advisory; see the service's UpdateDeviceToken.
@@ -308,9 +285,17 @@ func (h *DeviceTokenHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.service.UpdateDeviceToken(r.Context(), tokenID, req)
+	externalID, ok := middleware.GetMobileExternalID(r.Context())
+	if !ok {
+		response.JSON(w, http.StatusUnauthorized, nil, "invalid mobile token")
+		return
+	}
+
+	err = h.service.UpdateDeviceTokenForExternalID(r.Context(), externalID, tokenID, req)
 	if err != nil {
 		switch {
+		case errors.Is(err, ErrDeviceTokenForbidden):
+			response.JSON(w, http.StatusForbidden, nil, "forbidden")
 		case errors.Is(err, ErrDeviceTokenNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 		case errors.Is(err, ErrDeviceTokenDuplicate):
@@ -333,22 +318,16 @@ func (h *DeviceTokenHandler) Update(w http.ResponseWriter, r *http.Request) {
 // The token ID is taken from the path's id parameter. It must parse as
 // int64; a malformed value produces a 400.
 //
-// # No ownership check
+// # Ownership
 //
-// The endpoint deletes any device token identified by the path,
-// regardless of the caller's relationship to the user the token belongs
-// to. It does not verify that the caller is the token's owner or has
-// administrative authority over the target user. The API-key gate is the
-// only authorisation step.
-//
-// For the mobile-facing unregistration flow, this is acceptable because
-// the mobile client possesses the token ID it wants to remove. For a
-// server-to-server integration, the caller is expected to have already
-// verified its authority before making the request.
+// The handler derives the caller from the verified mobile JWT and deletes the
+// token only when it belongs to that user. A token owned by another user
+// produces 403 Forbidden without revealing the owner.
 //
 // # Responses
 //
 //   - 400 Bad Request: the path's id parameter is missing or malformed.
+//   - 403 Forbidden: the token belongs to another user.
 //   - 404 Not Found: the service returned ErrDeviceTokenNotFound.
 //   - 500 Internal Server Error: any other service error, served with
 //     err.Error() as the message.
@@ -357,9 +336,7 @@ func (h *DeviceTokenHandler) Update(w http.ResponseWriter, r *http.Request) {
 //
 // # Concurrency
 //
-// Safe for concurrent use. Two concurrent Deletes on the same ID will
-// both pass the initial lookup and both attempt the delete; the outcome
-// depends on the delete query's behaviour for a non-existent row.
+// Safe for concurrent use.
 func (h *DeviceTokenHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	tokenID, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -367,8 +344,18 @@ func (h *DeviceTokenHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = h.service.DeleteDeviceToken(r.Context(), tokenID)
+	externalID, ok := middleware.GetMobileExternalID(r.Context())
+	if !ok {
+		response.JSON(w, http.StatusUnauthorized, nil, "invalid mobile token")
+		return
+	}
+
+	err = h.service.DeleteDeviceTokenForExternalID(r.Context(), externalID, tokenID)
 	if err != nil {
+		if errors.Is(err, ErrDeviceTokenForbidden) {
+			response.JSON(w, http.StatusForbidden, nil, "forbidden")
+			return
+		}
 		if errors.Is(err, ErrDeviceTokenNotFound) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return

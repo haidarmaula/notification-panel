@@ -49,6 +49,13 @@
 // A TokenManager is read-only after construction and safe for concurrent
 // use. All methods take value or pointer receivers on immutable state and
 // perform no locking internally.
+//
+// # Robustness
+//
+// Both parse methods validate input in the order (1) parse error,
+// (2) token validity, (3) claim shape. The parsed token and its Claims
+// field are each guarded before dereference, so no input string — however
+// malformed — can crash the caller.
 package token
 
 import (
@@ -324,32 +331,32 @@ func (t *TokenManager) GenerateRefreshToken(StaffID int64, roleName string) (str
 // system that shares the access secret and produces compatible claims is
 // accepted.
 //
-// # Failure behaviour and a caveat on malformed input
+// # Failure behaviour
 //
 // On any failure the returned claims are nil and the error is ErrInvalidToken.
-// The underlying JWT library error is discarded, not wrapped; callers
-// cannot distinguish expired from tampered from wrong-class via this
-// function alone.
+// The underlying JWT library error is discarded, not wrapped; callers cannot
+// distinguish expired from tampered from wrong-class via this function alone.
 //
-// Callers should be aware that this method dereferences the parsed token's
-// Claims field before checking the parse error. For inputs that cause the
-// JWT library to return a nil token — most notably a string that is not a
-// well-formed JWT at all — the type assertion will panic rather than return
-// ErrInvalidToken. Handlers must ensure the caller-facing input is bounded
-// (for example, by the header-length limits in net/http) and should be
-// prepared for a panic if this method is ever exposed to arbitrary
-// attacker-controlled strings in a new context.
+// Malformed input is handled safely: the parse error and token validity
+// are checked before any claim is dereferenced, and the type assertion
+// uses the two-value form with an explicit nil guard. No input string,
+// however malformed, can crash the caller.
 func (t *TokenManager) ParseAccessToken(tokenString string) (*AccessClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &AccessClaims{}, func(_ *jwt.Token) (any, error) {
 		return t.accessSecret, nil
 	})
-
-	claims, ok := token.Claims.(*AccessClaims)
-
-	if err != nil || !token.Valid || !ok || claims.Type != "access" {
+	if err != nil {
 		return nil, ErrInvalidToken
 	}
-
+	// Defensive: jwt/v5 can return a non-nil token with a nil Claims field
+	// on some error paths. Guard before the type assertion.
+	if token == nil || !token.Valid {
+		return nil, ErrInvalidToken
+	}
+	claims, ok := token.Claims.(*AccessClaims)
+	if !ok || claims == nil || claims.Type != "access" {
+		return nil, ErrInvalidToken
+	}
 	return claims, nil
 }
 
@@ -371,20 +378,16 @@ func (t *TokenManager) ParseAccessToken(tokenString string) (*AccessClaims, erro
 // defence-in-depth: it catches the case where both secrets have been
 // misconfigured to the same value.
 //
-// # Failure behaviour and a caveat on malformed input
+// # Failure behaviour
 //
-// The type assertion on parsedToken.Claims uses the single-value form, which
-// will panic — not return an error — when the parsed token is nil. The JWT
-// library returns a nil token in several error paths, most importantly when
-// the input string is not a well-formed JWT. Callers must therefore treat
-// this method as unsafe for arbitrary attacker-controlled input until the
-// ordering of the error check is corrected; see the equivalent note on
-// ParseAccessToken for the same issue in its wider (two-value) form.
+// On any failure the returned claims are nil and the error is ErrInvalidToken.
+// The underlying JWT library error is discarded, not wrapped, so the caller
+// cannot distinguish expired from tampered from wrong-class.
 //
-// On a genuine failure the returned claims are nil and the error is
-// ErrInvalidToken. As with ParseAccessToken, the underlying error is not
-// wrapped, so the caller cannot distinguish expired from tampered from
-// wrong-class.
+// Malformed input is handled safely: the parse error and token validity
+// are checked before any claim is dereferenced, and the type assertion
+// uses the two-value form with an explicit nil guard. No input string,
+// however malformed, can crash the caller.
 func (t *TokenManager) ParseRefreshToken(tokenString string) (*RefreshClaims, error) {
 	parsedToken, err := jwt.ParseWithClaims(
 		tokenString,
@@ -393,12 +396,17 @@ func (t *TokenManager) ParseRefreshToken(tokenString string) (*RefreshClaims, er
 			return t.refreshSecret, nil
 		},
 	)
-
-	claims := parsedToken.Claims.(*RefreshClaims)
-
-	if err != nil || !parsedToken.Valid || claims.Type != "refresh" {
+	if err != nil {
 		return nil, ErrInvalidToken
 	}
-
+	// Defensive: jwt/v5 can return a non-nil token with a nil Claims field
+	// on some error paths. Guard before the type assertion.
+	if parsedToken == nil || !parsedToken.Valid {
+		return nil, ErrInvalidToken
+	}
+	claims, ok := parsedToken.Claims.(*RefreshClaims)
+	if !ok || claims == nil || claims.Type != "refresh" {
+		return nil, ErrInvalidToken
+	}
 	return claims, nil
 }

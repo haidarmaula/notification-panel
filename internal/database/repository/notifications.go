@@ -24,8 +24,9 @@ import (
 // DRAFT -> SCHEDULED -> QUEUED -> PROCESSING -> COMPLETED (with SENT and
 // FAILED as terminal variants). Not every transition is exposed here as a
 // dedicated method; UpdateStatus is the general-purpose escape hatch, while
-// UpdateStatusIfScheduled and MarkSent exist because they encode atomic
-// guarantees that a plain update cannot provide.
+// UpdateStatusIfDraft, UpdateStatusIfQueued, UpdateStatusIfScheduled, and
+// MarkSent exist because they encode atomic guarantees that a plain update
+// cannot provide.
 type NotificationRepository struct {
 	q sqlc.Querier
 }
@@ -199,6 +200,36 @@ func (r *NotificationRepository) UpdateStatus(ctx context.Context, params sqlc.U
 // caller as a real error rather than as a "lost the race" signal.
 func (r *NotificationRepository) UpdateStatusIfScheduled(ctx context.Context, id int64, status string) (int64, error) {
 	return r.q.UpdateNotificationStatusIfScheduled(ctx, sqlc.UpdateNotificationStatusIfScheduledParams{
+		ID:     id,
+		Status: status,
+	})
+}
+
+// UpdateStatusIfDraft atomically transitions a notification only if its
+// current status is DRAFT.
+//
+// It returns one affected row when the caller won the DRAFT-state claim and
+// zero when the notification is missing or has already left DRAFT. Immediate
+// sends use this guard before Kafka publication so concurrent Send calls cannot
+// enqueue duplicate delivery events. Errors from the database are returned
+// unchanged. The repository is safe for concurrent use.
+func (r *NotificationRepository) UpdateStatusIfDraft(ctx context.Context, id int64, status string) (int64, error) {
+	return r.q.UpdateNotificationStatusIfDraft(ctx, sqlc.UpdateNotificationStatusIfDraftParams{
+		ID:     id,
+		Status: status,
+	})
+}
+
+// UpdateStatusIfQueued atomically transitions a notification only if its
+// current status is QUEUED.
+//
+// It returns one affected row when the transition occurred and zero when the
+// row has moved to another state or no longer exists. Send uses it only to
+// roll back QUEUED to DRAFT after an unsuccessful Kafka publication, without
+// overwriting a state a worker may have advanced. Database errors are returned
+// unchanged. The repository is safe for concurrent use.
+func (r *NotificationRepository) UpdateStatusIfQueued(ctx context.Context, id int64, status string) (int64, error) {
+	return r.q.UpdateNotificationStatusIfQueued(ctx, sqlc.UpdateNotificationStatusIfQueuedParams{
 		ID:     id,
 		Status: status,
 	})

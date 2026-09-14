@@ -147,21 +147,17 @@ var (
 //
 // All nine fields are stored by reference and must be non-nil.
 //
-// # Send does not transition the notification
+// # Send lifecycle claim
 //
-// The Send method publishes a Kafka event but does not update the
-// notification's status to QUEUED. This is documented in detail on the
-// method itself; briefly, it means the row remains DRAFT after a
-// successful send, and a second Send call on the same notification
-// publishes a second event.
+// Send atomically claims DRAFT notifications as QUEUED before publishing the
+// Kafka event. This prevents competing API requests from enqueueing the same
+// campaign twice and prevents DRAFT-only edits or deletes after queueing.
 //
 // # Concurrency
 //
 // The service is stateless after construction and safe for concurrent use.
-// It holds no per-request state. Concurrent invocations on the same
-// notification ID are not serialised by the service; the underlying
-// repositories perform their own locking at the database level, and the
-// service does not add cross-call coordination.
+// It holds no per-request state. The conditional status update serialises
+// competing Send operations for one notification at the database level.
 type NotificationService struct {
 	notifRepo    *repository.NotificationRepository
 	targetRepo   *repository.NotificationTargetRepository
@@ -951,61 +947,37 @@ func (s *NotificationService) Delete(ctx context.Context, id int64) error {
 //     operation's actual needs.
 //  3. Rejects the request with ErrNotificationNotDraft if the
 //     notification's status is not "DRAFT".
-//  4. Publishes a NotificationSendRequested event to the configured Kafka
+//  4. Atomically transitions DRAFT to QUEUED. If another request has already
+//     claimed the row, it returns ErrNotificationNotDraft without publishing.
+//  5. Publishes a NotificationSendRequested event to the configured Kafka
 //     producer's topic.
-//  5. Writes an audit entry recording the send. As with the other write
+//  6. Writes an audit entry recording the send. As with the other write
 //     methods, an audit failure is logged but does not abort.
 //
-// # The notification is not transitioned to QUEUED
+// # Queue claim and publication failure
 //
-// The most important behavioural fact about this method: it publishes the
-// Kafka event but does not update the notification's status. The row
-// remains in DRAFT after a successful Send.
-//
-// This is at odds with the pipeline model described in the README, which
-// states that the API marks the notification as QUEUED and then publishes
-// the event, and with the worker's idempotency guard, which assumes the
-// row will eventually reach a terminal state that prevents reprocessing.
-// The practical consequences are:
-//
-//   - A second Send call on the same notification publishes a second
-//     Kafka event. The worker receives it, loads the notification, and —
-//     because the status is still DRAFT (or, if the first event has
-//     reached the worker, PROCESSING) — does not take the early-return
-//     path. The provider is invoked again. Under concurrent processing,
-//     both events can pass the status check simultaneously and both fan
-//     out, producing duplicate notifications on every device.
-//
-//   - A client that polls GetByID after a successful Send sees status
-//     "DRAFT" until the worker updates the row to "PROCESSING", and
-//     possibly reverts to DRAFT if the worker's status update fails.
-//
-//   - The DRAFT-only edit and delete guards remain in force between the
-//     publish and the worker's first status update, so a PATCH or DELETE
-//     can modify or remove a notification that has already been queued
-//     for delivery.
-//
-// A correct implementation would transition the notification to QUEUED —
-// ideally in a conditional update that also asserts the current status is
-// DRAFT, to prevent a double-send race — before publishing the event.
-// Alternatively, it would publish the event first and transition the
-// status on the assumption that the worker will ignore events for
-// non-DRAFT rows; the current code does neither.
+// A successful conditional claim makes QUEUED visible before the event is
+// published, preventing duplicate Send calls and DRAFT-only modifications.
+// If Kafka publication returns an error, the method attempts the inverse
+// conditional transition (QUEUED to DRAFT) so an operator can retry. The
+// rollback cannot be a distributed transaction with Kafka: a broker error may
+// be ambiguous, and a process crash between the database update and publish
+// can still leave a queued row without an event. A transactional outbox is
+// required to close that cross-system delivery gap.
 //
 // # Errors
 //
 // Returns ErrStaffNotFoundOrInactive or ErrNotificationNotFound for the
 // corresponding conditions (the latter via the GetByID call), and
 // ErrNotificationNotDraft if the notification is not in DRAFT status.
-// Returns a wrapped error if the Kafka publish fails; the wrap prefix is
-// "send notification: ".
+// Returns a wrapped error if the queue claim or Kafka publication fails; the
+// wrap prefixes are "queue notification: " and "send notification: ".
 //
 // # Concurrency
 //
-// Not safe against concurrent Send calls on the same notification ID. Two
-// concurrent Sends will both see the notification in DRAFT, both publish
-// Kafka events, and both write audit entries. This is the double-send
-// scenario described above.
+// Safe for concurrent use. Concurrent Send calls for one notification are
+// serialised by the DRAFT-only update: exactly one can move the row to QUEUED
+// and publish the event; all others receive ErrNotificationNotDraft.
 func (s *NotificationService) Send(ctx context.Context, id int64) error {
 	actorID, ok := audit.GetStaffID(ctx)
 	if !ok {
@@ -1025,12 +997,23 @@ func (s *NotificationService) Send(ctx context.Context, id int64) error {
 		return ErrNotificationNotDraft
 	}
 
+	claimed, err := s.notifRepo.UpdateStatusIfDraft(ctx, id, "QUEUED")
+	if err != nil {
+		return fmt.Errorf("queue notification: %w", err)
+	}
+	if claimed == 0 {
+		return ErrNotificationNotDraft
+	}
+
 	// Publish event to Kafka
 	event := kafka.NotificationSendRequested{
 		NotificationID: id,
 		RequestedAt:    time.Now(),
 	}
 	if err := s.producer.PublishSendRequested(ctx, event); err != nil {
+		if _, rollbackErr := s.notifRepo.UpdateStatusIfQueued(ctx, id, "DRAFT"); rollbackErr != nil {
+			log.Printf("[Server] Failed to roll back queued notification %d after publish failure: %v", id, rollbackErr)
+		}
 		return fmt.Errorf("send notification: %w", err)
 	}
 

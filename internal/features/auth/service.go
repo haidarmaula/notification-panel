@@ -59,8 +59,8 @@ var (
 	// ID that does not exist in the roles table. In practice this indicates
 	// either data corruption — a staff row whose role_id was never
 	// constrained by a foreign key, or was orphaned by a role delete — or,
-	// on the refresh path, a bug: see RefreshToken for the current
-	// misidentification of which ID is passed to the role lookup.
+	// on the refresh path, a data-integrity problem: RefreshToken resolves
+	// the role through the staff row's RoleID, just as Login does.
 	//
 	// The handler maps this error through the default branch and serves a
 	// generic 500; the underlying cause is not exposed to the client.
@@ -257,41 +257,23 @@ func (s *AuthService) Login(
 //     deliberate: it ensures that a role change or account deactivation
 //     that occurred after the refresh token was issued is reflected in the
 //     new access token. A missing staff row is ErrInvalidCredentials; see
-//     the "Known defects" section below for how this is handled downstream.
+//     the "Known handler limitation" section below for its HTTP mapping.
 //  3. Checks the row's IsActive flag. A deactivated staff user is
 //     ErrInvalidCredentials, again with the same downstream caveat.
 //  4. Resolves the user's role and mints a new access token. The refresh
 //     token itself is not rotated and is not returned — the caller reuses
 //     the same refresh token until it expires.
 //
-// # Known defects
+// # Known handler limitation
 //
-// Two defects are present in the current implementation. Both are documented
-// here rather than corrected, because correcting them is out of scope for a
-// documentation pass.
-//
-//  1. The role lookup passes the wrong ID. The call to
-//     roleRepo.FindByID uses staff.ID (the staff user's own primary key)
-//     instead of staff.RoleID (the foreign key that identifies the role).
-//     Compare with Login, which uses staff.RoleID correctly. In practice
-//     this means the role resolution almost always fails — surfacing as
-//     ErrInvalidStaffRoleID and, via the handler, as a 500 — or, when a
-//     role happens to share the numeric ID, succeeds while returning a
-//     role unrelated to the staff user. The latter case is a
-//     security-relevant correctness bug: the minted access token would
-//     carry a role_name claim that does not reflect the staff user's
-//     actual role, and downstream authorization decisions based on that
-//     claim would be wrong. The fix is to pass staff.RoleID.
-//
-//  2. ErrInvalidCredentials is not mapped to 401 by the refresh handler.
-//     AuthHandler.RefreshToken only recognises token.ErrInvalidToken. Any
-//     ErrInvalidCredentials returned from steps 2 or 3 above therefore
-//     falls through to the handler's default branch and is served as a 500
-//     Internal Server Error. A client whose refresh token is valid but
-//     whose account has since been deactivated receives a 500 rather than
-//     a 401, which is both incorrect and misleading for retry logic on the
-//     client. The fix is to extend the handler's switch to recognise
-//     ErrInvalidCredentials.
+// ErrInvalidCredentials is not mapped to 401 by the refresh handler.
+// AuthHandler.RefreshToken only recognises token.ErrInvalidToken. Any
+// ErrInvalidCredentials returned from steps 2 or 3 therefore falls through
+// to the handler's default branch and is served as a 500 Internal Server
+// Error. A client whose refresh token is valid but whose account has since
+// been deactivated receives a 500 rather than a 401, which is both incorrect
+// and misleading for retry logic on the client. The handler should extend its
+// switch to recognise ErrInvalidCredentials.
 //
 // # Response coupling
 //
@@ -309,9 +291,10 @@ func (s *AuthService) Login(
 //   - token.ErrInvalidToken when the refresh token fails verification for
 //     any reason.
 //   - ErrInvalidCredentials when the staff row referenced by the token does
-//     not exist, or exists but is inactive. See defect 2 above for how this
-//     is (mis)handled by the current handler.
-//   - ErrInvalidStaffRoleID when the role lookup fails. See defect 1 above.
+//     not exist, or exists but is inactive. See the handler limitation above
+//     for its current HTTP mapping.
+//   - ErrInvalidStaffRoleID when the role referenced by staff.RoleID cannot
+//     be found.
 //   - Any error returned by GenerateAccessToken. This is unexpected.
 //
 // # Concurrency
@@ -336,7 +319,7 @@ func (s *AuthService) RefreshToken(
 		return nil, ErrInvalidCredentials
 	}
 
-	role, err := s.roleRepo.FindByID(ctx, staff.ID)
+	role, err := s.roleRepo.FindByID(ctx, staff.RoleID)
 	if err != nil {
 		return nil, ErrInvalidStaffRoleID
 	}

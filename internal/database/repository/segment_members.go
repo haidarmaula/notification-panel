@@ -52,6 +52,20 @@ func (r *SegmentMemberRepository) CountSegmentsByUser(ctx context.Context, userI
 	return r.q.CountSegmentMembersByUser(ctx, userID)
 }
 
+// Exists reports whether the membership pair (segmentID, userID) is already
+// present in the segment_members table. It delegates to the generated
+// ExistsSegmentMember query and is used by the members service to perform a
+// correct duplicate check without scanning a paginated member list.
+//
+// A database error is returned unchanged. The method is safe for concurrent
+// use because the underlying Querier is concurrency-safe.
+func (r *SegmentMemberRepository) Exists(ctx context.Context, segmentID, userID int64) (bool, error) {
+	return r.q.ExistsSegmentMember(ctx, sqlc.ExistsSegmentMemberParams{
+		SegmentID: segmentID,
+		UserID:    userID,
+	})
+}
+
 // FindByID retrieves a single membership row by its primary key.
 //
 // Most callers do not need this: membership is naturally addressed by the

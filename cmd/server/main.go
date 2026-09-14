@@ -78,6 +78,7 @@ func main() {
 
 	apiKeyMW := middleware.NewAPIKeyMiddleware(cfg.APIKey)
 	jwtMW := middleware.NewJWTMiddleware(tokenManager)
+	mobileJWTMW := middleware.NewMobileJWTMiddleware(cfg.MobileJWTSecret)
 	superAdminMW := middleware.NewSuperAdminMiddleware(cfg.SuperAdminRole)
 	auditMW := middleware.NewAuditMiddleware()
 
@@ -86,7 +87,11 @@ func main() {
 	mobileModule := mobile.NewMobileModule(queries, cfg)
 	mobileModule.RegisterRoutes(mux)
 
-	userModule := users.NewUserModule(queries, apiKeyMW.Use, jwtMW.Use)
+	userModule := users.NewUserModule(
+		queries,
+		[]middleware.Middleware{apiKeyMW.Use, jwtMW.Use},
+		[]middleware.Middleware{mobileJWTMW.Use},
+	)
 	userModule.RegisterRoutes(mux)
 
 	authModule := auth.NewAuthModule(queries, tokenManager, apiKeyMW.Use)

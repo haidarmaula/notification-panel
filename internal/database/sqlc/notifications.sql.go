@@ -563,6 +563,50 @@ func (q *Queries) UpdateNotificationStatus(ctx context.Context, arg UpdateNotifi
 	return err
 }
 
+const updateNotificationStatusIfDraft = `-- name: UpdateNotificationStatusIfDraft :execrows
+UPDATE notifications
+SET
+    status = $1,
+    updated_at = NOW()
+WHERE id = $2
+  AND status = 'DRAFT'
+`
+
+type UpdateNotificationStatusIfDraftParams struct {
+	Status string `db:"status"`
+	ID     int64  `db:"id"`
+}
+
+func (q *Queries) UpdateNotificationStatusIfDraft(ctx context.Context, arg UpdateNotificationStatusIfDraftParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateNotificationStatusIfDraft, arg.Status, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
+const updateNotificationStatusIfQueued = `-- name: UpdateNotificationStatusIfQueued :execrows
+UPDATE notifications
+SET
+    status = $1,
+    updated_at = NOW()
+WHERE id = $2
+  AND status = 'QUEUED'
+`
+
+type UpdateNotificationStatusIfQueuedParams struct {
+	Status string `db:"status"`
+	ID     int64  `db:"id"`
+}
+
+func (q *Queries) UpdateNotificationStatusIfQueued(ctx context.Context, arg UpdateNotificationStatusIfQueuedParams) (int64, error) {
+	result, err := q.db.Exec(ctx, updateNotificationStatusIfQueued, arg.Status, arg.ID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const updateNotificationStatusIfScheduled = `-- name: UpdateNotificationStatusIfScheduled :execrows
 UPDATE notifications
 SET

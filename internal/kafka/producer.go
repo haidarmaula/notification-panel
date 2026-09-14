@@ -144,45 +144,13 @@ func (p *Producer) PublishSendRequested(ctx context.Context, event NotificationS
 // intended to route all delivery updates for the same notification to the
 // same partition, preserving their relative order for downstream analytics.
 //
-// # Known defect in the message key
+// # Message key
 //
-// The key is constructed as:
-//
-//	[]byte("delivery_" + string(rune(event.NotificationID)))
-//
-// The conversion string(rune(n)) does NOT produce the decimal representation
-// of n. It interprets n as a Unicode code point and produces the UTF-8
-// encoding of that code point. Concretely:
-//
-//   - NotificationID 65 produces the key "delivery_A" (U+0041).
-//   - NotificationID 66 produces the key "delivery_B" (U+0042).
-//   - NotificationID 1234 produces the key "delivery_Ӓ" (U+04D2).
-//   - IDs in the surrogate range (0xD800–0xDFFF) or above 0x10FFFF produce
-//     the Unicode replacement character U+FFFD, collapsing many distinct
-//     IDs onto the same key.
-//
-// The practical consequences are:
-//
-//   - Two distinct notifications whose IDs happen to be consecutive small
-//     integers produce different keys, but not in a way correlated with
-//     their ID ordering.
-//   - Two distinct notifications whose IDs collide in the surrogate or
-//     out-of-range space produce the same key, and therefore the same
-//     partition. This is not a correctness bug for correctness's own sake —
-//     Kafka only guarantees order within a partition, so co-located events
-//     are merely serialised — but it does mean the intended partitioning
-//     contract is not honoured, and downstream consumers that rely on
-//     "same notification, same partition" will be wrong.
-//
-// The intended expression is almost certainly:
-//
-//	strconv.FormatInt(event.NotificationID, 10)
-//
-// matching the pattern used by PublishSendRequested. Correcting this is a
-// one-line change that does not alter the wire format of the JSON payload,
-// but it does alter the partitioning of future messages. Applying it should
-// be coordinated with any consumer that has already built state on the
-// current partitioning.
+// The key is derived from the notification ID in the same way as
+// PublishSendRequested, using strconv.FormatInt. All delivery-update events
+// for a particular notification therefore share a deterministic key, and
+// Kafka routes them to the same partition while preserving their relative
+// order for downstream consumers.
 //
 // # Errors
 //
@@ -199,7 +167,7 @@ func (p *Producer) PublishDeliveryUpdated(ctx context.Context, event DeliveryUpd
 		return err
 	}
 
-	key := []byte("delivery_" + string(rune(event.NotificationID)))
+	key := []byte("delivery_" + strconv.FormatInt(event.NotificationID, 10))
 	msg := kafka.Message{
 		Key:   key,
 		Value: value,

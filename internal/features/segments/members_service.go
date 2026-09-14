@@ -18,21 +18,17 @@ import (
 // service.go).
 var (
 	// ErrMemberAlreadyExists is returned by AddMember when the user is
-	// already a member of the segment. The check that produces it has a
-	// known correctness gap — see AddMember for the details — so this
-	// sentinel is currently reachable only for a subset of duplicate-add
-	// cases.
+	// already a member of the segment. The service checks membership using
+	// SegmentMemberRepository.Exists, which inspects the exact
+	// (segment_id, user_id) pair rather than an arbitrary page.
 	//
 	// The handler maps this to 409 Conflict.
 	ErrMemberAlreadyExists = errors.New("user is already a member of this segment")
 
 	// ErrMemberNotFound is returned by RemoveMember when the user is not
-	// a member of the segment. Despite its declared purpose, the current
-	// implementation of RemoveMember does not actually produce this
-	// sentinel: the underlying DeleteBySegmentAndUser is a no-op DELETE
-	// that returns nil when the pair does not exist, and the code path
-	// that would translate that into ErrMemberNotFound is unreachable.
-	// See RemoveMember for the full analysis.
+	// a member of the segment. The service performs an explicit Exists
+	// check before deleting, so removing a non-member now returns this
+	// sentinel instead of reporting success.
 	//
 	// The handler maps this to 404 Not Found.
 	ErrMemberNotFound = errors.New("user is not a member of this segment")
@@ -171,43 +167,17 @@ func (s *MembersService) ListMembers(ctx context.Context, segmentID int64, page,
 //  3. Check for existing membership — see the correctness note below.
 //  4. Insert a new segment_members row via memberRepo.Create.
 //
-// # Existing-membership check is defective
+// # Existing-membership check
 //
-// The check at step 3 is intended to detect that the user is already a
-// member and return ErrMemberAlreadyExists. It is implemented as a single
-// ListBySegment call with a page size of 1:
+// The service calls SegmentMemberRepository.Exists for the exact
+// (segment_id, user_id) pair. This avoids the former page-limited
+// ListBySegment fallback and therefore works no matter how many members the
+// segment already has.
 //
-//	rows, err := s.memberRepo.ListBySegment(ctx, segmentID, 0, 1)
-//	for _, row := range rows {
-//	    if row.UserID == userID {
-//	        return ErrMemberAlreadyExists
-//	    }
-//	}
-//
-// Because the page size is 1, the loop inspects only the *first* member of
-// the segment. If the target user is not the first member — which is the
-// case for any segment with more than one member, except when the user
-// happens to sort first — the check reports "not already a member" and the
-// code proceeds to the insert.
-//
-// The consequences depend on the schema:
-//
-//   - If segment_members has a UNIQUE constraint on (segment_id, user_id),
-//     the insert fails with a unique-violation error, which this method
-//     wraps with "add member: " and the handler serves through its default
-//     500 branch. The client sees a generic 500 rather than the 409 that
-//     ErrMemberAlreadyExists would have produced.
-//   - If the schema does not enforce uniqueness, the insert succeeds and
-//     the segment ends up with duplicate membership rows for the same
-//     user. Every list response shows the user twice; the member count is
-//     inflated; and any downstream fan-out that treats segment members as
-//     an audience will attempt to deliver to the user twice (subject to
-//     deduplication elsewhere in the worker).
-//
-// The in-code comments acknowledge the problem and propose adding an
-// ExistsSegmentMember method to the repository, but the fix has not been
-// applied. The check is therefore advisory at best, and the authoritative
-// protection is whatever the schema enforces.
+// The Exists check and the following insert are not wrapped in a database
+// transaction. Concurrent AddMember calls for the same pair may both pass
+// the Exists check; the database unique constraint, if present, remains the
+// authoritative guard.
 //
 // # Errors
 //
@@ -220,9 +190,9 @@ func (s *MembersService) ListMembers(ctx context.Context, segmentID int64, page,
 // # Concurrency
 //
 // Not serialised against concurrent adds. Two concurrent AddMember calls
-// for the same (segment, user) pair will both pass the defective
-// existence check and both attempt the insert; the outcome is the same
-// as for a duplicate add by a single caller.
+// for the same (segment, user) pair will both pass the Exists check and
+// both attempt the insert; the outcome is the same as for a duplicate add
+// by a single caller.
 func (s *MembersService) AddMember(ctx context.Context, segmentID, userID int64) error {
 	_, err := s.segmentRepo.FindByID(ctx, segmentID)
 	if err != nil {
@@ -234,24 +204,12 @@ func (s *MembersService) AddMember(ctx context.Context, segmentID, userID int64)
 		return ErrUserNotFound
 	}
 
-	// Check existing membership efficiently using repository method.
-	// If repository doesn't have Exists, we can use a dedicated query.
-	// For now, we'll use a simple list but limit to 1 to avoid N+1.
-	// Better: add ExistsSegmentMember to repository.
-	// Assuming we added Exists method in repository:
-	// exists, err := s.memberRepo.Exists(ctx, segmentID, userID)
-	// if err != nil { return fmt.Errorf("check membership: %w", err) }
-	// if exists { return ErrMemberAlreadyExists }
-
-	// Since Exists not in repo yet, we use List with limit 1 as fallback.
-	rows, err := s.memberRepo.ListBySegment(ctx, segmentID, 0, 1)
+	exists, err := s.memberRepo.Exists(ctx, segmentID, userID)
 	if err != nil {
 		return fmt.Errorf("check membership: %w", err)
 	}
-	for _, row := range rows {
-		if row.UserID == userID {
-			return ErrMemberAlreadyExists
-		}
+	if exists {
+		return ErrMemberAlreadyExists
 	}
 
 	_, err = s.memberRepo.Create(ctx, sqlc.CreateSegmentMemberParams{
@@ -273,49 +231,24 @@ func (s *MembersService) AddMember(ctx context.Context, segmentID, userID int64)
 //     collapses to ErrSegmentNotFound.
 //  2. Verify that the user exists via userRepo.FindByID. Any failure
 //     collapses to ErrUserNotFound.
-//  3. Delete the membership row via memberRepo.DeleteBySegmentAndUser.
+//  3. Check that the (segment, user) membership exists; if not, return
+//     ErrMemberNotFound.
+//  4. Delete the membership row via memberRepo.DeleteBySegmentAndUser.
 //
-// # The ErrMemberNotFound path is unreachable
+// # Membership existence is verified before delete
 //
-// The implementation assumes DeleteBySegmentAndUser returns an error when
-// the membership does not exist, and translates any such error into
-// ErrMemberNotFound:
-//
-//	err = s.memberRepo.DeleteBySegmentAndUser(ctx, segmentID, userID)
-//	if err != nil {
-//	    return ErrMemberNotFound
-//	}
-//
-// That assumption is incorrect. The repository's DeleteBySegmentAndUser
-// is documented as a no-op DELETE that returns nil when the (segment,
-// user) pair does not exist — the underlying SQL is a DELETE, and a DELETE
-// that matches no rows is not an error. Consequently:
-//
-//   - Removing a user who *is* a member succeeds: the DELETE matches one
-//     row, the repository returns nil, and RemoveMember returns nil.
-//   - Removing a user who is *not* a member also succeeds from the
-//     caller's perspective: the DELETE matches zero rows, the repository
-//     returns nil, and RemoveMember returns nil. The handler serves 200
-//     "member removed" for a removal that did not occur.
-//   - ErrMemberNotFound is never returned by this method. The handler's
-//     mapping of that sentinel to 404 is dead code.
-//
-// The practical consequence for a client: a "remove member" call is
-// idempotent in the sense that it always reports success, but the client
-// cannot distinguish "the user was a member and is now removed" from "the
-// user was never a member, nothing changed". If the API's contract
-// requires that distinction — a 404 for a non-existent membership — the
-// method must be revised to check existence before the delete, or the
-// repository must be extended to report the affected-row count.
+// RemoveMember calls SegmentMemberRepository.Exists before issuing the
+// delete. A pair that does not exist returns ErrMemberNotFound. A database
+// failure from Exists is wrapped rather than collapsed into the not-found
+// sentinel. The subsequent delete remains a no-op if another request
+// removed the pair between the two calls, which is harmless for this API.
 //
 // # Errors
 //
-// Returns ErrSegmentNotFound or ErrUserNotFound for the corresponding
-// conditions. Never returns ErrMemberNotFound despite the sentinel's
-// presence in this package. Any repository failure from the delete step
-// (which, per the analysis above, does not occur for a missing membership)
-// would be returned as ErrMemberNotFound, which is itself a misleading
-// mapping for a genuine database error.
+// Returns ErrSegmentNotFound or ErrUserNotFound for a missing segment or
+// user. Returns ErrMemberNotFound when the membership does not exist.
+// Repository failures during the existence check or delete are wrapped and
+// are not collapsed into ErrMemberNotFound.
 //
 // # Concurrency
 //
@@ -334,13 +267,16 @@ func (s *MembersService) RemoveMember(ctx context.Context, segmentID, userID int
 		return ErrUserNotFound
 	}
 
-	err = s.memberRepo.DeleteBySegmentAndUser(ctx, segmentID, userID)
+	exists, err := s.memberRepo.Exists(ctx, segmentID, userID)
 	if err != nil {
-		// If no rows affected, consider it not found.
-		// We can check by trying to find the member or rely on error.
-		// For simplicity, we assume DeleteBySegmentAndUser returns error if not found.
-		// We'll check existence first to give better error.
+		return fmt.Errorf("check membership: %w", err)
+	}
+	if !exists {
 		return ErrMemberNotFound
+	}
+
+	if err := s.memberRepo.DeleteBySegmentAndUser(ctx, segmentID, userID); err != nil {
+		return fmt.Errorf("remove member: %w", err)
 	}
 
 	return nil

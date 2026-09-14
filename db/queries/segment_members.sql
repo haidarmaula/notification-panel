@@ -13,6 +13,18 @@ WHERE id = sqlc.arg('id')
 LIMIT 1;
 
 -- ==========================================
+-- EXISTS
+-- ==========================================
+
+-- name: ExistsSegmentMember :one
+SELECT EXISTS (
+    SELECT 1
+    FROM segment_members
+    WHERE segment_id = sqlc.arg('segment_id')
+      AND user_id = sqlc.arg('user_id')
+);
+
+-- ==========================================
 -- CREATE
 -- ==========================================
 

@@ -393,19 +393,15 @@ func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 //   - 500 Internal Server Error: any other service error, served with
 //     err.Error() as the message.
 //   - 202 Accepted: a JSON object with a "message" field confirming that
-//     the notification has been queued for sending. The 202 does not
-//     guarantee that the Kafka publish succeeded — see below.
+//     the notification was atomically claimed as QUEUED and its send event
+//     was accepted by the Kafka producer.
 //
 // # Kafka publish failure
 //
-// The service's Send method is responsible for publishing the Kafka event.
-// A publish failure is currently surfaced to the handler's default branch
-// and served as a 500; a client that receives a 202 can therefore be
-// reasonably confident that the event was published. The service's
-// implementation should be consulted for the exact ordering — whether the
-// status transition to QUEUED occurs before or after the publish — because
-// a failure between the two would leave the notification queued in the
-// database with no corresponding Kafka event.
+// The service claims DRAFT to QUEUED before publishing. A publication failure
+// is served as 500 and triggers a best-effort conditional rollback to DRAFT.
+// Kafka and PostgreSQL do not share a transaction, so a crash or an ambiguous
+// broker write still requires an outbox-based design for absolute durability.
 //
 // # Concurrency
 //
@@ -432,8 +428,6 @@ func (h *NotificationHandler) Send(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Update notification status to SENDING (optional, or wait for worker to update)
-	// For now, we just return success.
 	response.JSON(w, http.StatusAccepted, map[string]string{"message": "notification queued for sending"}, "success")
 }
 

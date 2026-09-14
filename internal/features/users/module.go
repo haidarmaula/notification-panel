@@ -50,7 +50,8 @@ import (
 // The module is safe for concurrent use. Its fields are set once in the
 // constructor and never mutated; RegisterRoutes only reads them.
 type UserModule struct {
-	middlewares        []middleware.Middleware
+	adminMiddlewares   []middleware.Middleware
+	deviceMiddlewares  []middleware.Middleware
 	handler            *UserHandler
 	deviceTokenHandler *DeviceTokenHandler
 }
@@ -77,18 +78,21 @@ type UserModule struct {
 // # Parameters
 //
 // queries must be non-nil and is expected to be the shared instance from
-// cmd/server. The middlewares parameter is variadic so that the caller can
-// pass whichever cross-cutting concerns apply to the users endpoints — in
-// the current wiring the API-key and JWT middlewares — without the module
-// hardcoding a chain. The order in which they are supplied is the order
-// in which they are applied; see middleware.Chain for the composition
-// rule.
+// cmd/server. adminMiddlewares protect the staff-facing /users routes; in
+// current wiring they require the API key and a staff JWT. deviceMiddlewares
+// protect the mobile-facing /device-tokens routes; in current wiring they
+// require a Laravel mobile JWT. Each slice is applied in order by
+// middleware.Chain.
 //
 // # Concurrency
 //
 // Intended to be called once during process startup, before the HTTP
 // server begins listening.
-func NewUserModule(queries *sqlc.Queries, middlewares ...middleware.Middleware) *UserModule {
+func NewUserModule(
+	queries *sqlc.Queries,
+	adminMiddlewares []middleware.Middleware,
+	deviceMiddlewares []middleware.Middleware,
+) *UserModule {
 	userRepo := repository.NewUserRepository(queries)
 	deviceRepo := repository.NewDeviceTokenRepository(queries)
 	segmentRepo := repository.NewSegmentMemberRepository(queries)
@@ -100,7 +104,8 @@ func NewUserModule(queries *sqlc.Queries, middlewares ...middleware.Middleware) 
 	deviceTokenHandler := NewDeviceTokenHandler(service)
 
 	return &UserModule{
-		middlewares:        middlewares,
+		adminMiddlewares:   adminMiddlewares,
+		deviceMiddlewares:  deviceMiddlewares,
 		handler:            handler,
 		deviceTokenHandler: deviceTokenHandler,
 	}

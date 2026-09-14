@@ -108,6 +108,31 @@ func (q *Queries) DeleteSegmentMemberBySegmentAndUser(ctx context.Context, arg D
 	return err
 }
 
+const existsSegmentMember = `-- name: ExistsSegmentMember :one
+
+SELECT EXISTS (
+    SELECT 1
+    FROM segment_members
+    WHERE segment_id = $1
+      AND user_id = $2
+)
+`
+
+type ExistsSegmentMemberParams struct {
+	SegmentID int64 `db:"segment_id"`
+	UserID    int64 `db:"user_id"`
+}
+
+// ==========================================
+// EXISTS
+// ==========================================
+func (q *Queries) ExistsSegmentMember(ctx context.Context, arg ExistsSegmentMemberParams) (bool, error) {
+	row := q.db.QueryRow(ctx, existsSegmentMember, arg.SegmentID, arg.UserID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
+}
+
 const getSegmentMemberByID = `-- name: GetSegmentMemberByID :one
 
 SELECT

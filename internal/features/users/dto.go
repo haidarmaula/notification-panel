@@ -17,23 +17,23 @@
 // added here — the current absence is a deliberate design, not an
 // oversight.
 //
-// # Two authentication models for device-token registration
+// # Mobile authentication for device-token registration
 //
-// The device-token surface is the one place in this feature where two
-// different authentication models coexist:
+// The two device-token registration surfaces accept the same Laravel-issued
+// identity but carry its JWT differently:
 //
 //   - The mobile feature's sync endpoint (POST /api/v1/mobile/sync)
 //     authenticates the caller with a Laravel-issued JWT and derives the
 //     user ID from the token's claims. The caller cannot register a device
 //     for a user other than themselves.
-//   - This feature's Register endpoint (POST /api/v1/device-tokens)
-//     accepts the target user ID from the request body and relies only on
-//     the shared API key for authentication. Any caller with a valid API
-//     key can register a device for any user.
+//   - This feature's direct device-token endpoints
+//     (POST/PATCH/DELETE /api/v1/device-tokens) authenticate with a
+//     Laravel-issued bearer JWT. The authenticated external_id is resolved
+//     to a local user, so callers can manage only their own tokens.
 //
-// The two endpoints overlap in function but differ in trust model. The
-// one in this package is intended for first-party (server-to-server)
-// clients; see DeviceTokenHandler.Register for the trust boundary.
+// The two endpoints overlap in function but differ in request shape. Both
+// derive ownership from a verified Laravel JWT; see DeviceTokenHandler for
+// the direct route's header-based authentication contract.
 //
 // # Layering
 //

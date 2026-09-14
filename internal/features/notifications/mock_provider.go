@@ -56,17 +56,12 @@ func NewMockProvider() *MockProvider {
 // pre-allocated with the exact capacity of the input, so no intermediate
 // allocations occur during the loop.
 //
-// # Panic on short tokens
+// # Short tokens
 //
-// The logging line dereferences token.PushToken[:8] to print a shortened
-// form of the token. If a token is shorter than 8 bytes, that slice
-// expression panics with "slice bounds out of range". The mock has no
-// guard against short tokens — unlike FCMProvider, which rejects them
-// before use — so the first short or empty token encountered will crash
-// the calling goroutine (typically the delivery worker). In practice the
-// mock is only invoked against synthetic data, but a test fixture that
-// generates empty push tokens will surface this as a panic rather than a
-// failed result.
+// Tokens shorter than 8 bytes are logged in full rather than truncated;
+// the method never slices a token past its own length. Empty tokens are
+// logged as an empty preview string. This makes the mock safe to drive
+// with synthetic test fixtures that include empty or short push tokens.
 //
 // # Return values
 //
@@ -97,7 +92,14 @@ func (p *MockProvider) Send(ctx context.Context, req SendRequest) ([]SendResult,
 			Status:            "SENT",
 			Error:             nil,
 		}
-		log.Printf("[MOCK]   -> User %d, token: %s...", token.UserID, token.PushToken[:8])
+		// Truncate the token for the log preview. Short tokens are logged
+		// whole rather than sliced past their length; empty tokens render
+		// as an empty preview.
+		preview := token.PushToken
+		if len(preview) > 8 {
+			preview = preview[:8]
+		}
+		log.Printf("[MOCK]   -> User %d, token: %s...", token.UserID, preview)
 	}
 	return results, nil
 }

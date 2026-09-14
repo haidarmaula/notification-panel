@@ -123,11 +123,12 @@ type DeliveryUpdated struct {
 	// provider-side logs and receipts.
 	ProviderMessageID string `json:"provider_message_id"`
 
-	// Status is the new delivery status. The canonical values are
-	// "DELIVERED", "FAILED", and "OPENED", as documented on the field
-	// itself; consumers should treat unknown values as forward-compatible
-	// extensions rather than as errors.
-	Status string `json:"status"` // DELIVERED, FAILED, OPENED
+	// Status is the new delivery status. The worker emits "SENT" after a
+	// provider accepts a delivery attempt and "FAILED" when the provider
+	// returns an error. Downstream consumers may later emit "DELIVERED" or
+	// "OPENED" when provider receipts or client reports arrive; consumers
+	// should tolerate forward-compatible values.
+	Status string `json:"status"`
 
 	// OccurredAt is the time at which the status change was observed by the
 	// producer — that is, when the worker recorded the outcome, not

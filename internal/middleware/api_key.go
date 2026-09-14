@@ -48,6 +48,7 @@
 package middleware
 
 import (
+	"crypto/subtle"
 	"net/http"
 
 	"hello/pkg/response"
@@ -98,15 +99,12 @@ func NewAPIKeyMiddleware(apiKey string) *APIKeyMiddleware {
 //
 // # Comparison
 //
-// The comparison is a plain string inequality, not a constant-time
-// comparison. This is a known limitation: an attacker able to issue a large
-// number of requests and measure response latency could in principle recover
-// the key byte-by-byte through a timing side channel. In practice, network
-// jitter makes this attack difficult against a remote endpoint, and the key
-// is only one of several required credentials, but callers deploying this
-// service on a low-latency network should consider switching to
-// crypto/subtle.ConstantTimeCompare. This is listed as a known gap in the
-// project README.
+// The configured key and the provided header are compared using
+// crypto/subtle.ConstantTimeCompare. The explicit empty checks ensure that
+// a missing configured key fails closed rather than accepting an empty
+// header. For equal-length inputs the comparison time is independent of how
+// many leading bytes match, closing the previously documented timing
+// side-channel.
 //
 // # Failure response
 //
@@ -124,7 +122,8 @@ func (m *APIKeyMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		providedAPIKey := r.Header.Get("X-API-Key")
 
-		if providedAPIKey == "" || providedAPIKey != m.apiKey {
+		if providedAPIKey == "" ||
+			subtle.ConstantTimeCompare([]byte(providedAPIKey), []byte(m.apiKey)) != 1 {
 			response.JSON(w, http.StatusUnauthorized, nil, "invalid api key")
 			return
 		}

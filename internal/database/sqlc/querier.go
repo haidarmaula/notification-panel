@@ -185,6 +185,10 @@ type Querier interface {
 	// ==========================================
 	// EXISTS
 	// ==========================================
+	ExistsSegmentMember(ctx context.Context, arg ExistsSegmentMemberParams) (bool, error)
+	// ==========================================
+	// EXISTS
+	// ==========================================
 	ExistsStaffUserByEmail(ctx context.Context, email string) (bool, error)
 	// ==========================================
 	// EXISTS
@@ -350,6 +354,8 @@ type Querier interface {
 	// ==========================================
 	UpdateNotification(ctx context.Context, arg UpdateNotificationParams) error
 	UpdateNotificationStatus(ctx context.Context, arg UpdateNotificationStatusParams) error
+	UpdateNotificationStatusIfDraft(ctx context.Context, arg UpdateNotificationStatusIfDraftParams) (int64, error)
+	UpdateNotificationStatusIfQueued(ctx context.Context, arg UpdateNotificationStatusIfQueuedParams) (int64, error)
 	UpdateNotificationStatusIfScheduled(ctx context.Context, arg UpdateNotificationStatusIfScheduledParams) (int64, error)
 	// ==========================================
 	// UPDATE

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"hello/internal/database/repository"
@@ -25,10 +26,9 @@ import (
 // For each event the processor transitions the notification through the
 // states PROCESSING → COMPLETED (or FAILED), resolving the notification's
 // targets into a set of user IDs, expanding those users into device tokens,
-// dispatching a single batched request to the configured provider, and
-// recording one delivery row per provider result. It does not emit a
-// NotificationDeliveryUpdated event to the update topic — see the
-// "Missing delivery-update publication" section on ProcessSendRequested.
+// dispatching a single batched request to the configured provider, recording
+// one delivery row per provider result, and publishing one DeliveryUpdated
+// event for each delivery row successfully persisted.
 //
 // # Status vocabulary
 //
@@ -91,14 +91,6 @@ type Processor struct {
 // the provider (currently always OneSignalProvider), and creates the Kafka
 // producer targeting the update topic.
 //
-// # Unused producer field
-//
-// The producer passed to this constructor is stored on the struct but is
-// never referenced by ProcessSendRequested. The processor therefore does
-// not publish delivery-update events despite the field's presence and
-// despite the README's description of the worker as emitting such events.
-// See ProcessSendRequested for the full implications.
-//
 // # Concurrency
 //
 // The constructor is cheap and stateless. The returned processor holds only
@@ -159,7 +151,8 @@ func NewProcessor(
 //     to COMPLETED and return nil.
 //  7. Build a SendRequest from the notification and the token set, and
 //     invoke provider.Send. A failure here sets status to FAILED.
-//  8. For each SendResult, insert a notification_deliveries row. Insert
+//  8. For each SendResult, insert a notification_deliveries row. After a
+//     successful insert, publish a DeliveryUpdated event. Insert and publish
 //     errors are logged and skipped — they do not abort the loop.
 //  9. Transition the notification to "COMPLETED" and return nil.
 //
@@ -191,20 +184,15 @@ func NewProcessor(
 // silently lost: no delivery row is inserted for them, and they are not
 // counted as failures.
 //
-// # Missing delivery-update publication
+// # Delivery-update publication
 //
-// Despite the producer field being wired in and despite the README
-// describing the worker as emitting NotificationDeliveryUpdated events on
-// the update topic for downstream analytics, this method never calls the
-// producer. No delivery-update event is published from any code path in
-// this package. Downstream consumers that expect those events will receive
-// nothing; the only record of delivery outcomes is the
-// notification_deliveries table.
-//
-// Adding the publish is straightforward — the field and the producer's
-// PublishDeliveryUpdated method both exist — but the sequence around it
-// (per-result publication, error handling, and the interaction with the
-// COMPLETED status update) requires design work that has not been done.
+// A DeliveryUpdated event is published after its corresponding delivery row
+// has been persisted. The database row remains the source of truth. A publish
+// failure is logged but does not fail the Kafka send-request message: returning
+// an error after a provider call would cause the worker's at-least-once loop to
+// retry the entire notification and potentially dispatch duplicate pushes.
+// This best-effort boundary can lose analytics events; a transactional outbox
+// is required for durable, exactly-once database-to-Kafka propagation.
 //
 // # Device token attribution
 //
@@ -352,6 +340,12 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 		})
 		if err != nil {
 			log.Printf("[Worker] Failed to insert delivery for user %d: %v", r.UserID, err)
+			continue
+		}
+
+		update := deliveryUpdatedEvent(notif.ID, "ONESIGNAL", r, time.Now())
+		if err := p.producer.PublishDeliveryUpdated(ctx, update); err != nil {
+			log.Printf("[Worker] Failed to publish delivery update for notification %d, user %d: %v", notif.ID, r.UserID, err)
 		}
 	}
 
@@ -364,6 +358,33 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 
 	log.Printf("[Worker] Notification %d processed successfully", event.NotificationID)
 	return nil
+}
+
+// deliveryUpdatedEvent converts a provider result into the analytics event
+// emitted after its delivery row is stored.
+//
+// provider is the normalized provider label persisted with the delivery. A
+// provider error always yields FAILED and includes its human-readable reason;
+// otherwise the provider's result status is preserved (typically SENT). The
+// helper is deterministic for a supplied occurredAt and safe for concurrent
+// use because it has no mutable state.
+func deliveryUpdatedEvent(notificationID int64, provider string, result SendResult, occurredAt time.Time) kafka.DeliveryUpdated {
+	status := result.Status
+	failedReason := ""
+	if result.Error != nil {
+		status = "FAILED"
+		failedReason = result.Error.Error()
+	}
+
+	return kafka.DeliveryUpdated{
+		NotificationID:    notificationID,
+		UserID:            result.UserID,
+		Provider:          provider,
+		ProviderMessageID: result.ProviderMessageID,
+		Status:            status,
+		OccurredAt:        occurredAt,
+		FailedReason:      failedReason,
+	}
 }
 
 // expandTargets resolves all user IDs targeted by the notification.

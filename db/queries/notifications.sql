@@ -92,6 +92,22 @@ SET
 WHERE id = sqlc.arg('id')
   AND status = 'SCHEDULED';
 
+-- name: UpdateNotificationStatusIfDraft :execrows
+UPDATE notifications
+SET
+    status = sqlc.arg('status'),
+    updated_at = NOW()
+WHERE id = sqlc.arg('id')
+  AND status = 'DRAFT';
+
+-- name: UpdateNotificationStatusIfQueued :execrows
+UPDATE notifications
+SET
+    status = sqlc.arg('status'),
+    updated_at = NOW()
+WHERE id = sqlc.arg('id')
+  AND status = 'QUEUED';
+
 -- name: MarkNotificationSent :exec
 UPDATE notifications
 SET

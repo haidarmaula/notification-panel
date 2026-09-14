@@ -13,7 +13,7 @@ import (
 
 // Domain errors.
 //
-// These four sentinels are returned by UserService methods and translated
+// These five sentinels are returned by UserService methods and translated
 // into HTTP status codes by the UserHandler and DeviceTokenHandler. They
 // are declared here, in the file that owns their methods, rather than in a
 // separate errors.go — consistent with the convention used by the auth,
@@ -37,6 +37,11 @@ var (
 	//
 	// The handler maps this to 404 Not Found.
 	ErrDeviceTokenNotFound = errors.New("device token not found")
+
+	// ErrDeviceTokenForbidden is returned when an authenticated mobile user
+	// attempts to update or delete a device token owned by another user.
+	// The handler maps it to 403 Forbidden without disclosing the token owner.
+	ErrDeviceTokenForbidden = errors.New("device token does not belong to authenticated user")
 
 	// ErrDeviceTokenDuplicate is returned by RegisterDeviceToken and
 	// UpdateDeviceToken when the supplied push token is already
@@ -596,6 +601,22 @@ func (s *UserService) RegisterDeviceToken(ctx context.Context, userID int64, req
 	}, nil
 }
 
+// RegisterDeviceTokenForExternalID registers a device token for the mobile
+// user identified by externalID.
+//
+// externalID must originate from a verified mobile JWT, never directly from
+// client input. The method resolves it to the internal users.id and delegates
+// validation and persistence to RegisterDeviceToken. It returns ErrUserNotFound
+// when no local user matches externalID and otherwise preserves the delegate's
+// errors. The service is safe for concurrent use.
+func (s *UserService) RegisterDeviceTokenForExternalID(ctx context.Context, externalID string, req RegisterDeviceTokenRequest) (*DeviceToken, error) {
+	userID, err := s.userIDByExternalID(ctx, externalID)
+	if err != nil {
+		return nil, err
+	}
+	return s.RegisterDeviceToken(ctx, userID, req)
+}
+
 // UpdateDeviceToken updates a device token.
 //
 // # Flow
@@ -763,6 +784,70 @@ func (s *UserService) DeleteDeviceToken(ctx context.Context, tokenID int64) erro
 		return ErrDeviceTokenNotFound
 	}
 	return s.deviceRepo.Delete(ctx, tokenID)
+}
+
+// UpdateDeviceTokenForExternalID updates a device token only when externalID
+// identifies the token's current owner.
+//
+// externalID must come from verified mobile authentication. The method returns
+// ErrUserNotFound, ErrDeviceTokenNotFound, or ErrDeviceTokenForbidden before
+// applying an update; successful ownership verification delegates to
+// UpdateDeviceToken and preserves its validation and repository errors. It is
+// safe for concurrent use.
+func (s *UserService) UpdateDeviceTokenForExternalID(ctx context.Context, externalID string, tokenID int64, req UpdateDeviceTokenRequest) error {
+	if err := s.ensureDeviceTokenOwnership(ctx, externalID, tokenID); err != nil {
+		return err
+	}
+	return s.UpdateDeviceToken(ctx, tokenID, req)
+}
+
+// DeleteDeviceTokenForExternalID deletes a device token only when externalID
+// identifies the token's current owner.
+//
+// externalID must come from verified mobile authentication. The method returns
+// ErrUserNotFound, ErrDeviceTokenNotFound, or ErrDeviceTokenForbidden when the
+// ownership check cannot pass; otherwise it deletes the token. It is safe for
+// concurrent use.
+func (s *UserService) DeleteDeviceTokenForExternalID(ctx context.Context, externalID string, tokenID int64) error {
+	if err := s.ensureDeviceTokenOwnership(ctx, externalID, tokenID); err != nil {
+		return err
+	}
+	return s.deviceRepo.Delete(ctx, tokenID)
+}
+
+// userIDByExternalID resolves a verified mobile external ID to users.id.
+//
+// It returns ErrUserNotFound for any repository lookup failure, consistent
+// with the service's existing by-ID lookup behaviour. It has no mutable state
+// and is safe for concurrent use.
+func (s *UserService) userIDByExternalID(ctx context.Context, externalID string) (int64, error) {
+	user, err := s.userRepo.FindByExternalID(ctx, externalID)
+	if err != nil {
+		return 0, ErrUserNotFound
+	}
+	return user.ID, nil
+}
+
+// ensureDeviceTokenOwnership verifies that externalID resolves to the owner
+// of tokenID.
+//
+// The method intentionally compares internal IDs after resolving the verified
+// external ID, so a client never controls either side of the authorization
+// decision. It returns the relevant not-found or forbidden sentinel and is
+// safe for concurrent use.
+func (s *UserService) ensureDeviceTokenOwnership(ctx context.Context, externalID string, tokenID int64) error {
+	userID, err := s.userIDByExternalID(ctx, externalID)
+	if err != nil {
+		return err
+	}
+	token, err := s.deviceRepo.FindByID(ctx, tokenID)
+	if err != nil {
+		return ErrDeviceTokenNotFound
+	}
+	if token.UserID != userID {
+		return ErrDeviceTokenForbidden
+	}
+	return nil
 }
 
 // ============================================
