@@ -31,9 +31,9 @@ import (
 // Each method recognises a small set of service sentinels
 // (ErrUserNotFound, ErrDeviceTokenNotFound, ErrDeviceTokenForbidden,
 // ErrDeviceTokenDuplicate, ErrInvalidPlatform) and maps them to status codes. Any unrecognised
-// error falls through to a 500 whose response body carries err.Error()
-// verbatim — the same disclosure pattern used elsewhere in this
-// codebase.
+// error falls through to a 500 whose response body is the generic string
+// "internal server error". The underlying error is not disclosed. This is
+// the same disclosure policy used elsewhere in this codebase.
 //
 // # Concurrency
 //
@@ -83,8 +83,9 @@ func NewDeviceTokenHandler(service *UserService) *DeviceTokenHandler {
 //   - 400 Bad Request: the path's id parameter is missing or malformed.
 //   - 404 Not Found: the service returned ErrUserNotFound — the user
 //     does not exist, checked before the token list is fetched.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: a ListDeviceTokensResponse containing the user's tokens.
 //
 // # Concurrency
@@ -103,7 +104,7 @@ func (h *DeviceTokenHandler) ListByUser(w http.ResponseWriter, r *http.Request) 
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
@@ -162,16 +163,16 @@ func (h *DeviceTokenHandler) ListByUser(w http.ResponseWriter, r *http.Request) 
 // # Responses
 //
 //   - 400 Bad Request: the body could not be decoded, push_token was empty,
-//     platform was empty, or the service
-//     returned ErrInvalidPlatform.
+//     platform was empty, or the service returned ErrInvalidPlatform.
 //   - 404 Not Found: the service returned ErrUserNotFound — the
 //     authenticated user does not resolve to a local row.
 //   - 409 Conflict: the service returned ErrDeviceTokenDuplicate — a
 //     device with the same push token is already registered. The check
 //     is advisory; see the service's RegisterDeviceToken for the
 //     concurrency caveat.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 201 Created: a DeviceTokenResponse for the newly created row.
 //
 // # Concurrency
@@ -208,7 +209,7 @@ func (h *DeviceTokenHandler) Register(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrInvalidPlatform):
 			response.JSON(w, http.StatusBadRequest, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
@@ -258,8 +259,9 @@ func (h *DeviceTokenHandler) Register(w http.ResponseWriter, r *http.Request) {
 //   - 409 Conflict: the service returned ErrDeviceTokenDuplicate — the
 //     new push_token collides with another token's. The check is
 //     advisory; see the service's UpdateDeviceToken.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: a JSON object with a "message" field.
 //
 // # Concurrency
@@ -303,7 +305,7 @@ func (h *DeviceTokenHandler) Update(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrInvalidPlatform):
 			response.JSON(w, http.StatusBadRequest, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
@@ -329,8 +331,9 @@ func (h *DeviceTokenHandler) Update(w http.ResponseWriter, r *http.Request) {
 //   - 400 Bad Request: the path's id parameter is missing or malformed.
 //   - 403 Forbidden: the token belongs to another user.
 //   - 404 Not Found: the service returned ErrDeviceTokenNotFound.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: no data payload; the message "deleted" accompanies a nil
 //     data field.
 //
@@ -360,7 +363,7 @@ func (h *DeviceTokenHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 

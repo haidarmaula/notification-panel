@@ -23,10 +23,9 @@ import (
 // ErrStaffNotFoundOrInactive) and maps them to specific status codes.
 // Any unrecognised error — including repository failures and wrapped
 // errors from the service — falls through to a 500 whose response body
-// carries err.Error() verbatim. This is the same disclosure pattern used
-// by the notifications, mobile, and profile features; the auth feature
-// is the only handler that replaces the 500 message with a generic
-// string.
+// is the generic string "internal server error". This is the same
+// disclosure policy used by the notifications, mobile, and profile
+// features; the auth feature also uses a generic message.
 //
 // # Concurrency
 //
@@ -76,8 +75,9 @@ func NewSegmentHandler(service *SegmentService) *SegmentHandler {
 //
 //   - 200 OK: a ListSegmentsResponse with the current page of segments
 //     and pagination metadata.
-//   - 500 Internal Server Error: any service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any service error. The response body is
+//     the generic string "internal server error"; the underlying error
+//     is not disclosed.
 //
 // # Concurrency
 //
@@ -88,7 +88,7 @@ func (h *SegmentHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	segments, total, err := h.service.List(r.Context(), page, limit, search)
 	if err != nil {
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
@@ -140,8 +140,9 @@ func (h *SegmentHandler) List(w http.ResponseWriter, r *http.Request) {
 //   - 400 Bad Request: the path's id parameter is missing or not a valid
 //     int64.
 //   - 404 Not Found: the service returned ErrSegmentNotFound.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: a SegmentDetail.
 //
 // # Concurrency
@@ -160,7 +161,7 @@ func (h *SegmentHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
@@ -200,9 +201,11 @@ func (h *SegmentHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 //     with the same name already exists. The check is advisory; a
 //     concurrent create with the same name can race past it and produce
 //     a database-level unique-violation, which surfaces through the
-//     default 500 branch instead.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//     default 500 branch instead. The default 500 message is the generic
+//     "internal server error" and does not disclose the database error.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 201 Created: a CreateSegmentResponse with the new segment's ID,
 //     under the message "segment created".
 //
@@ -238,7 +241,7 @@ func (h *SegmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrStaffNotFoundOrInactive):
 			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
@@ -276,8 +279,9 @@ func (h *SegmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 //     name collides with an existing segment. As with Create, the check
 //     is advisory and a concurrent update can race past it.
 //   - 401 Unauthorized: the service returned ErrStaffNotFoundOrInactive.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: the small-map response described above.
 //
 // # Concurrency
@@ -314,7 +318,7 @@ func (h *SegmentHandler) Update(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrStaffNotFoundOrInactive):
 			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
@@ -343,8 +347,9 @@ func (h *SegmentHandler) Update(w http.ResponseWriter, r *http.Request) {
 //   - 409 Conflict: the service returned ErrSegmentHasMembers — the
 //     segment cannot be deleted while it has members.
 //   - 401 Unauthorized: the service returned ErrStaffNotFoundOrInactive.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: no data payload; the message "deleted" accompanies a nil
 //     data field.
 //
@@ -368,7 +373,7 @@ func (h *SegmentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrStaffNotFoundOrInactive):
 			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}

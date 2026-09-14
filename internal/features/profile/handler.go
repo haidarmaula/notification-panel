@@ -32,9 +32,9 @@ import (
 // ErrEmailAlreadyUsed, ErrInvalidCredentials) and maps them to specific
 // status codes. Any unrecognised error — including repository failures and
 // wrapped errors from the service — falls through to a 500 whose response
-// body carries err.Error() verbatim. This is the same disclosure pattern
-// used by the notifications and mobile features; the auth feature is the
-// only handler that replaces the 500 message with a generic string.
+// body is the generic string "internal server error". This is the same
+// disclosure policy used by the notifications and mobile features; the
+// auth feature also uses a generic message.
 //
 // # Concurrency
 //
@@ -74,8 +74,9 @@ func NewProfileHandler(service *ProfileService) *ProfileHandler {
 //     string "unauthorized".
 //   - 404 Not Found: the service returned ErrProfileNotFound — the staff
 //     user identified by the token no longer exists in the database.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: a ProfileResponse, wrapped in the standard envelope with the
 //     message "success".
 //
@@ -95,7 +96,7 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
@@ -125,8 +126,9 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 //     expected to have checked for this before attempting the write;
 //     whether the check is atomic with the write is the service's concern,
 //     not the handler's.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: the updated ProfileResponse, with the message "profile
 //     updated". Unlike the equivalent response in the notifications
 //     feature, this response echoes the updated state rather than a bare
@@ -165,7 +167,7 @@ func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrEmailAlreadyUsed):
 			response.JSON(w, http.StatusConflict, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
@@ -191,8 +193,9 @@ func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 //   - 400 Bad Request: the body could not be decoded, or either password
 //     field was empty.
 //   - 404 Not Found: the service returned ErrProfileNotFound.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: no data payload; the message "password updated successfully"
 //     accompanies a nil data field.
 //
@@ -238,7 +241,7 @@ func (h *ProfileHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) 
 		case errors.Is(err, ErrInvalidCredentials):
 			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}

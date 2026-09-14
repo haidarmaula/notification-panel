@@ -43,13 +43,11 @@ type contextKeyStaffID struct{}
 // # Error mapping
 //
 // Every handler maps a set of service sentinels to specific status codes
-// (404, 409, 400, 401) and falls through to a 500 with err.Error() as the
-// message for anything unrecognised. As with the mobile feature's handler,
-// this means any error not explicitly listed is served verbatim to the
-// client — including database errors and wrapped repository errors. The
-// auth feature's handler follows the safer convention of replacing the 500
-// message with a generic string; the two handlers are inconsistent on this
-// point.
+// (404, 409, 400, 401) and falls through to a 500 with the generic message
+// "internal server error" for anything unrecognised. No error details are
+// disclosed to the client. As with the auth feature's handler, this avoids
+// leaking database errors or wrapped repository errors. The auth feature
+// uses the same generic message.
 //
 // # Concurrency
 //
@@ -90,7 +88,8 @@ func NewNotificationHandler(service *NotificationService) *NotificationHandler {
 //   - 200 OK: a ListNotificationsResponse carrying the current page and the
 //     total matching row count.
 //   - 500 Internal Server Error: any service error, including a repository
-//     failure. The error message is served verbatim from err.Error().
+//     failure. The response body is the generic string "internal server
+//     error"; the underlying error is not disclosed.
 //
 // The handler does not distinguish "no matching rows" from "empty page of a
 // larger result set"; the client must inspect Pagination.Total.
@@ -107,7 +106,7 @@ func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	items, total, err := h.service.List(r.Context(), page, limit, status, targetType, keyword)
 	if err != nil {
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
@@ -134,8 +133,9 @@ func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 //   - 400 Bad Request: the path's id parameter is missing or not a valid
 //     int64.
 //   - 404 Not Found: the service returned ErrNotificationNotFound.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response body
+//     is the generic string "internal server error"; the underlying error
+//     is not disclosed.
 //   - 200 OK: a NotificationDetail.
 //
 // # Concurrency
@@ -154,7 +154,7 @@ func (h *NotificationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
@@ -189,8 +189,9 @@ func (h *NotificationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 //   - 401 Unauthorized: the request context lacks a staff identity, or the
 //     service reports the staff user is missing or inactive
 //     (ErrStaffNotFoundOrInactive).
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response body
+//     is the generic string "internal server error"; the underlying error
+//     is not disclosed.
 //   - 201 Created: a CreateNotificationResponse.
 //
 // # Concurrency
@@ -246,7 +247,7 @@ func (h *NotificationHandler) Create(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrStaffNotFoundOrInactive):
 			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
@@ -272,8 +273,9 @@ func (h *NotificationHandler) Create(w http.ResponseWriter, r *http.Request) {
 //   - 409 Conflict: the service returned ErrNotificationNotDraft — the
 //     notification has moved past DRAFT and cannot be edited.
 //   - 401 Unauthorized: the service returned ErrStaffNotFoundOrInactive.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response body
+//     is the generic string "internal server error"; the underlying error
+//     is not disclosed.
 //   - 200 OK: a JSON object with a "message" field. This response does not
 //     echo the updated notification — the client must re-fetch to obtain
 //     the current state.
@@ -316,7 +318,7 @@ func (h *NotificationHandler) Update(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrStaffNotFoundOrInactive):
 			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
@@ -335,8 +337,9 @@ func (h *NotificationHandler) Update(w http.ResponseWriter, r *http.Request) {
 //     in DRAFT (and, depending on the service's rules, SCHEDULED) are
 //     eligible for deletion.
 //   - 401 Unauthorized: the service returned ErrStaffNotFoundOrInactive.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response body
+//     is the generic string "internal server error"; the underlying error
+//     is not disclosed.
 //   - 200 OK: no payload; the "deleted" message accompanies a nil data
 //     field.
 //
@@ -360,7 +363,7 @@ func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrStaffNotFoundOrInactive):
 			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
@@ -390,8 +393,9 @@ func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 //     includes a notification that has already been sent: the caller must
 //     check status before retrying.
 //   - 401 Unauthorized: the service returned ErrStaffNotFoundOrInactive.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response body
+//     is the generic string "internal server error"; the underlying error
+//     is not disclosed.
 //   - 202 Accepted: a JSON object with a "message" field confirming that
 //     the notification was atomically claimed as QUEUED and its send event
 //     was accepted by the Kafka producer.
@@ -423,7 +427,7 @@ func (h *NotificationHandler) Send(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrStaffNotFoundOrInactive):
 			response.JSON(w, http.StatusUnauthorized, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
@@ -535,5 +539,4 @@ func getStaffIDFromContext(ctx context.Context) (int64, bool) {
 		return 0, false
 	}
 	return claims.StaffID, true
-
 }

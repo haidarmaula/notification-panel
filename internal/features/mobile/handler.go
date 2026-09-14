@@ -19,10 +19,10 @@ import (
 //
 // The handler recognises two sentinels returned by the service:
 // ErrInvalidJWT is mapped to 401, ErrInvalidPlatform to 400. Any other error
-// falls through to a 500 whose response body carries the underlying
-// error's message via err.Error() — see the Sync method for the
-// consequences of that choice. Unlike the auth feature handler, this one
-// does not replace the default error message with a generic string.
+// falls through to a 500 with the generic message "internal server error"
+// rather than disclosing the underlying error. This matches the auth
+// feature's handler and avoids leaking internal details to the mobile
+// client.
 //
 // # Concurrency
 //
@@ -75,23 +75,22 @@ func NewMobileHandler(service *MobileService) *MobileHandler {
 //     the one configured for the mobile audience.
 //   - 400 Bad Request: the service returned ErrInvalidPlatform — the
 //     platform string was not one the service recognises.
-//   - 500 Internal Server Error: any other service error. See the caveat
-//     below on the response body.
+//   - 500 Internal Server Error: any other service error. The response body
+//     is the generic string "internal server error"; the underlying error
+//     is not disclosed.
 //   - 200 OK: a SyncResponse carrying the internal user and device-token
 //     IDs, wrapped in the standard response envelope with the message
 //     "user synchronized".
 //
-// # Error disclosure caveat
+// # Error disclosure policy
 //
-// The default branch of the error switch sends err.Error() as the response
-// message rather than a generic "internal server error". Any error that is
-// not ErrInvalidJWT or ErrInvalidPlatform — a database connectivity
+// The default branch of the error switch sends the generic
+// "internal server error" message rather than err.Error(). Any error that
+// is not ErrInvalidJWT or ErrInvalidPlatform — a database connectivity
 // failure, a unique-constraint violation with a driver-supplied message, a
-// future internal sentinel — will therefore be surfaced to the mobile
-// client verbatim. That is an information-disclosure risk and an
-// inconsistency with the auth feature's handler, which always replaces the
-// message with a generic string on the 500 path. Correcting it is a
-// one-line change but is outside the scope of a documentation pass.
+// future internal sentinel — is therefore not surfaced to the mobile
+// client. This is consistent with the auth feature's handler and closes the
+// information-disclosure gap previously present here.
 //
 // # Concurrency
 //
@@ -133,7 +132,7 @@ func (h *MobileHandler) Sync(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrInvalidPlatform):
 			response.JSON(w, http.StatusBadRequest, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}

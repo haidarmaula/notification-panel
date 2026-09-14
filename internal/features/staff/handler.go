@@ -89,10 +89,10 @@ type StaffServicer interface {
 // (ErrStaffNotFound, ErrEmailAlreadyRegistered, ErrInvalidRole,
 // ErrCannotDeleteSelf) and maps them to status codes. Any unrecognised
 // error — including repository failures and wrapped errors from the
-// service — falls through to a 500 whose response body carries
-// err.Error() verbatim. This is the same disclosure pattern used by the
-// notifications, mobile, segments, and profile features; the auth feature
-// is the only handler that replaces the 500 message with a generic string.
+// service — falls through to a 500 whose response body is the generic
+// string "internal server error". This is the same disclosure policy used
+// by the notifications, mobile, segments, and profile features; the auth
+// feature also uses a generic message.
 //
 // # Concurrency
 //
@@ -136,8 +136,9 @@ func NewStaffHandler(service StaffServicer) *StaffHandler {
 //     advisory; a concurrent create with the same email can race past
 //     it, and the resulting outcome depends on the schema's unique
 //     constraint — see the service's Create for details.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 201 Created: the created StaffResponse, under the message "staff
 //     created".
 //
@@ -168,7 +169,7 @@ func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrInvalidRole):
 			response.JSON(w, http.StatusBadRequest, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
@@ -185,8 +186,9 @@ func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 //   - 400 Bad Request: the path's id parameter is missing or not a valid
 //     int64.
 //   - 404 Not Found: the service returned ErrStaffNotFound.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: the StaffResponse for the identified user.
 //
 // # Concurrency
@@ -204,7 +206,7 @@ func (h *StaffHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 	response.JSON(w, http.StatusOK, toStaffResponse(staff), "success")
@@ -233,8 +235,9 @@ func (h *StaffHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 //
 //   - 200 OK: a ListStaffResponse with the current page, total, and page
 //     count.
-//   - 500 Internal Server Error: any service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any service error. The response body is
+//     the generic string "internal server error"; the underlying error
+//     is not disclosed.
 //
 // # Concurrency
 //
@@ -245,7 +248,7 @@ func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	items, total, err := h.service.List(r.Context(), page, limit, search)
 	if err != nil {
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
@@ -284,9 +287,13 @@ func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 //     all three fields empty, or the service returned ErrInvalidRole.
 //   - 404 Not Found: the service returned ErrStaffNotFound.
 //   - 409 Conflict: the service returned ErrEmailAlreadyUsed — the new
-//     email collides with another staff user's email.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//     email collides with another staff user's email. This service error
+//     is not currently mapped to 409; see the sentinel's documentation.
+//     The default 500 branch now returns the generic "internal server
+//     error" and does not disclose the underlying error.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: the updated StaffResponse, under the message "staff
 //     updated".
 //
@@ -324,7 +331,7 @@ func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrEmailAlreadyUsed):
 			response.JSON(w, http.StatusConflict, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
@@ -347,8 +354,9 @@ func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 //
 //   - 400 Bad Request: a malformed id or a JSON decode failure.
 //   - 404 Not Found: the service returned ErrStaffNotFound.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: the updated StaffResponse, under the message "status
 //     updated".
 //
@@ -373,7 +381,7 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 	response.JSON(w, http.StatusOK, toStaffResponse(staff), "status updated")
@@ -406,8 +414,9 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 //   - 400 Bad Request: a malformed id, a JSON decode failure, or an empty
 //     password.
 //   - 404 Not Found: the service returned ErrStaffNotFound.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: no data payload; the message "password updated" accompanies
 //     a nil data field.
 //
@@ -434,7 +443,7 @@ func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 	response.JSON(w, http.StatusOK, nil, "password updated")
@@ -443,7 +452,7 @@ func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 // Delete handles DELETE /api/v1/staff/{id}.
 // It removes a staff user from the system.
 // Returns 200 OK on successful deletion, 400 for invalid ID format,
-// 403 if the actor attempts to delete their own account,
+// 403 if the actor attempts to delete our own account,
 // 404 if the staff user does not exist, and 500 for internal errors.
 //
 // # Self-deletion guard
@@ -464,8 +473,9 @@ func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 //   - 403 Forbidden: the service returned ErrCannotDeleteSelf — the
 //     acting staff user attempted to delete their own account.
 //   - 404 Not Found: the service returned ErrStaffNotFound.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: no data payload; the message "staff user deleted"
 //     accompanies a nil data field.
 //
@@ -485,7 +495,7 @@ func (h *StaffHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		case errors.Is(err, ErrCannotDeleteSelf):
 			response.JSON(w, http.StatusForbidden, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}

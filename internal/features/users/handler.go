@@ -31,10 +31,11 @@ import (
 // # Error mapping
 //
 // Each method recognises ErrUserNotFound and maps it to 404; every other
-// service error falls through to a 500 with err.Error() as the message.
-// The 500 disclosure pattern is shared with the notifications, mobile,
-// segments, staff, and profile features; the auth feature's handler is
-// the only one that replaces the 500 message with a generic string.
+// service error falls through to a 500 with the generic message
+// "internal server error". The 500 message does not disclose the
+// underlying error. This is the same disclosure policy used by the
+// notifications, mobile, segments, staff, and profile features; the auth
+// feature also uses a generic message.
 //
 // # Concurrency
 //
@@ -82,8 +83,9 @@ func NewUserHandler(service *UserService) *UserHandler {
 //
 //   - 200 OK: a ListUsersResponse with the current page of users and
 //     pagination metadata.
-//   - 500 Internal Server Error: any service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any service error. The response body is
+//     the generic string "internal server error"; the underlying error
+//     is not disclosed.
 //
 // # Concurrency
 //
@@ -96,7 +98,7 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	users, total, err := h.service.List(r.Context(), page, limit, keyword, status, externalID)
 	if err != nil {
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
@@ -135,8 +137,9 @@ func (h *UserHandler) List(w http.ResponseWriter, r *http.Request) {
 //
 //   - 400 Bad Request: the path's id parameter is missing or malformed.
 //   - 404 Not Found: the service returned ErrUserNotFound.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: the UserResponse for the identified user.
 //
 // # Concurrency
@@ -155,7 +158,7 @@ func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
@@ -191,8 +194,9 @@ func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // # Responses
 //
 //   - 400 Bad Request: the keyword query parameter was empty.
-//   - 500 Internal Server Error: any service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any service error. The response body is
+//     the generic string "internal server error"; the underlying error
+//     is not disclosed.
 //   - 200 OK: a slice of SearchUserResult.
 //
 // # Concurrency
@@ -207,7 +211,7 @@ func (h *UserHandler) Search(w http.ResponseWriter, r *http.Request) {
 
 	results, err := h.service.Search(r.Context(), keyword)
 	if err != nil {
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
@@ -229,8 +233,9 @@ func (h *UserHandler) Search(w http.ResponseWriter, r *http.Request) {
 //
 //   - 400 Bad Request: the path's id parameter is missing or malformed.
 //   - 404 Not Found: the service returned ErrUserNotFound.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: a ListUserSegmentsResponse.
 //
 // # Concurrency
@@ -249,7 +254,7 @@ func (h *UserHandler) GetUserSegments(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
@@ -288,8 +293,9 @@ func (h *UserHandler) GetUserSegments(w http.ResponseWriter, r *http.Request) {
 //
 //   - 400 Bad Request: the path's id parameter is missing or malformed.
 //   - 404 Not Found: the service returned ErrUserNotFound.
-//   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//   - 500 Internal Server Error: any other service error. The response
+//     body is the generic string "internal server error"; the underlying
+//     error is not disclosed.
 //   - 200 OK: a ListUserNotificationsResponse with the current page and
 //     pagination metadata.
 //
@@ -311,7 +317,7 @@ func (h *UserHandler) GetUserNotifications(w http.ResponseWriter, r *http.Reques
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
