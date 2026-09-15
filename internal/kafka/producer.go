@@ -17,21 +17,20 @@ import (
 //
 // # Behaviour
 //
-// The underlying kafka.Writer is configured for at-most-one-leader
-// acknowledgement (RequiredAcks: RequireOne) and for automatic topic
-// creation (AllowAutoTopicCreation: true). Both choices favour availability
-// and ease of local development over durability and strictness — see
-// NewProducer for the trade-offs and the recommended changes for production
-// deployments.
+// The underlying kafka.Writer is configured for all-replica acknowledgement
+// (RequiredAcks: RequireAll) and for no automatic topic creation
+// (AllowAutoTopicCreation: false). Both choices favour durability and
+// strictness over convenience — see NewProducer for the trade-offs and the
+// reasons these values were chosen.
 //
 // # Delivery semantics
 //
 // A WriteMessages call returns nil once the broker has acknowledged the
-// write under the configured RequiredAcks. This is not the same as
-// "durable" — with RequireOne, a leader failure immediately after
-// acknowledgment can lose the message. The producer does not retry at the
-// application level; retries are handled internally by kafka-go within its
-// own limits.
+// write under the configured RequiredAcks. With RequireAll, the producer
+// waits for the leader and all in-sync replicas to acknowledge the write,
+// so a message that is acknowledged is durable across a single replica
+// failure. The producer does not retry at the application level; retries
+// are handled internally by kafka-go within its own limits.
 //
 // # Concurrency
 //
@@ -49,25 +48,24 @@ type Producer struct {
 //
 // # Configuration choices
 //
-// The writer is constructed with three non-default settings, each of which
+// The writer is constructed with two non-default settings, each of which
 // has an operational consequence:
 //
 //   - Balancer: kafka.LeastBytes. Message keys still determine partition
 //     assignment when present (kafka-go hashes the key), so this balancer
 //     only affects messages published without a key. In this codebase every
 //     publish sets a key, so the balancer is effectively inert.
-//   - RequiredAcks: kafka.RequireOne. The producer waits for the leader to
-//     acknowledge, but not for replicas. A leader crash immediately after
-//     acknowledgment can silently lose the message. Production deployments
-//     that combine this producer with an at-least-once consumer should
-//     consider kafka.RequireAll, at the cost of additional latency on every
-//     publish.
-//   - AllowAutoTopicCreation: true. A typo in the configured topic name
-//     will silently create a new topic rather than failing loudly. This is
-//     convenient during local development but hazardous in production,
-//     where it can mask a misconfiguration: messages are written
-//     successfully to a topic no consumer is reading. Deployments that
-//     pre-provision topics should set this to false.
+//   - RequiredAcks: kafka.RequireAll. The producer waits for the leader and
+//     all in-sync replicas to acknowledge before returning from
+//     WriteMessages. This provides durability at the cost of additional
+//     latency on every publish. It is the appropriate default for an
+//     at-least-once delivery pipeline.
+//   - AllowAutoTopicCreation: false. Topics must be pre-provisioned
+//     explicitly. A typo in the configured topic name causes the first
+//     publish to fail loudly rather than silently creating a topic no
+//     consumer is reading. Pre-provisioning is the correct operational
+//     posture for production; local development can create topics via the
+//     provided Kafka UI or Kafka CLI.
 //
 // # Parameters
 //
@@ -89,8 +87,8 @@ func NewProducer(broker, topic string) *Producer {
 		Addr:                   kafka.TCP(broker),
 		Topic:                  topic,
 		Balancer:               &kafka.LeastBytes{},
-		RequiredAcks:           kafka.RequireOne,
-		AllowAutoTopicCreation: true,
+		RequiredAcks:           kafka.RequireAll,
+		AllowAutoTopicCreation: false,
 	}
 	return &Producer{writer: w}
 }
