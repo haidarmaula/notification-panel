@@ -21,6 +21,23 @@ import (
 // Whether a transition is a no-op or an error when applied to a row that is
 // already in the target state is a property of the SQL query, not this
 // wrapper.
+//
+// # User-facing vs admin-facing projections
+//
+// Two of the read methods — ListByNotification and ListByUser — are
+// distinguished not only by filter but by the granularity of the result:
+//
+//   - ListByNotification returns one row per delivery, which is the correct
+//     projection for the admin portal's per-campaign delivery listing.
+//   - ListByUser returns one row per *notification*, collapsing the
+//     deliveries that belong to a multi-device user into a single
+//     representative row. That is the projection the mobile inbox expects,
+//     where the same notification is shown once regardless of how many
+//     devices received it.
+//
+// The asymmetry is deliberate. Callers that need per-delivery detail for a
+// user should query the table directly or use ListByNotification scoped to
+// the relevant notification ID.
 type NotificationDeliveryRepository struct {
 	q sqlc.Querier
 }
@@ -40,17 +57,25 @@ func NewNotificationDeliveryRepository(q sqlc.Querier) *NotificationDeliveryRepo
 // This is the denominator of the per-campaign delivery rate displayed in the
 // admin analytics view. It counts rows, not distinct users or devices — if a
 // user has multiple active tokens, each token contributes independently.
+// That is the intended semantics for a per-campaign delivery rate: each
+// attempted push is a distinct unit of work, and a user with two devices
+// legitimately represents two delivery attempts.
 func (r *NotificationDeliveryRepository) CountByNotification(ctx context.Context, notificationID int64) (int64, error) {
 	return r.q.CountNotificationDeliveries(ctx, notificationID)
 }
 
-// CountByUser returns the total number of notification deliveries for a user.
+// CountByUser returns the total number of distinct notifications a user has
+// received.
 //
-// "Deliveries" here means rows in notification_deliveries — one per device
-// per notification — so a user with three devices who has received ten
-// notifications will report thirty. Callers that need per-notification
-// counts should join against notifications or use ListByUser, which returns
-// the joined row shape.
+// The count is of distinct notification_id values, not of delivery rows, so
+// it matches the number of items that ListByUser can return for the same
+// user. A user with three devices who has received ten notifications
+// reports ten, not thirty.
+//
+// This is the total the mobile inbox uses for its "X notifications"
+// pagination metadata; it would be wrong to use the raw delivery count for
+// that purpose, because the client would then believe there are more
+// notifications than it can ever page to.
 func (r *NotificationDeliveryRepository) CountByUser(ctx context.Context, userID int64) (int64, error) {
 	return r.q.CountUserNotifications(ctx, userID)
 }
@@ -84,6 +109,13 @@ func (r *NotificationDeliveryRepository) FindByID(ctx context.Context, id int64)
 // offset and limit are passed through to SQL without validation. The row
 // type carries joined context (user identity, device metadata), making this
 // the natural endpoint for the admin portal's per-campaign delivery listing.
+//
+// The result is one row per delivery, not one row per notification or per
+// user: a notification delivered to a user with three registered devices
+// produces three rows. That is the correct granularity for the admin view,
+// which is interested in per-device delivery success and failure. Callers
+// that need the collapsed per-notification view for a single user should use
+// ListByUser instead.
 func (r *NotificationDeliveryRepository) ListByNotification(ctx context.Context, notificationID int64, offset, limit int32) ([]sqlc.ListNotificationDeliveriesRow, error) {
 	return r.q.ListNotificationDeliveries(ctx, sqlc.ListNotificationDeliveriesParams{
 		NotificationID: notificationID,
@@ -92,13 +124,35 @@ func (r *NotificationDeliveryRepository) ListByNotification(ctx context.Context,
 	})
 }
 
-// ListByUser returns notification deliveries for a specific user, joined with
-// the parent notification so the caller can render the mobile app's inbox
-// without a second query.
+// ListByUser returns a page of distinct notifications for a specific user,
+// joined with the parent notification so the caller can render the mobile
+// app's inbox without a second query.
 //
-// offset and limit are passed through to SQL without validation. The row
-// type exposes the joined shape and is not interchangeable with
-// sqlc.NotificationDelivery.
+// offset and limit are passed through to SQL without validation.
+//
+// # One row per notification, not per delivery
+//
+// The underlying query collapses the notification_deliveries rows that
+// belong to a multi-device user into a single representative row per
+// notification, so a user with three devices who has received ten
+// notifications sees ten entries in their inbox, not thirty.
+//
+// The representative delivery is chosen by a status priority of
+//
+//	OPENED > DELIVERED > SENT > FAILED > (anything else)
+//
+// so a notification that the user has opened on any device is reported as
+// OPENED, even if another device's delivery is still in DELIVERED or FAILED.
+// The rationale is that the user's perception of "have I read this?" is the
+// most meaningful state for an inbox, and it should not be downgraded by the
+// failure or lag of a secondary device. Ordering is by the representative
+// delivery's created_at descending, so the most recently received
+// notification appears first.
+//
+// The row shape (sqlc.ListUserNotificationsRow) is unchanged by this
+// collapsing: the Status field carries the priority-selected status, and the
+// OpenedAt field carries the opened_at of whichever delivery produced that
+// status (or NULL when no delivery has been opened).
 func (r *NotificationDeliveryRepository) ListByUser(ctx context.Context, userID int64, offset, limit int32) ([]sqlc.ListUserNotificationsRow, error) {
 	return r.q.ListUserNotifications(ctx, sqlc.ListUserNotificationsParams{
 		UserID: userID,

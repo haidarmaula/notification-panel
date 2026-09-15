@@ -9,9 +9,10 @@
 // mobile end user (managed by the users feature) and from the acting staff
 // user's own self-service account (managed by the profile feature). The
 // staff feature is administrative: it acts on other accounts. Its
-// endpoints are gated by the super-admin role at the HTTP layer, so only a
-// super-admin can invoke them; the service layer does not re-check the
-// role.
+// endpoints are gated by the super-admin role at the HTTP layer, and two
+// service methods — Create and UpdatePassword — enforce the same
+// invariant independently as defense in depth. The remaining methods
+// (Update, UpdateStatus, Delete) rely on the HTTP-layer gate alone.
 //
 // # Relationship to auth and profile
 //
@@ -242,19 +243,42 @@ type UpdateStatusRequest struct {
 //
 // It is the JSON body expected by PATCH /api/v1/staff/{id}/password. This
 // is an administrative password reset: the caller sets a new password for
-// the target account without supplying the current password. Contrast
-// with the profile feature's UpdatePasswordRequest, which requires the
-// caller to prove identity by supplying their current password — the
-// difference reflects the two features' distinct authorisation models
-// (self-service versus administrative).
+// the target account. Unlike the profile feature's UpdatePasswordRequest —
+// where the current password proves that the caller owns the account —
+// this request requires the caller to prove that they are still the
+// super-admin whose token is being used, by re-entering their *own*
+// current password. The distinction reflects the two features'
+// authorisation models: the profile feature is self-service, while the
+// staff feature is administrative and the actor is acting on someone
+// else's account.
+//
+// # Re-authentication rationale
+//
+// The CurrentPassword field is a confirmation step (sometimes called
+// "sudo mode"): it forces the caller to demonstrate possession of
+// something the token alone does not. A stolen super-admin token — for
+// example, one exfiltrated from a browser session — is therefore not on
+// its own sufficient to reset an account's password and take it over.
 //
 // # Plaintext handling
 //
-// Password carries a plaintext value. The service bcrypt-hashes it before
-// storing; the plaintext never leaves the request scope and must not be
-// logged.
+// Both fields carry plaintext values. The service bcrypt-hashes the new
+// password before storing, and uses bcrypt.CompareHashAndPassword to
+// verify the current password against the actor's stored hash. Neither
+// plaintext value leaves the request scope, and neither must be logged.
 type UpdatePasswordRequest struct {
-	// Password is the new plaintext password. Required; the handler
-	// rejects an empty value with a 400 before invoking the service.
+	// CurrentPassword is the acting super-admin's own current password.
+	// Required; the handler rejects an empty value with a 400 before
+	// invoking the service. A value that does not match the actor's
+	// stored bcrypt hash produces ErrInvalidCurrentPassword, served as
+	// 403.
+	CurrentPassword string `json:"current_password"`
+
+	// Password is the new plaintext password to set on the target
+	// account. Required; the handler rejects an empty value with a 400
+	// before invoking the service. The service enforces a length policy
+	// (minPasswordLength–maxPasswordLength) and rejects an out-of-range
+	// value with ErrPasswordTooShort or ErrPasswordTooLong, both served
+	// as 400.
 	Password string `json:"password"`
 }

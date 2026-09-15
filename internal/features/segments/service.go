@@ -85,6 +85,18 @@ var (
 // depends on concrete repository types; see interfaces.go for the
 // rationale.
 //
+// # Creator reference resolution
+//
+// Every method that builds a Segment response resolves the creator's
+// display name from staffRepo. The creator's *ID* is taken from the
+// segment row itself (its CreatedBy column, which is the authoritative
+// value written at insert time and always available), not from the
+// staff-lookup result. A failure of the staff lookup therefore degrades
+// the response's creator name to the empty string while preserving the
+// correct creator ID — a caller can still resolve the reference, at the
+// cost of a follow-up lookup. This behaviour is documented in full on
+// GetByID.
+//
 // # Concurrency
 //
 // The service is stateless after construction and safe for concurrent use.
@@ -142,6 +154,16 @@ func NewSegmentService(
 //
 // The two branches are functionally identical apart from which repository
 // method they call and produce the same domain shape.
+//
+// # Creator reference in list rows
+//
+// Unlike the single-record read paths, List does not perform a per-row
+// staff lookup to resolve the creator's display name. The underlying
+// queries join the staff_users table directly and return the creator's
+// name alongside the segment row, so the creator reference on each
+// Segment in the response is always fully populated with the correct ID
+// and name. The zeroing bug that affected GetByID, Create, and Update
+// (see those methods) did not apply to this path.
 //
 // # Search-aware total
 //
@@ -267,10 +289,11 @@ func (s *SegmentService) List(ctx context.Context, page, limit int32, search str
 //     with the prefix "count members: " and returned as a non-sentinel
 //     error.
 //  3. Look up the creating staff user to obtain the creator's display
-//     name. A failure here is *swallowed*: the method proceeds with an
-//     empty name.
+//     name. A failure here is *swallowed*: the response's creator name
+//     degrades to the empty string while the creator ID is preserved —
+//     see the section below.
 //
-// # Creator ID is zeroed on staff-lookup failure
+// # Creator reference on staff-lookup failure
 //
 // The creator lookup at step 3 is implemented as:
 //
@@ -280,21 +303,28 @@ func (s *SegmentService) List(ctx context.Context, page, limit int32, search str
 //	    actorName = actor.Name
 //	}
 //
-// On failure, actor is the zero value of sqlc.StaffUser. The subsequent
-// construction reads actor.ID regardless of whether the lookup succeeded:
+// The subsequent construction reads the creator ID from *the segment row*,
+// not from the lookup result:
 //
 //	CreatedBy: Actor{
-//	    ID:   actor.ID,   // 0 when the lookup failed
+//	    ID:   seg.CreatedBy,
 //	    Name: actorName,
 //	},
 //
-// The result is that a transient or permanent staff-lookup failure
-// produces a response whose creator reference is {id: 0, name: ""},
-// discarding the correct creator ID held in seg.CreatedBy. A client that
-// uses the ID for subsequent lookups will attempt to fetch staff user 0.
-// The correct fallback would set ID to seg.CreatedBy (which is always
-// available) and only fall back to an empty Name. This pattern repeats in
-// Create and Update.
+// Because seg.CreatedBy is the value read from the segments table, it is
+// always available and always correct — it is the authoritative record of
+// which staff user created the segment, and it does not depend on the
+// second lookup succeeding. A transient or permanent staff-lookup failure
+// therefore only degrades the response's creator *name* to the empty
+// string; the creator ID remains resolvable, and a client can issue a
+// follow-up staff lookup to recover the name.
+//
+// This behaviour closes the defect described as C18 in code-review.md,
+// where the response's creator ID was read from the lookup's zero-valued
+// result and was therefore recorded as 0 on any failure — discarding the
+// correct value held in seg.CreatedBy and causing a client that used the
+// ID for subsequent lookups to fetch staff user 0. The same pattern is
+// applied in Create and Update.
 //
 // # Errors
 //
@@ -334,7 +364,7 @@ func (s *SegmentService) GetByID(ctx context.Context, id int64) (*SegmentWithCou
 			Name:        seg.Name,
 			Description: seg.Description.String,
 			CreatedBy: Actor{
-				ID:   actor.ID,
+				ID:   seg.CreatedBy,
 				Name: actorName,
 			},
 			CreatedAt: seg.CreatedAt.Time,
@@ -403,6 +433,16 @@ type CreateParams struct {
 // the context-derived staff user. The authorisation and the attribution
 // would then be inconsistent.
 //
+// # Creator reference on staff-lookup failure
+//
+// The response's creator reference is built from a second staff lookup at
+// step 6. The creator *ID* is read from seg.CreatedBy — the value written
+// to the row at step 4 and echoed back by the insert — not from the
+// lookup result. A lookup failure therefore degrades the response's
+// creator name to the empty string while leaving the creator ID intact;
+// see GetByID for the full rationale and the corresponding entry in
+// code-review.md (C18).
+//
 // # Advisory name-uniqueness check
 //
 // The ExistsByName check at step 2 and the insert at step 4 are not
@@ -414,13 +454,6 @@ type CreateParams struct {
 // handler — not the 409 that ErrSegmentNameTaken would have produced. If
 // the schema does not enforce uniqueness, both inserts succeed and the
 // table contains two segments sharing a name.
-//
-// # Creator ID is zeroed on staff-lookup failure
-//
-// The response's creator reference is built from a second staff lookup at
-// step 6. As with GetByID, a lookup failure leaves Actor.ID at its zero
-// value, discarding the correct creator ID held in seg.CreatedBy. See
-// GetByID for the full analysis.
 //
 // # Errors
 //
@@ -494,7 +527,7 @@ func (s *SegmentService) Create(ctx context.Context, params CreateParams) (*Segm
 		Name:        seg.Name,
 		Description: seg.Description.String,
 		CreatedBy: Actor{
-			ID:   actor.ID,
+			ID:   seg.CreatedBy,
 			Name: actorName,
 		},
 		CreatedAt: seg.CreatedAt.Time,
@@ -571,11 +604,13 @@ type UpdateParams struct {
 // that treats the 500 as "the update failed" will retry against a row that
 // already reflects the requested change.
 //
-// # Creator ID is zeroed on staff-lookup failure
+// # Creator reference on staff-lookup failure
 //
 // As with GetByID and Create, the response's creator reference is built
-// from a staff lookup whose failure is silently absorbed. See GetByID for
-// the analysis.
+// from a staff lookup whose failure is silently absorbed. The creator ID
+// is taken from the re-fetched row (updated.CreatedBy), not from the
+// lookup result, so a failure degrades only the name. See GetByID for the
+// full analysis and the corresponding entry in code-review.md (C18).
 //
 // # Advisory name-uniqueness check
 //
@@ -676,7 +711,7 @@ func (s *SegmentService) Update(ctx context.Context, params UpdateParams) (*Segm
 		Name:        updated.Name,
 		Description: updated.Description.String,
 		CreatedBy: Actor{
-			ID:   actor.ID,
+			ID:   updated.CreatedBy,
 			Name: actorName,
 		},
 		CreatedAt: updated.CreatedAt.Time,

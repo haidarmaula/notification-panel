@@ -14,6 +14,44 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+// superAdminRoleName is the role name that the service requires a caller
+// to hold before it will perform a staff-management operation.
+//
+// The value mirrors the literal used by the bootstrap package to seed
+// the initial super-admin account; the two sites are intentionally kept
+// in sync. A future revision that centralises the constant — see L3 in
+// code-review.md — should update both.
+//
+// It is compared verbatim against roles.name, so the roles table must
+// store the value with the exact casing used here. The comparison is
+// case-sensitive.
+const superAdminRoleName = "SUPER_ADMIN"
+
+// Password policy bounds enforced by validatePasswordPolicy.
+//
+// The minimum is eight characters, matching the NIST SP 800-63B
+// recommendation and the shortest length that is not trivially brute
+// forced. The maximum is 72 bytes, the hard limit of the bcrypt input
+// length; a longer password is either rejected by the library or
+// silently truncated, both of which are worse than a clear rejection at
+// the service boundary.
+//
+// The policy deliberately does not mandate character classes
+// (uppercase, digit, symbol). NIST SP 800-63B recommends against
+// composition rules because they encourage predictable substitutions
+// (P@ssw0rd!) without measurably improving resistance to guessing. The
+// policy is enforced at both the admin reset path (this file) and, where
+// applicable, the self-service path in the profile feature.
+const (
+	// minPasswordLength is the shortest password the service accepts.
+	minPasswordLength = 8
+
+	// maxPasswordLength is the longest password the service accepts.
+	// The bound is derived from bcrypt's hard input limit; a longer
+	// value cannot be hashed without silent truncation.
+	maxPasswordLength = 72
+)
+
 // Domain errors for staff service.
 //
 // Five sentinels are declared here. Two of them — ErrEmailAlreadyRegistered
@@ -23,14 +61,15 @@ import (
 //
 //   - ErrEmailAlreadyRegistered is returned by Create, and the handler's
 //     Create method maps it to 409 Conflict.
-//   - ErrEmailAlreadyUsed is returned by Update, but the handler's Update
-//     method does *not* recognise it — see the sentinel's own
-//     documentation for the consequence.
+//   - ErrEmailAlreadyUsed is returned by Update, and the handler's Update
+//     method now maps it to 409 Conflict as well — the two sentinels
+//     remain distinct to preserve the method-level audit trail, but the
+//     handler treats them identically.
 //
 // The two should probably be a single sentinel; they are currently
 // distinct because of the order in which the paths were written. A future
-// consolidation would be safe as long as the handler's Update switch is
-// extended to recognise the resulting value.
+// consolidation would be safe as long as both handler switches continue
+// to recognise the resulting value.
 var (
 	// ErrEmailAlreadyRegistered is returned by Create when the supplied
 	// email already exists on another staff_users row. The check that
@@ -60,19 +99,9 @@ var (
 	// same class of conflict as ErrEmailAlreadyRegistered, but it is
 	// emitted from the Update path rather than the Create path.
 	//
-	// # Handler mapping gap
-	//
-	// The handler's Update method does not have a case for this sentinel.
-	// It recognises ErrStaffNotFound and ErrInvalidRole explicitly, and
-	// every other error — including this one — falls through to the
-	// default 500 branch. A caller that attempts to update a staff user's
-	// email to a value already taken by another user therefore receives
-	// a 500 Internal Server Error with the raw error message, rather
-	// than the 409 Conflict that the sentinel's semantics imply.
-	//
-	// The fix is a one-line addition to the handler's Update switch; it
-	// is documented here rather than applied because Rule 3 of this pass
-	// prohibits executable changes.
+	// The handler's Update method maps it to 409 Conflict. The two
+	// sentinels remain distinct for API-caller clarity even though the
+	// HTTP response is identical to the Create conflict.
 	ErrEmailAlreadyUsed = errors.New("email already used by another staff")
 
 	// ErrCannotDeleteSelf is returned by Delete when the acting staff
@@ -93,6 +122,70 @@ var (
 	//
 	// The handler maps this to 403 Forbidden.
 	ErrCannotDeleteSelf = errors.New("cannot delete your own account")
+
+	// ErrForbidden is returned by Create and UpdatePassword when the
+	// acting staff user does not hold the SUPER_ADMIN role, or when the
+	// acting identity cannot be resolved from the request context at all.
+	//
+	// The sentinel is the service-layer counterpart of the HTTP
+	// middleware's super-admin gate. It exists because a caller that can
+	// create a staff user can also create a super admin, and a caller
+	// that can reset another account's password can take over that
+	// account; the service therefore enforces the privilege boundary
+	// independently of the route wiring. A future route added without
+	// the middleware — or a caller that invokes the service directly,
+	// such as a background job or a test — will be rejected before any
+	// other work is performed.
+	//
+	// The check is fail-closed: a missing identity returns ErrForbidden
+	// rather than being silently treated as a super admin. This differs
+	// from the fail-open self-deletion guard in Delete, because the two
+	// guards protect different properties: Delete protects an individual
+	// account from a lockout, while the super-admin guard protects the
+	// privilege boundary of the system.
+	//
+	// The handler maps this to 403 Forbidden.
+	ErrForbidden = errors.New("forbidden")
+
+	// ErrPasswordTooShort is returned by UpdatePassword when the supplied
+	// new password is shorter than minPasswordLength. The length is
+	// measured in bytes, which equals the character count for ASCII
+	// input and overcounts for multi-byte UTF-8; the overcount is
+	// intentional, since bcrypt's own limit is expressed in bytes.
+	//
+	// The handler maps this to 400 Bad Request.
+	ErrPasswordTooShort = errors.New("password must be at least 8 characters")
+
+	// ErrPasswordTooLong is returned by UpdatePassword when the supplied
+	// new password exceeds maxPasswordLength. The bound exists because
+	// bcrypt either rejects or silently truncates inputs beyond 72
+	// bytes; rejecting explicitly avoids a password that appears to be
+	// stored in full but is only validated against its first 72 bytes.
+	//
+	// The handler maps this to 400 Bad Request.
+	ErrPasswordTooLong = errors.New("password must not exceed 72 characters")
+
+	// ErrInvalidCurrentPassword is returned by UpdatePassword when the
+	// caller's CurrentPassword does not match the acting super-admin's
+	// stored bcrypt hash.
+	//
+	// The sentinel implements the re-authentication ("sudo mode") step
+	// described on UpdatePasswordRequest: possession of a valid
+	// super-admin token is not sufficient to reset another account's
+	// password; the caller must also demonstrate knowledge of the
+	// password that would let them authenticate afresh. A stolen token
+	// — for example, one exfiltrated from a browser session — is
+	// therefore not on its own enough to take over an account.
+	//
+	// The sentinel is deliberately not collapsed into ErrForbidden. A
+	// 403 with a distinct message tells the legitimate caller that the
+	// token is valid but the confirmation password is wrong, which is
+	// actionable; collapsing the two would leave the caller unable to
+	// distinguish "your session is no longer authorised" from "you
+	// mistyped your password".
+	//
+	// The handler maps this to 403 Forbidden.
+	ErrInvalidCurrentPassword = errors.New("current password is incorrect")
 )
 
 // CreateStaffParams holds the input for creating a new staff user.
@@ -108,6 +201,11 @@ type CreateStaffParams struct {
 	// Role is the role name to assign, not the numeric ID. The service
 	// resolves it via RoleRepository.FindByName; a name that does not
 	// match an existing roles row produces ErrInvalidRole.
+	//
+	// A caller that supplies "SUPER_ADMIN" is permitted to do so provided
+	// the actor passes the requireSuperAdmin check; the service does not
+	// impose any additional restriction on which roles a super admin may
+	// assign.
 	Role string
 
 	// Name is the new staff user's display name.
@@ -184,13 +282,33 @@ type UpdateStaffParams struct {
 //
 // # Authorisation model
 //
-// The service performs no role-based authorisation of its own. It trusts
-// that the caller has already been authorised to perform the operation —
-// in the current wiring, the HTTP middleware chain applies the super-admin
-// role gate before any staff endpoint is reached. The one exception is
-// the self-deletion guard in Delete, which reads the acting staff
-// identity from the request context and rejects a delete-of-self. That
-// guard is the only place the service inspects the acting identity.
+// The service performs role-based authorisation at two call sites:
+// Create and UpdatePassword both invoke requireSuperAdmin before doing
+// any other work. All other methods trust that the caller has already
+// been authorised by the HTTP middleware chain, which applies the
+// super-admin role gate before any staff endpoint is reached. The
+// self-deletion guard in Delete reads the acting staff identity from
+// the request context but does not verify the actor's role.
+//
+// The Create-time and UpdatePassword-time checks are deliberately
+// defense-in-depth: the HTTP layer already gates those routes, but the
+// service enforces the super-admin invariant independently so that a
+// future route added without the middleware cannot silently widen
+// access. The invariant is not currently enforced on Update,
+// UpdateStatus, or Delete; those methods rely on the middleware alone.
+//
+// UpdatePassword additionally requires the actor to re-enter their own
+// password as a confirmation step; see the method's documentation for
+// the rationale.
+//
+// # Password policy
+//
+// The service enforces a minimum length of minPasswordLength and a
+// maximum length of maxPasswordLength on passwords submitted through
+// UpdatePassword. The policy is checked before any repository call, so
+// an out-of-range password is rejected without touching the database.
+// Create does not currently enforce the same policy; the omission is
+// documented on Create.
 //
 // # Concurrency
 //
@@ -227,13 +345,116 @@ func NewStaffService(staffRepo StaffUserRepository, roleRepo RoleRepository, aud
 	}
 }
 
+// requireSuperAdmin verifies that the acting staff user holds the
+// super-admin role, and returns the actor's row on success.
+//
+// The acting identity is read from the request context via
+// audit.GetStaffID. A missing identity, a lookup failure for the
+// corresponding staff_users row, or a role name that does not equal
+// superAdminRoleName all cause the function to return an error. The
+// caller is expected to propagate the error unchanged.
+//
+// # Return value
+//
+// On success the function returns the actor's full staff_users row. The
+// row carries the actor's PasswordHash, which UpdatePassword uses to
+// verify the re-authentication step. Callers that do not need the row
+// — currently Create — may discard it with `_`.
+//
+// # Failure modes
+//
+// Three outcomes are distinguished:
+//
+//   - A missing identity returns ErrForbidden. The caller is not
+//     authenticated; treating the absence as "definitely not a super
+//     admin" is the fail-closed choice.
+//   - A role name that does not equal superAdminRoleName returns
+//     ErrForbidden. The caller is authenticated but not authorised.
+//   - A repository failure during the actor or role lookup returns a
+//     wrapped, non-sentinel error. The identity is presumed valid — it
+//     was set by the JWT middleware — so a lookup failure indicates an
+//     infrastructure problem rather than an authorisation problem, and
+//     is surfaced as a 500 by the handler rather than a 403.
+//
+// # Callers
+//
+// The helper is invoked by Create and UpdatePassword. Update,
+// UpdateStatus, and Delete have the same theoretical gap — the service
+// does not enforce the super-admin invariant for those methods — and a
+// future revision may extend this call to them as well. The helper is
+// declared on *StaffService rather than as a free function so that it
+// has direct access to staffRepo and roleRepo without additional
+// parameters.
+//
+// # Concurrency
+//
+// Safe for concurrent use. The helper holds no state between calls and
+// performs only read-only repository lookups.
+func (s *StaffService) requireSuperAdmin(ctx context.Context) (*sqlc.StaffUser, error) {
+	actorID, ok := audit.GetStaffID(ctx)
+	if !ok {
+		return nil, ErrForbidden
+	}
+	actor, err := s.staffRepo.FindByID(ctx, actorID)
+	if err != nil {
+		return nil, fmt.Errorf("authorization: get actor: %w", err)
+	}
+	role, err := s.roleRepo.FindByID(ctx, actor.RoleID)
+	if err != nil {
+		return nil, fmt.Errorf("authorization: get actor role: %w", err)
+	}
+	if role.Name != superAdminRoleName {
+		return nil, ErrForbidden
+	}
+	return &actor, nil
+}
+
+// validatePasswordPolicy enforces the service's password-length policy.
+//
+// The function checks two bounds: a minimum of minPasswordLength and a
+// maximum of maxPasswordLength. A password that falls outside either
+// bound returns the corresponding sentinel — ErrPasswordTooShort or
+// ErrPasswordTooLong — which the handler maps to 400 Bad Request.
+//
+// # What the policy does not check
+//
+// The function performs no character-class analysis. Composition rules
+// (uppercase, digit, symbol) are deliberately not enforced; see the
+// documentation on the policy constants for the rationale. Callers that
+// require composition rules must apply them at the handler layer, in
+// addition to this check.
+//
+// The function does not compare the new password to the old one. A
+// caller that requires "must differ from the previous password" must
+// implement that check against the stored hash itself; the current
+// service does not.
+//
+// # Concurrency
+//
+// Safe for concurrent use. The function is pure: it reads only its
+// parameter and returns a sentinel or nil.
+func validatePasswordPolicy(password string) error {
+	if len(password) < minPasswordLength {
+		return ErrPasswordTooShort
+	}
+	if len(password) > maxPasswordLength {
+		return ErrPasswordTooLong
+	}
+	return nil
+}
+
 // Create creates a new staff user.
 // It validates email uniqueness, hashes the password, and assigns a role.
 // Returns the created Staff object or an error.
-// Possible errors: ErrEmailAlreadyRegistered, ErrInvalidRole.
+// Possible errors: ErrForbidden, ErrEmailAlreadyRegistered, ErrInvalidRole.
 //
 // # Flow
 //
+//  0. Verify that the acting staff user holds the super-admin role via
+//     requireSuperAdmin. This is a fail-closed check: a missing identity
+//     or a non-super-admin role returns ErrForbidden before any other
+//     work is performed. See the helper's documentation for the full
+//     failure taxonomy.
 //  1. Check for an existing staff user with the same email via
 //     staffRepo.ExistsByEmail. A match returns ErrEmailAlreadyRegistered.
 //  2. Hash params.Password with bcrypt at bcrypt.DefaultCost. A hashing
@@ -248,6 +469,26 @@ func NewStaffService(staffRepo StaffUserRepository, roleRepo RoleRepository, aud
 //  5. Write an audit entry. An audit failure is logged and does not
 //     abort the operation.
 //  6. Return the domain Staff view of the created row.
+//
+// # Caller authorisation
+//
+// The super-admin invariant is enforced at step 0, independently of the
+// HTTP layer. The service does not, however, restrict which role the
+// caller may assign: a super admin may legitimately create another super
+// admin, and the method does not distinguish between that case and the
+// creation of a lower-privileged account. The privilege boundary
+// protected by this method is therefore "staff management as a whole",
+// not "the SUPER_ADMIN role in particular".
+//
+// # Password policy is not applied here
+//
+// Unlike UpdatePassword, this method does not call
+// validatePasswordPolicy before hashing. A caller that supplies a
+// one-character password to Create will have it accepted and stored.
+// The asymmetry is a known gap; the fix would be a one-line call to
+// validatePasswordPolicy alongside the existing step 0 check, but the
+// change is scoped to C7 (which concerns UpdatePassword) and is left
+// for a future revision.
 //
 // # Advisory email-uniqueness check
 //
@@ -269,27 +510,25 @@ func NewStaffService(staffRepo StaffUserRepository, roleRepo RoleRepository, aud
 // returned by this method does not carry the hash — see model.go — so the
 // response is safe to serialise.
 //
-// # No caller authorisation check
-//
-// The method does not verify that the acting staff user has authority to
-// create another staff user, or to assign any particular role. A caller
-// with a valid JWT and the API key can create a super-admin. In the
-// current wiring the HTTP layer applies the super-admin gate before this
-// method is reached, but the service does not enforce the invariant
-// itself.
-//
 // # Errors
 //
-// Returns ErrEmailAlreadyRegistered or ErrInvalidRole for the
-// corresponding conditions. Returns a wrapped error for the email-check,
-// password-hash, or insert steps; none of the wrapped errors is a
-// sentinel, so the handler serves them through its default 500 branch.
+// Returns ErrForbidden when the acting caller is not a super admin, or
+// when the acting identity is absent from the context. Returns
+// ErrEmailAlreadyRegistered or ErrInvalidRole for the corresponding
+// conditions. Returns a wrapped error for the actor-lookup, role-lookup,
+// email-check, password-hash, or insert steps; none of the wrapped
+// errors is a sentinel, so the handler serves them through its default
+// 500 branch.
 //
 // # Concurrency
 //
 // Safe for concurrent use. See the advisory-check note above for the
 // concurrency implications of the email check.
 func (s *StaffService) Create(ctx context.Context, params CreateStaffParams) (*Staff, error) {
+	if _, err := s.requireSuperAdmin(ctx); err != nil {
+		return nil, err
+	}
+
 	exists, err := s.staffRepo.ExistsByEmail(ctx, params.Email)
 	if err != nil {
 		return nil, fmt.Errorf("check email: %w", err)
@@ -506,7 +745,7 @@ func (s *StaffService) List(ctx context.Context, page, limit int32, search strin
 //  4. If params.Name is non-empty, apply it.
 //  5. If params.Email is non-empty AND differs from the existing email,
 //     check for a collision via ExistsByEmail. A collision returns
-//     ErrEmailAlreadyUsed — see the handler-mapping gap noted below.
+//     ErrEmailAlreadyUsed.
 //  6. Issue the UPDATE.
 //  7. Re-fetch via GetByID to obtain the post-update state — a role
 //     lookup is performed as part of this re-fetch, which adds a round
@@ -515,15 +754,16 @@ func (s *StaffService) List(ctx context.Context, page, limit int32, search strin
 //     audit failure is logged and does not abort the operation.
 //  9. Return the updated Staff.
 //
-// # Handler does not map ErrEmailAlreadyUsed to 409
+// # Absence of a caller-authorisation check
 //
-// The service returns ErrEmailAlreadyUsed for a duplicate email, but the
-// handler's Update switch does not recognise that sentinel — it handles
-// only ErrStaffNotFound and ErrInvalidRole, and everything else falls
-// through to a 500 with the raw message. A caller attempting to set an
-// email already taken by another user therefore receives a 500 rather
-// than a 409. This is documented on ErrEmailAlreadyUsed and in the
-// handler's Update documentation; correcting it is a handler-side change.
+// Unlike Create, this method does not verify that the acting staff user
+// is a super admin. The check is not applied because the HTTP layer
+// already gates the route and because the same privilege boundary
+// applies to any caller that can reach the handler. A caller that can
+// invoke Update can also change a staff user's role — including
+// elevating a non-privileged account to SUPER_ADMIN — so the invariant
+// that Create enforces is equally relevant here. A future revision may
+// extend requireSuperAdmin to this method as well.
 //
 // # Re-fetch failure produces a 500 after the write landed
 //
@@ -642,6 +882,13 @@ func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*S
 //     performs its own role lookup.
 //  4. Write an audit entry recording the before and after snapshots.
 //
+// # Absence of a caller-authorisation check
+//
+// As with Update, this method does not independently verify that the
+// acting caller is a super admin. Deactivating another super admin is a
+// privileged operation that the HTTP middleware gate covers; the service
+// does not enforce the invariant itself.
+//
 // # Re-fetch failure produces a 500 after the write landed
 //
 // As with Update, step 3 re-reads the row after the status change has
@@ -707,39 +954,81 @@ func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool
 }
 
 // UpdatePassword hashes and updates the password of a staff user.
-// Returns an error if the user is not found or hashing fails.
-// Possible error: ErrStaffNotFound.
+// Returns an error if the user is not found, hashing fails, or the
+// caller fails the re-authentication or password-policy checks.
+// Possible errors: ErrForbidden, ErrInvalidCurrentPassword,
+// ErrPasswordTooShort, ErrPasswordTooLong, ErrStaffNotFound.
 //
-// # Administrative reset, not a self-service change
+// # Administrative reset with re-authentication
 //
-// This method replaces the target account's password without requiring
-// the caller to supply the current password. It is the administrative
-// counterpart to the profile feature's UpdatePassword, which does require
-// the current password; the two features have distinct authorisation
-// models (super-admin acting on another account, versus a staff user
-// acting on their own).
+// This method replaces the target account's password. It is the
+// administrative counterpart to the profile feature's UpdatePassword,
+// which requires the caller to supply their own current password as
+// proof of account ownership; here the current password proves
+// something different. The target's password is not required — the
+// caller is resetting someone else's account — but the *actor's* own
+// current password is required as a confirmation step (sometimes called
+// "sudo mode"). Possession of a valid super-admin token is not on its
+// own sufficient to reset another account's password; the caller must
+// also demonstrate knowledge of the password that would let them
+// authenticate afresh.
 //
-// Because the current password is not verified, this method relies
-// entirely on the HTTP-layer super-admin gate to prevent unauthorised
-// use. The service does not independently check the acting user's
-// authority, nor does it prevent a caller from resetting a
-// higher-privileged account's password.
+// # Flow
 //
-// # No password policy
+//  1. Call requireSuperAdmin. On success it returns the actor's full
+//     staff_users row, including the bcrypt hash of the actor's current
+//     password. A missing identity or a non-super-admin role returns
+//     ErrForbidden before any other work is performed.
+//  2. Verify the supplied currentPassword against the actor's stored
+//     hash via bcrypt.CompareHashAndPassword. A mismatch returns
+//     ErrInvalidCurrentPassword.
+//  3. Validate newPassword against validatePasswordPolicy. A password
+//     outside the min–max length bounds returns the corresponding
+//     sentinel.
+//  4. Load the target account's row. A missing row returns
+//     ErrStaffNotFound; any other repository failure is wrapped with
+//     "get staff for update password: " and returned as a non-sentinel
+//     error.
+//  5. Hash newPassword with bcrypt at bcrypt.DefaultCost. A hashing
+//     failure is wrapped with "hash password: " and returned.
+//  6. Write the new hash via staffRepo.UpdatePassword.
+//  7. Write an audit entry on success. An audit failure is logged and
+//     does not abort the operation. The audit entry carries no After
+//     payload — see below.
 //
-// The method performs no validation of the new password's length,
-// character composition, or similarity to the previous password. Any
-// string that bcrypt will accept is stored. A caller that requires
-// minimum length, complexity rules, or a "must differ" check must
-// implement it at the handler layer or in a dedicated helper.
+// # Ordering of checks
+//
+// The re-authentication step precedes the password-policy check
+// deliberately. A caller who fails re-authentication receives
+// ErrInvalidCurrentPassword regardless of the new password's shape,
+// which prevents a caller from probing the policy with a valid token
+// but an unverified identity. The current-password check also precedes
+// the target lookup, so an attacker who has stolen a token but does not
+// know the actor's password cannot distinguish "the target account
+// exists" from "the target account does not exist".
+//
+// # Current-password verification
+//
+// The comparison uses bcrypt.CompareHashAndPassword, which is
+// constant-time with respect to the hash and returns a non-nil error on
+// any mismatch. A nil actor hash (which would indicate a corrupted row)
+// causes the comparison to return an error and the method to return
+// ErrInvalidCurrentPassword, which is the safe failure direction.
+//
+// # Password policy
+//
+// The new password is validated against validatePasswordPolicy. A
+// password shorter than minPasswordLength returns ErrPasswordTooShort;
+// a password longer than maxPasswordLength returns ErrPasswordTooLong.
+// Both are mapped to 400 Bad Request by the handler.
 //
 // # bcrypt's 72-byte limit
 //
-// bcrypt operates on at most 72 bytes of input; a longer password is
-// either rejected by the library (returning ErrPasswordTooLong) or
-// silently truncated, depending on the library version. Either way the
-// method propagates the behaviour; the wrapped "hash password: " error
-// covers the rejection case.
+// bcrypt operates on at most 72 bytes of input. The password policy
+// rejects inputs above that bound with ErrPasswordTooLong, so the
+// library never sees a value it would have to truncate. The wrapped
+// "hash password: " error covers the residual case where the library
+// rejects an input for a reason other than length.
 //
 // # Existing sessions survive
 //
@@ -762,7 +1051,12 @@ func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool
 //
 // # Errors
 //
-// Returns ErrStaffNotFound only when the target account is absent
+// Returns ErrForbidden when the acting caller is not a super admin, or
+// when the acting identity is absent from the context. Returns
+// ErrInvalidCurrentPassword when the supplied confirmation password does
+// not match the actor's stored hash. Returns ErrPasswordTooShort or
+// ErrPasswordTooLong when the new password violates the policy. Returns
+// ErrStaffNotFound only when the target account is absent
 // (pgx.ErrNoRows). Other initial-lookup failures are wrapped rather than
 // collapsed. bcrypt failures use the prefix "hash password: " and
 // repository write failures are returned as-is; both are non-sentinel
@@ -771,10 +1065,28 @@ func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool
 //
 // # Concurrency
 //
-// Not serialised against concurrent resets. Two concurrent UpdatePassword
-// calls on the same account will both hash their respective new passwords
-// and the last write wins.
-func (s *StaffService) UpdatePassword(ctx context.Context, id int64, newPassword string) error {
+// Safe for concurrent use. Two concurrent UpdatePassword calls on the
+// same account will both pass the authorisation, re-authentication, and
+// policy checks, both hash their respective new passwords, and the last
+// write wins. Two concurrent UpdatePassword calls by the same actor
+// succeed independently; the actor's own hash is read at the beginning
+// of each call and is not re-read after a change to the actor's own
+// account, so a caller cannot invalidate their own in-flight reset by
+// resetting their own password in parallel.
+func (s *StaffService) UpdatePassword(ctx context.Context, id int64, currentPassword, newPassword string) error {
+	actor, err := s.requireSuperAdmin(ctx)
+	if err != nil {
+		return err
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(actor.PasswordHash), []byte(currentPassword)); err != nil {
+		return ErrInvalidCurrentPassword
+	}
+
+	if err := validatePasswordPolicy(newPassword); err != nil {
+		return err
+	}
+
 	existing, err := s.staffRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -847,6 +1159,21 @@ func (s *StaffService) UpdatePassword(ctx context.Context, id int64, newPassword
 // a background job or a test that does not populate the context. The
 // safety property ("a super-admin cannot delete themselves") is
 // therefore enforced conditionally, not absolutely.
+//
+// The fail-open behaviour is intentional and differs from the
+// fail-closed choice made by requireSuperAdmin for Create and
+// UpdatePassword. The guards protect different properties: the
+// self-deletion guard protects an individual account from a lockout,
+// while the super-admin guard protects the privilege boundary of the
+// system.
+//
+// # Absence of a caller-authorisation check
+//
+// This method does not independently verify that the acting caller is a
+// super admin. Deleting another super admin is a privileged operation
+// that the HTTP middleware gate covers; the service does not enforce
+// the invariant itself. A future revision may extend requireSuperAdmin
+// to this method as well.
 //
 // # Hard delete
 //

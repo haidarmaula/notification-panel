@@ -20,21 +20,35 @@ import (
 // are declared here, in the file that owns their methods, rather than in a
 // separate errors.go — consistent with the convention used by the auth,
 // notifications, segments, and staff features.
+//
+// # Error collapse policy
+//
+// Every method in this file that performs a by-ID or by-external-ID lookup
+// distinguishes pgx.ErrNoRows — the driver's signal that the row does not
+// exist — from every other repository failure. ErrUserNotFound and
+// ErrDeviceTokenNotFound are therefore returned only for genuinely absent
+// rows; a connectivity failure, a query error, or any other driver-level
+// problem is wrapped with a method-specific prefix and propagated as a
+// non-sentinel error, which the handler maps to 500 rather than 404. This
+// closes the class of defect described as C16 in code-review.md, where a
+// database failure was indistinguishable from "no such record".
 var (
 	// ErrUserNotFound is returned when a user ID or external_id does not
-	// resolve to a row. GetByID now returns it only for pgx.ErrNoRows;
-	// other by-ID user-existence checks in this package may still collapse
-	// every repository error into this sentinel until they receive the
-	// same treatment.
+	// resolve to a row. Every by-ID and by-external-ID lookup in this
+	// package returns it only for pgx.ErrNoRows; other repository errors
+	// are wrapped with a method-specific prefix and propagated as
+	// non-sentinel errors, so the handler maps them to 500 rather than
+	// incorrectly reporting a missing user.
 	//
 	// The handler maps this to 404 Not Found.
 	ErrUserNotFound = errors.New("user not found")
 
-	// ErrDeviceTokenNotFound is returned by UpdateDeviceToken and
-	// DeleteDeviceToken when the token ID does not resolve to a row. As
-	// with ErrUserNotFound, any repository failure from the initial
-	// lookup produces this sentinel, so a database error is reported as
-	// a 404 rather than a 500.
+	// ErrDeviceTokenNotFound is returned by every device-token method that
+	// performs an initial lookup by token ID — UpdateDeviceToken,
+	// DeleteDeviceToken, and ensureDeviceTokenOwnership — when the token
+	// ID does not resolve to a row. As with ErrUserNotFound, the sentinel
+	// is produced only for pgx.ErrNoRows; any other repository failure
+	// from the initial lookup is wrapped and served as a 500.
 	//
 	// The handler maps this to 404 Not Found.
 	ErrDeviceTokenNotFound = errors.New("device token not found")
@@ -68,6 +82,34 @@ var (
 	ErrInvalidPlatform = errors.New("invalid platform: must be ANDROID, IOS, or WEB")
 )
 
+// Transactor is the minimal contract that UserService requires in order to
+// wrap a multi-write operation in a single database transaction.
+//
+// The interface is deliberately narrow: it exposes only the ability to
+// begin a transaction, and returns a pgx.Tx that the service can hand to
+// sqlc.New to obtain a transaction-scoped querier. This keeps the users
+// feature decoupled from pgxpool and lets a test supply a stub Transactor
+// without touching a live database.
+//
+// # Contract
+//
+// Begin returns a non-nil transaction on success. The caller is
+// responsible for exactly one of Commit or Rollback on the returned
+// transaction; a transaction that is neither committed nor rolled back
+// holds its connection until the process exits or the database closes
+// it. The conventional Go pattern — Begin, defer Rollback, Commit last —
+// is safe because Rollback after a successful Commit is a no-op that
+// returns pgx.ErrTxClosed, which callers should discard.
+//
+// # Implementation
+//
+// *pgxpool.Pool satisfies this interface structurally, so production
+// wiring passes the shared pool directly. A test may pass any value with
+// a compatible Begin method.
+type Transactor interface {
+	Begin(ctx context.Context) (pgx.Tx, error)
+}
+
 // UserService provides business logic for user and device-token management.
 //
 // It is the service layer shared by two handlers — UserHandler for the
@@ -92,26 +134,53 @@ var (
 // The users feature has no unit tests today, so the missing seam is not
 // currently exercised.
 //
+// The Transactor dependency is an exception to that pattern: it is
+// declared as an interface so that tests can substitute a stub, and so
+// that the service is not coupled to pgxpool.
+//
+// # Error handling
+//
+// Every by-ID lookup in this service follows the pattern established by
+// GetByID: pgx.ErrNoRows is collapsed into the relevant not-found
+// sentinel, while any other repository failure is wrapped and propagated
+// as a non-sentinel error. The handler distinguishes the two and maps
+// them to 404 and 500 respectively, so a transient database problem is
+// never reported to a client as a missing record. See the sentinel
+// documentation above for the policy statement.
+//
+// # Transactions
+//
+// The service owns a Transactor — typically the shared *pgxpool.Pool —
+// that it uses to wrap multi-write operations. Currently only
+// UpdateDeviceToken needs a transaction: it writes metadata and the
+// active flag in two separate repository calls, and the two must commit
+// or roll back together. Every other method performs at most one write
+// per call and does not open a transaction.
+//
 // # Concurrency
 //
 // The service is stateless after construction and safe for concurrent use.
 // It holds no per-request state and shares nothing mutable between
-// invocations. The five concrete repositories are themselves safe for
-// concurrent use; the underlying pgxpool handles connection multiplexing.
+// invocations. The five concrete repositories and the Transactor are
+// themselves safe for concurrent use; the underlying pgxpool handles
+// connection multiplexing and each transaction is bound to a single
+// connection.
 type UserService struct {
 	userRepo     *repository.UserRepository
 	deviceRepo   *repository.DeviceTokenRepository
 	segmentRepo  *repository.SegmentMemberRepository
 	deliveryRepo *repository.NotificationDeliveryRepository
 	readRepo     *repository.NotificationReadRepository
+	tx           Transactor
 }
 
 // NewUserService creates a new UserService instance.
 //
-// All five parameters must be non-nil; none is validated, so a nil
-// repository will panic on the first method call that uses it rather than
-// at construction. In practice the dependencies are wired by
-// NewUserModule from the shared sqlc.Queries.
+// All six parameters must be non-nil. None is validated here; a nil
+// repository will panic on the first method call that uses it, and a nil
+// Transactor will panic on the first call to UpdateDeviceToken. In
+// practice the dependencies are wired by NewUserModule from the shared
+// sqlc.Queries and the shared *pgxpool.Pool.
 //
 // # Unused read repository
 //
@@ -123,16 +192,25 @@ type UserService struct {
 // Rule 3 of this documentation pass; a future cleanup would drop it
 // along with the corresponding module-wiring line.
 //
+// # Transactor parameter
+//
+// tx is the shared pool (or a test stub) that the service uses for the
+// multi-write UpdateDeviceToken path. Because it is declared as the
+// narrow Transactor interface rather than as *pgxpool.Pool, the service
+// remains decoupled from the pool implementation and can be tested with
+// a stub.
+//
 // # Concurrency
 //
 // The constructor is cheap and stateless; the returned service holds only
-// the five repository pointers.
+// the five repository pointers and the Transactor.
 func NewUserService(
 	userRepo *repository.UserRepository,
 	deviceRepo *repository.DeviceTokenRepository,
 	segmentRepo *repository.SegmentMemberRepository,
 	deliveryRepo *repository.NotificationDeliveryRepository,
 	readRepo *repository.NotificationReadRepository,
+	tx Transactor,
 ) *UserService {
 	return &UserService{
 		userRepo:     userRepo,
@@ -140,6 +218,7 @@ func NewUserService(
 		segmentRepo:  segmentRepo,
 		deliveryRepo: deliveryRepo,
 		readRepo:     readRepo,
+		tx:           tx,
 	}
 }
 
@@ -171,7 +250,8 @@ func NewUserService(
 //
 // Returns a wrapped error with the prefix "list users: " or
 // "count users: " for repository failures. No repository error is collapsed
-// into a not-found sentinel on this path.
+// into a not-found sentinel on this path; both failures are served as 500
+// by the handler.
 //
 // # Concurrency
 //
@@ -308,10 +388,14 @@ func (s *UserService) Search(ctx context.Context, keyword string) ([]SearchUserR
 //
 // The method performs a FindByID lookup on the user before fetching the
 // tokens, so a call for a non-existent user is rejected with
-// ErrUserNotFound rather than returning an empty list. The two operations
-// are not transactional: a user deleted between the lookup and the token
-// fetch will produce an empty list rather than an error, which is
-// harmless in practice.
+// ErrUserNotFound rather than returning an empty list. Only pgx.ErrNoRows
+// from that lookup produces ErrUserNotFound; any other repository failure
+// is wrapped with "get user: " and served as a 500, so a transient
+// database problem is never reported to the client as a missing user.
+//
+// The existence check and the token fetch are not transactional: a user
+// deleted between the two reads produces an empty list rather than an
+// error, which is harmless in practice.
 //
 // # Hard-coded result cap
 //
@@ -331,10 +415,11 @@ func (s *UserService) Search(ctx context.Context, keyword string) ([]SearchUserR
 //
 // # Errors
 //
-// Returns ErrUserNotFound if the user does not exist. Returns a wrapped
-// "list device tokens: " error for a repository failure on the token
-// fetch. The latter is not a sentinel, so the handler serves it through
-// its default 500 branch.
+// Returns ErrUserNotFound when the user lookup produces pgx.ErrNoRows.
+// Returns a wrapped "get user: " error for any other failure of that
+// lookup, and a wrapped "list device tokens: " error for a failure of
+// the token fetch. Neither wrapped error is a sentinel, so the handler
+// serves them through its default 500 branch.
 //
 // # Concurrency
 //
@@ -342,7 +427,10 @@ func (s *UserService) Search(ctx context.Context, keyword string) ([]SearchUserR
 func (s *UserService) ListDeviceTokens(ctx context.Context, userID int64) ([]DeviceToken, error) {
 	_, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		return nil, ErrUserNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("get user: %w", err)
 	}
 
 	rows, err := s.deviceRepo.ListByUser(ctx, userID, 0, 100)
@@ -383,8 +471,9 @@ func (s *UserService) ListDeviceTokens(ctx context.Context, userID int64) ([]Dev
 //  1. Validate the platform string against the three accepted literals
 //     ("ANDROID", "IOS", "WEB"); a mismatch returns ErrInvalidPlatform
 //     before any database work is performed.
-//  2. Verify the user exists via userRepo.FindByID. Any failure collapses
-//     to ErrUserNotFound.
+//  2. Verify the user exists via userRepo.FindByID. Only pgx.ErrNoRows
+//     produces ErrUserNotFound; any other lookup failure is wrapped with
+//     "get user: " and served as a 500.
 //  3. Check whether the push token is already registered via
 //     deviceRepo.ExistsByPushToken. A match returns
 //     ErrDeviceTokenDuplicate — including when the existing row belongs
@@ -438,9 +527,9 @@ func (s *UserService) ListDeviceTokens(ctx context.Context, userID int64) ([]Dev
 //
 // Returns ErrInvalidPlatform, ErrUserNotFound, or ErrDeviceTokenDuplicate
 // for the corresponding conditions. Returns a wrapped error with the
-// prefix "check push token: " or "create device token: " for repository
-// failures; neither is a sentinel, so the handler serves them through its
-// default 500 branch.
+// prefix "get user: ", "check push token: ", or "create device token: "
+// for repository failures; none is a sentinel, so the handler serves them
+// through its default 500 branch.
 //
 // # Concurrency
 //
@@ -455,7 +544,10 @@ func (s *UserService) RegisterDeviceToken(ctx context.Context, userID int64, req
 	// Check if user exists.
 	_, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		return nil, ErrUserNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("get user: %w", err)
 	}
 
 	// Check for duplicate push_token.
@@ -534,8 +626,10 @@ func (s *UserService) RegisterDeviceToken(ctx context.Context, userID int64, req
 // externalID must originate from a verified mobile JWT, never directly from
 // client input. The method resolves it to the internal users.id and delegates
 // validation and persistence to RegisterDeviceToken. It returns ErrUserNotFound
-// when no local user matches externalID and otherwise preserves the delegate's
-// errors. The service is safe for concurrent use.
+// when no local user matches externalID (pgx.ErrNoRows from the lookup); a
+// genuine lookup failure is wrapped and propagated as a non-sentinel error.
+// All errors returned by the delegate are preserved unchanged. The service
+// is safe for concurrent use.
 func (s *UserService) RegisterDeviceTokenForExternalID(ctx context.Context, externalID string, req RegisterDeviceTokenRequest) (*DeviceToken, error) {
 	userID, err := s.userIDByExternalID(ctx, externalID)
 	if err != nil {
@@ -546,71 +640,124 @@ func (s *UserService) RegisterDeviceTokenForExternalID(ctx context.Context, exte
 
 // UpdateDeviceToken updates a device token.
 //
+// # Atomicity
+//
+// The method updates two logically distinct pieces of state: the token's
+// metadata (platform, push token, app version, OS version, device model,
+// installation ID) and its active flag. Both updates are performed inside
+// a single database transaction, so either both commit or neither does.
+//
+// This closes finding C20 in code-review.md, where the two writes were
+// issued as independent repository calls: a failure of the second write
+// left the row with updated metadata but an unchanged active flag, and
+// the caller received an error that named only the second step. With the
+// transaction in place, a failure of the status write rolls back the
+// metadata write, and the client can retry the whole operation without
+// worrying about a partially-applied state.
+//
+// The read (FindByID) and the duplicate check (ExistsByPushToken) are
+// also executed inside the transaction, so they observe the same
+// database snapshot as the writes that follow. This prevents the race in
+// which the row is deleted between the existence check and the write:
+// the write would otherwise be a silent no-op that returned success.
+//
 // # Flow
 //
-//  1. Load the existing token by ID. Any failure collapses to
-//     ErrDeviceTokenNotFound.
-//  2. If req.PushToken is non-nil AND differs from the current push
+//  1. Begin a transaction via s.tx. A failure to begin returns a wrapped
+//     "begin transaction: " error.
+//  2. Build a transaction-scoped DeviceTokenRepository from sqlc.New(tx)
+//     so that all subsequent calls run on the transaction's connection
+//     rather than on the shared pool.
+//  3. Load the existing token by ID within the transaction. Only
+//     pgx.ErrNoRows produces ErrDeviceTokenNotFound; any other lookup
+//     failure is wrapped with "get device token: " and served as a 500.
+//  4. If req.PushToken is non-nil AND differs from the current push
 //     token, check for a duplicate via ExistsByPushToken. A match returns
 //     ErrDeviceTokenDuplicate. A same-value update is skipped without a
 //     check, so a client resending the current push token does not
 //     trigger a spurious conflict.
-//  3. Build an update struct pre-populated with the existing values, so
+//  5. Build an update struct pre-populated with the existing values, so
 //     that fields not supplied by the caller retain their current state.
-//  4. Apply each non-nil field. Platform is validated against the
+//  6. Apply each non-nil field. Platform is validated against the
 //     accepted literals, and a platform change recomputes the provider
 //     mapping (ANDROID/WEB → FCM, IOS → APNS). A platform that is not
 //     changed leaves the existing provider untouched, so the two fields
 //     are not independently settable through this method.
-//  5. Issue the metadata update via UpdateFull.
-//  6. If req.IsActive is non-nil, issue a *second* write via
-//     UpdateStatus to toggle the active flag. See the transaction note
-//     below.
+//  7. Issue the metadata update via UpdateFull on the transaction-scoped
+//     repository.
+//  8. If req.IsActive is non-nil, issue the status update via
+//     UpdateStatus on the same transaction-scoped repository.
+//  9. Commit the transaction. A commit failure returns a wrapped
+//     "commit transaction: " error and the caller is expected to treat
+//     the whole operation as failed.
 //
-// # Two separate writes with no transaction
+// # Deferred rollback
 //
-// Steps 5 and 6 are two independent repository calls with no enclosing
-// database transaction. If step 5 succeeds and step 6 fails — a transient
-// connection drop, a constraint violation on the status column, a
-// timeout — the token's metadata has been updated but its active flag has
-// not, and the caller receives an error that names only the second write.
-//
-// A client that treats the returned error as "the update failed" and
-// retries will issue a redundant metadata update followed by a retried
-// status update. A client that treats the error as "nothing changed"
-// will be wrong about the metadata. The correct behaviour would be to
-// wrap both writes in a transaction, or to fold the is_active field into
-// the UpdateFull query so that only one write is required.
+// The method registers a deferred Rollback immediately after Begin. The
+// deferred call is a no-op when the transaction commits successfully —
+// pgx returns ErrTxClosed and the error is discarded — and an actual
+// rollback on any earlier return path. This is the standard Go pattern
+// for transaction handling and ensures the connection is always released.
 //
 // # Advisory duplicate check
 //
-// The ExistsByPushToken check at step 2 and the UpdateFull call at step 5
-// are not atomic. Two concurrent updates claiming the same push token can
-// both pass the check; the outcome depends on the schema's unique
-// constraint, as documented on ErrDeviceTokenDuplicate.
+// The ExistsByPushToken check at step 4 runs inside the transaction but
+// against a snapshot that the transaction does not lock. Two concurrent
+// updates claiming the same push token can both pass the check; the
+// outcome depends on the schema's unique constraint, as documented on
+// ErrDeviceTokenDuplicate. The transaction does not change this property
+// — an advisory uniqueness check is not made authoritative by being
+// wrapped in a transaction, because the conflicting row may not yet be
+// visible to the snapshot.
 //
 // # Errors
 //
-// Returns ErrDeviceTokenNotFound, ErrDeviceTokenDuplicate, or
-// ErrInvalidPlatform for the corresponding conditions. Returns a wrapped
-// error with the prefix "check push token: ", "update device token: ", or
-// "update device token status: " for repository failures. None of the
-// wrapped errors is a sentinel.
+// Returns ErrDeviceTokenNotFound only when the initial token lookup
+// produces pgx.ErrNoRows, ErrDeviceTokenDuplicate for a push-token
+// collision, or ErrInvalidPlatform for an unsupported platform literal.
+// Returns a wrapped error with the prefix "begin transaction: ",
+// "get device token: ", "check push token: ", "update device token: ",
+// "update device token status: ", or "commit transaction: " for
+// repository and transaction failures. None of the wrapped errors is a
+// sentinel, so the handler serves them through its default 500 branch.
 //
 // # Concurrency
 //
 // Safe for concurrent use. Two concurrent updates on the same token are
-// not serialised; the final state reflects whichever write commits last
-// for each of the two write steps independently.
+// not serialised by this method — PostgreSQL's default isolation level
+// (read committed) does not prevent two transactions from reading the
+// same row and then writing it — but the writes within each call are
+// atomic with respect to each other. The final state reflects whichever
+// transaction commits last.
 func (s *UserService) UpdateDeviceToken(ctx context.Context, tokenID int64, req UpdateDeviceTokenRequest) error {
-	existing, err := s.deviceRepo.FindByID(ctx, tokenID)
+	// Begin a transaction so that the metadata write and the status write
+	// commit or roll back together. All reads are performed inside the
+	// same transaction so they observe a consistent snapshot.
+	tx, err := s.tx.Begin(ctx)
 	if err != nil {
-		return ErrDeviceTokenNotFound
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() {
+		// Rollback is a no-op after a successful Commit — pgx returns
+		// ErrTxClosed and the error is discarded deliberately. On any
+		// earlier return path this call actually rolls back the open
+		// transaction and releases the connection.
+		_ = tx.Rollback(ctx)
+	}()
+
+	txDeviceRepo := repository.NewDeviceTokenRepository(sqlc.New(tx))
+
+	existing, err := txDeviceRepo.FindByID(ctx, tokenID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrDeviceTokenNotFound
+		}
+		return fmt.Errorf("get device token: %w", err)
 	}
 
 	// Check duplicate push_token if changed.
 	if req.PushToken != nil && *req.PushToken != existing.PushToken {
-		exists, err := s.deviceRepo.ExistsByPushToken(ctx, *req.PushToken)
+		exists, err := txDeviceRepo.ExistsByPushToken(ctx, *req.PushToken)
 		if err != nil {
 			return fmt.Errorf("check push token: %w", err)
 		}
@@ -659,12 +806,12 @@ func (s *UserService) UpdateDeviceToken(ctx context.Context, tokenID int64, req 
 		update.DeviceModel = pgtype.Text{String: *req.DeviceModel, Valid: true}
 	}
 
-	if err := s.deviceRepo.UpdateFull(ctx, update); err != nil {
+	if err := txDeviceRepo.UpdateFull(ctx, update); err != nil {
 		return fmt.Errorf("update device token: %w", err)
 	}
 
 	if req.IsActive != nil {
-		if err := s.deviceRepo.UpdateStatus(ctx, sqlc.UpdateDeviceTokenStatusParams{
+		if err := txDeviceRepo.UpdateStatus(ctx, sqlc.UpdateDeviceTokenStatusParams{
 			ID:       tokenID,
 			IsActive: *req.IsActive,
 		}); err != nil {
@@ -672,45 +819,11 @@ func (s *UserService) UpdateDeviceToken(ctx context.Context, tokenID int64, req 
 		}
 	}
 
-	return nil
-}
-
-// DeleteDeviceToken deletes a device token.
-//
-// # Flow
-//
-// The method performs a FindByID existence check before issuing the
-// delete, so a call for a non-existent token is rejected with
-// ErrDeviceTokenNotFound rather than being a silent no-op. The two
-// operations are not transactional; a token deleted between the check
-// and the delete produces a successful return, which is harmless.
-//
-// # Hard delete
-//
-// This is a hard delete of the device_tokens row. Historical delivery
-// records that reference the token are subject to whatever foreign-key
-// behaviour the schema declares; the service does not cascade or null out
-// references. For retiring a token that the push provider has reported as
-// unregistered, prefer toggling is_active via UpdateDeviceToken, which
-// preserves the historical delivery trail.
-//
-// # Errors
-//
-// Returns ErrDeviceTokenNotFound if the token does not exist, or the raw
-// repository error if the delete itself fails. The latter is not a
-// sentinel, so the handler serves it through its default 500 branch.
-//
-// # Concurrency
-//
-// Safe for concurrent use. Two concurrent Deletes on the same ID will
-// both pass the initial lookup and both attempt the delete; the second is
-// either a no-op or a row-not-found error at the SQL level.
-func (s *UserService) DeleteDeviceToken(ctx context.Context, tokenID int64) error {
-	_, err := s.deviceRepo.FindByID(ctx, tokenID)
-	if err != nil {
-		return ErrDeviceTokenNotFound
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("commit transaction: %w", err)
 	}
-	return s.deviceRepo.Delete(ctx, tokenID)
+
+	return nil
 }
 
 // UpdateDeviceTokenForExternalID updates a device token only when externalID
@@ -719,8 +832,20 @@ func (s *UserService) DeleteDeviceToken(ctx context.Context, tokenID int64) erro
 // externalID must come from verified mobile authentication. The method returns
 // ErrUserNotFound, ErrDeviceTokenNotFound, or ErrDeviceTokenForbidden before
 // applying an update; successful ownership verification delegates to
-// UpdateDeviceToken and preserves its validation and repository errors. It is
-// safe for concurrent use.
+// UpdateDeviceToken and preserves its validation and repository errors. The
+// not-found sentinels are produced only for pgx.ErrNoRows; other lookup
+// failures are wrapped and propagated as non-sentinel errors. It is safe for
+// concurrent use.
+//
+// # Not atomic with the ownership check
+//
+// The ownership check and the delegated update are two separate operations
+// without an enclosing transaction. A concurrent change of the token's
+// owner between the two would allow the update to be applied to a token
+// that has since been reassigned — an edge case that is not exploitable
+// in practice because ownership changes on this table are not supported
+// by any current write path, but worth knowing when reasoning about the
+// method.
 func (s *UserService) UpdateDeviceTokenForExternalID(ctx context.Context, externalID string, tokenID int64, req UpdateDeviceTokenRequest) error {
 	if err := s.ensureDeviceTokenOwnership(ctx, externalID, tokenID); err != nil {
 		return err
@@ -733,8 +858,10 @@ func (s *UserService) UpdateDeviceTokenForExternalID(ctx context.Context, extern
 //
 // externalID must come from verified mobile authentication. The method returns
 // ErrUserNotFound, ErrDeviceTokenNotFound, or ErrDeviceTokenForbidden when the
-// ownership check cannot pass; otherwise it deletes the token. It is safe for
-// concurrent use.
+// ownership check cannot pass; otherwise it deletes the token. The not-found
+// sentinels are produced only for pgx.ErrNoRows; other lookup failures are
+// wrapped and propagated as non-sentinel errors. It is safe for concurrent
+// use.
 func (s *UserService) DeleteDeviceTokenForExternalID(ctx context.Context, externalID string, tokenID int64) error {
 	if err := s.ensureDeviceTokenOwnership(ctx, externalID, tokenID); err != nil {
 		return err
@@ -744,13 +871,22 @@ func (s *UserService) DeleteDeviceTokenForExternalID(ctx context.Context, extern
 
 // userIDByExternalID resolves a verified mobile external ID to users.id.
 //
-// It returns ErrUserNotFound for any repository lookup failure, consistent
-// with the service's existing by-ID lookup behaviour. It has no mutable state
-// and is safe for concurrent use.
+// It returns ErrUserNotFound only when the repository lookup produces
+// pgx.ErrNoRows — the external ID does not correspond to a local user.
+// Any other repository failure is wrapped with "get user by external id: "
+// and propagated as a non-sentinel error, so a transient database problem
+// is served as a 500 rather than being reported to the caller as a
+// missing user. This mirrors the error-handling policy applied by the
+// other by-ID lookups in this file.
+//
+// It has no mutable state and is safe for concurrent use.
 func (s *UserService) userIDByExternalID(ctx context.Context, externalID string) (int64, error) {
 	user, err := s.userRepo.FindByExternalID(ctx, externalID)
 	if err != nil {
-		return 0, ErrUserNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return 0, ErrUserNotFound
+		}
+		return 0, fmt.Errorf("get user by external id: %w", err)
 	}
 	return user.ID, nil
 }
@@ -760,8 +896,24 @@ func (s *UserService) userIDByExternalID(ctx context.Context, externalID string)
 //
 // The method intentionally compares internal IDs after resolving the verified
 // external ID, so a client never controls either side of the authorization
-// decision. It returns the relevant not-found or forbidden sentinel and is
-// safe for concurrent use.
+// decision.
+//
+// # Error semantics
+//
+// The method distinguishes three outcomes:
+//
+//   - The external ID does not resolve to a local user: ErrUserNotFound
+//     is returned only when the lookup produces pgx.ErrNoRows; other
+//     failures are wrapped by userIDByExternalID and propagated.
+//   - The token ID does not resolve to a row: ErrDeviceTokenNotFound is
+//     returned only when the token lookup produces pgx.ErrNoRows; any
+//     other failure is wrapped with "get device token: " and served as
+//     a 500.
+//   - The token exists but is owned by a different user:
+//     ErrDeviceTokenForbidden is returned, without disclosing the actual
+//     owner to the caller.
+//
+// It is safe for concurrent use.
 func (s *UserService) ensureDeviceTokenOwnership(ctx context.Context, externalID string, tokenID int64) error {
 	userID, err := s.userIDByExternalID(ctx, externalID)
 	if err != nil {
@@ -769,7 +921,10 @@ func (s *UserService) ensureDeviceTokenOwnership(ctx context.Context, externalID
 	}
 	token, err := s.deviceRepo.FindByID(ctx, tokenID)
 	if err != nil {
-		return ErrDeviceTokenNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrDeviceTokenNotFound
+		}
+		return fmt.Errorf("get device token: %w", err)
 	}
 	if token.UserID != userID {
 		return ErrDeviceTokenForbidden
@@ -787,9 +942,12 @@ func (s *UserService) ensureDeviceTokenOwnership(ctx context.Context, externalID
 //
 // The method performs a FindByID lookup on the user before fetching the
 // segments, so a call for a non-existent user is rejected with
-// ErrUserNotFound rather than returning an empty list. The check is not
-// atomic with the segment fetch, but the race is harmless — a user
-// deleted between the two reads produces an empty list.
+// ErrUserNotFound rather than returning an empty list. Only pgx.ErrNoRows
+// from that lookup produces the sentinel; any other failure is wrapped
+// with "get user: " and served as a 500.
+//
+// The check is not atomic with the segment fetch, but the race is
+// harmless — a user deleted between the two reads produces an empty list.
 //
 // # Hard-coded result cap
 //
@@ -800,9 +958,11 @@ func (s *UserService) ensureDeviceTokenOwnership(ctx context.Context, externalID
 //
 // # Errors
 //
-// Returns ErrUserNotFound if the user does not exist, or a wrapped
-// "list segments by user: " error for a repository failure. The latter
-// is not a sentinel, so the handler serves it through its default 500
+// Returns ErrUserNotFound only when the user lookup produces
+// pgx.ErrNoRows. A wrapped "get user: " error is returned for any other
+// failure of that lookup, and a wrapped "list segments by user: " error
+// is returned for a failure of the segment fetch. Neither wrapped error
+// is a sentinel, so the handler serves them through its default 500
 // branch.
 //
 // # Concurrency
@@ -811,7 +971,10 @@ func (s *UserService) ensureDeviceTokenOwnership(ctx context.Context, externalID
 func (s *UserService) GetUserSegments(ctx context.Context, userID int64) ([]UserSegment, error) {
 	_, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		return nil, ErrUserNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("get user: %w", err)
 	}
 
 	rows, err := s.segmentRepo.ListSegmentsByUser(ctx, userID, 0, 100)
@@ -836,31 +999,32 @@ func (s *UserService) GetUserSegments(ctx context.Context, userID int64) ([]User
 
 // GetUserNotifications returns notification history for a user with pagination.
 //
-// # Pagination is over delivery rows, not notifications
+// # One row per notification
 //
-// The underlying repository call ListByUser returns rows from
-// notification_deliveries — one row per (notification, device) pair — not
-// one row per notification. A user with three active devices therefore
-// accumulates three rows for every notification received, and the total
-// reported by the paginated response is a *delivery* count, not a
-// notification count.
+// The underlying repository call ListByUser returns one row per distinct
+// notification for the user. The repository collapses the
+// notification_deliveries rows that belong to a multi-device user into a
+// single representative row per notification, choosing the representative
+// delivery by status priority (OPENED > DELIVERED > SENT > FAILED). A user
+// with three devices who has received ten notifications therefore sees ten
+// entries, not thirty, and the Total returned by this method matches the
+// number of items the caller can page through.
 //
-// The domain type UserNotification and the wire DTO
-// UserNotificationHistoryItem both present these as "notifications in the
-// user's history", which is misleading: a user who has received one
-// notification on three devices will see three history entries. A client
-// that displays "X notifications received" from the response's Total will
-// over-count by the user's device count.
-//
-// Fixing the mismatch requires either a repository query that aggregates
-// to one row per notification or a DTO that explicitly reports delivery
-// counts. Neither exists today.
+// The status on each returned UserNotification reflects the priority-selected
+// delivery; a notification opened on any device is reported as OPENED even
+// if another device's delivery is still in DELIVERED or FAILED. A user who
+// has never opened the notification sees the status of the most advanced
+// non-opened delivery instead. The rationale for the priority is documented
+// on the repository's ListByUser; it is the mobile inbox's semantics, not
+// the admin analytics view's.
 //
 // # Existence check
 //
 // The method performs a FindByID lookup on the user before fetching the
 // history, so a call for a non-existent user is rejected with
-// ErrUserNotFound rather than returning an empty list.
+// ErrUserNotFound rather than returning an empty list. Only
+// pgx.ErrNoRows from that lookup produces the sentinel; any other
+// failure is wrapped with "get user: " and served as a 500.
 //
 // # OpenedAt formatting
 //
@@ -873,9 +1037,12 @@ func (s *UserService) GetUserSegments(ctx context.Context, userID int64) ([]User
 //
 // # Errors
 //
-// Returns ErrUserNotFound if the user does not exist. Returns a wrapped
-// "list user notifications: " or "count user notifications: " error for
-// repository failures; neither is a sentinel.
+// Returns ErrUserNotFound only when the user lookup produces
+// pgx.ErrNoRows. A wrapped "get user: " error is returned for any other
+// failure of that lookup. Returns a wrapped "list user notifications: "
+// or "count user notifications: " error for repository failures on the
+// history fetch. None of the wrapped errors is a sentinel, so the handler
+// serves them through its default 500 branch.
 //
 // # Concurrency
 //
@@ -883,7 +1050,10 @@ func (s *UserService) GetUserSegments(ctx context.Context, userID int64) ([]User
 func (s *UserService) GetUserNotifications(ctx context.Context, userID int64, page, limit int32) ([]UserNotification, int64, error) {
 	_, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
-		return nil, 0, ErrUserNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, 0, ErrUserNotFound
+		}
+		return nil, 0, fmt.Errorf("get user: %w", err)
 	}
 
 	offset := (page - 1) * limit

@@ -27,6 +27,19 @@ func (q *Queries) CountSegments(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countSegmentsWithSearch = `-- name: CountSegmentsWithSearch :one
+SELECT COUNT(*)
+FROM segments
+WHERE name ILIKE '%' || $1 || '%'
+`
+
+func (q *Queries) CountSegmentsWithSearch(ctx context.Context, keyword pgtype.Text) (int64, error) {
+	row := q.db.QueryRow(ctx, countSegmentsWithSearch, keyword)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createSegment = `-- name: CreateSegment :one
 
 INSERT INTO segments (
@@ -176,8 +189,8 @@ SELECT
 FROM segments s
 JOIN staff_users su ON su.id = s.created_by
 ORDER BY s.name
-LIMIT $2
 OFFSET $1
+LIMIT $2
 `
 
 type ListSegmentsParams struct {
@@ -240,8 +253,8 @@ FROM segments s
 JOIN staff_users su ON su.id = s.created_by
 WHERE s.name ILIKE '%' || $1 || '%'
 ORDER BY s.name
-LIMIT $3
 OFFSET $2
+LIMIT $3
 `
 
 type SearchSegmentsParams struct {

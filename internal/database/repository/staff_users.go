@@ -2,9 +2,11 @@ package repository
 
 import (
 	"context"
+	"errors"
 
 	"hello/internal/database/sqlc"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -29,9 +31,10 @@ type StaffUserRepository struct {
 // NewStaffUserRepository creates a new StaffUserRepository instance.
 //
 // q must be non-nil. Typical callers are the auth service (login and
-// refresh flows), the staff admin service (CRUD), and the bootstrap utility
-// (initial super-admin provisioning). A transaction-scoped querier or a test
-// fake is equally valid.
+// refresh flows), the staff admin service (CRUD), the JWT middleware (the
+// per-request active-status check), and the bootstrap utility (initial
+// super-admin provisioning). A transaction-scoped querier or a test fake is
+// equally valid.
 func NewStaffUserRepository(q sqlc.Querier) *StaffUserRepository {
 	return &StaffUserRepository{q: q}
 }
@@ -54,6 +57,52 @@ func (r *StaffUserRepository) Count(ctx context.Context) (int64, error) {
 // unchanged when no row matches.
 func (r *StaffUserRepository) FindByID(ctx context.Context, id int64) (sqlc.StaffUser, error) {
 	return r.q.GetStaffUserByID(ctx, id)
+}
+
+// IsActive reports whether the staff user identified by id currently has an
+// active account.
+//
+// It is the narrow read that the JWT middleware performs on every
+// authenticated request to enforce effective revocation: a token whose
+// signature and expiry are still valid is rejected as soon as the backing
+// account is deactivated or deleted.
+//
+// # Semantics
+//
+// The method distinguishes three outcomes, which the caller must not
+// conflate:
+//
+//   - The row exists and its is_active column is true: returns (true, nil).
+//   - The row exists and its is_active column is false: returns (false, nil).
+//   - The row does not exist: returns (false, nil). The token references a
+//     staff user that has since been deleted, and the caller is expected to
+//     treat this exactly like a deactivated account.
+//
+// A genuine infrastructure failure — a connection error, a query error —
+// is surfaced as a non-nil error with the underlying cause intact, so that
+// the caller can respond with a 500 rather than a misleading "inactive".
+//
+// # Implementation note
+//
+// The method reuses the existing GetStaffUserByID query and reads only the
+// IsActive field of the returned row. This avoids introducing a new SQL
+// statement solely to save a column read; the query is indexed on the
+// primary key and the row is small. A future optimisation that projects
+// only the is_active column would remove the extra column reads without
+// changing this method's contract.
+//
+// # Concurrency
+//
+// Safe for concurrent use. The method holds no state between calls.
+func (r *StaffUserRepository) IsActive(ctx context.Context, id int64) (bool, error) {
+	user, err := r.q.GetStaffUserByID(ctx, id)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	return user.IsActive, nil
 }
 
 // FindByEmail retrieves a staff user by email address and returns the base
@@ -139,6 +188,13 @@ func (r *StaffUserRepository) UpdatePassword(ctx context.Context, params sqlc.Up
 // The repository performs an unconditional UPDATE — it does not read the
 // current status first — so applying a transition to a row that is already
 // in the target state is a no-op at the SQL level.
+//
+// # Interaction with IsActive
+//
+// A transition to false takes effect for the JWT middleware on the next
+// authenticated request: the middleware re-reads the status on every
+// request, so an already-issued access token stops working as soon as this
+// method commits. No cache or revocation list is involved.
 func (r *StaffUserRepository) UpdateStatus(ctx context.Context, params sqlc.UpdateStaffStatusParams) error {
 	return r.q.UpdateStaffStatus(ctx, params)
 }
@@ -153,6 +209,12 @@ func (r *StaffUserRepository) UpdateStatus(ctx context.Context, params sqlc.Upda
 // reference staff_users (notably audit_logs); the repository does not
 // cascade or null out references itself. Deleting a non-existent row is not
 // an error.
+//
+// # Interaction with IsActive
+//
+// A deleted row is reported by IsActive as (false, nil), so an outstanding
+// access token for the deleted account stops working on the next
+// authenticated request in the same way a deactivated account does.
 func (r *StaffUserRepository) Delete(ctx context.Context, id int64) error {
 	return r.q.DeleteStaffUser(ctx, id)
 }

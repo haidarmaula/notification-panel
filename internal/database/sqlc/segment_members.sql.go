@@ -28,6 +28,40 @@ func (q *Queries) CountSegmentMembers(ctx context.Context, segmentID int64) (int
 	return count, err
 }
 
+const countSegmentMembersBySegmentIDs = `-- name: CountSegmentMembersBySegmentIDs :many
+SELECT
+    segment_id,
+    COUNT(*)::bigint AS member_count
+FROM segment_members
+WHERE segment_id = ANY($1::bigint[])
+GROUP BY segment_id
+`
+
+type CountSegmentMembersBySegmentIDsRow struct {
+	SegmentID   int64 `db:"segment_id"`
+	MemberCount int64 `db:"member_count"`
+}
+
+func (q *Queries) CountSegmentMembersBySegmentIDs(ctx context.Context, segmentIds []int64) ([]CountSegmentMembersBySegmentIDsRow, error) {
+	rows, err := q.db.Query(ctx, countSegmentMembersBySegmentIDs, segmentIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountSegmentMembersBySegmentIDsRow{}
+	for rows.Next() {
+		var i CountSegmentMembersBySegmentIDsRow
+		if err := rows.Scan(&i.SegmentID, &i.MemberCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const countSegmentMembersByUser = `-- name: CountSegmentMembersByUser :one
 SELECT COUNT(*)
 FROM segment_members

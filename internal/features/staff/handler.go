@@ -36,7 +36,8 @@ import (
 // Every method takes a context.Context as its first parameter. This is
 // the request context from the HTTP layer, and it carries the acting
 // staff user's identity (via middleware.UserContextKey). The service
-// reads that identity for the self-deletion check (see Delete) and for
+// reads that identity for the super-admin check in Create and
+// UpdatePassword, for the self-deletion check in Delete, and for
 // audit-log attribution.
 type StaffServicer interface {
 	// Create provisions a new staff account. See StaffService.Create for
@@ -59,8 +60,12 @@ type StaffServicer interface {
 	UpdateStatus(ctx context.Context, id int64, isActive bool) (*Staff, error)
 
 	// UpdatePassword replaces the stored bcrypt hash for a staff account.
-	// See StaffService.UpdatePassword.
-	UpdatePassword(ctx context.Context, id int64, newPassword string) error
+	//
+	// currentPassword is the acting super-admin's own password, used as a
+	// confirmation step; newPassword is the value to set on the target
+	// account. Both are required. See StaffService.UpdatePassword for the
+	// re-authentication and password-policy semantics.
+	UpdatePassword(ctx context.Context, id int64, currentPassword, newPassword string) error
 
 	// Delete removes a staff account. See StaffService.Delete for the
 	// self-deletion guard.
@@ -86,12 +91,14 @@ type StaffServicer interface {
 // # Error mapping
 //
 // Each method recognises a small set of service sentinels
-// (ErrStaffNotFound, ErrEmailAlreadyRegistered, ErrInvalidRole,
-// ErrCannotDeleteSelf) and maps them to status codes. Any unrecognised
-// error — including repository failures and wrapped errors from the
-// service — falls through to a 500 whose response body is the generic
-// string "internal server error". This is the same disclosure policy used
-// by the notifications, mobile, segments, and profile features; the auth
+// (ErrStaffNotFound, ErrEmailAlreadyRegistered, ErrEmailAlreadyUsed,
+// ErrInvalidRole, ErrCannotDeleteSelf, ErrForbidden,
+// ErrInvalidCurrentPassword, ErrPasswordTooShort, ErrPasswordTooLong)
+// and maps them to status codes. Any unrecognised error — including
+// repository failures and wrapped errors from the service — falls
+// through to a 500 whose response body is the generic string "internal
+// server error". This is the same disclosure policy used by the
+// notifications, mobile, segments, and profile features; the auth
 // feature also uses a generic message.
 //
 // # Concurrency
@@ -118,7 +125,8 @@ func NewStaffHandler(service StaffServicer) *StaffHandler {
 
 // Create handles POST /api/v1/staff.
 // It validates the request, creates a new staff user, and returns 201 Created.
-// Returns 400 for validation errors, 409 for duplicate email, and 500 for internal errors.
+// Returns 400 for validation errors, 403 if the acting staff user is not a
+// super admin, 409 for duplicate email, and 500 for internal errors.
 //
 // # Validation
 //
@@ -126,11 +134,23 @@ func NewStaffHandler(service StaffServicer) *StaffHandler {
 // Name, Email, or Password is empty. Deeper validation — role existence,
 // email uniqueness, password strength — is the service's responsibility.
 //
+// # Authorisation
+//
+// The service enforces the super-admin invariant independently of the
+// HTTP layer (see StaffService.Create and ErrForbidden). In the current
+// wiring the route is also gated by the super-admin middleware, so a
+// caller that reaches this handler has already been checked once; the
+// service check is defense in depth. When the service returns
+// ErrForbidden, the handler maps it to 403 Forbidden.
+//
 // # Responses
 //
 //   - 400 Bad Request: the body could not be decoded, a required field
 //     was empty, or the service returned ErrInvalidRole (the role name
 //     did not resolve to a row).
+//   - 403 Forbidden: the service returned ErrForbidden — the acting
+//     staff user is not a super admin, or the acting identity is absent
+//     from the request context.
 //   - 409 Conflict: the service returned ErrEmailAlreadyRegistered — a
 //     staff user with the same email already exists. The check is
 //     advisory; a concurrent create with the same email can race past
@@ -168,6 +188,8 @@ func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusConflict, nil, err.Error())
 		case errors.Is(err, ErrInvalidRole):
 			response.JSON(w, http.StatusBadRequest, nil, err.Error())
+		case errors.Is(err, ErrForbidden):
+			response.JSON(w, http.StatusForbidden, nil, err.Error())
 		default:
 			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
@@ -287,10 +309,7 @@ func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 //     all three fields empty, or the service returned ErrInvalidRole.
 //   - 404 Not Found: the service returned ErrStaffNotFound.
 //   - 409 Conflict: the service returned ErrEmailAlreadyUsed — the new
-//     email collides with another staff user's email. This service error
-//     is not currently mapped to 409; see the sentinel's documentation.
-//     The default 500 branch now returns the generic "internal server
-//     error" and does not disclose the underlying error.
+//     email collides with another staff user's email.
 //   - 500 Internal Server Error: any other service error. The response
 //     body is the generic string "internal server error"; the underlying
 //     error is not disclosed.
@@ -389,16 +408,31 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 
 // UpdatePassword handles PATCH /api/v1/staff/{id}/password.
 // It updates the password of a staff user.
-// Returns 200 OK on success, 404 if not found, 400 if password is empty.
+// Returns 200 OK on success; 400 if the id is malformed, the body is
+// malformed, either password field is empty, or the new password violates
+// the length policy; 403 if the acting staff user is not a super admin or
+// the current-password confirmation fails; 404 if the target account does
+// not exist; 500 for internal errors.
 //
-// # Administrative reset
+// # Administrative reset with re-authentication
 //
-// This is an administrative password reset: the endpoint accepts the new
-// password without requiring the current one, on the assumption that the
-// caller is a super-admin acting on someone else's account. This is the
-// distinction from the profile feature's UpdatePassword, which requires
-// the caller to supply their current password — the two features have
-// distinct authorisation models.
+// This is an administrative password reset: the caller sets a new password
+// for the target account. The target's current password is not required —
+// the caller is acting on someone else's account — but the *actor's* own
+// current password is required as a confirmation step. The handler
+// forwards both values to the service and does not itself perform any
+// verification; the service re-authenticates the actor and enforces the
+// password-length policy. See StaffService.UpdatePassword and
+// UpdatePasswordRequest for the rationale.
+//
+// # Validation performed here
+//
+// The handler rejects a request where either CurrentPassword or Password
+// is empty with a 400 before invoking the service. Deeper checks —
+// whether the current password is correct, whether the new password
+// satisfies the length policy, whether the target account exists — are
+// the service's responsibility and are reported through the error
+// mapping below.
 //
 // # Existing sessions
 //
@@ -411,8 +445,14 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 //
 // # Responses
 //
-//   - 400 Bad Request: a malformed id, a JSON decode failure, or an empty
-//     password.
+//   - 400 Bad Request: a malformed id, a JSON decode failure, an empty
+//     current_password or password, or a new password that violates the
+//     length policy (ErrPasswordTooShort / ErrPasswordTooLong).
+//   - 403 Forbidden: the service returned ErrForbidden — the acting
+//     staff user is not a super admin, or the acting identity is absent
+//     from the request context. Also returned for
+//     ErrInvalidCurrentPassword — the current_password value did not
+//     match the acting super-admin's stored hash.
 //   - 404 Not Found: the service returned ErrStaffNotFound.
 //   - 500 Internal Server Error: any other service error. The response
 //     body is the generic string "internal server error"; the underlying
@@ -434,16 +474,25 @@ func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
 		return
 	}
+	if req.CurrentPassword == "" {
+		response.JSON(w, http.StatusBadRequest, nil, "current password required")
+		return
+	}
 	if req.Password == "" {
 		response.JSON(w, http.StatusBadRequest, nil, "password required")
 		return
 	}
-	if err := h.service.UpdatePassword(r.Context(), id, req.Password); err != nil {
-		if errors.Is(err, ErrStaffNotFound) {
+	if err := h.service.UpdatePassword(r.Context(), id, req.CurrentPassword, req.Password); err != nil {
+		switch {
+		case errors.Is(err, ErrStaffNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
-			return
+		case errors.Is(err, ErrForbidden), errors.Is(err, ErrInvalidCurrentPassword):
+			response.JSON(w, http.StatusForbidden, nil, err.Error())
+		case errors.Is(err, ErrPasswordTooShort), errors.Is(err, ErrPasswordTooLong):
+			response.JSON(w, http.StatusBadRequest, nil, err.Error())
+		default:
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 	response.JSON(w, http.StatusOK, nil, "password updated")

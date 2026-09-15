@@ -107,15 +107,41 @@ LIMIT sqlc.arg('limit')
 OFFSET sqlc.arg('offset');
 
 -- name: ListUserNotifications :many
+-- Returns one row per distinct notification for a user, collapsing the
+-- one-row-per-device deliveries into a single representative row. The
+-- representative delivery is chosen by status priority (OPENED beats
+-- DELIVERED beats SENT beats FAILED beats anything else) so that a
+-- notification the user has opened on any device appears as OPENED in
+-- the mobile inbox. Ordering is by the representative delivery's
+-- created_at descending, so the most recently received notification
+-- appears first.
 SELECT
-    n.id AS notification_id,
-    n.title,
-    nd.status,
-    nd.opened_at
-FROM notification_deliveries nd
-JOIN notifications n ON n.id = nd.notification_id
-WHERE nd.user_id = sqlc.arg('user_id')
-ORDER BY nd.created_at DESC
+    notification_id,
+    title,
+    status,
+    opened_at
+FROM (
+    SELECT DISTINCT ON (n.id)
+        n.id AS notification_id,
+        n.title,
+        nd.status,
+        nd.opened_at,
+        nd.created_at
+    FROM notification_deliveries nd
+    JOIN notifications n ON n.id = nd.notification_id
+    WHERE nd.user_id = sqlc.arg('user_id')
+    ORDER BY
+        n.id,
+        CASE nd.status
+            WHEN 'OPENED' THEN 1
+            WHEN 'DELIVERED' THEN 2
+            WHEN 'SENT' THEN 3
+            WHEN 'FAILED' THEN 4
+            ELSE 5
+        END ASC,
+        nd.created_at DESC
+) AS per_notification
+ORDER BY created_at DESC
 LIMIT sqlc.arg('limit')
 OFFSET sqlc.arg('offset');
 
@@ -129,6 +155,9 @@ FROM notification_deliveries
 WHERE notification_id = sqlc.arg('notification_id');
 
 -- name: CountUserNotifications :one
-SELECT COUNT(*)
+-- Counts distinct notifications rather than delivery rows, so the total
+-- matches the number of items ListUserNotifications can return for the
+-- same user.
+SELECT COUNT(DISTINCT notification_id)
 FROM notification_deliveries
 WHERE user_id = sqlc.arg('user_id');

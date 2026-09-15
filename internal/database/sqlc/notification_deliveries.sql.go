@@ -29,11 +29,14 @@ func (q *Queries) CountNotificationDeliveries(ctx context.Context, notificationI
 }
 
 const countUserNotifications = `-- name: CountUserNotifications :one
-SELECT COUNT(*)
+SELECT COUNT(DISTINCT notification_id)
 FROM notification_deliveries
 WHERE user_id = $1
 `
 
+// Counts distinct notifications rather than delivery rows, so the total
+// matches the number of items ListUserNotifications can return for the
+// same user.
 func (q *Queries) CountUserNotifications(ctx context.Context, userID int64) (int64, error) {
 	row := q.db.QueryRow(ctx, countUserNotifications, userID)
 	var count int64
@@ -245,14 +248,32 @@ func (q *Queries) ListNotificationDeliveries(ctx context.Context, arg ListNotifi
 
 const listUserNotifications = `-- name: ListUserNotifications :many
 SELECT
-    n.id AS notification_id,
-    n.title,
-    nd.status,
-    nd.opened_at
-FROM notification_deliveries nd
-JOIN notifications n ON n.id = nd.notification_id
-WHERE nd.user_id = $1
-ORDER BY nd.created_at DESC
+    notification_id,
+    title,
+    status,
+    opened_at
+FROM (
+    SELECT DISTINCT ON (n.id)
+        n.id AS notification_id,
+        n.title,
+        nd.status,
+        nd.opened_at,
+        nd.created_at
+    FROM notification_deliveries nd
+    JOIN notifications n ON n.id = nd.notification_id
+    WHERE nd.user_id = $1
+    ORDER BY
+        n.id,
+        CASE nd.status
+            WHEN 'OPENED' THEN 1
+            WHEN 'DELIVERED' THEN 2
+            WHEN 'SENT' THEN 3
+            WHEN 'FAILED' THEN 4
+            ELSE 5
+        END ASC,
+        nd.created_at DESC
+) AS per_notification
+ORDER BY created_at DESC
 LIMIT $3
 OFFSET $2
 `
@@ -270,6 +291,14 @@ type ListUserNotificationsRow struct {
 	OpenedAt       pgtype.Timestamptz `db:"opened_at"`
 }
 
+// Returns one row per distinct notification for a user, collapsing the
+// one-row-per-device deliveries into a single representative row. The
+// representative delivery is chosen by status priority (OPENED beats
+// DELIVERED beats SENT beats FAILED beats anything else) so that a
+// notification the user has opened on any device appears as OPENED in
+// the mobile inbox. Ordering is by the representative delivery's
+// created_at descending, so the most recently received notification
+// appears first.
 func (q *Queries) ListUserNotifications(ctx context.Context, arg ListUserNotificationsParams) ([]ListUserNotificationsRow, error) {
 	rows, err := q.db.Query(ctx, listUserNotifications, arg.UserID, arg.Offset, arg.Limit)
 	if err != nil {

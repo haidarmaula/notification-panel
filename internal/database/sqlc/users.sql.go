@@ -40,6 +40,30 @@ func (q *Queries) CountUsersByStatus(ctx context.Context, status string) (int64,
 	return count, err
 }
 
+const countUsersWithFilters = `-- name: CountUsersWithFilters :one
+SELECT COUNT(*)
+FROM users
+WHERE
+    ($1::text = '' OR name ILIKE '%' || $1 || '%'
+        OR email ILIKE '%' || $1 || '%'
+        OR external_id ILIKE '%' || $1 || '%')
+    AND ($2::text = '' OR status = $2)
+    AND ($3::text = '' OR external_id = $3)
+`
+
+type CountUsersWithFiltersParams struct {
+	Keyword    string `db:"keyword"`
+	Status     string `db:"status"`
+	ExternalID string `db:"external_id"`
+}
+
+func (q *Queries) CountUsersWithFilters(ctx context.Context, arg CountUsersWithFiltersParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countUsersWithFilters, arg.Keyword, arg.Status, arg.ExternalID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createUser = `-- name: CreateUser :one
 
 INSERT INTO users (
@@ -314,6 +338,69 @@ type ListUsersByStatusParams struct {
 // ==========================================
 func (q *Queries) ListUsersByStatus(ctx context.Context, arg ListUsersByStatusParams) ([]User, error) {
 	rows, err := q.db.Query(ctx, listUsersByStatus, arg.Status, arg.Offset, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []User{}
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.ExternalID,
+			&i.Name,
+			&i.Email,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUsersWithFilters = `-- name: ListUsersWithFilters :many
+SELECT
+    id,
+    external_id,
+    name,
+    email,
+    status,
+    created_at,
+    updated_at
+FROM users
+WHERE
+    ($1::text = '' OR name ILIKE '%' || $1 || '%'
+        OR email ILIKE '%' || $1 || '%'
+        OR external_id ILIKE '%' || $1 || '%')
+    AND ($2::text = '' OR status = $2)
+    AND ($3::text = '' OR external_id = $3)
+ORDER BY name
+LIMIT $5
+OFFSET $4
+`
+
+type ListUsersWithFiltersParams struct {
+	Keyword    string `db:"keyword"`
+	Status     string `db:"status"`
+	ExternalID string `db:"external_id"`
+	Offset     int32  `db:"offset"`
+	Limit      int32  `db:"limit"`
+}
+
+func (q *Queries) ListUsersWithFilters(ctx context.Context, arg ListUsersWithFiltersParams) ([]User, error) {
+	rows, err := q.db.Query(ctx, listUsersWithFilters,
+		arg.Keyword,
+		arg.Status,
+		arg.ExternalID,
+		arg.Offset,
+		arg.Limit,
+	)
 	if err != nil {
 		return nil, err
 	}

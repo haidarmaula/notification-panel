@@ -44,11 +44,13 @@ type Querier interface {
 	// COUNT
 	// ==========================================
 	CountSegmentMembers(ctx context.Context, segmentID int64) (int64, error)
+	CountSegmentMembersBySegmentIDs(ctx context.Context, segmentIds []int64) ([]CountSegmentMembersBySegmentIDsRow, error)
 	CountSegmentMembersByUser(ctx context.Context, userID int64) (int64, error)
 	// ==========================================
 	// COUNT
 	// ==========================================
 	CountSegments(ctx context.Context) (int64, error)
+	CountSegmentsWithSearch(ctx context.Context, keyword pgtype.Text) (int64, error)
 	// ==========================================
 	// COUNT
 	// ==========================================
@@ -65,12 +67,16 @@ type Querier interface {
 	// COUNT
 	// ==========================================
 	CountUploadBatches(ctx context.Context) (int64, error)
+	// Counts distinct notifications rather than delivery rows, so the total
+	// matches the number of items ListUserNotifications can return for the
+	// same user.
 	CountUserNotifications(ctx context.Context, userID int64) (int64, error)
 	// ==========================================
 	// COUNT
 	// ==========================================
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersByStatus(ctx context.Context, status string) (int64, error)
+	CountUsersWithFilters(ctx context.Context, arg CountUsersWithFiltersParams) (int64, error)
 	// ==========================================
 	// CREATE
 	// ==========================================
@@ -307,6 +313,14 @@ type Querier interface {
 	// LIST
 	// ==========================================
 	ListUploadBatches(ctx context.Context, arg ListUploadBatchesParams) ([]ListUploadBatchesRow, error)
+	// Returns one row per distinct notification for a user, collapsing the
+	// one-row-per-device deliveries into a single representative row. The
+	// representative delivery is chosen by status priority (OPENED beats
+	// DELIVERED beats SENT beats FAILED beats anything else) so that a
+	// notification the user has opened on any device appears as OPENED in
+	// the mobile inbox. Ordering is by the representative delivery's
+	// created_at descending, so the most recently received notification
+	// appears first.
 	ListUserNotifications(ctx context.Context, arg ListUserNotificationsParams) ([]ListUserNotificationsRow, error)
 	// ==========================================
 	// LIST
@@ -316,6 +330,7 @@ type Querier interface {
 	// FILTER
 	// ==========================================
 	ListUsersByStatus(ctx context.Context, arg ListUsersByStatusParams) ([]User, error)
+	ListUsersWithFilters(ctx context.Context, arg ListUsersWithFiltersParams) ([]User, error)
 	// ==========================================
 	// UPDATE STATUS
 	// ==========================================

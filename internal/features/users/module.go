@@ -24,13 +24,15 @@ import (
 //
 //   - Five repositories (user, device-token, segment-member, delivery,
 //     notification-read) built from the shared sqlc.Queries.
-//   - A UserService composed from all five.
+//   - A UserService composed from all five repositories and the shared
+//     Transactor.
 //   - A UserHandler and a DeviceTokenHandler, both wrapping the same
 //     service.
 //
-// The module does not own the dependencies it receives — the sqlc.Queries
-// and the middlewares belong to the caller — and it does not expose any of
-// its internal repositories or the service to the caller.
+// The module does not own the dependencies it receives — the sqlc.Queries,
+// the Transactor, and the middlewares belong to the caller — and it does
+// not expose any of its internal repositories or the service to the
+// caller.
 //
 // # No audit service
 //
@@ -70,7 +72,8 @@ type UserModule struct {
 //     - deliveryRepo, backing the notification-history projection.
 //     - readRepo, which is stored on the service but not referenced by
 //     any method — see NewUserService for the dead-field note.
-//  2. Builds a UserService from the five collaborators.
+//  2. Builds a UserService from the five collaborators and the supplied
+//     Transactor.
 //  3. Builds a UserHandler and a DeviceTokenHandler, both wrapping the
 //     same service.
 //  4. Returns the module with the supplied middlewares and both handlers.
@@ -78,11 +81,22 @@ type UserModule struct {
 // # Parameters
 //
 // queries must be non-nil and is expected to be the shared instance from
-// cmd/server. adminMiddlewares protect the staff-facing /users routes; in
-// current wiring they require the API key and a staff JWT. deviceMiddlewares
+// cmd/server. db is the shared Transactor — typically the *pgxpool.Pool
+// returned by database.New — and must be non-nil; the service uses it to
+// wrap UpdateDeviceToken's two writes in a single database transaction.
+// adminMiddlewares protect the staff-facing /users routes; in current
+// wiring they require the API key and a staff JWT. deviceMiddlewares
 // protect the mobile-facing /device-tokens routes; in current wiring they
 // require a Laravel mobile JWT. Each slice is applied in order by
 // middleware.Chain.
+//
+// # Transactor parameter
+//
+// Because the parameter is typed as the narrow Transactor interface
+// rather than as *pgxpool.Pool, a caller (or a test) may supply any
+// implementation with a compatible Begin method. In production wiring
+// the shared pool is passed through unchanged — *pgxpool.Pool satisfies
+// Transactor structurally.
 //
 // # Concurrency
 //
@@ -90,6 +104,7 @@ type UserModule struct {
 // server begins listening.
 func NewUserModule(
 	queries *sqlc.Queries,
+	db Transactor,
 	adminMiddlewares []middleware.Middleware,
 	deviceMiddlewares []middleware.Middleware,
 ) *UserModule {
@@ -99,7 +114,7 @@ func NewUserModule(
 	deliveryRepo := repository.NewNotificationDeliveryRepository(queries)
 	readRepo := repository.NewNotificationReadRepository(queries)
 
-	service := NewUserService(userRepo, deviceRepo, segmentRepo, deliveryRepo, readRepo)
+	service := NewUserService(userRepo, deviceRepo, segmentRepo, deliveryRepo, readRepo, db)
 	handler := NewUserHandler(service)
 	deviceTokenHandler := NewDeviceTokenHandler(service)
 

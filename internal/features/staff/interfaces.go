@@ -67,8 +67,8 @@ type RoleRepository interface {
 //
 // The interface is the service's only means of accessing the staff_users
 // table. Because the handler is also interface-typed (see StaffServicer
-// below), the staff feature has the largest testable surface of any
-// feature in the codebase — both the handler and the service can be
+// in handler.go), the staff feature has the largest testable surface of
+// any feature in the codebase — both the handler and the service can be
 // tested with fakes rather than a live database.
 //
 // Documentation for each method's semantics — pagination conventions,
