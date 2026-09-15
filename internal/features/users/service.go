@@ -25,8 +25,7 @@ var (
 	// resolve to a row. GetByID now returns it only for pgx.ErrNoRows;
 	// other by-ID user-existence checks in this package may still collapse
 	// every repository error into this sentinel until they receive the
-	// same treatment. The external_id fast path in List swallows errors
-	// entirely rather than returning a sentinel.
+	// same treatment.
 	//
 	// The handler maps this to 404 Not Found.
 	ErrUserNotFound = errors.New("user not found")
