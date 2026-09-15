@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
+
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 )
@@ -153,14 +155,13 @@ func NewProfileService(staffRepo *repository.StaffUserRepository, roleRepo *repo
 // check is performed — see the type-level documentation for the
 // authorisation model.
 //
-// # Error collapsing on the staff lookup
+// # Error handling on the staff lookup
 //
-// A failure of the initial staff lookup returns ErrProfileNotFound,
-// regardless of the underlying cause. This means a database connectivity
-// failure, a query error, or an unexpected driver failure are all reported
-// to the client as "profile not found" (404), which is misleading. A
-// caller that needs to distinguish "the row does not exist" from "the
-// lookup failed" cannot do so through this method.
+// A missing profile row returns ErrProfileNotFound only when the underlying
+// repository error is pgx.ErrNoRows. Any other lookup failure — a database
+// connectivity error, a query failure, or another driver-level problem — is
+// wrapped with "get profile: " and returned as a non-sentinel error, so the
+// handler serves it as 500 rather than incorrectly reporting 404.
 //
 // # Error wrapping on the role lookup
 //
@@ -178,7 +179,10 @@ func NewProfileService(staffRepo *repository.StaffUserRepository, roleRepo *repo
 func (s *ProfileService) GetProfile(ctx context.Context, staffID int64) (*Profile, error) {
 	staff, err := s.staffRepo.FindByID(ctx, staffID)
 	if err != nil {
-		return nil, ErrProfileNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrProfileNotFound
+		}
+		return nil, fmt.Errorf("get profile: %w", err)
 	}
 
 	role, err := s.roleRepo.FindByID(ctx, staff.RoleID)
@@ -202,8 +206,9 @@ func (s *ProfileService) GetProfile(ctx context.Context, staffID int64) (*Profil
 //
 // # Flow
 //
-//  1. Load the existing staff row by params.ID. A failure — for any reason,
-//     including a transient database error — returns ErrProfileNotFound.
+//  1. Load the existing staff row by params.ID. A missing row returns
+//     ErrProfileNotFound; any other repository failure is wrapped and
+//     returned as a non-sentinel error.
 //  2. Build an update struct initialised with the existing values, so that
 //     fields not supplied by the caller retain their current state.
 //  3. If params.Name is non-empty, set it on the update struct. An empty
@@ -250,12 +255,13 @@ func (s *ProfileService) GetProfile(ctx context.Context, staffID int64) (*Profil
 //
 // # Errors
 //
-// Returns ErrProfileNotFound if the initial lookup fails, ErrEmailAlreadyUsed
-// if the email collision check fails, a wrapped error with the prefix
-// "check email: " if the collision check itself errors, and a wrapped error
-// with the prefix "update profile: " if the write fails. The wrapped errors
-// are not sentinels, so the handler serves them through the default 500
-// branch.
+// Returns ErrProfileNotFound only when the initial lookup returns
+// pgx.ErrNoRows. Other lookup failures are wrapped with
+// "get profile for update: ". Returns ErrEmailAlreadyUsed if the email
+// collision check fails, a wrapped error with the prefix "check email: " if
+// the collision check itself errors, and a wrapped error with the prefix
+// "update profile: " if the write fails. Wrapped errors are not sentinels,
+// so the handler serves them through the default 500 branch.
 //
 // # Authorisation
 //
@@ -272,7 +278,10 @@ func (s *ProfileService) GetProfile(ctx context.Context, staffID int64) (*Profil
 func (s *ProfileService) UpdateProfile(ctx context.Context, params UpdateProfileParams) (*Profile, error) {
 	existing, err := s.staffRepo.FindByID(ctx, params.ID)
 	if err != nil {
-		return nil, ErrProfileNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrProfileNotFound
+		}
+		return nil, fmt.Errorf("get profile for update: %w", err)
 	}
 
 	update := sqlc.UpdateStaffUserParams{
