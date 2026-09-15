@@ -56,11 +56,28 @@ func NewDeviceTokenHandler(service *UserService) *DeviceTokenHandler {
 }
 
 // ListByUser handles GET /api/v1/users/{id}/device-tokens.
+// Query params: page, limit.
 //
 // # Path parameters
 //
 // The user ID is taken from the path's id parameter. It must parse as
 // int64; a malformed value produces a 400 before the service is called.
+//
+// # Pagination
+//
+// The endpoint is paginated. page and limit are parsed by
+// getPaginationParams, so the default page size is 10 and the ceiling is
+// 100. The response carries pagination metadata under a "pagination"
+// key; a caller that receives fewer tokens than the applied limit can
+// determine whether more pages exist by comparing Total against
+// Page*Limit.
+//
+// This replaces the previous implementation, which returned all tokens
+// up to a hard-coded cap of 100 with no pagination metadata and no
+// truncation indicator. See finding H18 in code-review.md. In practice a
+// user's device-token set is small — typically one to three — so the
+// default page will usually contain the full set; the pagination exists
+// for the pathological case rather than for the common one.
 //
 // # Response mapping
 //
@@ -71,13 +88,6 @@ func NewDeviceTokenHandler(service *UserService) *DeviceTokenHandler {
 // nil, the DTO field is nil and the JSON key is omitted. When it is
 // non-nil, the DTO field is a non-nil pointer to the formatted string.
 //
-// # No pagination
-//
-// The endpoint does not paginate. A user's device tokens are expected to
-// be a small, bounded set — typically 1 to 3 — so returning them all in
-// one call is safe. A pathological user with hundreds of tokens would
-// produce a large response; no bound is enforced.
-//
 // # Responses
 //
 //   - 400 Bad Request: the path's id parameter is missing or malformed.
@@ -86,7 +96,8 @@ func NewDeviceTokenHandler(service *UserService) *DeviceTokenHandler {
 //   - 500 Internal Server Error: any other service error. The response
 //     body is the generic string "internal server error"; the underlying
 //     error is not disclosed.
-//   - 200 OK: a ListDeviceTokensResponse containing the user's tokens.
+//   - 200 OK: a ListDeviceTokensResponse containing the requested page
+//     of the user's tokens and the pagination metadata.
 //
 // # Concurrency
 //
@@ -98,7 +109,9 @@ func (h *DeviceTokenHandler) ListByUser(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	tokens, err := h.service.ListDeviceTokens(r.Context(), userID)
+	page, limit := getPaginationParams(r)
+
+	tokens, total, err := h.service.ListDeviceTokens(r.Context(), userID, page, limit)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
@@ -125,7 +138,15 @@ func (h *DeviceTokenHandler) ListByUser(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	response.JSON(w, http.StatusOK, ListDeviceTokensResponse{Data: data}, "success")
+	resp := ListDeviceTokensResponse{
+		Data: data,
+		Pagination: Pagination{
+			Page:  page,
+			Limit: limit,
+			Total: total,
+		},
+	}
+	response.JSON(w, http.StatusOK, resp, "success")
 }
 
 // Register handles POST /api/v1/device-tokens (for mobile app).

@@ -331,18 +331,25 @@ func (s *UserService) GetByID(ctx context.Context, id int64) (*User, error) {
 	}, nil
 }
 
-// Search returns a minimal list of users for autocomplete/typeahead.
+// Search returns a paginated list of users for autocomplete/typeahead.
 //
-// # Hard-coded result cap
+// # Pagination
 //
-// The method calls userRepo.Search with a fixed offset of 0 and a fixed
-// limit of 20. There is no way for a caller to control the cap through
-// this method's signature, and the handler does not attempt to pass a
-// limit through. A search that matches more than 20 users returns only
-// the first 20; the client has no way to paginate to the rest or to know
-// that a truncation occurred. The endpoint is therefore appropriate for
-// typeahead / autocomplete use cases, where the caller refines the
-// keyword until the result set is small, but not for bulk exports.
+// The method accepts page and limit and applies them to the underlying
+// Search query as a normal SQL LIMIT/OFFSET. The returned total is
+// obtained from CountSearch using the same keyword, so pagination
+// metadata is accurate for the search-filtered result set.
+//
+// The caller chooses the page size. The typeahead use case is served by
+// the handler's default of 20 items per page; larger pages are possible
+// but not recommended for interactive search. The method itself imposes
+// no upper bound on limit — the caller is trusted to supply a sensible
+// value.
+//
+// This replaces the previous implementation, which hard-coded offset 0
+// and limit 20 and returned no total. The change closes finding H18 in
+// code-review.md: a caller could neither paginate past the first 20
+// matches nor detect that a truncation had occurred.
 //
 // # Minimal projection
 //
@@ -354,16 +361,24 @@ func (s *UserService) GetByID(ctx context.Context, id int64) (*User, error) {
 // # Errors
 //
 // Returns a wrapped error with the prefix "search users: " for a
-// repository failure. This is not a sentinel, so the handler serves it
-// through its default 500 branch.
+// repository failure on the page fetch, or "count search users: " for a
+// failure on the count. Neither is a sentinel, so the handler serves
+// them through its default 500 branch.
 //
 // # Concurrency
 //
 // Safe for concurrent use.
-func (s *UserService) Search(ctx context.Context, keyword string) ([]SearchUserResult, error) {
-	users, err := s.userRepo.Search(ctx, keyword, 0, 20)
+func (s *UserService) Search(ctx context.Context, keyword string, page, limit int32) ([]SearchUserResult, int64, error) {
+	offset := (page - 1) * limit
+
+	users, err := s.userRepo.Search(ctx, keyword, offset, limit)
 	if err != nil {
-		return nil, fmt.Errorf("search users: %w", err)
+		return nil, 0, fmt.Errorf("search users: %w", err)
+	}
+
+	total, err := s.userRepo.CountSearch(ctx, keyword)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count search users: %w", err)
 	}
 
 	result := make([]SearchUserResult, len(users))
@@ -375,14 +390,14 @@ func (s *UserService) Search(ctx context.Context, keyword string) ([]SearchUserR
 		}
 	}
 
-	return result, nil
+	return result, total, nil
 }
 
 // ============================================
 // Device Token Methods
 // ============================================
 
-// ListDeviceTokens returns all device tokens for a user.
+// ListDeviceTokens returns a paginated list of device tokens for a user.
 //
 // # Existence check
 //
@@ -397,14 +412,18 @@ func (s *UserService) Search(ctx context.Context, keyword string) ([]SearchUserR
 // deleted between the two reads produces an empty list rather than an
 // error, which is harmless in practice.
 //
-// # Hard-coded result cap
+// # Pagination
 //
-// The underlying repository call is made with a fixed offset of 0 and a
-// fixed limit of 100. There is no pagination. A user with more than 100
-// active device tokens will have the excess silently dropped; the
-// response carries no indication that truncation occurred. The cap is
-// well above realistic device counts, but it is not enforced or
-// documented to the client.
+// The method accepts page and limit and applies them to the underlying
+// ListByUser query as a normal SQL LIMIT/OFFSET. The returned total is
+// obtained from CountByUser, so the caller can render accurate pagination
+// metadata and detect truncation.
+//
+// This replaces the previous implementation, which hard-coded offset 0
+// and limit 100 and returned no total. The change closes finding H18 in
+// code-review.md. The handler's default of 10 items per page applies to
+// requests that do not specify a limit; the underlying repository does
+// not enforce a maximum, so the service trusts the caller's limit.
 //
 // # Nullable columns are flattened
 //
@@ -417,25 +436,32 @@ func (s *UserService) Search(ctx context.Context, keyword string) ([]SearchUserR
 //
 // Returns ErrUserNotFound when the user lookup produces pgx.ErrNoRows.
 // Returns a wrapped "get user: " error for any other failure of that
-// lookup, and a wrapped "list device tokens: " error for a failure of
-// the token fetch. Neither wrapped error is a sentinel, so the handler
-// serves them through its default 500 branch.
+// lookup, a wrapped "list device tokens: " error for the page fetch, and
+// a wrapped "count device tokens: " error for the count. None of the
+// wrapped errors is a sentinel, so the handler serves them through its
+// default 500 branch.
 //
 // # Concurrency
 //
 // Safe for concurrent use.
-func (s *UserService) ListDeviceTokens(ctx context.Context, userID int64) ([]DeviceToken, error) {
+func (s *UserService) ListDeviceTokens(ctx context.Context, userID int64, page, limit int32) ([]DeviceToken, int64, error) {
 	_, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrUserNotFound
+			return nil, 0, ErrUserNotFound
 		}
-		return nil, fmt.Errorf("get user: %w", err)
+		return nil, 0, fmt.Errorf("get user: %w", err)
 	}
 
-	rows, err := s.deviceRepo.ListByUser(ctx, userID, 0, 100)
+	offset := (page - 1) * limit
+	rows, err := s.deviceRepo.ListByUser(ctx, userID, offset, limit)
 	if err != nil {
-		return nil, fmt.Errorf("list device tokens: %w", err)
+		return nil, 0, fmt.Errorf("list device tokens: %w", err)
+	}
+
+	total, err := s.deviceRepo.CountByUser(ctx, userID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count device tokens: %w", err)
 	}
 
 	result := make([]DeviceToken, len(rows))
@@ -461,7 +487,7 @@ func (s *UserService) ListDeviceTokens(ctx context.Context, userID int64) ([]Dev
 		}
 	}
 
-	return result, nil
+	return result, total, nil
 }
 
 // RegisterDeviceToken registers a new device token for a user.
@@ -936,7 +962,7 @@ func (s *UserService) ensureDeviceTokenOwnership(ctx context.Context, externalID
 // User Segments Methods
 // ============================================
 
-// GetUserSegments returns all segments a user belongs to.
+// GetUserSegments returns a paginated list of segments a user belongs to.
 //
 // # Existence check
 //
@@ -949,37 +975,48 @@ func (s *UserService) ensureDeviceTokenOwnership(ctx context.Context, externalID
 // The check is not atomic with the segment fetch, but the race is
 // harmless — a user deleted between the two reads produces an empty list.
 //
-// # Hard-coded result cap
+// # Pagination
 //
-// The underlying repository call uses a fixed offset of 0 and a fixed
-// limit of 100. As with ListDeviceTokens, there is no pagination and no
-// truncation indicator; a user who belongs to more than 100 segments will
-// have the excess silently dropped.
+// The method accepts page and limit and applies them to the underlying
+// ListSegmentsByUser query as a normal SQL LIMIT/OFFSET. The returned
+// total is obtained from CountSegmentsByUser, so the caller can render
+// accurate pagination metadata and detect truncation.
+//
+// This replaces the previous implementation, which hard-coded offset 0
+// and limit 100 and returned no total. The change closes finding H18 in
+// code-review.md. The handler's default of 10 items per page applies to
+// requests that do not specify a limit.
 //
 // # Errors
 //
 // Returns ErrUserNotFound only when the user lookup produces
 // pgx.ErrNoRows. A wrapped "get user: " error is returned for any other
-// failure of that lookup, and a wrapped "list segments by user: " error
-// is returned for a failure of the segment fetch. Neither wrapped error
-// is a sentinel, so the handler serves them through its default 500
-// branch.
+// failure of that lookup, a wrapped "list segments by user: " error for
+// the page fetch, and a wrapped "count segments by user: " error for the
+// count. None of the wrapped errors is a sentinel, so the handler serves
+// them through its default 500 branch.
 //
 // # Concurrency
 //
 // Safe for concurrent use.
-func (s *UserService) GetUserSegments(ctx context.Context, userID int64) ([]UserSegment, error) {
+func (s *UserService) GetUserSegments(ctx context.Context, userID int64, page, limit int32) ([]UserSegment, int64, error) {
 	_, err := s.userRepo.FindByID(ctx, userID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrUserNotFound
+			return nil, 0, ErrUserNotFound
 		}
-		return nil, fmt.Errorf("get user: %w", err)
+		return nil, 0, fmt.Errorf("get user: %w", err)
 	}
 
-	rows, err := s.segmentRepo.ListSegmentsByUser(ctx, userID, 0, 100)
+	offset := (page - 1) * limit
+	rows, err := s.segmentRepo.ListSegmentsByUser(ctx, userID, offset, limit)
 	if err != nil {
-		return nil, fmt.Errorf("list segments by user: %w", err)
+		return nil, 0, fmt.Errorf("list segments by user: %w", err)
+	}
+
+	total, err := s.segmentRepo.CountSegmentsByUser(ctx, userID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count segments by user: %w", err)
 	}
 
 	result := make([]UserSegment, len(rows))
@@ -990,7 +1027,7 @@ func (s *UserService) GetUserSegments(ctx context.Context, userID int64) ([]User
 		}
 	}
 
-	return result, nil
+	return result, total, nil
 }
 
 // ============================================

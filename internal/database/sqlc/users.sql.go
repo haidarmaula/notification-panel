@@ -11,6 +11,22 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const countSearchUsers = `-- name: CountSearchUsers :one
+SELECT COUNT(*)
+FROM users
+WHERE
+    name ILIKE '%' || $1 || '%'
+    OR email ILIKE '%' || $1 || '%'
+    OR external_id ILIKE '%' || $1 || '%'
+`
+
+func (q *Queries) CountSearchUsers(ctx context.Context, keyword pgtype.Text) (int64, error) {
+	row := q.db.QueryRow(ctx, countSearchUsers, keyword)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countUsers = `-- name: CountUsers :one
 
 SELECT COUNT(*)

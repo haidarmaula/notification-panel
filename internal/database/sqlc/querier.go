@@ -40,6 +40,7 @@ type Querier interface {
 	// COUNT
 	// ==========================================
 	CountRoles(ctx context.Context) (int64, error)
+	CountSearchUsers(ctx context.Context, keyword pgtype.Text) (int64, error)
 	// ==========================================
 	// COUNT
 	// ==========================================

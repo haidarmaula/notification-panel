@@ -35,6 +35,15 @@
 // derive ownership from a verified Laravel JWT; see DeviceTokenHandler for
 // the direct route's header-based authentication contract.
 //
+// # Pagination convention
+//
+// Every list-shaped response in this package carries a Pagination field.
+// The convention is uniform across List, Search, GetUserSegments,
+// GetUserNotifications, and ListDeviceTokens: a response has a "data"
+// array and a "pagination" object with page, limit, and total. A client
+// that receives fewer items than the applied limit can determine whether
+// more pages exist by comparing Total against Page*Limit.
+//
 // # Layering
 //
 // The package follows the standard feature-module triad used elsewhere in
@@ -159,6 +168,34 @@ type SearchUserResult struct {
 	Name string `json:"name"`
 }
 
+// ListSearchUsersResponse represents the paginated search response.
+//
+// It is the response shape of GET /api/v1/users/search. The endpoint
+// previously returned a bare JSON array of SearchUserResult; the wrapper
+// was introduced so that the response can carry a total, which lets a
+// client detect that the result set was truncated (Total > Page*Limit)
+// and page through the rest. This closes finding H18 in code-review.md.
+//
+// # Not backwards compatible with the previous array shape
+//
+// A client that was decoding the response body as a top-level JSON array
+// must be updated to decode the "data" key instead. The change is
+// deliberate: the old shape could not express a total, so any attempt to
+// add truncation metadata without changing the shape would have required
+// a response header, which the rest of the codebase does not use.
+type ListSearchUsersResponse struct {
+	// Data is the current page of search results. An empty page is not
+	// distinguishable at this level from "no matches" — the client must
+	// inspect Pagination.Total to tell the cases apart.
+	Data []SearchUserResult `json:"data"`
+
+	// Pagination is the pagination metadata for the full search result
+	// set. The default page size for search is 20 rather than the 10
+	// used elsewhere; see the handler's defaultSearchLimit for the
+	// rationale.
+	Pagination Pagination `json:"pagination"`
+}
+
 // ============================================
 // Device Token DTOs
 // ============================================
@@ -211,16 +248,26 @@ type DeviceTokenResponse struct {
 	CreatedAt string `json:"created_at"`
 }
 
-// ListDeviceTokensResponse represents list of device tokens for a user.
+// ListDeviceTokensResponse represents a page of device tokens for a user.
 //
-// It is the response shape of GET /api/v1/users/{id}/device-tokens.
-// Unlike the user list endpoint, it carries no pagination metadata: a
-// user's device tokens are expected to be a small, bounded set, so the
-// response returns them all in one call.
+// It is the response shape of GET /api/v1/users/{id}/device-tokens. The
+// endpoint was previously unpaginated and capped at a hard-coded limit;
+// this shape adds pagination metadata so that a client can detect
+// truncation. See finding H18 in code-review.md.
+//
+// In practice a user's device-token set is small — typically one to
+// three — so the default page will usually contain the full set. The
+// pagination metadata exists for the pathological case rather than for
+// the common one; a client that wants to be defensive should still check
+// whether Total exceeds Page*Limit.
 type ListDeviceTokensResponse struct {
-	// Data is the full set of device tokens for the user, in the order
-	// returned by the underlying query.
+	// Data is the current page of device tokens for the user, in the
+	// order returned by the underlying query.
 	Data []DeviceTokenResponse `json:"data"`
+
+	// Pagination is the pagination metadata for the user's full
+	// device-token set.
+	Pagination Pagination `json:"pagination"`
 }
 
 // ============================================
@@ -241,14 +288,22 @@ type UserSegmentResponse struct {
 	Name string `json:"name"`
 }
 
-// ListUserSegmentsResponse represents list of segments a user belongs to.
+// ListUserSegmentsResponse represents a page of segments a user belongs to.
 //
-// It is the response shape of GET /api/v1/users/{id}/segments. As with
-// the device-token list, there is no pagination — a user's segment
-// memberships are expected to be a small set.
+// It is the response shape of GET /api/v1/users/{id}/segments. The
+// endpoint was previously unpaginated and capped at a hard-coded limit;
+// this shape adds pagination metadata so that a client can detect
+// truncation. See finding H18 in code-review.md.
+//
+// In practice a user's segment memberships are expected to be a small
+// set, so the default page will usually contain the full set.
 type ListUserSegmentsResponse struct {
-	// Data is the full set of segments the user belongs to.
+	// Data is the current page of segments the user belongs to.
 	Data []UserSegmentResponse `json:"data"`
+
+	// Pagination is the pagination metadata for the user's full segment
+	// membership set.
+	Pagination Pagination `json:"pagination"`
 }
 
 // ============================================
@@ -276,7 +331,11 @@ type ListUserSegmentsResponse struct {
 // Status is the notification_deliveries status — "DELIVERED", "OPENED",
 // "FAILED", or other values the delivery pipeline writes. The users
 // feature does not define a closed enumeration; it passes the value
-// through verbatim from the underlying row.
+// through verbatim from the underlying row. When the delivery repository
+// collapses multiple delivery rows per notification into a single
+// representative row (see the repository's ListByUser), the value here
+// is the priority-selected status: OPENED beats DELIVERED beats SENT
+// beats FAILED.
 type UserNotificationHistoryItem struct {
 	// NotificationID is the internal notifications.id of the entry.
 	NotificationID int64 `json:"notification_id"`
@@ -412,12 +471,14 @@ type Pagination struct {
 	Page int32 `json:"page"`
 
 	// Limit is the maximum number of items per page. The handler defaults
-	// it to 10 and caps it at 100; an out-of-range client value is
-	// silently replaced with the default, not rejected. The value here
-	// reflects what was actually applied, not what the client asked for.
+	// it to 10 — or to 20 for the search endpoint — and caps it at 100;
+	// an out-of-range client value is silently replaced with the default,
+	// not rejected. The value here reflects what was actually applied,
+	// not what the client asked for.
 	Limit int32 `json:"limit"`
 
 	// Total is the total number of rows matching the current filter,
-	// before pagination was applied.
+	// before pagination was applied. A client can determine whether more
+	// pages exist by comparing Total against Page*Limit.
 	Total int64 `json:"total"`
 }

@@ -79,6 +79,27 @@ func (r *UserRepository) CountByStatus(ctx context.Context, status string) (int6
 	return r.q.CountUsersByStatus(ctx, status)
 }
 
+// CountSearch returns the total number of users matching the same keyword
+// filter accepted by Search.
+//
+// It is the count-side counterpart of Search and exists so that the search
+// endpoint can report a total alongside its page of results — a client
+// that receives fewer results than it requested can compare the two to
+// determine whether the result set was truncated, and a client that
+// paginates can render an accurate page count.
+//
+// The keyword semantics are identical to Search: the count matches the
+// same OR-of-three ILIKE predicate, and the same pgtype.Text wrapping is
+// applied. An empty keyword is treated as a valid search term rather than
+// as "match everything" — a caller that wants an unfiltered total should
+// use Count instead.
+//
+// A repository error is returned unchanged. The method holds no state and
+// is safe for concurrent use.
+func (r *UserRepository) CountSearch(ctx context.Context, keyword string) (int64, error) {
+	return r.q.CountSearchUsers(ctx, pgtype.Text{String: keyword, Valid: true})
+}
+
 // FindByID retrieves a user by its internal primary key and returns the base
 // sqlc.User model.
 //
@@ -154,9 +175,11 @@ func (r *UserRepository) ListByStatus(ctx context.Context, status string, offset
 // valid search term rather than as "no filter". Callers that want
 // "keyword is optional" semantics should use List or ListByStatus instead.
 //
-// The query is expected to match against name, email, or external_id —
-// consult db/queries/users.sql for the exact predicate — but the repository
-// makes no promise about which columns participate.
+// The query matches against name, email, or external_id — see
+// db/queries/users.sql for the exact predicate. offset and limit are passed
+// through to SQL without validation; the caller is responsible for choosing
+// a sensible page size. A paired CountSearch is available for callers that
+// need to report a total alongside the page.
 func (r *UserRepository) Search(ctx context.Context, keyword string, offset, limit int32) ([]sqlc.User, error) {
 	return r.q.SearchUsers(ctx, sqlc.SearchUsersParams{
 		Keyword: pgtype.Text{String: keyword, Valid: true},
@@ -166,7 +189,7 @@ func (r *UserRepository) Search(ctx context.Context, keyword string, offset, lim
 }
 
 // ListWithFilters returns a page of users filtered by keyword, status, and
-// externalID. Empty filter values mean “no filter on that column”; the
+// externalID. Empty filter values mean "no filter on that column"; the
 // filters compose with AND semantics.
 //
 // The returned slice is ordered by the underlying SQL. offset and limit are

@@ -5,10 +5,35 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"time"
 )
+
+// minPushTokenLength is the threshold below which a push token is rejected
+// without being forwarded to OneSignal.
+//
+// A token is forwarded only when its byte length is strictly greater than
+// this value; a token whose PushToken is empty or whose length is less than
+// or equal to minPushTokenLength is recorded in the result slice as
+// "FAILED" instead. The threshold is shared with FCMProvider so that both
+// providers accept and reject the same token population. Real OneSignal
+// player IDs and FCM/APNs registration tokens are far longer than this
+// threshold, so a token this short almost always indicates a client-side
+// bug or a placeholder in test data.
+//
+// The value is used as an exclusive lower bound — `len(token) >
+// minPushTokenLength` — so a token of exactly this many bytes is rejected.
+// Callers should not depend on the specific numeric value; it is an
+// implementation detail that may be adjusted without a contract change.
+const minPushTokenLength = 10
+
+// onesignalEndpoint is the OneSignal REST endpoint that this provider
+// calls. It is a package-level constant rather than a struct field so that
+// the URL is greppable and so that a future revision that needs to point
+// at a staging endpoint has a single place to change.
+const onesignalEndpoint = "https://onesignal.com/api/v1/notifications"
 
 // OneSignalProvider sends notifications via OneSignal REST API.
 //
@@ -21,22 +46,66 @@ import (
 // per-token receipts, so the provider cannot distinguish which tokens in a
 // partially-successful batch were accepted.
 //
-// # Contract divergence from FCMProvider
+// # Error contract
 //
-// The two providers do not honour a consistent error contract. FCMProvider
-// returns per-token failures in the SendResult slice and always returns a
-// nil function-level error. OneSignalProvider returns a nil, non-nil error
-// pair on any failure — including failures of a single request inside what
-// would otherwise be a batch — and does not populate per-token results on
-// those paths.
+// The provider returns a per-token result slice on every return path, and
+// additionally returns a non-nil function-level error when every token
+// failed. This matches the contract that FCMProvider honours after its
+// H24 revision, so a caller that checks only the error return sees a
+// consistent signal from both providers.
 //
-// Callers written against one provider's semantics will mishandle the
-// other. The correct fix is to standardise on one shape — either per-token
-// results with a nil function-level error, or a strictly-typed error return
-// — across every implementation of NotificationProvider. Until then, the
-// safest pattern for callers is to check both return values: a non-nil
-// error means the batch failed entirely, a non-nil slice means at least
-// some tokens were dispatched.
+// The invariant a caller can rely on is:
+//
+//	len(results) == len(req.Tokens)
+//
+// on every return path, including error returns. Each entry in the slice
+// carries a Status of either "SENT" or "FAILED". The Error field on a
+// "FAILED" result is currently left at its zero value; the specific reason
+// for each failure is logged but not surfaced through the result.
+//
+// # When a function-level error is returned
+//
+// A non-nil error is returned when and only when no token succeeded. This
+// covers:
+//
+//   - Every token failed local validation (empty or too short).
+//   - Every forwarded token failed because the batch call could not be
+//     completed, was rejected by OneSignal, was accepted only partially,
+//     or could not be decoded.
+//
+// On every error return the caller still receives the fully-populated
+// result slice, so per-token detail is available alongside the summary
+// signal.
+//
+// # Partial failure
+//
+// A partial failure — at least one token "SENT" and at least one "FAILED" —
+// returns a nil function-level error. The caller is expected to iterate the
+// result slice and inspect each Status. This asymmetry is deliberate:
+// escalating every partial failure to the function-level return would
+// force every caller to duplicate the per-token inspection logic.
+//
+// # Batch-level failures
+//
+// The following operational conditions are reported as per-token "FAILED"
+// results with a non-nil function-level error:
+//
+//   - The HTTP round-trip failed: a network error, a DNS failure, or the
+//     10-second client timeout elapsing.
+//   - OneSignal returned a non-2xx HTTP status. The status code and a
+//     bounded snippet of the response body are logged; see finding H20 in
+//     code-review.md for why this check exists.
+//   - The response body could not be decoded as JSON.
+//   - The decoded response contained a non-empty Errors list.
+//   - The decoded response reported fewer recipients than were submitted,
+//     which indicates OneSignal partially accepted the batch and did not
+//     identify the rejected player IDs; see finding H23 in code-review.md
+//     for the reasoning behind failing the batch rather than reporting
+//     partial success.
+//
+// A caller that needs to distinguish "the whole batch failed" from "the
+// network was temporarily unavailable" must inspect its own logs; the
+// current contract does not carry a failure classification.
 //
 // # Concurrency
 //
@@ -54,9 +123,12 @@ type OneSignalProvider struct {
 // # Parameters
 //
 // appID and apiKey are sourced from config.WorkerConfig (OneSignalAppID and
-// OneSignalAPIKey). Neither is validated; an empty apiKey will result in
-// every OneSignal call returning 401, which the provider does not detect as
-// a distinct error — see Send for how the 401 body is (mis)handled.
+// OneSignalAPIKey). Neither is validated here; an empty apiKey results in
+// every OneSignal call returning 401. With the current revision, that 401
+// is detected as a non-2xx status and produces per-token "FAILED" results
+// plus a non-nil function-level error, rather than the silently-successful
+// Send that earlier revisions emitted — see the Send documentation for the
+// H20 rationale.
 //
 // # Client configuration
 //
@@ -102,7 +174,9 @@ type OneSignalRequest struct {
 	// IncludePlayerIDs is the batch of device tokens to deliver to.
 	// OneSignal's API accepts up to 2,000 player IDs per request; the
 	// provider does not enforce that limit, so a batch larger than 2,000
-	// will be rejected by OneSignal with an API error.
+	// will be rejected by OneSignal as a 400 with a non-empty Errors list —
+	// which the caller now sees as per-token "FAILED" results plus a
+	// non-nil function-level error.
 	IncludePlayerIDs []string `json:"include_player_ids"`
 
 	// Headings is the notification title, keyed by language code. The
@@ -134,128 +208,221 @@ type OneSignalRequest struct {
 // OneSignalResponse is the API response structure.
 //
 // It is the subset of OneSignal's create-notification response that this
-// provider decodes. OneSignal returns a richer body — including per-recipient
-// error details and a "recipients" count — but only these three fields are
-// read.
+// provider decodes. OneSignal returns a richer body — including
+// per-recipient error details and a "recipients" count — but only these
+// three fields are read.
 //
 // # Relationship between ID, Recipients, and Errors
 //
 // On a fully successful call, ID is the notification's OneSignal-assigned
-// identifier, Recipients is the number of devices the notification was
-// accepted for, and Errors is empty.
+// identifier, Recipients equals the number of player IDs submitted, and
+// Errors is empty.
 //
 // On a partially successful call, ID and Recipients are populated and
-// Errors contains one or more strings describing the rejections (for
-// example, invalid player IDs). OneSignal does not, however, indicate which
-// specific player IDs were rejected.
+// either Errors contains one or more strings describing the rejections, or
+// Recipients is smaller than the submitted count without any accompanying
+// Errors entry. OneSignal does not indicate which specific player IDs were
+// rejected in either case.
 //
-// The provider's handling of this structure is documented on Send; in
-// particular, note that Recipients is not used to filter the result set.
+// The provider treats any of these signals as a batch-level failure and
+// records per-token "FAILED" results for every forwarded token. See Send
+// for the full contract and the code-review.md findings (H20, H22, H23)
+// that motivated it.
 type OneSignalResponse struct {
-	// ID is the OneSignal-assigned identifier for the notification. It is
-	// copied into every SendResult's ProviderMessageID — the same value for
-	// every device in the batch, since OneSignal assigns one ID per
-	// notification, not per recipient.
+	// ID is the OneSignal-assigned identifier for the notification. On a
+	// successful send, it is copied into every "SENT" SendResult's
+	// ProviderMessageID — the same value for every device in the batch,
+	// because OneSignal assigns one ID per notification, not per
+	// recipient.
+	//
+	// # Per-device correlation
+	//
+	// The single-ID-per-notification design means that ProviderMessageID
+	// alone cannot distinguish which device a delivery receipt belongs to.
+	// A caller that needs per-device correlation must use the composite key
+	// (ProviderMessageID, PushToken) — both are present in every SendResult
+	// — or switch to a one-call-per-device strategy. The batching approach
+	// this provider uses is fundamentally incompatible with per-device
+	// receipt IDs, because OneSignal's batch endpoint assigns one ID to the
+	// whole notification. This is finding H22 in code-review.md; the
+	// limitation is documented rather than fixed because the alternative
+	// — a per-device call — would forfeit the throughput advantage that is
+	// this provider's reason for existing.
 	ID string `json:"id"`
 
 	// Recipients is the number of devices OneSignal accepted the
-	// notification for. The provider does not currently consult this field;
-	// see Send for the consequence.
+	// notification for.
+	//
+	// The provider compares this value against the number of player IDs it
+	// submitted. A smaller value is treated as a partial rejection and
+	// causes every forwarded token to be marked "FAILED", on the reasoning
+	// that unknown partial state is better reported as a batch failure than
+	// as an outright success — a caller that retries will over-deliver to
+	// the accepted recipients, which is preferable in this domain to the
+	// silent loss of the rejected ones. This is finding H23 in
+	// code-review.md.
 	Recipients int `json:"recipients"`
 
-	// Errors is a list of human-readable error messages. If non-empty, the
-	// provider treats the whole request as failed — even though OneSignal
-	// may have accepted the notification for a subset of recipients. See
-	// Send for the implication.
+	// Errors is a list of human-readable error messages. A non-empty list
+	// causes every forwarded token to be marked "FAILED"; the provider does
+	// not attempt to map the errors to specific player IDs, because
+	// OneSignal's response does not expose that mapping.
 	Errors []string `json:"errors"`
 }
 
 // Send delivers the notification via OneSignal.
-// It skips tokens that are empty or too short, and returns a SendResult per device.
+//
+// # Contract
+//
+// On every return — nil error or non-nil error — the result slice has
+// exactly one SendResult per entry in req.Tokens, in the same order as the
+// input. A caller can therefore correlate result i with req.Tokens[i] by
+// index, which is the pattern the delivery processor relies on during
+// fan-out.
+//
+// Each result carries a Status of either "SENT" or "FAILED":
+//
+//   - "SENT" means the token was forwarded to OneSignal in the batch and
+//     the batch was accepted in full. Note that OneSignal's aggregate
+//     response cannot confirm per-token acceptance; see "Per-device
+//     correlation" below.
+//   - "FAILED" means the token was not delivered. This covers three cases:
+//     the token was filtered out locally (empty or too short), the token
+//     was forwarded but the batch-level request failed, or the token was
+//     forwarded but the batch was accepted only partially.
+//
+// The Error field on a "FAILED" result is currently left at its zero value;
+// the specific reason for each failure is logged but not surfaced through
+// the result.
+//
+// # Function-level error
+//
+// Send returns a non-nil function-level error when and only when no token
+// succeeded — either because every token failed local validation, or
+// because every forwarded token failed at the batch level. Partial
+// failures return a nil error; callers that need to detect them must
+// iterate the result slice and inspect each Status.
+//
+// This alignment with FCMProvider's contract — which was updated in the
+// same pass to return an error on total failure — closes the remaining
+// asymmetry documented under finding H24 in code-review.md. A caller that
+// checks only the error return now sees a consistent "at least one token
+// succeeded" signal from both providers, and a consistent "everything
+// failed" signal when the fan-out achieved nothing.
 //
 // # Flow
 //
-// The method performs a single batched call to OneSignal's create-
-// notification endpoint. Its steps are:
+// The method performs at most one batched HTTP call to OneSignal's
+// create-notification endpoint. Its steps are:
 //
-//  1. Filter req.Tokens, keeping only tokens whose PushToken is non-empty
-//     and longer than 10 bytes. Tokens shorter than or equal to 10 bytes
-//     are silently dropped — see the "Silently dropped tokens" section.
-//  2. If no tokens survive the filter, return an empty result slice and a
-//     nil error, without contacting OneSignal.
-//  3. Build a OneSignalRequest containing the filtered player IDs, the
+//  1. Pre-allocate a result slice of length len(req.Tokens) so that every
+//     input token has a reserved position in the output regardless of how
+//     many are actually forwarded.
+//  2. Partition req.Tokens. Tokens whose PushToken is non-empty and longer
+//     than minPushTokenLength are collected into a forwarding list, with
+//     their original indices remembered. Tokens that fail either check are
+//     recorded as "FAILED" in the result slice at their original position.
+//  3. If no tokens survive the partition, return the result slice (which
+//     contains only "FAILED" entries) and a non-nil error indicating that
+//     all tokens failed local validation.
+//  4. Build a OneSignalRequest containing the forwarded player IDs, the
 //     request's title and body under the "en" language key, a Data map
 //     carrying notification_id and click_action, and a fixed priority of
 //     10.
-//  4. Marshal the request, POST it to https://onesignal.com/api/v1/notifications
-//     with the app's apiKey in a Basic-auth header, and decode the
-//     response body as a OneSignalResponse.
-//  5. If the decoded response has a non-empty Errors list, return a nil
-//     result slice and an error whose message is the errors joined.
-//  6. Otherwise, return one SendResult per surviving token, every one of
-//     them with Status "SENT", the response's ID as ProviderMessageID, and
-//     a nil Error.
+//  5. Marshal the request. A marshal failure cannot occur with the field
+//     types in use, but is handled by failing every forwarded token and
+//     returning a non-nil error.
+//  6. Construct the HTTP request. A construction failure cannot occur with
+//     a constant endpoint, but is handled the same way as the marshal
+//     failure.
+//  7. POST the request and decode the response. Any failure of the round
+//     trip, a non-2xx status code, a decode failure, a non-empty Errors
+//     list, or a Recipients count below the submitted count all take the
+//     same path: every forwarded token is marked "FAILED", the failure is
+//     logged, and the method returns a non-nil error.
+//  8. On full acceptance, every forwarded token is marked "SENT" with the
+//     batch ID as its ProviderMessageID, and the method returns a nil
+//     error.
 //
-// # Silently dropped tokens
+// # Token filtering
 //
-// The length filter at step 1 removes tokens the provider considers
-// obviously invalid. Because those tokens do not appear in the output
-// slice, the length of the returned slice may be smaller than the length
-// of req.Tokens. A caller that expects a one-to-one mapping — as it would
-// get from FCMProvider — will mis-correlate results to inputs. In
-// particular, the delivery processor's fan-out loop indexes into
-// req.Tokens by result position in some code paths; correctness depends on
-// the provider preserving the input ordering and cardinality, which
-// OneSignalProvider does not.
+// A token is forwarded to OneSignal only when its PushToken is non-empty
+// and its byte length is strictly greater than minPushTokenLength. Tokens
+// that fail either check are recorded in the result slice as "FAILED" at
+// the position they occupied in req.Tokens, preserving the input ordering
+// and cardinality that the delivery processor depends on.
 //
-// There is no result entry with Status "FAILED" for the dropped tokens, so
-// the caller has no way to record a delivery for them. They are not
-// delivered and not tracked.
+// This behaviour closes finding H19 in code-review.md. A previous revision
+// silently dropped short tokens from the result slice, producing an output
+// whose length did not match the input and whose per-position entries no
+// longer corresponded to the correct input tokens.
 //
-// # Single-ID response semantics
+// # HTTP status inspection
+//
+// The response's status code is inspected before the body is decoded.
+// Anything outside the 2xx range takes the batch-failure path: every
+// forwarded token is marked "FAILED", the status code and up to 1 KiB of
+// the response body are logged, and the method returns a non-nil error.
+//
+// This closes finding H20 in code-review.md. A previous revision decoded
+// the response regardless of status, so a 401 Unauthorized with a
+// well-formed body of `{"id":"","recipients":0,"errors":[]}` produced a
+// Send that marked every token "SENT" — a silently successful return whose
+// notifications never left OneSignal's servers.
+//
+// # Per-device correlation
 //
 // OneSignal assigns one notification ID per API call, not per recipient.
-// The ProviderMessageID in every result is therefore identical for every
-// device in the batch. A caller that needs per-device receipt correlation
-// cannot get it from this provider without switching to one call per
-// device — which is the model FCMProvider uses, at the cost of throughput.
+// The ProviderMessageID in every "SENT" result is therefore identical for
+// every forwarded token in the batch. A caller that needs per-device
+// receipt correlation must use the composite key (ProviderMessageID,
+// PushToken) — both fields are present in every SendResult — or switch to
+// a one-call-per-device strategy, which is the model FCMProvider uses at
+// the cost of throughput.
 //
-// # Recipients not consulted
+// This is finding H22 in code-review.md. The limitation is structural: the
+// batch endpoint the provider uses does not expose per-recipient IDs. The
+// revision documents the composite-key workaround rather than altering the
+// batching strategy.
 //
-// The response's Recipients field, which records how many devices OneSignal
-// accepted the notification for, is not read. When OneSignal partially
-// rejects a batch (Errors is empty but Recipients is smaller than the
-// number of submitted player IDs), the provider still marks every surviving
-// token as "SENT". Callers that need an accurate count of accepted
-// recipients must not rely on the result slice.
+// # Partial acceptance
 //
-// # HTTP status not checked
+// If OneSignal's response reports a Recipients count below the number of
+// player IDs that were submitted, the provider treats the batch as a
+// failure: every forwarded token is marked "FAILED" and a non-nil error
+// is returned. This is deliberately conservative — the alternative,
+// marking every token "SENT" because some were accepted, hides the fact
+// that an unknown subset of recipients never received the notification.
+// In the notification domain, over-delivery on a caller-triggered retry is
+// preferable to silent under-delivery.
 //
-// The method does not inspect resp.StatusCode. A 401 Unauthorized response
-// with a valid JSON body — for example, {"id":"","recipients":0,"errors":[]}
-// — will be decoded successfully and, because Errors is empty, every
-// surviving token will be marked "SENT". A misconfigured apiKey therefore
-// produces a silently successful Send whose notifications never leave the
-// provider's servers. The only way this provider surfaces an
-// authentication problem is if OneSignal's error body happens to include
-// a non-empty Errors array for the 401, which is not guaranteed.
+// This closes finding H23 in code-review.md. The provider does not attempt
+// to identify which specific recipients were rejected, because OneSignal's
+// response does not expose that information.
 //
 // # Errors
 //
-// A non-nil error is returned in four cases:
+// A non-nil function-level error is returned on every path that leaves no
+// token "SENT":
 //
-//   - The request struct fails to marshal as JSON. This is unexpected for
-//     the field types involved and indicates a code defect.
-//   - The HTTP request cannot be constructed. Also unexpected.
-//   - The HTTP round-trip fails — network error, DNS failure, or the
+//   - All tokens failed local validation.
+//   - The request struct failed to marshal (unreachable with the field
+//     types in use).
+//   - The HTTP request could not be constructed (unreachable with a
+//     constant endpoint).
+//   - The HTTP round-trip failed: network error, DNS failure, or the
 //     10-second client timeout elapsing.
-//   - The response body cannot be decoded as JSON, or the decoded response
-//     contains a non-empty Errors list.
+//   - OneSignal returned a non-2xx status.
+//   - The response body could not be decoded as JSON.
+//   - The decoded response contained a non-empty Errors list.
+//   - The decoded response reported fewer recipients than were submitted.
 //
-// On every error path, the result slice is nil. The method does not
-// distinguish transient failures (network, timeout) from permanent ones
-// (invalid credentials, malformed request); a caller implementing retry
-// logic must classify the error itself.
+// On every one of these paths the result slice is fully populated: one
+// SendResult per input token, with a Status of "SENT" or "FAILED" at each
+// position. This is a deliberate change from earlier revisions, which
+// returned a nil slice together with the error and thereby deprived the
+// caller of per-token detail. The current contract is that the result
+// slice is meaningful regardless of the error return.
 //
 // # Context
 //
@@ -274,20 +441,52 @@ func (p *OneSignalProvider) Send(ctx context.Context, req SendRequest) ([]SendRe
 		return []SendResult{}, nil
 	}
 
-	// Map player IDs to user IDs for result correlation.
-	playerIDs := make([]string, 0, len(req.Tokens))
-	userIDMap := make(map[string]int64)
+	// Pre-allocate a result slice with the same length as the input so
+	// that every token — forwarded or rejected — occupies a fixed
+	// position. The delivery processor correlates results to input tokens
+	// by index; a shorter slice would break that correlation.
+	results := make([]SendResult, len(req.Tokens))
 
-	for _, token := range req.Tokens {
-		if token.PushToken != "" && len(token.PushToken) > 10 {
-			playerIDs = append(playerIDs, token.PushToken)
-			userIDMap[token.PushToken] = token.UserID
+	// Partition tokens. Forwarded tokens are collected in playerIDs and
+	// their original indices are remembered in forwardedIdx; rejected
+	// tokens are recorded as "FAILED" in place.
+	playerIDs := make([]string, 0, len(req.Tokens))
+	forwardedIdx := make([]int, 0, len(req.Tokens))
+
+	for i, token := range req.Tokens {
+		if token.PushToken == "" || len(token.PushToken) <= minPushTokenLength {
+			results[i] = SendResult{
+				UserID:    token.UserID,
+				PushToken: token.PushToken,
+				Status:    "FAILED",
+			}
+			continue
+		}
+		playerIDs = append(playerIDs, token.PushToken)
+		forwardedIdx = append(forwardedIdx, i)
+	}
+
+	// failForwarded records a batch-level failure against every token
+	// that was actually forwarded to OneSignal. It is invoked from each
+	// failure path so that the caller always receives a per-token
+	// outcome rather than a slice that silently omits tokens.
+	failForwarded := func() {
+		for _, idx := range forwardedIdx {
+			results[idx] = SendResult{
+				UserID:    req.Tokens[idx].UserID,
+				PushToken: req.Tokens[idx].PushToken,
+				Status:    "FAILED",
+			}
 		}
 	}
 
 	if len(playerIDs) == 0 {
+		// Every token failed the local length check; no HTTP call is
+		// attempted. The per-token FAILED results are already populated,
+		// and a non-nil error is returned so a caller that inspects only
+		// the error return still sees the failure.
 		log.Printf("[OneSignal] No valid player IDs for notification %d", req.NotificationID)
-		return []SendResult{}, nil
+		return results, fmt.Errorf("all %d tokens failed local validation", len(req.Tokens))
 	}
 
 	onesignalReq := OneSignalRequest{
@@ -304,42 +503,94 @@ func (p *OneSignalProvider) Send(ctx context.Context, req SendRequest) ([]SendRe
 
 	jsonBody, err := json.Marshal(onesignalReq)
 	if err != nil {
-		return nil, fmt.Errorf("marshal request: %w", err)
+		// Unreachable with the field types in use. The forwarded tokens
+		// are marked FAILED so that the result slice is complete on this
+		// path, and the error is returned so the caller sees the defect.
+		failForwarded()
+		return results, fmt.Errorf("marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", "https://onesignal.com/api/v1/notifications", bytes.NewReader(jsonBody))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", onesignalEndpoint, bytes.NewReader(jsonBody))
 	if err != nil {
-		return nil, fmt.Errorf("create request: %w", err)
+		// Unreachable: the endpoint is a package-level constant. Handled
+		// the same way as the marshal failure above.
+		failForwarded()
+		return results, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Basic "+p.apiKey)
 
 	resp, err := p.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("do request: %w", err)
+		log.Printf("[OneSignal] Notification %d batch request failed: %v", req.NotificationID, err)
+		failForwarded()
+		return results, fmt.Errorf("all %d tokens failed", len(req.Tokens))
 	}
 	defer resp.Body.Close()
 
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// Non-2xx status. Read a bounded snippet of the body for the log
+		// line, then fail the batch. The bound keeps a misbehaving
+		// provider from feeding the logger an unbounded payload.
+		bodySnippet, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		log.Printf(
+			"[OneSignal] Notification %d non-2xx status %d: %s",
+			req.NotificationID,
+			resp.StatusCode,
+			string(bodySnippet),
+		)
+		failForwarded()
+		return results, fmt.Errorf("all %d tokens failed", len(req.Tokens))
+	}
+
 	var onesignalResp OneSignalResponse
 	if err := json.NewDecoder(resp.Body).Decode(&onesignalResp); err != nil {
-		return nil, fmt.Errorf("decode response: %w", err)
+		log.Printf("[OneSignal] Notification %d decode failed: %v", req.NotificationID, err)
+		failForwarded()
+		return results, fmt.Errorf("all %d tokens failed", len(req.Tokens))
 	}
 
 	if len(onesignalResp.Errors) > 0 {
-		return nil, fmt.Errorf("onesignal error: %v", onesignalResp.Errors)
+		log.Printf("[OneSignal] Notification %d API errors: %v", req.NotificationID, onesignalResp.Errors)
+		failForwarded()
+		return results, fmt.Errorf("all %d tokens failed", len(req.Tokens))
 	}
 
-	results := make([]SendResult, 0, len(playerIDs))
-	for _, playerID := range playerIDs {
-		results = append(results, SendResult{
-			UserID:            userIDMap[playerID],
-			PushToken:         playerID,
+	if onesignalResp.Recipients < len(playerIDs) {
+		// Partial acceptance: OneSignal accepted the notification for
+		// some but not all of the submitted player IDs, and did not
+		// identify which ones were rejected. Failing the batch is the
+		// conservative choice — the alternative would silently report
+		// success for tokens that were never queued.
+		log.Printf(
+			"[OneSignal] Notification %d partial acceptance: %d of %d recipients",
+			req.NotificationID,
+			onesignalResp.Recipients,
+			len(playerIDs),
+		)
+		failForwarded()
+		return results, fmt.Errorf("all %d tokens failed", len(req.Tokens))
+	}
+
+	// Full acceptance: mark every forwarded token "SENT". The
+	// ProviderMessageID is the same for all of them — see the H22 note
+	// on the OneSignalResponse.ID field for the per-device correlation
+	// implications.
+	for _, idx := range forwardedIdx {
+		token := req.Tokens[idx]
+		results[idx] = SendResult{
+			UserID:            token.UserID,
+			PushToken:         token.PushToken,
 			ProviderMessageID: onesignalResp.ID,
 			Status:            "SENT",
-			Error:             nil,
-		})
+		}
 	}
 
-	log.Printf("[OneSignal] Notification %d sent to %d devices, message ID: %s", req.NotificationID, len(results), onesignalResp.ID)
+	log.Printf(
+		"[OneSignal] Notification %d sent to %d devices, message ID: %s",
+		req.NotificationID,
+		len(forwardedIdx),
+		onesignalResp.ID,
+	)
 	return results, nil
 }

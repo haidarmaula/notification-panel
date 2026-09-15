@@ -154,6 +154,14 @@ ORDER BY name
 LIMIT sqlc.arg('limit')
 OFFSET sqlc.arg('offset');
 
+-- name: CountSearchUsers :one
+SELECT COUNT(*)
+FROM users
+WHERE
+    name ILIKE '%' || sqlc.arg('keyword') || '%'
+    OR email ILIKE '%' || sqlc.arg('keyword') || '%'
+    OR external_id ILIKE '%' || sqlc.arg('keyword') || '%';
+
 -- ==========================================
 -- FILTER
 -- ==========================================

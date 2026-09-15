@@ -12,6 +12,17 @@ import (
 	"hello/pkg/response"
 )
 
+// defaultSearchLimit is the number of search results returned when a
+// request does not supply a limit query parameter.
+//
+// The value — 20 — is chosen for the typeahead/autocomplete use case that
+// the search endpoint primarily serves: a caller that receives more than
+// 20 matches for a partial keyword is expected to refine the keyword
+// rather than page through the full result set. A caller that genuinely
+// needs more can pass an explicit ?limit= up to the getPaginationParams
+// ceiling of 100; the endpoint does not enforce a smaller maximum.
+const defaultSearchLimit int32 = 20
+
 // UserHandler handles HTTP requests for user management.
 //
 // It is the HTTP adapter for the user-facing read endpoints of the users
@@ -36,6 +47,17 @@ import (
 // underlying error. This is the same disclosure policy used by the
 // notifications, mobile, segments, staff, and profile features; the auth
 // feature also uses a generic message.
+//
+// # Pagination convention
+//
+// Every list-shaped endpoint on this handler returns pagination metadata
+// alongside its data: the current page, the applied limit, and the total
+// number of matching rows. The metadata is nested under a "pagination"
+// key, which is the same shape used by the notifications, segments, and
+// staff features. A client that receives fewer items than the applied
+// limit can therefore determine whether more pages exist by comparing
+// Total against Page*Limit. This convention is applied uniformly across
+// List, Search, GetUserSegments, and GetUserNotifications.
 //
 // # Concurrency
 //
@@ -175,7 +197,7 @@ func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 }
 
 // Search handles GET /api/v1/users/search for autocomplete.
-// Query param: keyword (required).
+// Query params: keyword (required), page, limit.
 //
 // # Required keyword
 //
@@ -184,12 +206,29 @@ func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // service is called. There is no upper bound on the keyword's length and
 // no minimum, so a single character will produce a search.
 //
+// # Pagination
+//
+// The endpoint is paginated, and the response carries pagination
+// metadata under a "pagination" key. The default page size is
+// defaultSearchLimit (20) rather than the 10 used by the other list
+// endpoints, because the primary use case is a typeahead widget that
+// wants a slightly larger first page to avoid forcing the user to keep
+// typing. A caller that needs a different page size can pass ?limit=
+// explicitly; the ceiling is the same 100 that getPaginationParams
+// applies everywhere else.
+//
+// The response includes the total number of matches, so a client that
+// receives fewer results than the applied limit can determine whether
+// more pages exist. Previously the endpoint returned a bounded slice
+// with no indication that truncation had occurred; see finding H18 in
+// code-review.md.
+//
 // # Response shape
 //
-// The service returns a slice of SearchUserResult values, which the
-// handler passes through unchanged. The response does not carry
-// pagination metadata — Search returns a bounded set of matches, not a
-// paginated view — and it does not echo the keyword that was searched.
+// The response is a ListSearchUsersResponse — an object with a "data"
+// array and a "pagination" object — rather than the bare array that
+// earlier revisions returned. The change is not backwards compatible for
+// a client that was decoding the response as a top-level array.
 //
 // # Responses
 //
@@ -197,7 +236,7 @@ func (h *UserHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 //   - 500 Internal Server Error: any service error. The response body is
 //     the generic string "internal server error"; the underlying error
 //     is not disclosed.
-//   - 200 OK: a slice of SearchUserResult.
+//   - 200 OK: a ListSearchUsersResponse.
 //
 // # Concurrency
 //
@@ -209,25 +248,45 @@ func (h *UserHandler) Search(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, err := h.service.Search(r.Context(), keyword)
+	page, limit := getPaginationParamsWithDefault(r, defaultSearchLimit)
+
+	results, total, err := h.service.Search(r.Context(), keyword, page, limit)
 	if err != nil {
 		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
-	response.JSON(w, http.StatusOK, results, "success")
+	resp := ListSearchUsersResponse{
+		Data: results,
+		Pagination: Pagination{
+			Page:  page,
+			Limit: limit,
+			Total: total,
+		},
+	}
+	response.JSON(w, http.StatusOK, resp, "success")
 }
 
 // GetUserSegments handles GET /api/v1/users/{id}/segments.
+// Query params: page, limit.
+//
+// # Pagination
+//
+// The endpoint is paginated, and the response carries pagination
+// metadata. page and limit are parsed by getPaginationParams, so the
+// default page size is 10 and the ceiling is 100. A caller that receives
+// fewer results than the applied limit can determine whether more pages
+// exist by comparing Total against Page*Limit; previously the endpoint
+// silently truncated at a fixed 100 with no such indicator. See finding
+// H18 in code-review.md.
 //
 // # Response shape
 //
 // The service returns a slice of UserSegment domain values, which the
-// handler maps to a ListUserSegmentsResponse. There is no pagination: a
-// user's segment memberships are expected to be a small set, so the
-// endpoint returns them all in one call. The segment IDs and names are
-// the only fields carried; a caller needing full segment details must
-// follow up against the segments feature's endpoints.
+// handler maps to a ListUserSegmentsResponse carrying both the page of
+// segments and the pagination metadata. The response shape is
+// backwards-incompatible for a client that was decoding the response as
+// an object with only a "data" key and no "pagination" key.
 //
 // # Responses
 //
@@ -248,7 +307,9 @@ func (h *UserHandler) GetUserSegments(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	segments, err := h.service.GetUserSegments(r.Context(), id)
+	page, limit := getPaginationParams(r)
+
+	segments, total, err := h.service.GetUserSegments(r.Context(), id, page, limit)
 	if err != nil {
 		if errors.Is(err, ErrUserNotFound) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
@@ -265,7 +326,15 @@ func (h *UserHandler) GetUserSegments(w http.ResponseWriter, r *http.Request) {
 			Name: s.Name,
 		}
 	}
-	response.JSON(w, http.StatusOK, ListUserSegmentsResponse{Data: data}, "success")
+	resp := ListUserSegmentsResponse{
+		Data: data,
+		Pagination: Pagination{
+			Page:  page,
+			Limit: limit,
+			Total: total,
+		},
+	}
+	response.JSON(w, http.StatusOK, resp, "success")
 }
 
 // GetUserNotifications handles GET /api/v1/users/{id}/notifications.
@@ -378,31 +447,57 @@ func parseInt64FromPath(r *http.Request, key string) (int64, error) {
 	return strconv.ParseInt(raw, 10, 64)
 }
 
-// getPaginationParams extracts page and limit from query parameters with defaults.
+// getPaginationParams extracts page and limit from query parameters with
+// defaults of page=1 and limit=10.
+//
+// It is a thin convenience wrapper around
+// getPaginationParamsWithDefault, kept so that call sites that use the
+// standard defaults do not have to repeat the value. See the
+// getPaginationParamsWithDefault documentation for the clamping policy
+// that both functions share.
+//
+// # Duplication
+//
+// The corresponding helpers in the notifications, segments, and staff
+// packages are byte-for-byte identical to this pair. The duplication is a
+// consequence of the helpers being unexported in each package; a shared
+// request-parsing helper package would collapse them.
+func getPaginationParams(r *http.Request) (page, limit int32) {
+	return getPaginationParamsWithDefault(r, 10)
+}
+
+// getPaginationParamsWithDefault extracts page and limit from query
+// parameters, applying the supplied default limit when the request does
+// not specify one.
 //
 // # Defaults and clamping
 //
-// The function applies a default of page=1 and limit=10 when a parameter
-// is absent, and silently clamps out-of-range values rather than rejecting
-// them:
+// The function applies a default of page=1 and a default of defaultLimit
+// when a parameter is absent, and silently clamps out-of-range values
+// rather than rejecting them:
 //
 //   - A page value that fails to parse, or that parses to zero or a
 //     negative number, is replaced by 1.
 //   - A limit value that fails to parse, or that parses to zero, a
-//     negative number, or a value greater than 100, is replaced by 10.
+//     negative number, or a value greater than 100, is replaced by
+//     defaultLimit.
 //
 // Clients should treat the values echoed in the response's Pagination
-// object as authoritative, not the values they sent.
+// object as authoritative, not the values they sent. A client that needs
+// a page size above the 100 ceiling cannot obtain one through this
+// helper; the ceiling exists so that a single request cannot force the
+// server to materialise an unbounded result set.
 //
-// # Duplication
+// # Why a separate function from getPaginationParams
 //
-// This function is byte-for-byte identical to the versions in the
-// notifications, segments, and staff features. The duplication is a
-// consequence of the helpers being unexported in each package; a shared
-// request-parsing helper package would collapse them.
-func getPaginationParams(r *http.Request) (page, limit int32) {
+// The search endpoint uses a different default page size (20) from every
+// other list endpoint (10), because the typeahead use case is better
+// served by a slightly larger first page. Rather than duplicating the
+// parse-and-clamp body, the standard default is expressed as a call to
+// this function with the value 10.
+func getPaginationParamsWithDefault(r *http.Request, defaultLimit int32) (page, limit int32) {
 	page = 1
-	limit = 10
+	limit = defaultLimit
 	if p := r.URL.Query().Get("page"); p != "" {
 		if v, err := strconv.ParseInt(p, 10, 32); err == nil && v > 0 {
 			page = int32(v)
