@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/jackc/pgx/v5"
+
 	"hello/internal/audit"
 	"hello/internal/database/sqlc"
 
@@ -46,10 +48,9 @@ var (
 	ErrInvalidRole = errors.New("invalid role")
 
 	// ErrStaffNotFound is returned when the requested staff ID does not
-	// resolve to a row. As with the equivalent sentinels in other
-	// features, it is returned for *any* repository error from the
-	// initial lookup — a database connectivity failure surfaces as a
-	// 404 rather than a 500.
+	// resolve to a row. It is returned only when the repository reports
+	// pgx.ErrNoRows; any other lookup failure is wrapped and surfaced as a
+	// non-sentinel error so the handler can map it to 500 rather than 404.
 	//
 	// The handler maps this to 404 Not Found.
 	ErrStaffNotFound = errors.New("staff user not found")
@@ -351,8 +352,9 @@ func (s *StaffService) Create(ctx context.Context, params CreateStaffParams) (*S
 //
 // # Flow
 //
-//  1. Load the staff row by ID. Any failure — including a transient
-//     database error — collapses to ErrStaffNotFound.
+//  1. Load the staff row by ID. A missing row returns ErrStaffNotFound;
+//     any other repository failure is wrapped with "get staff: " and
+//     returned as a non-sentinel error.
 //  2. Load the associated role to obtain the display name. A failure here
 //     is wrapped with the prefix "get role: " and returned as a
 //     non-sentinel error.
@@ -360,10 +362,11 @@ func (s *StaffService) Create(ctx context.Context, params CreateStaffParams) (*S
 //
 // # Errors
 //
-// Returns ErrStaffNotFound for the staff lookup failure, or a wrapped
-// "get role: " error for the role lookup failure. The latter is served
-// through the handler's default 500 branch, and the wrapped message
-// reaches the client verbatim.
+// Returns ErrStaffNotFound only when the staff lookup returns
+// pgx.ErrNoRows. Other staff-lookup failures are wrapped with
+// "get staff: " and are not sentinels. A role-lookup failure is wrapped
+// with "get role: " and served through the handler's default 500 branch,
+// with only the generic "internal server error" disclosed to the client.
 //
 // # Concurrency
 //
@@ -371,7 +374,10 @@ func (s *StaffService) Create(ctx context.Context, params CreateStaffParams) (*S
 func (s *StaffService) GetByID(ctx context.Context, id int64) (*Staff, error) {
 	staff, err := s.staffRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, ErrStaffNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrStaffNotFound
+		}
+		return nil, fmt.Errorf("get staff: %w", err)
 	}
 
 	role, err := s.roleRepo.FindByID(ctx, staff.RoleID)
@@ -489,8 +495,9 @@ func (s *StaffService) List(ctx context.Context, page, limit int32, search strin
 //
 // # Flow
 //
-//  1. Load the existing staff row. Any failure collapses to
-//     ErrStaffNotFound.
+//  1. Load the existing staff row. A missing row returns
+//     ErrStaffNotFound; any other repository failure is wrapped with
+//     "get staff for update: " and returned as a non-sentinel error.
 //  2. Build an update struct pre-populated with the existing values, so
 //     that fields not supplied by the caller retain their current state.
 //  3. If params.Role is non-empty, resolve it via roleRepo.FindByName. A
@@ -543,9 +550,11 @@ func (s *StaffService) List(ctx context.Context, page, limit int32, search strin
 //
 // # Errors
 //
-// Returns ErrStaffNotFound, ErrInvalidRole, or ErrEmailAlreadyUsed for
-// the corresponding conditions. Returns wrapped errors with prefixes
-// "check email: " or "update staff: " for repository failures.
+// Returns ErrStaffNotFound only when the existing staff row is absent
+// (pgx.ErrNoRows), ErrInvalidRole for an unknown role, or
+// ErrEmailAlreadyUsed for an email collision. Other lookup,
+// uniqueness-check, update, and re-fetch failures are wrapped; the
+// handler maps those to 500 and does not disclose internal details.
 //
 // # Concurrency
 //
@@ -555,7 +564,10 @@ func (s *StaffService) List(ctx context.Context, page, limit int32, search strin
 func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*Staff, error) {
 	existing, err := s.staffRepo.FindByID(ctx, params.ID)
 	if err != nil {
-		return nil, ErrStaffNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrStaffNotFound
+		}
+		return nil, fmt.Errorf("get staff for update: %w", err)
 	}
 
 	update := sqlc.UpdateStaffUserParams{
@@ -622,8 +634,9 @@ func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*S
 //
 // # Flow
 //
-//  1. Load the existing staff row. Any failure collapses to
-//     ErrStaffNotFound.
+//  1. Load the existing staff row. A missing row returns
+//     ErrStaffNotFound; any other repository failure is wrapped with
+//     "get staff for update status: " and returned as a non-sentinel error.
 //  2. Write the new status via staffRepo.UpdateStatus.
 //  3. Re-fetch via GetByID to obtain the post-update state — which
 //     performs its own role lookup.
@@ -647,10 +660,10 @@ func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*S
 //
 // # Errors
 //
-// Returns ErrStaffNotFound for the initial lookup failure, or a wrapped
-// "update status: " error for the status-write failure. The re-fetch
-// error (from GetByID) is returned as-is; if it is the wrapped "get
-// role: " error, the handler serves it through the default 500 branch.
+// Returns ErrStaffNotFound only when the target staff row is absent.
+// Other initial-lookup failures are wrapped. The status write and
+// post-write re-fetch failures are also wrapped rather than collapsed;
+// the handler maps them to 500 without disclosing internal details.
 //
 // # Concurrency
 //
@@ -659,7 +672,10 @@ func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*S
 func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool) (*Staff, error) {
 	existing, err := s.staffRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, ErrStaffNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrStaffNotFound
+		}
+		return nil, fmt.Errorf("get staff for update status: %w", err)
 	}
 
 	if err := s.staffRepo.UpdateStatus(ctx, sqlc.UpdateStaffStatusParams{ID: id, IsActive: isActive}); err != nil {
@@ -746,11 +762,12 @@ func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool
 //
 // # Errors
 //
-// Returns ErrStaffNotFound if the target account does not exist, or a
-// wrapped "hash password: " error if bcrypt fails. A repository failure
-// on the password write is returned as-is — it is not a sentinel, so the
-// handler serves it through the default 500 branch. The audit failure is
-// logged and discarded, matching the convention used elsewhere.
+// Returns ErrStaffNotFound only when the target account is absent
+// (pgx.ErrNoRows). Other initial-lookup failures are wrapped rather than
+// collapsed. bcrypt failures use the prefix "hash password: " and
+// repository write failures are returned as-is; both are non-sentinel
+// errors served as 500 by the handler. Audit failures are logged and
+// discarded.
 //
 // # Concurrency
 //
@@ -760,7 +777,10 @@ func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool
 func (s *StaffService) UpdatePassword(ctx context.Context, id int64, newPassword string) error {
 	existing, err := s.staffRepo.FindByID(ctx, id)
 	if err != nil {
-		return ErrStaffNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrStaffNotFound
+		}
+		return fmt.Errorf("get staff for update password: %w", err)
 	}
 
 	hashed, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
@@ -800,8 +820,9 @@ func (s *StaffService) UpdatePassword(ctx context.Context, id int64, newPassword
 //
 // # Flow
 //
-//  1. Load the target staff row. Any failure collapses to
-//     ErrStaffNotFound.
+//  1. Load the target staff row. A missing row returns
+//     ErrStaffNotFound; any other repository failure is wrapped with
+//     "get staff for delete: " and returned as a non-sentinel error.
 //  2. Read the acting staff identity from the request context via
 //     audit.GetStaffID and, if present, compare it to the delete target.
 //     A match returns ErrCannotDeleteSelf.
@@ -838,10 +859,10 @@ func (s *StaffService) UpdatePassword(ctx context.Context, id int64, newPassword
 //
 // # Errors
 //
-// Returns ErrStaffNotFound for the initial lookup failure, or
-// ErrCannotDeleteSelf for a self-delete with a present context identity.
-// A repository failure on the delete is returned as-is — it is not a
-// sentinel, so the handler serves it through the default 500 branch.
+// Returns ErrStaffNotFound only when the target staff row is absent.
+// Other initial-lookup failures are wrapped. ErrCannotDeleteSelf is
+// returned for a self-delete with a present context identity. Delete
+// failures are returned as-is and are served as 500 by the handler.
 //
 // # Concurrency
 //
@@ -852,7 +873,10 @@ func (s *StaffService) UpdatePassword(ctx context.Context, id int64, newPassword
 func (s *StaffService) Delete(ctx context.Context, id int64) error {
 	existing, err := s.staffRepo.FindByID(ctx, id)
 	if err != nil {
-		return ErrStaffNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrStaffNotFound
+		}
+		return fmt.Errorf("get staff for delete: %w", err)
 	}
 
 	actorID, ok := audit.GetStaffID(ctx)
