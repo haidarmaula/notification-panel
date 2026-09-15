@@ -143,7 +143,7 @@ SELECT
          LIMIT 1),
         'BROADCAST'
     )::text AS target_type,
-    CASE WHEN n.status = 'SENT' THEN n.published_at ELSE NULL END AS sent_at
+    CASE WHEN n.status = 'SENT' THEN n.published_at ELSE NULL::timestamptz END AS sent_at
 FROM notifications n
 JOIN staff_users su
     ON su.id = n.created_by
@@ -166,7 +166,7 @@ SELECT
          LIMIT 1), 
         'BROADCAST'
     )::text AS target_type,
-    CASE WHEN n.status = 'SENT' THEN n.published_at ELSE NULL END AS sent_at
+    CASE WHEN n.status = 'SENT' THEN n.published_at ELSE NULL::timestamptz END AS sent_at
 FROM notifications n
 JOIN staff_users su ON su.id = n.created_by
 WHERE 

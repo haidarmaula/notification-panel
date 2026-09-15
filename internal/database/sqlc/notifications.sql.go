@@ -246,7 +246,7 @@ SELECT
          LIMIT 1),
         'BROADCAST'
     )::text AS target_type,
-    CASE WHEN n.status = 'SENT' THEN n.published_at ELSE NULL END AS sent_at
+    CASE WHEN n.status = 'SENT' THEN n.published_at ELSE NULL::timestamptz END AS sent_at
 FROM notifications n
 JOIN staff_users su
     ON su.id = n.created_by
@@ -268,7 +268,7 @@ type ListNotificationsRow struct {
 	ScheduledAt   pgtype.Timestamptz `db:"scheduled_at"`
 	CreatedAt     pgtype.Timestamptz `db:"created_at"`
 	TargetType    string             `db:"target_type"`
-	SentAt        interface{}        `db:"sent_at"`
+	SentAt        pgtype.Timestamptz `db:"sent_at"`
 }
 
 // ==========================================
@@ -318,7 +318,7 @@ SELECT
          LIMIT 1), 
         'BROADCAST'
     )::text AS target_type,
-    CASE WHEN n.status = 'SENT' THEN n.published_at ELSE NULL END AS sent_at
+    CASE WHEN n.status = 'SENT' THEN n.published_at ELSE NULL::timestamptz END AS sent_at
 FROM notifications n
 JOIN staff_users su ON su.id = n.created_by
 WHERE 
@@ -351,7 +351,7 @@ type ListNotificationsWithFiltersRow struct {
 	ScheduledAt   pgtype.Timestamptz `db:"scheduled_at"`
 	CreatedAt     pgtype.Timestamptz `db:"created_at"`
 	TargetType    string             `db:"target_type"`
-	SentAt        interface{}        `db:"sent_at"`
+	SentAt        pgtype.Timestamptz `db:"sent_at"`
 }
 
 func (q *Queries) ListNotificationsWithFilters(ctx context.Context, arg ListNotificationsWithFiltersParams) ([]ListNotificationsWithFiltersRow, error) {
