@@ -230,12 +230,11 @@ func NewNotificationService(
 //   - SentAt. Both paths hardcode nil, so the field never appears in a
 //     list response regardless of the notification's actual sent_at
 //     value. Callers that need this field must fetch the detail endpoint.
-//   - ScheduledAt. Both paths unconditionally take the address of
-//     row.ScheduledAt.Time, even when the SQL column is NULL. Because the
-//     pgtype.Timestamptz zero value is a valid time.Time (the Unix epoch
-//     at year 1), the resulting pointer is non-nil and points to
-//     "0001-01-01T00:00:00Z" rather than being nil. A JSON client will
-//     see this as a valid-looking timestamp rather than an absent one.
+//   - ScheduledAt. Both paths now take a pointer only when the underlying
+//     row's ScheduledAt column is valid. A NULL scheduled_at is serialised
+//     as absent/null rather than as "0001-01-01T00:00:00Z". A JSON client
+//     therefore sees nil for immediate or unscheduled notifications, which
+//     matches the field's type-level documentation.
 //
 // # Pagination
 //
@@ -267,13 +266,18 @@ func (s *NotificationService) List(ctx context.Context, page, limit int32, statu
 		}
 		items := make([]NotificationListItem, len(rows))
 		for i, row := range rows {
+			var scheduledAt *time.Time
+			if row.ScheduledAt.Valid {
+				scheduledAt = &row.ScheduledAt.Time
+			}
+
 			items[i] = NotificationListItem{
 				ID:          row.ID,
 				Title:       row.Title,
 				Type:        row.TargetType, // sekarang string
 				Status:      row.Status,
 				CreatedBy:   row.CreatedByName,
-				ScheduledAt: &row.ScheduledAt.Time,
+				ScheduledAt: scheduledAt,
 				SentAt:      nil,
 				CreatedAt:   row.CreatedAt.Time,
 			}
@@ -291,13 +295,18 @@ func (s *NotificationService) List(ctx context.Context, page, limit int32, statu
 	}
 	items := make([]NotificationListItem, len(rows))
 	for i, row := range rows {
+		var scheduledAt *time.Time
+		if row.ScheduledAt.Valid {
+			scheduledAt = &row.ScheduledAt.Time
+		}
+
 		items[i] = NotificationListItem{
 			ID:          row.ID,
 			Title:       row.Title,
 			Type:        "BROADCAST",
 			Status:      row.Status,
 			CreatedBy:   row.CreatedByName,
-			ScheduledAt: &row.ScheduledAt.Time,
+			ScheduledAt: scheduledAt,
 			SentAt:      nil,
 			CreatedAt:   row.CreatedAt.Time,
 		}
