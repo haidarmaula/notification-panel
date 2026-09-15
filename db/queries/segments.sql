@@ -97,8 +97,8 @@ SELECT
 FROM segments s
 JOIN staff_users su ON su.id = s.created_by
 ORDER BY s.name
-LIMIT sqlc.arg('limit')
-OFFSET sqlc.arg('offset');
+OFFSET sqlc.arg('offset')
+LIMIT sqlc.arg('limit');
 
 -- ==========================================
 -- SEARCH
@@ -117,8 +117,8 @@ FROM segments s
 JOIN staff_users su ON su.id = s.created_by
 WHERE s.name ILIKE '%' || sqlc.arg('keyword') || '%'
 ORDER BY s.name
-LIMIT sqlc.arg('limit')
-OFFSET sqlc.arg('offset');
+OFFSET sqlc.arg('offset')
+LIMIT sqlc.arg('limit');
 
 -- name: CountSegmentsWithSearch :one
 SELECT COUNT(*)
