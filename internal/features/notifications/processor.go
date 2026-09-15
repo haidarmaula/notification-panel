@@ -220,13 +220,14 @@ func NewProcessor(
 //
 // # Failure semantics
 //
-// Five paths set the notification status to "FAILED":
-// expandTargets failure, token-fetch failure, provider-send failure, and
-// the two "no work to do" branches do NOT set FAILED (they set COMPLETED).
-// A failure of the status update itself — for example, a database outage
-// that prevents writing FAILED — is silently ignored: the method updates
-// status without checking the returned error in most branches, so a
-// subsequent retry will see whatever status was previously written.
+// Three failure paths set the notification status to "FAILED":
+// expandTargets failure, token-fetch failure, and provider-send failure.
+// Two no-work paths set it to "COMPLETED": an empty resolved user set and
+// an empty active-device-token set. A failure of one of those compensating
+// status updates is logged rather than silently discarded, so a transient
+// database error while marking a notification FAILED or COMPLETED remains
+// visible in the worker logs while the original error is still returned to
+// the caller.
 //
 // # Concurrency
 //
@@ -258,38 +259,46 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 
 	userIDs, err := p.expandTargets(ctx, event.NotificationID)
 	if err != nil {
-		_ = p.notifRepo.UpdateStatus(ctx, sqlc.UpdateNotificationStatusParams{
+		if statusErr := p.notifRepo.UpdateStatus(ctx, sqlc.UpdateNotificationStatusParams{
 			ID:     notif.ID,
 			Status: "FAILED",
-		})
+		}); statusErr != nil {
+			log.Printf("[Worker] Failed to mark notification %d FAILED after target expansion failure: %v", notif.ID, statusErr)
+		}
 		return fmt.Errorf("expand targets: %w", err)
 	}
 
 	// No users targeted → nothing to send.
 	if len(userIDs) == 0 {
 		log.Printf("[Worker] No users targeted, marking as COMPLETED")
-		_ = p.notifRepo.UpdateStatus(ctx, sqlc.UpdateNotificationStatusParams{
+		if statusErr := p.notifRepo.UpdateStatus(ctx, sqlc.UpdateNotificationStatusParams{
 			ID:     notif.ID,
 			Status: "COMPLETED",
-		})
+		}); statusErr != nil {
+			log.Printf("[Worker] Failed to mark notification %d COMPLETED after empty user set: %v", notif.ID, statusErr)
+		}
 		return nil
 	}
 
 	tokens, err := p.deviceRepo.ListByUserIDs(ctx, userIDs)
 	if err != nil {
-		_ = p.notifRepo.UpdateStatus(ctx, sqlc.UpdateNotificationStatusParams{
+		if statusErr := p.notifRepo.UpdateStatus(ctx, sqlc.UpdateNotificationStatusParams{
 			ID:     notif.ID,
 			Status: "FAILED",
-		})
+		}); statusErr != nil {
+			log.Printf("[Worker] Failed to mark notification %d FAILED after device-token fetch failure: %v", notif.ID, statusErr)
+		}
 		return fmt.Errorf("fetch device tokens: %w", err)
 	}
 
 	if len(tokens) == 0 {
 		log.Printf("[Worker] No active device tokens, marking as COMPLETED")
-		_ = p.notifRepo.UpdateStatus(ctx, sqlc.UpdateNotificationStatusParams{
+		if statusErr := p.notifRepo.UpdateStatus(ctx, sqlc.UpdateNotificationStatusParams{
 			ID:     notif.ID,
 			Status: "COMPLETED",
-		})
+		}); statusErr != nil {
+			log.Printf("[Worker] Failed to mark notification %d COMPLETED after empty token set: %v", notif.ID, statusErr)
+		}
 		return nil
 	}
 
@@ -310,10 +319,12 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 
 	results, err := p.provider.Send(ctx, req)
 	if err != nil {
-		_ = p.notifRepo.UpdateStatus(ctx, sqlc.UpdateNotificationStatusParams{
+		if statusErr := p.notifRepo.UpdateStatus(ctx, sqlc.UpdateNotificationStatusParams{
 			ID:     notif.ID,
 			Status: "FAILED",
-		})
+		}); statusErr != nil {
+			log.Printf("[Worker] Failed to mark notification %d FAILED after provider send failure: %v", notif.ID, statusErr)
+		}
 		return fmt.Errorf("provider send: %w", err)
 	}
 
