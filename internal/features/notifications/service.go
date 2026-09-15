@@ -224,12 +224,14 @@ func NewNotificationService(
 // The two paths produce different response shapes for some fields, and
 // callers should be aware of the divergence:
 //
-//   - TargetType. The filtered path reports the row's actual target type.
-//     The unfiltered path hardcodes "BROADCAST" for every item, because
-//     the underlying List query does not join the target table.
-//   - SentAt. Both paths hardcode nil, so the field never appears in a
-//     list response regardless of the notification's actual sent_at
-//     value. Callers that need this field must fetch the detail endpoint.
+//   - TargetType. Both list queries now compute target_type from the
+//     notification_targets rows, defaulting to "BROADCAST" only when no
+//     target row exists. The filtered and unfiltered paths therefore
+//     report the same shape.
+//   - SentAt. Both list queries now compute sent_at as the
+//     notification's published_at when its status is "SENT", and NULL
+//     otherwise. A list item therefore carries a sent timestamp for sent
+//     notifications without requiring the detail endpoint.
 //   - ScheduledAt. Both paths now take a pointer only when the underlying
 //     row's ScheduledAt column is valid. A NULL scheduled_at is serialised
 //     as absent/null rather than as "0001-01-01T00:00:00Z". A JSON client
@@ -270,15 +272,19 @@ func (s *NotificationService) List(ctx context.Context, page, limit int32, statu
 			if row.ScheduledAt.Valid {
 				scheduledAt = &row.ScheduledAt.Time
 			}
+			var sentAt *time.Time
+			if row.SentAt.Valid {
+				sentAt = &row.SentAt.Time
+			}
 
 			items[i] = NotificationListItem{
 				ID:          row.ID,
 				Title:       row.Title,
-				Type:        row.TargetType, // sekarang string
+				Type:        row.TargetType,
 				Status:      row.Status,
 				CreatedBy:   row.CreatedByName,
 				ScheduledAt: scheduledAt,
-				SentAt:      nil,
+				SentAt:      sentAt,
 				CreatedAt:   row.CreatedAt.Time,
 			}
 		}
@@ -299,15 +305,19 @@ func (s *NotificationService) List(ctx context.Context, page, limit int32, statu
 		if row.ScheduledAt.Valid {
 			scheduledAt = &row.ScheduledAt.Time
 		}
+		var sentAt *time.Time
+		if row.SentAt.Valid {
+			sentAt = &row.SentAt.Time
+		}
 
 		items[i] = NotificationListItem{
 			ID:          row.ID,
 			Title:       row.Title,
-			Type:        "BROADCAST",
+			Type:        row.TargetType,
 			Status:      row.Status,
 			CreatedBy:   row.CreatedByName,
 			ScheduledAt: scheduledAt,
-			SentAt:      nil,
+			SentAt:      sentAt,
 			CreatedAt:   row.CreatedAt.Time,
 		}
 	}

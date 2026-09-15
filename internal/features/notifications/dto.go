@@ -177,12 +177,12 @@ type NotificationListItem struct {
 	// Title is the notification's headline.
 	Title string `json:"title"`
 
-	// Type is the targeting strategy. As the inline comment on the field
-	// notes, this may be reported as "SEGMENT" by default when the list
-	// query does not join the target-type table; the value may therefore
-	// not always reflect the notification's actual targeting. Consult the
-	// detail endpoint when the type is security- or behaviour-relevant.
-	Type string `json:"type"` // default "SEGMENT" because no join
+	// Type is the targeting strategy as resolved from the notification's
+	// target rows. Both the filtered and unfiltered list queries now
+	// compute this value and default to "BROADCAST" only when no target
+	// row exists, so the field reflects the actual targeting strategy in
+	// list responses.
+	Type string `json:"type"`
 
 	// Status is the current lifecycle state — DRAFT, SCHEDULED, QUEUED,
 	// PROCESSING, COMPLETED, SENT, or FAILED.

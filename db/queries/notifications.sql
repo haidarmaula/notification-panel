@@ -135,7 +135,15 @@ SELECT
     n.status,
     su.name AS created_by_name,
     n.scheduled_at,
-    n.created_at
+    n.created_at,
+    COALESCE(
+        (SELECT DISTINCT nt.target_type
+         FROM notification_targets nt
+         WHERE nt.notification_id = n.id
+         LIMIT 1),
+        'BROADCAST'
+    )::text AS target_type,
+    CASE WHEN n.status = 'SENT' THEN n.published_at ELSE NULL END AS sent_at
 FROM notifications n
 JOIN staff_users su
     ON su.id = n.created_by
@@ -157,7 +165,8 @@ SELECT
          WHERE nt.notification_id = n.id 
          LIMIT 1), 
         'BROADCAST'
-    )::text AS target_type
+    )::text AS target_type,
+    CASE WHEN n.status = 'SENT' THEN n.published_at ELSE NULL END AS sent_at
 FROM notifications n
 JOIN staff_users su ON su.id = n.created_by
 WHERE 
