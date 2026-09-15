@@ -185,3 +185,33 @@ FROM users;
 SELECT COUNT(*)
 FROM users
 WHERE status = sqlc.arg('status');
+
+-- name: ListUsersWithFilters :many
+SELECT
+    id,
+    external_id,
+    name,
+    email,
+    status,
+    created_at,
+    updated_at
+FROM users
+WHERE
+    (sqlc.arg('keyword')::text = '' OR name ILIKE '%' || sqlc.arg('keyword') || '%'
+        OR email ILIKE '%' || sqlc.arg('keyword') || '%'
+        OR external_id ILIKE '%' || sqlc.arg('keyword') || '%')
+    AND (sqlc.arg('status')::text = '' OR status = sqlc.arg('status'))
+    AND (sqlc.arg('external_id')::text = '' OR external_id = sqlc.arg('external_id'))
+ORDER BY name
+LIMIT sqlc.arg('limit')
+OFFSET sqlc.arg('offset');
+
+-- name: CountUsersWithFilters :one
+SELECT COUNT(*)
+FROM users
+WHERE
+    (sqlc.arg('keyword')::text = '' OR name ILIKE '%' || sqlc.arg('keyword') || '%'
+        OR email ILIKE '%' || sqlc.arg('keyword') || '%'
+        OR external_id ILIKE '%' || sqlc.arg('keyword') || '%')
+    AND (sqlc.arg('status')::text = '' OR status = sqlc.arg('status'))
+    AND (sqlc.arg('external_id')::text = '' OR external_id = sqlc.arg('external_id'));

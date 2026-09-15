@@ -149,78 +149,30 @@ func NewUserService(
 // ============================================
 
 // List returns a paginated list of users with optional filters.
-// Filters: keyword (search by name/email/external_id), status, external_id.
 //
-// # Filter precedence — filters do not compose
+// # Filtering
 //
-// The three filters are not combined. The method selects exactly one
-// repository call based on which filter is non-empty, evaluated in a
-// fixed priority order:
+// keyword, status, and externalID may be combined. The underlying query
+// applies the non-empty filters with AND semantics:
 //
-//  1. If externalID is non-empty, the method performs a single-row lookup
-//     by external_id. See the fast-path caveat below.
-//  2. Otherwise, if keyword is non-empty, the Search query is used.
-//  3. Otherwise, if status is non-empty, the status-filtered query is
-//     used.
-//  4. Otherwise, the unfiltered List query is used.
+//   - keyword searches name, email, and external_id.
+//   - status performs an exact status match.
+//   - externalID performs an exact external_id match.
 //
-// A caller that supplies both status and keyword will therefore get only
-// the keyword-filtered result; the status argument is silently ignored.
-// Combining filters requires extending the repository layer with a query
-// that accepts multiple predicates, which does not exist today. The
-// handler passes all three values through unchanged, so the precedence
-// is enforced here, not at the HTTP boundary.
+// An empty filter means “no filter on that column”.
 //
-// # The external_id fast path swallows repository errors
+// # Pagination
 //
-// The first branch is implemented as:
-//
-//	user, err := s.userRepo.FindByExternalID(ctx, externalID)
-//	if err != nil {
-//	    return []User{}, 0, nil
-//	}
-//
-// Any error from FindByExternalID — including a database connectivity
-// failure, a query error, or an unexpected driver error — is treated the
-// same as "no matching row": the method returns an empty slice, a zero
-// total, and a nil error. The client therefore sees a successful 200
-// response with no results, indistinguishable from a legitimate "no such
-// external_id".
-//
-// A correct implementation would distinguish pgx.ErrNoRows (the "not
-// found" case) from other errors and propagate the latter. The current
-// code does not, and the failure mode is invisible unless the caller
-// inspects the underlying database logs.
-//
-// # The external_id fast path ignores pagination
-//
-// When the fast path is taken, the page and limit arguments are ignored
-// entirely. A caller that supplies external_id=X&page=5&limit=50 will
-// receive the matching user (or nothing) with a hardcoded total of 1,
-// regardless of the pagination parameters. The handler echoes the
-// caller's page and limit into the response, so the response's
-// Pagination metadata may claim "page 5 of 1" — an inconsistency the
-// client must tolerate or explicitly avoid by not passing external_id
-// alongside pagination arguments.
-//
-// # Incorrect total on the keyword path
-//
-// The keyword branch computes the total via userRepo.Count(ctx) — the
-// *unfiltered* count — rather than a keyword-aware count. A search
-// returning 1 matching user out of 50,000 reports a total of 50,000, and
-// a client rendering "page X of Y" pagination will produce an incorrect
-// page count. The same defect exists in the staff and segments features;
-// the status branch is correctly paired with CountByStatus and does not
-// have this issue.
+// page and limit are applied to the filtered result set as a normal SQL
+// LIMIT/OFFSET. The returned total is obtained from CountWithFilters using
+// the same filter arguments, so pagination metadata matches the visible
+// page.
 //
 // # Errors
 //
-// Returns a wrapped error with the prefix "search users: ", "list users
-// by status: ", "list users: ", "count users: ", or "count users by
-// status: " for failures of the corresponding repository call. None of
-// these is a sentinel, so the handler serves them through its default
-// 500 branch — except on the external_id fast path, where the error is
-// swallowed (see above).
+// Returns a wrapped error with the prefix "list users: " or
+// "count users: " for repository failures. No repository error is collapsed
+// into a not-found sentinel on this path.
 //
 // # Concurrency
 //
@@ -228,49 +180,18 @@ func NewUserService(
 func (s *UserService) List(ctx context.Context, page, limit int32, keyword, status, externalID string) ([]User, int64, error) {
 	offset := (page - 1) * limit
 
-	var users []sqlc.User
-	var total int64
-	var err error
-
-	// Fast path: exact external_id match.
-	if externalID != "" {
-		user, err := s.userRepo.FindByExternalID(ctx, externalID)
-		if err != nil {
-			return []User{}, 0, nil
-		}
-		users = []sqlc.User{user}
-		total = 1
-	} else if keyword != "" {
-		users, err = s.userRepo.Search(ctx, keyword, offset, limit)
-		if err != nil {
-			return nil, 0, fmt.Errorf("search users: %w", err)
-		}
-		total, err = s.userRepo.Count(ctx)
-		if err != nil {
-			return nil, 0, fmt.Errorf("count users: %w", err)
-		}
-	} else if status != "" {
-		users, err = s.userRepo.ListByStatus(ctx, status, offset, limit)
-		if err != nil {
-			return nil, 0, fmt.Errorf("list users by status: %w", err)
-		}
-		total, err = s.userRepo.CountByStatus(ctx, status)
-		if err != nil {
-			return nil, 0, fmt.Errorf("count users by status: %w", err)
-		}
-	} else {
-		users, err = s.userRepo.List(ctx, offset, limit)
-		if err != nil {
-			return nil, 0, fmt.Errorf("list users: %w", err)
-		}
-		total, err = s.userRepo.Count(ctx)
-		if err != nil {
-			return nil, 0, fmt.Errorf("count users: %w", err)
-		}
+	rows, err := s.userRepo.ListWithFilters(ctx, keyword, status, externalID, offset, limit)
+	if err != nil {
+		return nil, 0, fmt.Errorf("list users: %w", err)
 	}
 
-	result := make([]User, len(users))
-	for i, u := range users {
+	total, err := s.userRepo.CountWithFilters(ctx, keyword, status, externalID)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count users: %w", err)
+	}
+
+	result := make([]User, len(rows))
+	for i, u := range rows {
 		result[i] = User{
 			ID:         u.ID,
 			ExternalID: u.ExternalID,

@@ -165,6 +165,40 @@ func (r *UserRepository) Search(ctx context.Context, keyword string, offset, lim
 	})
 }
 
+// ListWithFilters returns a page of users filtered by keyword, status, and
+// externalID. Empty filter values mean “no filter on that column”; the
+// filters compose with AND semantics.
+//
+// The returned slice is ordered by the underlying SQL. offset and limit are
+// passed through without validation, following the package convention.
+func (r *UserRepository) ListWithFilters(
+	ctx context.Context,
+	keyword, status, externalID string,
+	offset, limit int32,
+) ([]sqlc.User, error) {
+	return r.q.ListUsersWithFilters(ctx, sqlc.ListUsersWithFiltersParams{
+		Keyword:    keyword,
+		Status:     status,
+		ExternalID: externalID,
+		Offset:     offset,
+		Limit:      limit,
+	})
+}
+
+// CountWithFilters returns the number of users matching the same filters
+// accepted by ListWithFilters. It pairs with ListWithFilters for pagination
+// metadata.
+func (r *UserRepository) CountWithFilters(
+	ctx context.Context,
+	keyword, status, externalID string,
+) (int64, error) {
+	return r.q.CountUsersWithFilters(ctx, sqlc.CountUsersWithFiltersParams{
+		Keyword:    keyword,
+		Status:     status,
+		ExternalID: externalID,
+	})
+}
+
 // Create inserts a new user and returns the persisted row, including any
 // database-generated fields such as the internal primary key and creation
 // timestamp.
