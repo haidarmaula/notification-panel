@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 )
@@ -20,11 +22,11 @@ import (
 // notifications, segments, and staff features.
 var (
 	// ErrUserNotFound is returned when a user ID or external_id does not
-	// resolve to a row. It is also returned for *any* repository error
-	// from a by-ID lookup — a database connectivity failure surfaces as
-	// a 404 rather than a 500. The one exception is the external_id fast
-	// path in List, which swallows the error entirely; see List for the
-	// details.
+	// resolve to a row. GetByID now returns it only for pgx.ErrNoRows;
+	// other by-ID user-existence checks in this package may still collapse
+	// every repository error into this sentinel until they receive the
+	// same treatment. The external_id fast path in List swallows errors
+	// entirely rather than returning a sentinel.
 	//
 	// The handler maps this to 404 Not Found.
 	ErrUserNotFound = errors.New("user not found")
@@ -285,10 +287,11 @@ func (s *UserService) List(ctx context.Context, page, limit int32, keyword, stat
 
 // GetByID returns a single user by ID.
 //
-// The lookup collapses every repository error — including a transient
-// database failure — into ErrUserNotFound, so a client cannot distinguish
-// "the user does not exist" from "the lookup failed" through the return
-// value alone.
+// The lookup reports ErrUserNotFound only when the repository returns
+// pgx.ErrNoRows. Any other repository failure — a connectivity error, a
+// query failure, or another driver-level problem — is wrapped with
+// "get user: " and returned as a non-sentinel error, so the handler maps
+// it to 500 instead of incorrectly reporting 404.
 //
 // # Nullable columns are flattened
 //
@@ -301,8 +304,9 @@ func (s *UserService) List(ctx context.Context, page, limit int32, keyword, stat
 //
 // # Errors
 //
-// Returns ErrUserNotFound for any failure of the underlying lookup. The
-// handler maps it to 404.
+// Returns ErrUserNotFound only when the underlying lookup produces
+// pgx.ErrNoRows. Other lookup failures are wrapped with "get user: " and
+// are not sentinels; the handler maps them to 500.
 //
 // # Concurrency
 //
@@ -310,7 +314,10 @@ func (s *UserService) List(ctx context.Context, page, limit int32, keyword, stat
 func (s *UserService) GetByID(ctx context.Context, id int64) (*User, error) {
 	user, err := s.userRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, ErrUserNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrUserNotFound
+		}
+		return nil, fmt.Errorf("get user: %w", err)
 	}
 
 	return &User{
