@@ -151,37 +151,21 @@ func NewSegmentService(
 // Pagination metadata therefore matches the visible result set on both the
 // filtered and unfiltered paths.
 //
-// # Swallowed member-count errors
+// # Batched member counts
 //
-// The member count for each segment is fetched via a per-segment
-// CountBySegment call whose error is discarded:
-//
-//	memberCount, _ := s.memberRepo.CountBySegment(ctx, seg.ID)
-//
-// A transient database error during a count is therefore reported to the
-// client as MemberCount == 0, indistinguishable from a segment that
-// genuinely has no members. The list is still returned successfully, so
-// the failure is invisible unless the client has another source of truth
-// for the count.
-//
-// # N+1 query behaviour
-//
-// Member counts are fetched one segment at a time inside a loop. For a
-// page of N segments, the method issues N additional COUNT queries after
-// the initial page fetch and the total count — a classic N+1 pattern. For
-// the default page size of 10 this is 10 extra round-trips; for a client
-// that requests limit=100 it is 100. A batched count query (returning
-// counts for all page IDs in one statement) would resolve the pattern;
-// the current schema and queries do not provide one.
+// Member counts for the returned page are fetched in one batched query via
+// SegmentMemberRepository.CountBySegmentIDs. Segments with no membership
+// rows are absent from the batch result and therefore default to zero in
+// the response. A failure of the batch query aborts the call and is
+// returned as a wrapped error rather than collapsed into a zero count.
 //
 // # Errors
 //
-// Returns a wrapped error with the prefix "search segments: ", "list
-// segments: ", or "count segments: " for failures of the corresponding
-// repository call. None of these is a sentinel, so the handler serves
-// them through its default 500 branch, and the wrapped message reaches
-// the client verbatim. The per-segment member-count errors are not
-// surfaced at all — see above.
+// Returns a wrapped error with the prefix "search segments: " or
+// "list segments: " for the page query, "count segments search: " or
+// "count segments: " for the total, and "count members: " for the batched
+// member-count query. None of these is a sentinel; the handler serves them
+// through its default 500 branch without disclosing internal details.
 //
 // # Concurrency
 //
@@ -242,12 +226,30 @@ func (s *SegmentService) List(ctx context.Context, page, limit int32, search str
 		}
 	}
 
+	// Fetch member counts for every returned segment in one batched query.
+	// Segments that have no membership rows are absent from the result set,
+	// so they fall back to zero via the map lookup below.
+	ids := make([]int64, len(segments))
+	for i, seg := range segments {
+		ids[i] = seg.ID
+	}
+
+	countMap := make(map[int64]int64, len(segments))
+	if len(ids) > 0 {
+		counts, err := s.memberRepo.CountBySegmentIDs(ctx, ids)
+		if err != nil {
+			return nil, 0, fmt.Errorf("count members: %w", err)
+		}
+		for _, c := range counts {
+			countMap[c.SegmentID] = c.MemberCount
+		}
+	}
+
 	result := make([]SegmentWithCount, len(segments))
 	for i, seg := range segments {
-		memberCount, _ := s.memberRepo.CountBySegment(ctx, seg.ID)
 		result[i] = SegmentWithCount{
 			Segment:     seg,
-			MemberCount: memberCount,
+			MemberCount: countMap[seg.ID],
 		}
 	}
 

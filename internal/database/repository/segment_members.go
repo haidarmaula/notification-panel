@@ -52,6 +52,23 @@ func (r *SegmentMemberRepository) CountSegmentsByUser(ctx context.Context, userI
 	return r.q.CountSegmentMembersByUser(ctx, userID)
 }
 
+// CountBySegmentIDs returns member counts for multiple segments in one
+// batched query.
+//
+// It is used by list views so a page of segments can be decorated with
+// member counts without issuing one COUNT query per segment. Segments with
+// no membership rows are absent from the result slice; callers should
+// therefore default missing segment IDs to zero.
+//
+// The underlying Querier is concurrency-safe and this method holds no
+// mutable state.
+func (r *SegmentMemberRepository) CountBySegmentIDs(
+	ctx context.Context,
+	segmentIDs []int64,
+) ([]sqlc.CountSegmentMembersBySegmentIDsRow, error) {
+	return r.q.CountSegmentMembersBySegmentIDs(ctx, segmentIDs)
+}
+
 // Exists reports whether the membership pair (segmentID, userID) is already
 // present in the segment_members table. It delegates to the generated
 // ExistsSegmentMember query and is used by the members service to perform a

@@ -100,3 +100,11 @@ WHERE segment_id = sqlc.arg('segment_id');
 SELECT COUNT(*)
 FROM segment_members
 WHERE user_id = sqlc.arg('user_id');
+
+-- name: CountSegmentMembersBySegmentIDs :many
+SELECT
+    segment_id,
+    COUNT(*)::bigint AS member_count
+FROM segment_members
+WHERE segment_id = ANY(sqlc.arg('segment_ids')::bigint[])
+GROUP BY segment_id;

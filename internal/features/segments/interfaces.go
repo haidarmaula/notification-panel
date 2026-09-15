@@ -64,15 +64,17 @@ type SegmentRepository interface {
 // # Current usage
 //
 // The segment feature uses only a subset of the methods declared here.
-// CountBySegment is used by the list and detail views to populate the
-// member count; the other methods are declared for completeness and
-// because a future membership-management feature is expected to consume
-// them. An interface with unused methods is a mild code smell — it
-// couples the segment feature to methods it does not need — but the
-// alternative (split interfaces per consumer) would proliferate types
-// without an immediate benefit.
+// CountBySegment is used by the detail view to populate the member count,
+// while CountBySegmentIDs is used by the list view to fetch counts for a
+// whole page in one query. The other methods are declared for completeness
+// and because a future membership-management feature is expected to consume
+// them. An interface with unused methods is a mild code smell — it couples
+// the segment feature to methods it does not need — but the alternative
+// (split interfaces per consumer) would proliferate types without an
+// immediate benefit.
 type SegmentMemberRepository interface {
 	CountBySegment(ctx context.Context, segmentID int64) (int64, error)
+	CountBySegmentIDs(ctx context.Context, segmentIDs []int64) ([]sqlc.CountSegmentMembersBySegmentIDsRow, error)
 	CountSegmentsByUser(ctx context.Context, userID int64) (int64, error)
 	FindByID(ctx context.Context, id int64) (sqlc.SegmentMember, error)
 	ListBySegment(ctx context.Context, segmentID int64, offset, limit int32) ([]sqlc.ListSegmentMembersRow, error)
