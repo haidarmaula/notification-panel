@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 
+	"github.com/jackc/pgx/v5"
+
 	"hello/internal/audit"
 	"hello/internal/database/sqlc"
 
@@ -30,10 +32,9 @@ var (
 	ErrStaffNotFoundOrInactive = errors.New("staff account not found or inactive")
 
 	// ErrSegmentNotFound is returned when the requested segment ID does
-	// not resolve to a row. As with the profile and notifications
-	// features, it is returned for *any* repository error from the initial
-	// lookup, not only for pgx.ErrNoRows; a database connectivity failure
-	// produces the same sentinel.
+	// not resolve to a row. It is returned only when the repository reports
+	// pgx.ErrNoRows; any other lookup failure is wrapped and surfaced as a
+	// non-sentinel error so the handler can map it to 500 rather than 404.
 	//
 	// The handler maps this to 404 Not Found.
 	ErrSegmentNotFound = errors.New("segment not found")
@@ -255,8 +256,9 @@ func (s *SegmentService) List(ctx context.Context, page, limit int32, search str
 //
 // # Flow
 //
-//  1. Load the segment row by ID. Any failure collapses to
-//     ErrSegmentNotFound.
+//  1. Load the segment row by ID. A missing row returns
+//     ErrSegmentNotFound; any other lookup failure is wrapped with
+//     "get segment: " and returned as a non-sentinel error.
 //  2. Fetch the segment's current member count. A failure here is wrapped
 //     with the prefix "count members: " and returned as a non-sentinel
 //     error.
@@ -292,10 +294,12 @@ func (s *SegmentService) List(ctx context.Context, page, limit int32, search str
 //
 // # Errors
 //
-// Returns ErrSegmentNotFound for the segment lookup failure. Returns a
-// wrapped "count members: " error for the member-count failure. The
-// staff-lookup failure does not produce an error — see the section above
-// — so the caller cannot detect it from the return values alone.
+// Returns ErrSegmentNotFound only when the segment lookup produces
+// pgx.ErrNoRows. Other lookup failures are wrapped with
+// "get segment: ". Returns a wrapped "count members: " error for the
+// member-count failure. The staff-lookup failure does not produce an
+// error — see the section above — so the caller cannot detect it from the
+// return values alone.
 //
 // # Concurrency
 //
@@ -303,7 +307,10 @@ func (s *SegmentService) List(ctx context.Context, page, limit int32, search str
 func (s *SegmentService) GetByID(ctx context.Context, id int64) (*SegmentWithCount, error) {
 	seg, err := s.segmentRepo.FindByID(ctx, id)
 	if err != nil {
-		return nil, ErrSegmentNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrSegmentNotFound
+		}
+		return nil, fmt.Errorf("get segment: %w", err)
 	}
 
 	memberCount, err := s.memberRepo.CountBySegment(ctx, id)
@@ -521,8 +528,9 @@ type UpdateParams struct {
 //
 //  1. Verify the acting staff identity from the request context. A
 //     missing identity produces ErrStaffNotFoundOrInactive.
-//  2. Load the existing segment. A failure — for any reason — collapses
-//     to ErrSegmentNotFound.
+//  2. Load the existing segment. A missing row returns ErrSegmentNotFound;
+//     any other repository failure is wrapped with "get segment for update: "
+//     and returned as a non-sentinel error.
 //  3. Build an update struct pre-populated with the existing name and
 //     description, so that fields not supplied by the caller retain
 //     their current state.
@@ -575,11 +583,11 @@ type UpdateParams struct {
 //
 // # Errors
 //
-// Returns ErrStaffNotFoundOrInactive, ErrSegmentNotFound, or
-// ErrSegmentNameTaken for the corresponding conditions. Returns wrapped
-// errors with prefixes "check name: ", "update segment: ", or "fetch
-// updated segment: " for repository failures. None of the wrapped errors
-// is a sentinel.
+// Returns ErrStaffNotFoundOrInactive, ErrSegmentNameTaken, or
+// ErrSegmentNotFound (only when the existing segment row is missing).
+// Other lookup, uniqueness-check, update, and re-fetch failures are
+// wrapped, not collapsed to a not-found sentinel; the handlers map those
+// to 500.
 //
 // # Concurrency
 //
@@ -598,7 +606,10 @@ func (s *SegmentService) Update(ctx context.Context, params UpdateParams) (*Segm
 
 	existing, err := s.segmentRepo.FindByID(ctx, params.ID)
 	if err != nil {
-		return nil, ErrSegmentNotFound
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrSegmentNotFound
+		}
+		return nil, fmt.Errorf("get segment for update: %w", err)
 	}
 
 	update := sqlc.UpdateSegmentParams{
