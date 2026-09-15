@@ -40,6 +40,7 @@ import (
 // establishes which methods the segment service is allowed to depend on.
 type SegmentRepository interface {
 	Count(ctx context.Context) (int64, error)
+	CountSearch(ctx context.Context, keyword string) (int64, error)
 	FindByID(ctx context.Context, id int64) (sqlc.Segment, error)
 	FindByName(ctx context.Context, name string) (sqlc.Segment, error)
 	List(ctx context.Context, offset, limit int32) ([]sqlc.ListSegmentsRow, error)

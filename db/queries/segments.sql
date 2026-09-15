@@ -120,6 +120,11 @@ ORDER BY s.name
 LIMIT sqlc.arg('limit')
 OFFSET sqlc.arg('offset');
 
+-- name: CountSegmentsWithSearch :one
+SELECT COUNT(*)
+FROM segments
+WHERE name ILIKE '%' || sqlc.arg('keyword') || '%';
+
 -- ==========================================
 -- COUNT
 -- ==========================================

@@ -143,16 +143,13 @@ func NewSegmentService(
 // The two branches are functionally identical apart from which repository
 // method they call and produce the same domain shape.
 //
-// # Incorrect total on the search path
+// # Search-aware total
 //
-// The returned total is computed via segmentRepo.Count(ctx) — the
-// *unfiltered* row count — regardless of whether a search was applied.
-// A caller searching for a rare name will therefore receive a page of 0
-// or 1 items together with a total that reflects the entire segments
-// table. A client building "page X of Y" pagination from these two values
-// will render incorrect page counts on any filtered list. The correct
-// total on the search path would require a search-aware count query; no
-// such query is currently used.
+// When search is non-empty, the total is obtained from
+// SegmentRepository.CountSearch, which applies the same name filter as the
+// Search query. When search is empty, SegmentRepository.Count is used.
+// Pagination metadata therefore matches the visible result set on both the
+// filtered and unfiltered paths.
 //
 // # Swallowed member-count errors
 //
@@ -193,7 +190,7 @@ func (s *SegmentService) List(ctx context.Context, page, limit int32, search str
 	offset := (page - 1) * limit
 
 	var segments []Segment
-	var err error
+	var total int64
 
 	if search != "" {
 		rows, err := s.segmentRepo.Search(ctx, search, offset, limit)
@@ -214,6 +211,11 @@ func (s *SegmentService) List(ctx context.Context, page, limit int32, search str
 				UpdatedAt: row.UpdatedAt.Time,
 			}
 		}
+
+		total, err = s.segmentRepo.CountSearch(ctx, search)
+		if err != nil {
+			return nil, 0, fmt.Errorf("count segments search: %w", err)
+		}
 	} else {
 		rows, err := s.segmentRepo.List(ctx, offset, limit)
 		if err != nil {
@@ -233,11 +235,11 @@ func (s *SegmentService) List(ctx context.Context, page, limit int32, search str
 				UpdatedAt: row.UpdatedAt.Time,
 			}
 		}
-	}
 
-	total, err := s.segmentRepo.Count(ctx)
-	if err != nil {
-		return nil, 0, fmt.Errorf("count segments: %w", err)
+		total, err = s.segmentRepo.Count(ctx)
+		if err != nil {
+			return nil, 0, fmt.Errorf("count segments: %w", err)
+		}
 	}
 
 	result := make([]SegmentWithCount, len(segments))
