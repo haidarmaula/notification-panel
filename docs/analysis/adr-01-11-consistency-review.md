@@ -131,7 +131,7 @@ provider delivery tidak dijanjikan.
 | G2 Freshness/performance | TTL, numeric SLO, acceptance target dan quota aggregate belum disepakati | Final scheduling/retry config, benchmark acceptance dan release |
 | G3 Mobile/auth | Lokasi repo RN, SDK/native version, issuer/audience/JWKS/revocation contract Laravel belum diverifikasi | Enrollment/receipt auth SPEC acceptance dan cutover |
 | G4 Infrastructure | Kafka host/failure domains, DB/staging/TLS dan operator belum diketahui | Production deployment/HA claim |
-| G5 Security policy | Permission matrix proposed, enrollment proof/recovery, gateway/BFF boundary belum disetujui | Security-sensitive API SPEC acceptance; C21 tetap open |
+| G5 Security policy | Business role matrix dikonfirmasi pengguna; M02a scoped SPEC siap. Enrollment proof/recovery, gateway/BFF/operational policy tetap terbuka | Enabling modern enrollment/identity/perimeter dan remaining security SPEC; bukan penghalang M02a role enforcement. C21 tetap open sampai implementation evidence |
 | G6 Data/recovery | Retention, erasure, RPO/RTO, backup ownership dan consumer inventory belum ditentukan | Maintenance/recovery SPEC acceptance dan release |
 | G7 Firebase/cutover | Project/app/APNs config, credentials access, legacy automation/exclusive cohort belum diverifikasi | Real provider/device pilot dan OneSignal retirement |
 

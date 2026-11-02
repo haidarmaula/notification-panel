@@ -170,8 +170,13 @@ Scheduling on create/PATCH can bypass a permission check placed only on /send.
 
 ### Decision
 
-Use current-authority service checks plus route checks. Proposed initial matrix
-(business owner must accept before SPEC):
+Use current-authority service checks plus route checks. The user confirmed the
+business role matrix on 2026-11-02: VIEWER read-only, OPERATOR draft/segment
+management, send/schedule only ADMIN/SUPER_ADMIN, staff/role administration only
+SUPER_ADMIN. This accepts the scoped policy, not the whole ADR or runtime.
+[SPEC M02a](../specs/m02a-staff-operation-permissions.md) and the
+[policy contract](../contracts/staff-permissions.json) start notification/segment/
+member enforcement; operational step-up remains proposed and separate.
 
 | Operation | VIEWER | OPERATOR | ADMIN | SUPER_ADMIN |
 | --- | --- | --- | --- | --- |
@@ -209,8 +214,8 @@ leaves the same privilege escalation through a different endpoint.
 ### Consequences
 
 C21 remains open until service/route permission tests cover all mutations and
-privileged fields. The matrix is a proposed least-privilege starting point,
-not an assertion that the current application already follows it.
+privileged fields. Business role matrix is confirmed; enforcement, atomic
+mutation/audit and remaining security policies are not thereby implemented.
 
 ## A-5. Request, resource and abuse limits
 

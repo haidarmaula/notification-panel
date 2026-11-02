@@ -14,6 +14,12 @@ All endpoints require authentication via:
 
 The authenticated staff ID is extracted from the JWT and used as the `created_by` field when creating notifications.
 
+**Planned authorization change (not implemented):** the confirmed role policy
+restricts draft writes to OPERATOR/ADMIN/SUPER_ADMIN and send/non-null scheduling
+inputs to ADMIN/SUPER_ADMIN. Current runtime has finding C21. See the
+[target authorization contract](authorization-api.md) and its implementation
+status; do not assume JWT authentication already enforces these permissions.
+
 ---
 
 ## Common Error Responses

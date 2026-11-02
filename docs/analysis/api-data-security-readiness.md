@@ -47,7 +47,7 @@ live API/security/provider test. Rancangan tidak menutup C21 maupun finding lama
 | --- | --- | --- |
 | A01 contract ownership | Existing caller inventory, OpenAPI/API version map, PATCH/status/auth compatibility | SPEC accepted |
 | A02 transactional correctness | Safe error/serialization, list/filter snapshot, audit rollback and CAS tests | Implementation accepted |
-| A03 role matrix | Business confirmation of VIEWER/OPERATOR/ADMIN/SUPER_ADMIN actions, schedule delegation and operational gates | Authorization SPEC accepted |
+| A03 role matrix | Business role matrix dikonfirmasi pengguna 2026-11-02; scoped SPEC M02a tersedia. Schedule durability/delegation implementation dan operational step-up masih pending | M02a role enforcement dapat dimulai; remaining authorization/security gates belum ditutup |
 | D01 retention matrix | Owner/purpose/lifetime/action for each class; explicit pending-work exclusions | Retention/erasure SPEC accepted |
 | D02 RPO/RTO | Allowed lost-data interval and safe-service restoration time, DB/storage failure domains | Backup/restore design accepted |
 | D03 recovery proof | Base/WAL/key continuity, sealed restore, erasure/revocation replay, epoch/ID/consumer/provider reconciliation | Production go/no-go |

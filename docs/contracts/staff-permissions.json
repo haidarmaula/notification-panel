@@ -1,0 +1,41 @@
+{
+  "policy_version": 1,
+  "status": "policy-confirmed-runtime-pending",
+  "confirmed_on": "2026-11-02",
+  "default": "deny",
+  "roles": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
+  "permissions": {
+    "notifications.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
+    "notifications.draft.write": ["OPERATOR", "ADMIN", "SUPER_ADMIN"],
+    "notifications.send": ["ADMIN", "SUPER_ADMIN"],
+    "notifications.schedule": ["ADMIN", "SUPER_ADMIN"],
+    "segments.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
+    "segments.write": ["OPERATOR", "ADMIN", "SUPER_ADMIN"],
+    "segments.members.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
+    "segments.members.write": ["OPERATOR", "ADMIN", "SUPER_ADMIN"]
+  },
+  "routes": [
+    {"method": "GET", "path": "/api/v1/notifications", "permission": "notifications.read"},
+    {"method": "GET", "path": "/api/v1/notifications/{id}", "permission": "notifications.read"},
+    {"method": "POST", "path": "/api/v1/notifications", "permission": "notifications.draft.write"},
+    {"method": "PATCH", "path": "/api/v1/notifications/{id}", "permission": "notifications.draft.write"},
+    {"method": "DELETE", "path": "/api/v1/notifications/{id}", "permission": "notifications.draft.write"},
+    {"method": "POST", "path": "/api/v1/notifications/{id}/send", "permission": "notifications.send"},
+    {"method": "GET", "path": "/api/v1/segments", "permission": "segments.read"},
+    {"method": "GET", "path": "/api/v1/segments/{id}", "permission": "segments.read"},
+    {"method": "POST", "path": "/api/v1/segments", "permission": "segments.write"},
+    {"method": "PATCH", "path": "/api/v1/segments/{id}", "permission": "segments.write"},
+    {"method": "DELETE", "path": "/api/v1/segments/{id}", "permission": "segments.write"},
+    {"method": "GET", "path": "/api/v1/segments/{id}/members", "permission": "segments.members.read"},
+    {"method": "POST", "path": "/api/v1/segments/{id}/members", "permission": "segments.members.write"},
+    {"method": "DELETE", "path": "/api/v1/segments/{id}/members/{userId}", "permission": "segments.members.write"}
+  ],
+  "additional_field_permissions": [
+    {"method": "POST", "path": "/api/v1/notifications", "field": "scheduled_at", "condition": "decoded non-null timestamp", "permission": "notifications.schedule"},
+    {"method": "PATCH", "path": "/api/v1/notifications/{id}", "field": "scheduled_at", "condition": "decoded non-null timestamp", "permission": "notifications.schedule"}
+  ],
+  "staff_administration": {
+    "allowed_roles": ["SUPER_ADMIN"],
+    "enforced_by_this_slice": false
+  }
+}
