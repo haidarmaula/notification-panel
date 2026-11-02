@@ -1,0 +1,50 @@
+openapi: 3.0.3
+info:
+  title: FCM send fixture subset
+  version: 0.1.0
+  description: >-
+    Local integration fixture only, not a complete Google API contract.
+    Based on Firebase REST send and error-codes documentation. Synthetic
+    fixture addresses select responses; no real tokens or OAuth are modeled.
+servers:
+  - url: https://fcm.googleapis.com
+paths:
+  /v1/projects/{project}/messages:send:
+    post:
+      operationId: sendFixtureMessage
+      parameters:
+        - in: path
+          name: project
+          required: true
+          schema: {type: string, enum: [integration-fixture]}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [message]
+              properties:
+                message:
+                  type: object
+                  properties:
+                    token: {type: string}
+                    fid: {type: string}
+                    data: {type: object, additionalProperties: {type: string}}
+                    notification:
+                      type: object
+                      properties:
+                        title: {type: string}
+                        body: {type: string}
+      responses:
+        '200':
+          description: Provider accepted submission; no device receipt implied
+          content:
+            application/json:
+              example: {name: projects/integration-fixture/messages/fixture-message}
+        '404':
+          description: UNREGISTERED fixture
+        '429':
+          description: RESOURCE_EXHAUSTED / QUOTA_EXCEEDED fixture
+        '503':
+          description: UNAVAILABLE fixture

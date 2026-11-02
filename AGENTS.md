@@ -46,6 +46,14 @@ not PostgreSQL/Kafka/FCM integration or production-readiness evidence.
 In restricted environments use `GOCACHE=/tmp/hello-go-review-cache` if the default
 Go build cache is not writable.
 
+Dependency integration smoke is opt-in: `bash scripts/integration.sh` with Docker
+Desktop/daemon, Python 3, migrate and Postman CLI installed. It uses its own
+Compose project, hardcoded local fixture DSN/ports, temporary storage and local
+HTTP simulation; it does not load `.env` or start server/worker/scheduler. The
+tagged tests refuse to run without explicit opt-in. See
+`docs/analysis/integration-readiness.md`: repository/Kafka producer + Firebase SDK
+Send are exercised, not the production FCMProvider SendAll adapter or new pipeline.
+
 **If you change a repository interface** consumed by a mocked package, regenerate
 (`go tool mockery`) or the affected test package will not compile.
 
@@ -75,6 +83,8 @@ Go build cache is not writable.
   non-existent topic fails loudly. `docker-compose.yml` provisions no topics and there is no
   init script. Create both before the worker/scheduler do anything useful:
   `notification.send.requested` and `notification.delivery.updated` (names from `.env`).
+  The separate integration runner provisions these names only on its disposable
+  fixture broker; it does not initialize the development broker.
 - `make migrate-*` runs against `localhost:$(DB_PORT)` with `sslmode=disable` regardless of
   `DB_HOST`/`DB_SSLMODE` in `.env`. `.env` sets `DB_HOST=postgres` for the container network;
   that is expected and does not affect the migrate targets.

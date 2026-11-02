@@ -1,0 +1,10 @@
+version: 1
+name: fcm-fixture
+slug: fcm-fixture
+protocol: http
+port: 14011
+interceptRequests: true
+scenarios:
+  - name: default
+    path: ./default.js
+    default: true

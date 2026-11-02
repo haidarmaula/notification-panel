@@ -10,7 +10,9 @@ Nomor step 01–46 tetap mengikuti production plan; milestone di sini mengelompo
 pekerjaan menurut dependensi, bukan mengharuskan semua keamanan menunggu pipeline.
 M00 selesai pada 2026-11-02: mock diregenerasi, tests diselaraskan, seluruh unit
 test dan build lulus. M01 step 18 selesai sebagai CI configuration/local checks;
-hosted run belum diamati, step 19/test environment belum selesai. M02–M10 belum
+hosted run belum diamati. Step 19 dependency environment/smoke juga selesai
+lokal; M01 selesai pada batas bukti tersebut, bukan hosted integration atau
+pipeline acceptance. M02–M10 belum
 selesai. Pekerjaan yang memakai
 keputusan belum settled harus mencatat proposed/test-only boundary dalam SPEC;
 tidak boleh diaktifkan ke production dengan asumsi tersembunyi.
@@ -91,7 +93,8 @@ auth fixtures, pgx not-found sentinel, filtered count dan batch membership count
 sudah diselaraskan; tests juga memeriksa denial dan kegagalan repository.
 Tidak ada perubahan perilaku service atau test yang di-skip.
 
-Lanjut M01 step 19 untuk lingkungan integrasi terisolasi. Step 18 sudah memiliki
-[workflow dan local evidence](ci-readiness.md), termasuk security dependency
-updates dan reachable scan nol; hosted execution tetap belum diamati. Provider/device/infrastruktur
-nyata belum diuji oleh penyelesaian M00.
+M01 step 18/19 selesai sebagai [CI/local checks](ci-readiness.md) dan
+[dependency smoke](integration-readiness.md). Berikutnya step 20/M02: SPEC slice
+permission/API baseline dengan policy G5 yang dipakainya. Hosted execution,
+production adapter/pipeline, real provider/device dan production infrastructure
+belum dibuktikan oleh penyelesaian fondasi ini.

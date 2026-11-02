@@ -27,7 +27,7 @@ Makefile tetap memiliki `include .env`; checks memanggil script langsung.
 | Build | `bash scripts/ci.sh build` | Seluruh packages/binaries compile dengan module mode readonly |
 | Unit tests | `bash scripts/ci.sh test` | Unit tests existing lulus; belum integration/race/load/device tests |
 | Vet | `bash scripts/ci.sh vet` | Analisis default go vet lulus; bukan semua bug/security findings tertutup |
-| Vulnerability | `bash scripts/ci.sh vuln` | govulncheck v1.9.0 menganalisis code + tests terhadap database Go saat scan; reachable finding atau kegagalan scanner memberi exit nonzero |
+| Vulnerability | `bash scripts/ci.sh vuln` | govulncheck v1.9.0 menganalisis default-build code + unit tests terhadap database Go saat scan; custom integration tag tidak diaktifkan; reachable finding atau kegagalan scanner memberi exit nonzero |
 
 Scanner dipasang ke temporary directory lalu dibersihkan; versi scanner tetap,
 database advisory tetap diperbarui. Temuan imported/required tetapi tidak

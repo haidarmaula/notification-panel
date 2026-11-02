@@ -1,0 +1,44 @@
+purpose:
+  stands_in_for: FCM HTTP v1 send response/error subset; no OAuth, APNs or real devices.
+  unblocks: Dependency smoke environment; not production adapter acceptance.
+assumptions:
+  - id: send-error-envelope
+    status: supported
+    claim: Firebase documents message names on acceptance and FCM-specific registration/quota/unavailable errors.
+    reason: Fixture shapes come from primary Firebase documentation and pinned SDK parsing.
+    verification: Documentation and Firebase Go v4.21.0 Send/handleFCMError inspected; actual SDK fixture tests returned expected accepted/unregistered/quota/unavailable outcomes. This does not validate a real Firebase project.
+    source: https://firebase.google.com/docs/cloud-messaging/error-codes; https://firebase.google.com/docs/reference/fcm/rest/v1/projects.messages/send; postman/contracts/fcm-fixture.openapi.yaml
+    updated_at: '2026-11-02'
+  - id: actual-fcm-delivery
+    status: unknown
+    claim: The production project accepts the application's Android/iOS payloads and delivers through APNs.
+    reason: Project/app/APNs/credentials/mobile configuration is unverified; a fixture cannot establish this.
+    verification: No real provider/device call made. Requires authorized test-project/device pilot.
+    source: docs/analysis/cutover-readiness.md
+    updated_at: '2026-11-02'
+  - id: current-provider-wiring
+    status: contradicted
+    claim: Production FCMProvider is compatible with this single-message Send fixture.
+    reason: Existing FCMProvider uses SendAll; fixture targets the proposed Send executor and SDK dependency smoke only.
+    verification: Adapter source inspected; application worker/adapter is not executed by this harness.
+    source: internal/features/notifications/fcm_provider.go; docs/adr/adr-04-provider-selection.md
+    updated_at: '2026-11-02'
+  - id: sdk-physical-retry-count
+    status: supported
+    claim: One SDK v4.21.0 Send issued five physical requests under the fixture 503 response and Retry-After zero.
+    reason: Real SDK execution and simulation request events agree; one logical call is not necessarily one HTTP quota unit.
+    verification: Dependency smoke passed; log contained 503 five times over about seven seconds. Fixture behavior does not establish provider retry timing or delivery.
+    source: tests/integration/dependencies_test.go; scripts/integration.sh; postman/mocks/fcm/default.js
+    updated_at: '2026-11-02'
+  - id: caller-deadline
+    status: supported
+    claim: In the fixture scenario the SDK caller stopped by its deadline rather than waiting for the delayed server response.
+    reason: Actual SDK test measured about 100 ms while the fixture response was delayed two seconds.
+    verification: Tagged smoke test and request logs passed; no inference about whether a real provider accepted a timed-out request.
+    source: tests/integration/dependencies_test.go; postman/mocks/fcm/default.js
+    updated_at: '2026-11-02'
+fingerprints:
+  - id: foundation-step-19
+    date: '2026-11-02'
+    commit: c8041aa plus uncommitted integration-environment artifacts
+    cli: Postman 1.75.0

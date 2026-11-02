@@ -554,6 +554,22 @@ to the Go module proxy and vulnerability database. Failures remain nonzero.
 See [CI evidence and limits](docs/analysis/ci-readiness.md); hosted execution and
 repository required-check settings still need verification after push.
 
+### Dependency integration smoke
+
+With Docker running, Go, Python 3, `migrate` and Postman CLI installed:
+
+```bash
+bash scripts/integration.sh
+```
+
+This provisions disposable PostgreSQL/Kafka fixtures, runs migrations up/down/up
+and tagged dependency tests, then removes only its owned resources. It uses
+fixed loopback ports and synthetic credentials, without loading development
+`.env` or starting application workers. Firebase SDK calls go to a local Postman
+simulation. See [prerequisites, evidence and limits](docs/analysis/integration-readiness.md).
+This is dependency smoke; the production FCM adapter and delivery pipeline
+remain separate implementation milestones.
+
 ---
 
 ## Deployment

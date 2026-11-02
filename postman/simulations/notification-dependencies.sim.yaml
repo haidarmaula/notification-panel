@@ -1,0 +1,7 @@
+simulation: notification-dependencies
+routing: path
+mocks:
+  - name: fcm-fixture
+    routeKey: fcm
+    origin: [fcm.googleapis.com]
+    path: postman/mocks/fcm/config.yaml

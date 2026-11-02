@@ -99,8 +99,10 @@ Baseline verifikasi dilakukan pada turn assessment sebelumnya dalam chat ini:
 UpdatePassword lama) dan segments (mock CountSearch/CountBySegmentIDs belum
 tersedia). Notifications, middleware, dan token lulus. Cache memakai
 `GOCACHE=/tmp/hello-go-review-cache`. Ini hasil working tree saat assessment,
-bukan bukti seluruh pipeline atau clean HEAD lulus. Tidak ada test integrasi
-PostgreSQL/Kafka/provider nyata yang telah dijalankan di sesi perancangan ini.
+bukan bukti seluruh pipeline atau clean HEAD lulus. Catatan ini adalah baseline
+historis sebelum implementasi test infrastructure: step 17 kemudian membuat
+unit suite hijau, dan step 19 menjalankan dependency smoke nyata PostgreSQL/Kafka
+serta SDK terhadap HTTP simulation. Provider/perangkat nyata belum diuji.
 
 ## 4. Indeks ADR / SPEC
 
@@ -150,7 +152,8 @@ SLO/TTL, integrasi, host, policy keamanan/data dan bukti cutover masih terbuka.
 Urutan dependency/milestone tersedia di [M00–M10](implementation-milestones.md).
 Step 16 selesai sebagai pemetaan; step 17/M00 memulihkan baseline unit test.
 Step 18 menyediakan [CI checks dan bukti lokal](ci-readiness.md); hosted run
-belum diamati. Berikutnya test environment terisolasi step 19.
+belum diamati. Step 19 menyediakan [dependency environment dan bukti lokal](integration-readiness.md).
+Berikutnya step 20: SPEC slice M02 permission/API baseline, dengan G5 yang relevan.
 Perbaikan baseline tidak harus menunggu seluruh gate release; acceptance SPEC
 fitur sensitif menunggu keputusan yang dipakainya. Step 15 belum ditandai penuh
 karena penerimaan ADR belum settled, bukan karena review dokumen belum dikerjakan.
@@ -186,7 +189,7 @@ pekerjaan pada baris yang belum dicentang sudah dimulai, sesuai catatan.
 - [x] 16. Susun M00–M10 dengan dependency graph, output, gate dan kriteria selesai; implementasi milestone belum otomatis selesai.
 - [x] 17. Regenerate mock segments; selaraskan actor/password/not-found fixtures staff dan filtered/batch count assertions; build dan seluruh unit test lulus pada 2026-11-02. Tidak ada perubahan perilaku service atau bukti integration/load test.
 - [x] 18. GitHub Actions + script lokal format/modules/build/test/vet/vulnerability; local checks/actionlint lulus, security dependencies diperbarui dan reachable scan nol. Main workflow tetap; hosted run/ruleset belum diverifikasi karena belum di-push.
-- [ ] 19. Lingkungan PostgreSQL/Kafka/provider simulasi yang reproducible.
+- [x] 19. Runner fixture terisolasi: 15 migration up/down/up, repository, kedua Kafka topic/producer round trip dan Firebase SDK HTTP simulation lulus lokal; guard/cleanup diverifikasi. Bukan test adapter/worker/new pipeline atau real FCM/APNs; hosted integration job belum tersedia.
 - [ ] 20. SPEC per milestone dengan acceptance cases; jangan tulis ulang semua detail terlalu awal.
 
 ### Tahap 4 — delivery pipeline
