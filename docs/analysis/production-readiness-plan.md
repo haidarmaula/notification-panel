@@ -149,7 +149,8 @@ Koreksi teknis sudah ditulis sebagai proposed; scope inti dikonfirmasi, tetapi
 SLO/TTL, integrasi, host, policy keamanan/data dan bukti cutover masih terbuka.
 Urutan dependency/milestone tersedia di [M00–M10](implementation-milestones.md).
 Step 16 selesai sebagai pemetaan; step 17/M00 memulihkan baseline unit test.
-Berikutnya step 18: CI checks, kemudian test environment step 19.
+Step 18 menyediakan [CI checks dan bukti lokal](ci-readiness.md); hosted run
+belum diamati. Berikutnya test environment terisolasi step 19.
 Perbaikan baseline tidak harus menunggu seluruh gate release; acceptance SPEC
 fitur sensitif menunggu keputusan yang dipakainya. Step 15 belum ditandai penuh
 karena penerimaan ADR belum settled, bukan karena review dokumen belum dikerjakan.
@@ -184,7 +185,7 @@ pekerjaan pada baris yang belum dicentang sudah dimulai, sesuai catatan.
 
 - [x] 16. Susun M00–M10 dengan dependency graph, output, gate dan kriteria selesai; implementasi milestone belum otomatis selesai.
 - [x] 17. Regenerate mock segments; selaraskan actor/password/not-found fixtures staff dan filtered/batch count assertions; build dan seluruh unit test lulus pada 2026-11-02. Tidak ada perubahan perilaku service atau bukti integration/load test.
-- [ ] 18. CI format/build/test/vet/vulnerability checks; tetap mengikuti workflow main.
+- [x] 18. GitHub Actions + script lokal format/modules/build/test/vet/vulnerability; local checks/actionlint lulus, security dependencies diperbarui dan reachable scan nol. Main workflow tetap; hosted run/ruleset belum diverifikasi karena belum di-push.
 - [ ] 19. Lingkungan PostgreSQL/Kafka/provider simulasi yang reproducible.
 - [ ] 20. SPEC per milestone dengan acceptance cases; jangan tulis ulang semua detail terlalu awal.
 

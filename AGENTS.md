@@ -58,7 +58,13 @@ Go build cache is not writable.
   regenerate sqlc**, or sqlc cannot see the new columns/tables and will emit stale or failing code.
 - Migrations are `golang-migrate` seq format, 6-digit prefix, `.up.sql` + `.down.sql` pairs
   (`make migrate-create NAME=...`). Add a **down** migration with every up migration.
-- No CI, no linter, no formatter config. `gofmt` correctness is assumed, not enforced.
+- `.github/workflows/ci.yml` runs format/module/build/unit-test/vet and reachable
+  vulnerability gates on main pushes, optional PRs, manual runs and weekly scans.
+  Run the same checks via `bash scripts/ci.sh <format|modules|build|test|vet|vuln>`;
+  no `.env` or Make target is needed. The workflow was validated locally on
+  2026-11-02; a hosted Actions run/branch protection is not yet verified.
+  Go version comes from go.mod; scanner is pinned in the script. Do not suppress
+  vulnerability/network errors or infer production readiness from green checks.
 
 ## Local environment gotchas
 

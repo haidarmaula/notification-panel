@@ -45,7 +45,7 @@ func (r *SegmentRepository) Count(ctx context.Context) (int64, error) {
 //
 // It pairs with Search for filtered pagination totals. The keyword is
 // wrapped in a valid pgtype.Text value; an empty keyword matches every
-// segment because the SQL pattern '%' || '' || '%' matches all rows, so
+// segment because an empty search term matches every name, so
 // callers should use Count when keyword is empty.
 func (r *SegmentRepository) CountSearch(ctx context.Context, keyword string) (int64, error) {
 	return r.q.CountSegmentsWithSearch(ctx, pgtype.Text{String: keyword, Valid: true})

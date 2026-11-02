@@ -9,7 +9,9 @@ Aturan bersama: [CR1–CR9 dan gate G1–G7](adr-01-11-consistency-review.md).
 Nomor step 01–46 tetap mengikuti production plan; milestone di sini mengelompokkan
 pekerjaan menurut dependensi, bukan mengharuskan semua keamanan menunggu pipeline.
 M00 selesai pada 2026-11-02: mock diregenerasi, tests diselaraskan, seluruh unit
-test dan build lulus. M01–M10 masih belum selesai. Pekerjaan yang memakai
+test dan build lulus. M01 step 18 selesai sebagai CI configuration/local checks;
+hosted run belum diamati, step 19/test environment belum selesai. M02–M10 belum
+selesai. Pekerjaan yang memakai
 keputusan belum settled harus mencatat proposed/test-only boundary dalam SPEC;
 tidak boleh diaktifkan ke production dengan asumsi tersembunyi.
 
@@ -89,6 +91,7 @@ auth fixtures, pgx not-found sentinel, filtered count dan batch membership count
 sudah diselaraskan; tests juga memeriksa denial dan kegagalan repository.
 Tidak ada perubahan perilaku service atau test yang di-skip.
 
-Lanjut M01: step 18 untuk CI format/build/test/vet/vulnerability checks, lalu
-step 19 untuk lingkungan integrasi terisolasi. Provider/device/infrastruktur
+Lanjut M01 step 19 untuk lingkungan integrasi terisolasi. Step 18 sudah memiliki
+[workflow dan local evidence](ci-readiness.md), termasuk security dependency
+updates dan reachable scan nol; hosted execution tetap belum diamati. Provider/device/infrastruktur
 nyata belum diuji oleh penyelesaian M00.

@@ -534,6 +534,26 @@ The green unit suite does not establish PostgreSQL/Kafka/provider integration,
 real-device delivery, load capacity or production readiness. See the
 [production roadmap](docs/analysis/production-readiness-plan.md).
 
+### Continuous integration
+
+[Backend CI](.github/workflows/ci.yml) checks main pushes, optional pull requests,
+manual runs and a weekly schedule. Run the same gates locally without `.env`:
+
+```bash
+bash scripts/ci.sh format
+bash scripts/ci.sh modules
+bash scripts/ci.sh build
+bash scripts/ci.sh test
+bash scripts/ci.sh vet
+bash scripts/ci.sh vuln
+```
+
+Module verification expects committed `go.mod`/`go.sum`. Vulnerability scanning
+installs a pinned govulncheck into a temporary directory and needs network access
+to the Go module proxy and vulnerability database. Failures remain nonzero.
+See [CI evidence and limits](docs/analysis/ci-readiness.md); hosted execution and
+repository required-check settings still need verification after push.
+
 ---
 
 ## Deployment

@@ -15,6 +15,12 @@ This is a live inventory of bugs, security gaps, correctness issues, and design 
 
 The findings are grouped by severity rather than by file, so that remediation can be prioritised without having to open every source file. A cross-cutting section follows the itemised lists and identifies patterns that recur across multiple features.
 
+Dependency baseline update (2026-11-02): step 18's govulncheck found 24 reachable
+advisories initially. Go/module security updates and a final scan reduced the
+reachable result to zero; uncalled dependency advisories remain informational.
+See [CI evidence](docs/analysis/ci-readiness.md) for versions and limitations.
+This does not close C21/H47/H48/M48 or reconcile older runtime finding rows.
+
 ---
 
 ## Severity Legend
