@@ -140,12 +140,19 @@ is never written by any Go code — treat adding a cancel path as new work, not 
   exists**. `PROCESSING` with zero delivery rows is deliberately treated as a crashed predecessor
   and re-dispatched — do not "tighten" that into a blanket `PROCESSING` guard, which would strand
   notifications that crashed before their first delivery insert.
-- **`internal/kafka/producer.go`** sets a deterministic message key per notification so events
-  land on one partition. Changing the key format breaks per-notification ordering.
+- **`internal/kafka/producer.go` has deterministic keys but NO current key-based partition
+  affinity.** `NewProducer` uses `kafka.LeastBytes`; the pinned kafka-go v0.4.51 balancer
+  routes by byte count, not key hash. Its Godoc claims otherwise and is stale (finding H47).
+  Preserve the existing `notification_<id>` / `delivery_<id>` key formats. ADR-07 proposes
+  an explicit hash balancer plus a reviewed mapping migration; this is not implemented yet.
 - **`GetDatabaseURL` does not percent-encode** the password. DB passwords must stay alphanumeric.
 - **Audit action strings are persisted schema.** They live in `internal/audit/constants.go`
   (`ACTION_*`, `ENTITY_TYPE_*`); changing a value breaks downstream log-search tooling.
   Register new actions there, not inline.
+- **Role labels do not imply enforced permissions.** `VIEWER` is seeded as read-only,
+  but current notification/segment mutation routes/services do not enforce that operation
+  distinction (C21, open). Do not assume a JWT gate protects send/schedule/edit by role.
+  ADR-11 proposes service/route permissions; this is not implemented yet.
 - **500 responses must use the literal `"internal server error"`, never `err.Error()`.**
   `err.Error()` is correct only on mapped 4xx branches (401/403/404/409/400), where it surfaces a
   domain sentinel. The blanket 500 leak was fixed, with exactly three hold-outs left — all in

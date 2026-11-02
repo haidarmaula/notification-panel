@@ -1,7 +1,9 @@
 # Notification Panel Backend — Code Review Findings
 
-**Version:** 1.0  
-**Last Updated:** 2026-09-14  
+**Version:** 1.2
+
+**Last Updated:** 2026-11-02
+
 **Scope:** Full codebase audit conducted during the Godoc documentation pass  
 **Coverage:** `cmd/`, `internal/`, `pkg/` — every non-test, non-generated `.go` file
 
@@ -9,7 +11,7 @@
 
 ## Overview
 
-This document is the complete inventory of bugs, security gaps, correctness issues, and design weaknesses identified across the Notification Panel codebase during an exhaustive documentation review. Every item is drawn from the inline Godoc comments added in the same pass, so each finding has a corresponding in-code reference that explains the surrounding context, the conditions that trigger the issue, and the intended fix.
+This is a live inventory of bugs, security gaps, correctness issues, and design weaknesses. The original audit was drawn from the Godoc pass; later targeted reviews verify implementation and pinned dependency behavior directly. Older rows/checklists are not a reconciled list of still-open defects. Findings C21/H47/H48/M48 were source-verified on 2026-11-02 and remain open; proposed ADRs do not fix runtime behavior.
 
 The findings are grouped by severity rather than by file, so that remediation can be prioritised without having to open every source file. A cross-cutting section follows the itemised lists and identifies patterns that recur across multiple features.
 
@@ -42,6 +44,7 @@ Crashes, security bypasses, data corruption, or issues that affect every user of
 | C6 | `internal/features/staff/service.go` — `Create` | No caller authorisation check in the service layer | Any caller with API key + JWT can create a `SUPER_ADMIN` account; the HTTP-layer role gate is the only defence |
 | C7 | `internal/features/staff/service.go` — `UpdatePassword` | No current-password check, no actor-authority check, no password policy | Admin can reset any account's password; no complexity or length enforcement anywhere in the codebase |
 | C8 | `internal/middleware/jwt.go` — `JWTMiddleware` | Does not check staff active status | A deactivated staff user's existing tokens continue to work until expiry; no effective revocation |
+| C21 | `cmd/server/main.go`; notification/segment routes and service mutation methods | **Open, source-verified 2026-11-02:** the seeded VIEWER role is described as read-only, but notification/segment mutations use the ordinary API-key/JWT/audit chain and services such as NotificationService.Create/Send check active actor identity without an operation-role permission check | An authenticated active VIEWER with the API key can create/send notifications or mutate segments. Enforce deny-by-default service/route permissions, including scheduling on create/PATCH; ADR-11 is a proposed design, not a runtime fix. No live exploit/API mutation was executed. |
 
 ### Runtime Crashes (Panics)
 
@@ -145,6 +148,8 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 | H44 | `internal/features/notifications/module.go` | The Kafka producer created in the module constructor is never closed |
 | H45 | `internal/kafka/producer.go` — `NewProducer` | `AllowAutoTopicCreation: true` means a typo in the configured topic name silently creates a new topic that no consumer reads |
 | H46 | `internal/kafka/producer.go` — `NewProducer` | `RequiredAcks: RequireOne` — a leader failure immediately after acknowledgement can lose the message |
+| H47 | `internal/kafka/producer.go` — `NewProducer` | **Open, verified 2026-11-02:** `kafka.LeastBytes` does not hash message keys, contradicting the claimed per-notification partition affinity. Pinned kafka-go v0.4.51 source and a local six-message probe over three partitions show the same key routed to 0/1/2. Preserve key bytes, use an explicit tested hash partitioner and review the mapping transition; ADR-07 is proposed only. |
+| H48 | `internal/kafka/producer.go` — `NewProducer`; `notifications/processor.go` — delivery publish loop | **Open, source-verified 2026-11-02:** synchronous per-delivery publishes inherit kafka-go's default BatchSize=100 and BatchTimeout=1s. A serial caller cannot fill its own batch while waiting for ack; sparse publishes can accumulate batch waits and delay campaign finalization/update propagation. Broker latency has not been benchmarked. Explicit low-latency batching and bounded timeout/retry behavior are required for ADR-03/05 dispatchers. |
 
 ---
 
@@ -233,6 +238,12 @@ Design inconsistencies, duplication, contract drift, and maintainability hazards
 | M45 | HTTP layer | No rate limiting on `/api/v1/auth/login` |
 | M46 | HTTP layer | No CORS configuration for the admin portal |
 | M47 | `internal/features/mobile/service.go` — `verifyJWT` | Correctly enforces HMAC signing — but `internal/token` does not apply the same hardening |
+
+### Kafka Client Configuration
+
+| # | Location | Issue |
+|---|----------|-------|
+| M48 | `internal/kafka/producer.go` — `NewProducer`; `cmd/worker/main.go` — reader config | **Open, source-verified 2026-11-02:** the producer Godoc promises comma-separated bootstrap seeds, but `kafka.TCP(broker)` passes one string and the reader likewise uses `[]string{cfg.KafkaBroker}`. Pinned kafka-go TCP is variadic and does not split CSV. Parse/validate an endpoint slice and use both writer/reader seed APIs correctly; real multi-broker failover is untested. |
 
 ---
 
@@ -429,11 +440,16 @@ Adding an `event_id` and a schema version to the event structs would enable cons
 
 | Severity | Count |
 |----------|-------|
-| Critical | 20 |
-| High | 44 |
-| Medium | 47 |
+| Critical | 21 |
+| High | 47 |
+| Medium | 48 |
 | Low | 20 |
-| **Total** | **131** |
+| **Total** | **136** |
+
+Counts are recalculated from distinct finding IDs currently present in the
+tables, including C21/H47/H48/M48; they are not counts of currently open findings.
+The old summary undercounted High by one. Original closed/fixed rows still
+need reconciliation.
 
 **Cross-cutting patterns:** 8
 
@@ -446,6 +462,8 @@ Adding an `event_id` and a schema version to the event structs would enable cons
 | Version | Date | Description |
 |---------|------|-------------|
 | 1.0 | 2026-09-14 | Initial findings inventory compiled from the full-codebase Godoc pass |
+| 1.1 | 2026-11-02 | Add open Kafka findings H47/H48/M48 from source/dependency review and key-partition probe; see `docs/analysis/kafka-readiness.md`. No runtime fix applied. |
+| 1.2 | 2026-11-02 | Add open role-permission finding C21 from route/service/seed review and recalculate summary counts from distinct IDs; see `docs/analysis/api-data-security-readiness.md`. No runtime fix applied. |
 
 ---
 
