@@ -1,0 +1,90 @@
+# Backend implementation milestones
+
+Tanggal: 2026-11-02. Status: urutan kerja, bukan bukti implementasi/produksi.
+Indeks: [production plan](production-readiness-plan.md).
+Aturan bersama: [CR1–CR9 dan gate G1–G7](adr-01-11-consistency-review.md).
+
+## Urutan dan dependensi
+
+Nomor step 01–46 tetap mengikuti production plan; milestone di sini mengelompokkan
+pekerjaan menurut dependensi, bukan mengharuskan semua keamanan menunggu pipeline.
+Semua milestone belum selesai ketika dokumen ini dibuat. Pekerjaan yang memakai
+keputusan belum settled harus mencatat proposed/test-only boundary dalam SPEC;
+tidak boleh diaktifkan ke production dengan asumsi tersembunyi.
+
+| Milestone | Dependensi | Potongan kerja berurutan dan output | Kriteria selesai | Step terkait |
+| --- | --- | --- | --- | --- |
+| M00 Baseline tests | Tidak ada gate eksternal | Regenerate mock dari interface; perbaiki fixture/assertion staff sesuai actor/password guards; perbaiki segment search/batch count assertions | Build dan seluruh unit test lulus tanpa skip/pelemahan guard; failure-path tests mencerminkan kontrak sekarang | 17 |
+| M01 Checks dan test environment | M00 | Pisahkan commit CI format/build/test/vet/vulnerability; kemudian test PostgreSQL/migrations, Kafka topics dan provider simulasi yang terisolasi | Check dapat diulang dari clean checkout; readiness/cleanup deterministik; tak mengirim ke perangkat nyata atau membaca credential produksi | 18,19 |
+| M02 API permission dan contract baseline | M01; keputusan G5 yang dipakai | SPEC permission matrix dan compatibility dahulu; deny-by-default mutation termasuk scheduling; safe errors/body limits/audit; dokumentasi API yang berubah | VIEWER tidak bisa mutate/send/schedule dari handler maupun service; actor inactive/forged access ditolak; public DTO/error tidak bocor | 20,31–33 |
+| M03 Immutable installation/binding | M02; G3/G5 untuk enrollment | SPEC lifecycle/proof/JWT dan receipt payload identity; migration up/down + sqlc; enrollment/refresh/logout/account switch dengan immutable binding dan owner epoch | Race refresh/transfer/revocation tidak mengubah owner historis; legacy sync tidak bisa mem-bypass enrollment; payload/capability contract disepakati dengan mobile | 20,22,30,32,33 |
+| M04 Durable acceptance | M01,M02; shared schema/event contract M03 | SPEC gabungan acceptance/admission menetapkan deadline, epochs dan lock order; atomic key+claim+audit+send outbox; scheduler expiry/promotion; bounded publisher | Crash sebelum/sesudah commit atau broker ack tidak menghilangkan accepted work; same-key replay konsisten; expired schedule tidak dipublikasikan | 20,25,28 |
+| M05 Durable admission | M03,M04 | Atomic snapshot/count/intent/fanout marker; serial consumer/commit; source-aware DLQ; requeue dan recovery QUEUED | Duplicate event tidak menambah audience/intent; partial transaction rollback utuh; DLQ DB failure memblokir advance offset; unsupported target/coverage hold eksplisit | 22,24,28 |
+| M06 FCM execution dan delivery updates | M05; G2/G7 untuk konfigurasi/pengiriman nyata | SPEC provider/error mapping + attempt claim/lease/generation; bounded per-device executor, rate/breaker/retry/recovery; signer capability; result + versioned update outbox atomik | Failed/unknown attempt pulih dalam budget/deadline; stale generation/attempt tidak menulis; no orphan terminal work; simulated provider acceptance dan outbox crash windows teruji | 21,23,26–28 |
+| M07 Receipt dan statistics | M03,M06; G3/G5 dan consumer contract G6 | Bearer + per-delivery capability; semantic dedup; early/late observations, read projection; snapshot denominator dan consumer version/epoch behavior | Cross-owner/forged receipt ditolak; early receipt tidak diregress worker; FAILED late observation tetap failure disposition; duplicated/reordered events tidak double-count | 26,29,30,33 |
+| M08 Production runtime dan observability | M01–M07; G4 dan operator | Image/config validation, Kafka provisioning/ACL/hash mapping, resource bounds; drain/lifecycle; private health, logs/metrics, dashboards dan exercised alerts | Config drift fail closed; shutdown/rebalance aman; dependency outage tidak restart storm; deployment evidence membedakan single-host smoke dan multi-host failure | 34–36,39 |
+| M09 Retention dan coordinated recovery | M07,M08; G6 | SPEC retention/erasure/FK/archive; bounded maintenance; off-host backup/WAL dan sealed restore; epoch/revocation/consumer reconciliation serta runbooks | Restore drill memenuhi agreed RPO/RTO; tidak otomatis resend uncertain work atau resurrect revoked identity; purge tidak menghapus pending/replay evidence | 37–39,43 |
+| M10 Staging evidence dan cutover | M00–M09; G2–G7 settled untuk release | Android/iOS nyata; load/burst/soak 20k + headroom; dependency fault/security/restore review; pilot exclusive cohort; rollout dan OneSignal retirement | Numeric acceptance dan release gates lulus dengan evidence; operator/rollback jelas; tidak ada dual-send cohort; go/no-go eksplisit | 40–46 |
+
+M06 dan M07 adalah acceptance gate bersama sebelum pilot: signer, verifier,
+payload schema, update projection dan consumer compatibility tidak boleh
+dikembangkan dengan kontrak yang saling berbeda. Implementasi M06 dapat diuji
+terhadap provider simulasi ketika akses Firebase belum tersedia; itu bukan
+bukti integrasi Firebase/APNs nyata. Pipeline baru tetap disabled/isolated
+sampai milestone downstream yang dibutuhkan aman untuk aktivasi.
+
+## Dependency graph
+
+```mermaid
+flowchart TD
+  M00["M00 Baseline tests"] --> M01["M01 Checks dan test environment"]
+  M01 --> M02["M02 Permission dan API contract"]
+  M02 --> M03["M03 Installation dan binding"]
+  M02 --> M04["M04 Durable acceptance"]
+  M03 --> M04
+  M03 --> M05["M05 Durable admission"]
+  M04 --> M05
+  M05 --> M06["M06 FCM executor dan update outbox"]
+  M03 --> M07["M07 Receipts dan statistics"]
+  M06 --> M07
+  M07 --> M08["M08 Runtime dan observability"]
+  M08 --> M09["M09 Retention dan recovery"]
+  M09 --> M10["M10 Evidence dan cutover"]
+```
+
+M04 bergantung pada kontrak identitas/schema M03; tidak perlu menunggu rollout
+mobile selesai untuk menulis atau menguji transaksi terhadap fixture. Coverage
+dan dispatch tetap held sampai enrollment/cutover evidence cukup. Instrumentasi
+dasar dan fault tests ditambahkan bersama masing-masing fitur; M08 merakit dan
+menguji operasi lengkap, bukan pertama kali menambahkan observability. M09
+menambahkan maintenance setelah policy disetujui; retained identity/FK floors
+sudah wajib di schema M03–M07 agar desain tidak menunggu recovery di akhir.
+
+## Cara menyelesaikan satu milestone
+
+1. Tulis satu SPEC kecil untuk slice berikutnya: input/output/error, migration
+   dan compatibility, invariants, open gates serta acceptance cases. NEW path
+   di `docs/specs/` ditentukan ketika slice dimulai; historical bigpickle bukan
+   SPEC canonical. M00 menyelaraskan tests ke kontrak kode existing, tanpa API
+   behavior baru atau companion SPEC fitur baru.
+2. Implementasi dan test slice tersebut, termasuk failure window yang relevan.
+   Simulasi tidak menggantikan real-device/multi-host/restore evidence.
+3. Catat command, hasil dan batas buktinya; update API docs jika kontrak berubah,
+   `code-review.md` jika finding ditutup, serta checklist production plan.
+4. Commit kecil di `main` dengan Conventional Commits berscope; jangan mengemas
+   tooling, rancangan dan perilaku runtime yang tidak terkait dalam satu commit.
+   Commit rutin menjadi bagian penutupan slice; push/deploy mengikuti instruksi
+   pengguna dan kesiapan lingkungan.
+
+Tidak ada estimasi tanggal yang dijanjikan sebelum akses/gate/sizing diketahui.
+Kriteria selesai milestone ini sengaja menjadi panduan untuk SPEC, bukan klaim
+acceptance case seluruh sistem sudah ditulis atau ADR sudah accepted.
+
+## Titik mulai berikutnya
+
+Mulai M00/step 17. Masalah baseline yang sudah direproduksi: signature
+`StaffService.UpdatePassword` berubah, mocks segments belum memiliki CountSearch
+dan CountBySegmentIDs, sedangkan list tests masih mengharapkan per-segment count.
+Perbaiki tests/fixtures dan regenerate mock tanpa mengubah perilaku service untuk
+memuaskan test lama. Tidak perlu credential Firebase, akses server Laravel,
+angka SLO final atau host Kafka untuk menyelesaikannya.

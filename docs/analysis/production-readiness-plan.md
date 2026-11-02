@@ -147,7 +147,8 @@ identity policy dan perubahan kontrak masih perlu keputusan/verifikasi.
 Hasil review lintas ADR: [CR1–CR9 dan gate G1–G7](adr-01-11-consistency-review.md).
 Koreksi teknis sudah ditulis sebagai proposed; scope inti dikonfirmasi, tetapi
 SLO/TTL, integrasi, host, policy keamanan/data dan bukti cutover masih terbuka.
-Berikutnya susun dependency/milestone (step 16), lalu baseline test (step 17).
+Urutan dependency/milestone tersedia di [M00–M10](implementation-milestones.md).
+Step 16 selesai sebagai pemetaan; berikutnya baseline test (step 17/M00).
 Perbaikan baseline tidak harus menunggu seluruh gate release; acceptance SPEC
 fitur sensitif menunggu keputusan yang dipakainya. Step 15 belum ditandai penuh
 karena penerimaan ADR belum settled, bukan karena review dokumen belum dikerjakan.
@@ -180,7 +181,7 @@ pekerjaan pada baris yang belum dicentang sudah dimulai, sesuai catatan.
 
 ### Tahap 3 — fondasi implementasi
 
-- [ ] 16. Susun milestone kecil berdasarkan dependency graph yang sudah direview.
+- [x] 16. Susun M00–M10 dengan dependency graph, output, gate dan kriteria selesai; implementasi milestone belum otomatis selesai.
 - [ ] 17. Perbaiki test staff/segments, regenerate mock dan perbarui assertions; build/test hijau.
 - [ ] 18. CI format/build/test/vet/vulnerability checks; tetap mengikuti workflow main.
 - [ ] 19. Lingkungan PostgreSQL/Kafka/provider simulasi yang reproducible.
