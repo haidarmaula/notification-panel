@@ -238,6 +238,7 @@ type Querier interface {
 	// GET
 	// ==========================================
 	GetSegmentMemberByID(ctx context.Context, id int64) (SegmentMember, error)
+	GetStaffAuthority(ctx context.Context, id int64) (GetStaffAuthorityRow, error)
 	GetStaffUserByEmail(ctx context.Context, email string) (StaffUser, error)
 	// ==========================================
 	// GET

@@ -117,6 +117,27 @@ func (q *Queries) ExistsStaffUserByEmail(ctx context.Context, email string) (boo
 	return exists, err
 }
 
+const getStaffAuthority = `-- name: GetStaffAuthority :one
+SELECT su.id, su.is_active, r.name AS role_name
+FROM staff_users su
+LEFT JOIN roles r ON r.id = su.role_id
+WHERE su.id = $1
+LIMIT 1
+`
+
+type GetStaffAuthorityRow struct {
+	ID       int64       `db:"id"`
+	IsActive bool        `db:"is_active"`
+	RoleName pgtype.Text `db:"role_name"`
+}
+
+func (q *Queries) GetStaffAuthority(ctx context.Context, id int64) (GetStaffAuthorityRow, error) {
+	row := q.db.QueryRow(ctx, getStaffAuthority, id)
+	var i GetStaffAuthorityRow
+	err := row.Scan(&i.ID, &i.IsActive, &i.RoleName)
+	return i, err
+}
+
 const getStaffUserByEmail = `-- name: GetStaffUserByEmail :one
 SELECT
     id,

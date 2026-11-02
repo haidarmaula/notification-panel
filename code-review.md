@@ -1,6 +1,6 @@
 # Notification Panel Backend — Code Review Findings
 
-**Version:** 1.2
+**Version:** 1.3
 
 **Last Updated:** 2026-11-02
 
@@ -11,7 +11,7 @@
 
 ## Overview
 
-This is a live inventory of bugs, security gaps, correctness issues, and design weaknesses. The original audit was drawn from the Godoc pass; later targeted reviews verify implementation and pinned dependency behavior directly. Older rows/checklists are not a reconciled list of still-open defects. Findings C21/H47/H48/M48 were source-verified on 2026-11-02 and remain open; proposed ADRs do not fix runtime behavior.
+This is a live inventory of bugs, security gaps, correctness issues, and design weaknesses. The original audit was drawn from the Godoc pass; later targeted reviews verify implementation and pinned dependency behavior directly. Older rows/checklists are not a reconciled list of still-open defects. Findings H47/H48/M48 remain open. C21 was remediated and locally verified in M02a on 2026-11-02; see its row/evidence. Proposed ADRs alone do not fix runtime behavior.
 
 The findings are grouped by severity rather than by file, so that remediation can be prioritised without having to open every source file. A cross-cutting section follows the itemised lists and identifies patterns that recur across multiple features.
 
@@ -19,7 +19,7 @@ Dependency baseline update (2026-11-02): step 18's govulncheck found 24 reachabl
 advisories initially. Go/module security updates and a final scan reduced the
 reachable result to zero; uncalled dependency advisories remain informational.
 See [CI evidence](docs/analysis/ci-readiness.md) for versions and limitations.
-This does not close C21/H47/H48/M48 or reconcile older runtime finding rows.
+The dependency scan does not close runtime findings; C21 is separately remediated by M02a code/tests. H47/H48/M48 and unreconciled older rows remain separate.
 
 ---
 
@@ -50,7 +50,7 @@ Crashes, security bypasses, data corruption, or issues that affect every user of
 | C6 | `internal/features/staff/service.go` — `Create` | No caller authorisation check in the service layer | Any caller with API key + JWT can create a `SUPER_ADMIN` account; the HTTP-layer role gate is the only defence |
 | C7 | `internal/features/staff/service.go` — `UpdatePassword` | No current-password check, no actor-authority check, no password policy | Admin can reset any account's password; no complexity or length enforcement anywhere in the codebase |
 | C8 | `internal/middleware/jwt.go` — `JWTMiddleware` | Does not check staff active status | A deactivated staff user's existing tokens continue to work until expiry; no effective revocation |
-| C21 | `cmd/server/main.go`; notification/segment routes and service mutation methods | **Open, source-verified 2026-11-02:** the seeded VIEWER role is described as read-only, but notification/segment mutations use the ordinary API-key/JWT/audit chain and services such as NotificationService.Create/Send only load an actor row without an explicit IsActive/operation-role check (HTTP JWT middleware checks activity, direct service callers do not) | An authenticated active VIEWER with the API key can create/send notifications or mutate segments. Enforce deny-by-default service/route permissions, including scheduling on create/PATCH and member writes. The user-confirmed role matrix and docs/specs/m02a-staff-operation-permissions.md are ready; enforcement remains unimplemented. No live exploit/API mutation was executed. |
+| C21 | `internal/authz`; notification/segment/member routes and services | **Fixed in code, locally verified 2026-11-02 (M02a):** current DB authority guards cover all 14 routes, nine mutation services and non-null create/PATCH scheduling input; creators are principal-derived | [Verification](docs/analysis/m02a-verification.md): four-role real-DB/API matrix, direct service denials, stale claims/committed demotion and no-write/no-Kafka tests pass. Statement-time authorization is not a lock through mutation; staff administration/session/atomic audit remain follow-up. Not deployed. |
 
 ### Runtime Crashes (Panics)
 
@@ -475,6 +475,7 @@ need reconciliation.
 | 1.0 | 2026-09-14 | Initial findings inventory compiled from the full-codebase Godoc pass |
 | 1.1 | 2026-11-02 | Add open Kafka findings H47/H48/M48 from source/dependency review and key-partition probe; see `docs/analysis/kafka-readiness.md`. No runtime fix applied. |
 | 1.2 | 2026-11-02 | Add open role-permission finding C21 from route/service/seed review and recalculate summary counts from distinct IDs; see `docs/analysis/api-data-security-readiness.md`. No runtime fix applied. |
+| 1.3 | 2026-11-02 | Remediate C21 in M02a with current-authority route/service guards and locally verified negative API/DB/Kafka cases; remaining security/transactional limitations recorded in `docs/analysis/m02a-verification.md`. |
 
 ---
 

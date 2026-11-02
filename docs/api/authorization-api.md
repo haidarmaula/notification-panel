@@ -1,9 +1,9 @@
 # Staff operation authorization contract
 
-Status: **target policy confirmed, runtime pending**, 2026-11-02. This document
-describes the M02a change to existing notification/segment/member APIs; current
-routes do not enforce this complete matrix. C21 remains open until implementation
-and negative tests. [SPEC](../specs/m02a-staff-operation-permissions.md),
+Status: **implemented in code, locally verified; not deployed**, 2026-11-02.
+Notification/segment/member APIs enforce the confirmed matrix. C21's scoped
+operation bypass is remediated; see [evidence and remaining limits](../analysis/m02a-verification.md),
+[SPEC](../specs/m02a-staff-operation-permissions.md), and
 [canonical role/route matrix](../contracts/staff-permissions.json).
 
 All routes retain API key (`X-API-Key`) plus staff access Bearer JWT.
@@ -28,7 +28,7 @@ semantics, not clearing/canceling a schedule. Current PATCH persists a timestamp
 without scheduling a DRAFT; durable scheduling is a later contract change.
 Existing non-DRAFT edit/delete/send restrictions remain in force.
 
-New gate errors use the existing envelope:
+Gate errors use the existing envelope:
 
 | HTTP status | Meaning | Safe message |
 | --- | --- | --- |

@@ -2,6 +2,7 @@ package segments
 
 import (
 	"hello/internal/audit"
+	"hello/internal/authz"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 	"hello/internal/middleware"
@@ -50,6 +51,7 @@ import (
 // The module is safe for concurrent use. Its fields are set once in the
 // constructor and never mutated; RegisterRoutes only reads them.
 type SegmentModule struct {
+	authorization  authz.Checker
 	middlewares    []middleware.Middleware
 	handler        *SegmentHandler
 	membersHandler *MembersHandler
@@ -94,18 +96,20 @@ func NewSegmentModule(queries *sqlc.Queries, middlewares ...middleware.Middlewar
 	segmentRepo := repository.NewSegmentRepository(queries)
 	memberRepo := repository.NewSegmentMemberRepository(queries)
 	staffRepo := repository.NewStaffUserRepository(queries)
+	authorization := authz.New(staffRepo)
 	userRepo := repository.NewUserRepository(queries)
 
 	auditRepo := repository.NewAuditLogRepository(queries)
 	auditService := audit.NewAuditService(auditRepo)
 
-	segmentService := NewSegmentService(segmentRepo, memberRepo, staffRepo, auditService)
+	segmentService := NewSegmentService(segmentRepo, memberRepo, staffRepo, auditService, authorization)
 	segmentHandler := NewSegmentHandler(segmentService)
 
-	membersService := NewMembersService(segmentRepo, memberRepo, userRepo)
+	membersService := NewMembersService(segmentRepo, memberRepo, userRepo, authorization)
 	membersHandler := NewMembersHandler(membersService)
 
 	return &SegmentModule{
+		authorization:  authorization,
 		middlewares:    middlewares,
 		handler:        segmentHandler,
 		membersHandler: membersHandler,

@@ -1,6 +1,7 @@
 package segments
 
 import (
+	"hello/internal/authz"
 	"hello/internal/middleware"
 	"net/http"
 )
@@ -56,14 +57,14 @@ func (m *SegmentModule) RegisterRoutes(mux *http.ServeMux) {
 	use := middleware.Chain(m.middlewares...)
 
 	// Segment routes
-	mux.HandleFunc("GET "+prefix, use(m.handler.List))
-	mux.HandleFunc("GET "+prefix+"/{id}", use(m.handler.GetByID))
-	mux.HandleFunc("POST "+prefix, use(m.handler.Create))
-	mux.HandleFunc("PATCH "+prefix+"/{id}", use(m.handler.Update))
-	mux.HandleFunc("DELETE "+prefix+"/{id}", use(m.handler.Delete))
+	mux.HandleFunc("GET "+prefix, use(authz.Guard(m.authorization, authz.SegmentsRead, m.handler.List)))
+	mux.HandleFunc("GET "+prefix+"/{id}", use(authz.Guard(m.authorization, authz.SegmentsRead, m.handler.GetByID)))
+	mux.HandleFunc("POST "+prefix, use(authz.Guard(m.authorization, authz.SegmentsWrite, m.handler.Create)))
+	mux.HandleFunc("PATCH "+prefix+"/{id}", use(authz.Guard(m.authorization, authz.SegmentsWrite, m.handler.Update)))
+	mux.HandleFunc("DELETE "+prefix+"/{id}", use(authz.Guard(m.authorization, authz.SegmentsWrite, m.handler.Delete)))
 
 	// Member routes
-	mux.HandleFunc("GET "+prefix+"/{id}/members", use(m.membersHandler.ListMembers))
-	mux.HandleFunc("POST "+prefix+"/{id}/members", use(m.membersHandler.AddMember))
-	mux.HandleFunc("DELETE "+prefix+"/{id}/members/{userId}", use(m.membersHandler.RemoveMember))
+	mux.HandleFunc("GET "+prefix+"/{id}/members", use(authz.Guard(m.authorization, authz.MembersRead, m.membersHandler.ListMembers)))
+	mux.HandleFunc("POST "+prefix+"/{id}/members", use(authz.Guard(m.authorization, authz.MembersWrite, m.membersHandler.AddMember)))
+	mux.HandleFunc("DELETE "+prefix+"/{id}/members/{userId}", use(authz.Guard(m.authorization, authz.MembersWrite, m.membersHandler.RemoveMember)))
 }

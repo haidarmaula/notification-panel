@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
+	"hello/internal/authz"
 	"hello/internal/database/sqlc"
 	"hello/internal/features/segments/mocks"
 	"hello/internal/middleware"
@@ -21,6 +22,16 @@ import (
 // --------------------------------
 // Helpers
 // --------------------------------
+
+type fixtureAuthority struct{}
+
+func (fixtureAuthority) GetStaffAuthority(ctx context.Context, id int64) (sqlc.GetStaffAuthorityRow, error) {
+	if id != 1 {
+		return sqlc.GetStaffAuthorityRow{}, pgx.ErrNoRows
+	}
+	return sqlc.GetStaffAuthorityRow{ID: id, IsActive: true, RoleName: pgtype.Text{String: "OPERATOR", Valid: true}}, nil
+}
+func fixtureAuthorization() authz.Checker { return authz.New(fixtureAuthority{}) }
 
 func dummyStaffUser(id int64) sqlc.StaffUser {
 	return sqlc.StaffUser{
@@ -132,8 +143,8 @@ func TestSegmentsService_List(t *testing.T) {
 
 			tc.mockSetup(mockSegmentRepo, mockMemberRepo)
 
-			service := NewSegmentService(mockSegmentRepo, mockMemberRepo, mockStaffRepo, mockAudit)
-			segments, total, err := service.List(context.Background(), tc.page, tc.limit, tc.search)
+			service := NewSegmentService(mockSegmentRepo, mockMemberRepo, mockStaffRepo, mockAudit, fixtureAuthorization())
+			segments, total, err := service.List(ctxWithStaffID(1), tc.page, tc.limit, tc.search)
 
 			assert.ErrorIs(t, err, tc.expectedError)
 			if tc.verifyResult != nil {
@@ -204,8 +215,8 @@ func TestSegmentsService_ListFailuresAndEmptyPage(t *testing.T) {
 			staff := mocks.NewMockStaffUserRepository(t)
 			audit := mocks.NewMockAuditService(t)
 			tc.setup(repo, members)
-			service := NewSegmentService(repo, members, staff, audit)
-			segments, total, err := service.List(context.Background(), 1, 10, tc.search)
+			service := NewSegmentService(repo, members, staff, audit, fixtureAuthorization())
+			segments, total, err := service.List(ctxWithStaffID(1), 1, 10, tc.search)
 			require.ErrorIs(t, err, tc.expectedError)
 			require.Empty(t, segments)
 			require.Zero(t, total)
@@ -286,8 +297,8 @@ func TestSegmentsService_GetByID(t *testing.T) {
 
 			tc.mockSetup(mockSegmentRepo, mockStaffRepo, mockMemberRepo)
 
-			service := NewSegmentService(mockSegmentRepo, mockMemberRepo, mockStaffRepo, mockAudit)
-			result, err := service.GetByID(context.Background(), tc.id)
+			service := NewSegmentService(mockSegmentRepo, mockMemberRepo, mockStaffRepo, mockAudit, fixtureAuthorization())
+			result, err := service.GetByID(ctxWithStaffID(1), tc.id)
 
 			assert.ErrorIs(t, err, tc.expectedError)
 			if tc.verifyResult != nil {
@@ -322,7 +333,7 @@ func TestSegmentsService_Create(t *testing.T) {
 			},
 			ctx: ctxWithStaffID(1),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Times(2)
+				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
 				segmentRepo.EXPECT().ExistsByName(mock.Anything, "Premium Users").Return(false, nil).Once()
 				segmentRepo.EXPECT().Create(mock.Anything, mock.MatchedBy(func(p sqlc.CreateSegmentParams) bool {
 					return p.Name == "Premium Users" && p.Description.String == "Users with premium subscription"
@@ -345,7 +356,7 @@ func TestSegmentsService_Create(t *testing.T) {
 			ctx: context.Background(),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 			},
-			expectedError: ErrStaffNotFoundOrInactive,
+			expectedError: authz.ErrUnauthenticated,
 			verifyResult: func(t *testing.T, segment *Segment) {
 				assert.Nil(t, segment)
 			},
@@ -357,9 +368,9 @@ func TestSegmentsService_Create(t *testing.T) {
 			},
 			ctx: ctxWithStaffID(999),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
+
 			},
-			expectedError: ErrStaffNotFoundOrInactive,
+			expectedError: authz.ErrUnauthenticated,
 			verifyResult: func(t *testing.T, segment *Segment) {
 				assert.Nil(t, segment)
 			},
@@ -371,7 +382,7 @@ func TestSegmentsService_Create(t *testing.T) {
 			},
 			ctx: ctxWithStaffID(1),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
+
 				segmentRepo.EXPECT().ExistsByName(mock.Anything, "Premium Users").Return(true, nil).Once()
 			},
 			expectedError: ErrSegmentNameTaken,
@@ -386,7 +397,7 @@ func TestSegmentsService_Create(t *testing.T) {
 			},
 			ctx: ctxWithStaffID(1),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
+
 				segmentRepo.EXPECT().ExistsByName(mock.Anything, "Premium Users").Return(false, errDB).Once()
 			},
 			expectedError: errDB,
@@ -402,7 +413,7 @@ func TestSegmentsService_Create(t *testing.T) {
 			},
 			ctx: ctxWithStaffID(1),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
+
 				segmentRepo.EXPECT().ExistsByName(mock.Anything, "Premium Users").Return(false, nil).Once()
 				segmentRepo.EXPECT().Create(mock.Anything, mock.Anything).Return(sqlc.Segment{}, errDB).Once()
 			},
@@ -424,7 +435,7 @@ func TestSegmentsService_Create(t *testing.T) {
 
 			tc.mockSetup(mockSegmentRepo, mockStaffRepo, mockAuditService)
 
-			service := NewSegmentService(mockSegmentRepo, mockMemberRepo, mockStaffRepo, mockAuditService)
+			service := NewSegmentService(mockSegmentRepo, mockMemberRepo, mockStaffRepo, mockAuditService, fixtureAuthorization())
 
 			segment, err := service.Create(tc.ctx, tc.params)
 
@@ -465,7 +476,7 @@ func TestSegmentsService_Update(t *testing.T) {
 				existing := dummySegment(1, "Old Name", "Old desc")
 				updated := dummySegment(1, "Updated Name", "Updated description")
 
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Times(2)
+				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(existing, nil).Once()
 				segmentRepo.EXPECT().ExistsByName(mock.Anything, "Updated Name").Return(false, nil).Once()
 				segmentRepo.EXPECT().Update(mock.Anything, mock.MatchedBy(func(p sqlc.UpdateSegmentParams) bool {
@@ -492,7 +503,7 @@ func TestSegmentsService_Update(t *testing.T) {
 				existing := dummySegment(1, "Old Name", "Old desc")
 				updated := dummySegment(1, "New Name Only", "Old desc")
 
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Times(2)
+				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(existing, nil).Once()
 				segmentRepo.EXPECT().ExistsByName(mock.Anything, "New Name Only").Return(false, nil).Once()
 				segmentRepo.EXPECT().Update(mock.Anything, mock.MatchedBy(func(p sqlc.UpdateSegmentParams) bool {
@@ -519,7 +530,7 @@ func TestSegmentsService_Update(t *testing.T) {
 				existing := dummySegment(1, "Old Name", "Old desc")
 				updated := dummySegment(1, "Old Name", "New description only")
 
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Times(2)
+				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(existing, nil).Once()
 				// No ExistsByName because name not changed
 				segmentRepo.EXPECT().Update(mock.Anything, mock.MatchedBy(func(p sqlc.UpdateSegmentParams) bool {
@@ -547,7 +558,7 @@ func TestSegmentsService_Update(t *testing.T) {
 				existing := dummySegment(1, "Old Name", "Old desc")
 				updated := dummySegment(1, "Old Name", "Updated description")
 
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Times(2)
+				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(existing, nil).Once()
 				// No ExistsByName
 				segmentRepo.EXPECT().Update(mock.Anything, mock.MatchedBy(func(p sqlc.UpdateSegmentParams) bool {
@@ -572,7 +583,7 @@ func TestSegmentsService_Update(t *testing.T) {
 			ctx: context.Background(),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 			},
-			expectedError: ErrStaffNotFoundOrInactive,
+			expectedError: authz.ErrUnauthenticated,
 			verifyResult: func(t *testing.T, segment *Segment) {
 				assert.Nil(t, segment)
 			},
@@ -585,9 +596,9 @@ func TestSegmentsService_Update(t *testing.T) {
 			},
 			ctx: ctxWithStaffID(999),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
+
 			},
-			expectedError: ErrStaffNotFoundOrInactive,
+			expectedError: authz.ErrUnauthenticated,
 			verifyResult: func(t *testing.T, segment *Segment) {
 				assert.Nil(t, segment)
 			},
@@ -600,7 +611,7 @@ func TestSegmentsService_Update(t *testing.T) {
 			},
 			ctx: ctxWithStaffID(1),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
+
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.Segment{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrSegmentNotFound,
@@ -618,7 +629,6 @@ func TestSegmentsService_Update(t *testing.T) {
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 				existing := dummySegment(1, "Old Name", "Old desc")
 
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(existing, nil).Once()
 				segmentRepo.EXPECT().ExistsByName(mock.Anything, "Taken Name").Return(true, nil).Once()
 			},
@@ -637,7 +647,6 @@ func TestSegmentsService_Update(t *testing.T) {
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 				existing := dummySegment(1, "Old Name", "Old desc")
 
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(existing, nil).Once()
 				segmentRepo.EXPECT().ExistsByName(mock.Anything, "New Name").Return(false, errDB).Once()
 			},
@@ -656,7 +665,6 @@ func TestSegmentsService_Update(t *testing.T) {
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 				existing := dummySegment(1, "Old Name", "Old desc")
 
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(existing, nil).Once()
 				segmentRepo.EXPECT().ExistsByName(mock.Anything, "New Name").Return(false, nil).Once()
 				segmentRepo.EXPECT().Update(mock.Anything, mock.Anything).Return(errDB).Once()
@@ -676,7 +684,6 @@ func TestSegmentsService_Update(t *testing.T) {
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 				existing := dummySegment(1, "Old Name", "Old desc")
 
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(existing, nil).Once()
 				segmentRepo.EXPECT().ExistsByName(mock.Anything, "New Name").Return(false, nil).Once()
 				segmentRepo.EXPECT().Update(mock.Anything, mock.Anything).Return(nil).Once()
@@ -700,7 +707,7 @@ func TestSegmentsService_Update(t *testing.T) {
 
 			tc.mockSetup(mockSegmentRepo, mockStaffRepo, mockAuditService)
 
-			service := NewSegmentService(mockSegmentRepo, mockMemberRepo, mockStaffRepo, mockAuditService)
+			service := NewSegmentService(mockSegmentRepo, mockMemberRepo, mockStaffRepo, mockAuditService, fixtureAuthorization())
 
 			segment, err := service.Update(tc.ctx, tc.params)
 
@@ -734,7 +741,7 @@ func TestSegmentsService_Delete(t *testing.T) {
 			ctx:       ctxWithStaffID(1),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, memberRepo *mocks.MockSegmentMemberRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 				existing := dummySegment(1, "Test", "desc")
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
+
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(existing, nil).Once()
 				memberRepo.EXPECT().CountBySegment(mock.Anything, int64(1)).Return(int64(0), nil).Once()
 				segmentRepo.EXPECT().Delete(mock.Anything, int64(1)).Return(nil).Once()
@@ -748,23 +755,23 @@ func TestSegmentsService_Delete(t *testing.T) {
 			ctx:       context.Background(),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, memberRepo *mocks.MockSegmentMemberRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 			},
-			expectedError: ErrStaffNotFoundOrInactive,
+			expectedError: authz.ErrUnauthenticated,
 		},
 		{
 			name:      "staff not found",
 			segmentID: 1,
 			ctx:       ctxWithStaffID(999),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, memberRepo *mocks.MockSegmentMemberRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
+
 			},
-			expectedError: ErrStaffNotFoundOrInactive,
+			expectedError: authz.ErrUnauthenticated,
 		},
 		{
 			name:      "segment not found",
 			segmentID: 999,
 			ctx:       ctxWithStaffID(1),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, memberRepo *mocks.MockSegmentMemberRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
+
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.Segment{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrSegmentNotFound,
@@ -775,7 +782,7 @@ func TestSegmentsService_Delete(t *testing.T) {
 			ctx:       ctxWithStaffID(1),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, memberRepo *mocks.MockSegmentMemberRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 				existing := dummySegment(1, "Test", "desc")
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
+
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(existing, nil).Once()
 				memberRepo.EXPECT().CountBySegment(mock.Anything, int64(1)).Return(int64(5), nil).Once()
 			},
@@ -787,7 +794,7 @@ func TestSegmentsService_Delete(t *testing.T) {
 			ctx:       ctxWithStaffID(1),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, memberRepo *mocks.MockSegmentMemberRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 				existing := dummySegment(1, "Test", "desc")
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
+
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(existing, nil).Once()
 				memberRepo.EXPECT().CountBySegment(mock.Anything, int64(1)).Return(int64(0), errDB).Once()
 			},
@@ -799,7 +806,7 @@ func TestSegmentsService_Delete(t *testing.T) {
 			ctx:       ctxWithStaffID(1),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, memberRepo *mocks.MockSegmentMemberRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 				existing := dummySegment(1, "Test", "desc")
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
+
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(existing, nil).Once()
 				memberRepo.EXPECT().CountBySegment(mock.Anything, int64(1)).Return(int64(0), nil).Once()
 				segmentRepo.EXPECT().Delete(mock.Anything, int64(1)).Return(errDB).Once()
@@ -819,7 +826,7 @@ func TestSegmentsService_Delete(t *testing.T) {
 
 			tc.mockSetup(mockSegmentRepo, mockMemberRepo, mockStaffRepo, mockAuditService)
 
-			service := NewSegmentService(mockSegmentRepo, mockMemberRepo, mockStaffRepo, mockAuditService)
+			service := NewSegmentService(mockSegmentRepo, mockMemberRepo, mockStaffRepo, mockAuditService, fixtureAuthorization())
 
 			err := service.Delete(tc.ctx, tc.segmentID)
 

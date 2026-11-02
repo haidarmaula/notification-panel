@@ -2,6 +2,7 @@ package notifications
 
 import (
 	"hello/internal/audit"
+	"hello/internal/authz"
 	"hello/internal/config"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
@@ -51,8 +52,9 @@ import (
 // The module is safe for concurrent use. Its fields are set once in the
 // constructor and never mutated; RegisterRoutes only reads them.
 type NotificationModule struct {
-	middlewares []middleware.Middleware
-	handler     *NotificationHandler
+	authorization authz.Checker
+	middlewares   []middleware.Middleware
+	handler       *NotificationHandler
 }
 
 // NewNotificationModule creates a new NotificationModule instance.
@@ -109,6 +111,7 @@ func NewNotificationModule(queries *sqlc.Queries, cfg *config.ServerConfig, midd
 	deliveryRepo := repository.NewNotificationDeliveryRepository(queries)
 	readRepo := repository.NewNotificationReadRepository(queries)
 	staffRepo := repository.NewStaffUserRepository(queries)
+	authorization := authz.New(staffRepo)
 	templateRepo := repository.NewTemplateRepository(queries)
 	segmentRepo := repository.NewSegmentRepository(queries)
 
@@ -118,13 +121,14 @@ func NewNotificationModule(queries *sqlc.Queries, cfg *config.ServerConfig, midd
 	producer := kafka.NewProducer(cfg.KafkaBroker, cfg.SendTopic)
 	service := NewNotificationService(
 		notifRepo, targetRepo, deliveryRepo, readRepo,
-		staffRepo, templateRepo, segmentRepo, auditService, producer,
+		staffRepo, templateRepo, segmentRepo, auditService, producer, authorization,
 	)
 
 	handler := NewNotificationHandler(service)
 
 	return &NotificationModule{
-		middlewares: middlewares,
-		handler:     handler,
+		authorization: authorization,
+		middlewares:   middlewares,
+		handler:       handler,
 	}
 }

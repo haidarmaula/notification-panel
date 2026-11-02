@@ -28,6 +28,12 @@ type StaffUserRepository struct {
 	q sqlc.Querier
 }
 
+// GetStaffAuthority reads only identity, active status and role in one snapshot.
+// A transaction-bound querier can be used for future guarded mutations.
+func (r *StaffUserRepository) GetStaffAuthority(ctx context.Context, id int64) (sqlc.GetStaffAuthorityRow, error) {
+	return r.q.GetStaffAuthority(ctx, id)
+}
+
 // NewStaffUserRepository creates a new StaffUserRepository instance.
 //
 // q must be non-nil. Typical callers are the auth service (login and

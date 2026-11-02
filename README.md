@@ -519,7 +519,7 @@ make sh-worker
 
 ### Testing
 
-Unit tests exist for staff, segments, notifications, middleware and token.
+Unit tests exist for authz, staff, segments, notifications, middleware and token.
 Run them with `go test ./...`; regenerate committed mocks after interface
 changes with `go tool mockery` (configured in `.mockery.yml`).
 

@@ -16,6 +16,13 @@ FROM staff_users
 WHERE id = sqlc.arg('id')
 LIMIT 1;
 
+-- name: GetStaffAuthority :one
+SELECT su.id, su.is_active, r.name AS role_name
+FROM staff_users su
+LEFT JOIN roles r ON r.id = su.role_id
+WHERE su.id = sqlc.arg('id')
+LIMIT 1;
+
 -- name: GetStaffUserByEmail :one
 SELECT
     id,

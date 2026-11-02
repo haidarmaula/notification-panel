@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hello/internal/authz"
 	"log"
 	"time"
 
@@ -28,17 +29,9 @@ import (
 // mapping table should read this block alongside the handler's error-mapping
 // switch.
 var (
-	// ErrStaffNotFoundOrInactive is returned when the request context does
-	// not carry a staff identity, or when the identified staff user cannot
-	// be loaded from the database (which includes an inactive account, at
-	// least in the sense that FindByID does not distinguish the two).
-	//
-	// The handler maps this to 401 Unauthorized.
-	//
-	// The service performs this check on every write method — Create,
-	// Update, Delete, Send — and on the detail read GetByID, so a
-	// deactivated staff user cannot use an unexpired token to act on any
-	// notification endpoint.
+	// ErrStaffNotFoundOrInactive is retained for legacy detail/error mappings.
+	// New entry-point permission checks return authz.ErrUnauthenticated or
+	// authz.ErrForbidden; authority lookup failures remain internal errors.
 	ErrStaffNotFoundOrInactive = errors.New("staff account not found or inactive")
 
 	// ErrNotificationNotFound is returned when the requested notification
@@ -145,7 +138,8 @@ var (
 //   - producer — the Kafka producer used by Send to publish the
 //     NotificationSendRequested event.
 //
-// All nine fields are stored by reference and must be non-nil.
+// Collaborators are stored by reference. The authorization checker is required;
+// all domain collaborators must also be supplied for successful operations.
 //
 // # Send lifecycle claim
 //
@@ -159,22 +153,24 @@ var (
 // It holds no per-request state. The conditional status update serialises
 // competing Send operations for one notification at the database level.
 type NotificationService struct {
-	notifRepo    *repository.NotificationRepository
-	targetRepo   *repository.NotificationTargetRepository
-	deliveryRepo *repository.NotificationDeliveryRepository
-	readRepo     *repository.NotificationReadRepository
-	staffRepo    *repository.StaffUserRepository
-	templateRepo *repository.TemplateRepository
-	segmentRepo  *repository.SegmentRepository
-	auditService *audit.AuditService
-	producer     *kafka.Producer
+	authorization authz.Checker
+	notifRepo     *repository.NotificationRepository
+	targetRepo    *repository.NotificationTargetRepository
+	deliveryRepo  *repository.NotificationDeliveryRepository
+	readRepo      *repository.NotificationReadRepository
+	staffRepo     *repository.StaffUserRepository
+	templateRepo  *repository.TemplateRepository
+	segmentRepo   *repository.SegmentRepository
+	auditService  *audit.AuditService
+	producer      *kafka.Producer
 }
 
 // NewNotificationService creates a new NotificationService instance.
 //
 // # Parameters
 //
-// All nine parameters must be non-nil; none is validated, so a nil
+// The authorization checker is validated; domain collaborators must be non-nil.
+// Other dependencies are not validated, so a nil
 // repository will panic on the first method call that uses it. In practice
 // the dependencies are wired by NewNotificationModule, which builds each
 // from the shared sqlc.Queries and the configuration.
@@ -195,17 +191,22 @@ func NewNotificationService(
 	segmentRepo *repository.SegmentRepository,
 	auditService *audit.AuditService,
 	producer *kafka.Producer,
+	authorization authz.Checker,
 ) *NotificationService {
+	if authorization == nil {
+		panic("notifications: authorization checker required")
+	}
 	return &NotificationService{
-		notifRepo:    notifRepo,
-		targetRepo:   targetRepo,
-		deliveryRepo: deliveryRepo,
-		readRepo:     readRepo,
-		staffRepo:    staffRepo,
-		templateRepo: templateRepo,
-		segmentRepo:  segmentRepo,
-		auditService: auditService,
-		producer:     producer,
+		authorization: authorization,
+		notifRepo:     notifRepo,
+		targetRepo:    targetRepo,
+		deliveryRepo:  deliveryRepo,
+		readRepo:      readRepo,
+		staffRepo:     staffRepo,
+		templateRepo:  templateRepo,
+		segmentRepo:   segmentRepo,
+		auditService:  auditService,
+		producer:      producer,
 	}
 }
 
@@ -258,7 +259,13 @@ func NewNotificationService(
 //
 // Safe for concurrent use. The method allocates its own result slice and
 // does not mutate shared state.
+// Authorization is evaluated before domain I/O. Non-null scheduling input
+// additionally requires notifications.schedule on notification create/update.
+// Permission checks do not lock authority through the subsequent mutation.
 func (s *NotificationService) List(ctx context.Context, page, limit int32, status, targetType, keyword string) ([]NotificationListItem, int64, error) {
+	if _, err := s.authorization.Require(ctx, authz.NotificationsRead); err != nil {
+		return nil, 0, err
+	}
 	offset := (page - 1) * limit
 
 	if status != "" || targetType != "" || keyword != "" {
@@ -332,20 +339,16 @@ func (s *NotificationService) List(ctx context.Context, page, limit int32, statu
 //
 // # Authorisation
 //
-// Despite being a read method, GetByID requires an authenticated staff
-// user: it extracts the acting staff ID from the context via
-// audit.GetStaffID and loads the staff row via staffRepo.FindByID. A
-// context without a staff identity, or one whose staff user cannot be
-// loaded, produces ErrStaffNotFoundOrInactive. This means the method
-// cannot be called from a background job or a system context; every
-// invocation must originate from an authenticated HTTP request.
+// The method requires notifications.read against current DB authority.
+// Token role claims are ignored; internal callers must supply an authenticated
+// identity too. A subsequent staff lookup supplies the legacy response name.
 //
 // The staff row itself is used only for its ID and name, which are echoed
 // back in the response's CreatedBy field — note that this is the *acting*
 // staff user, not the *creating* staff user of the notification. The
 // current implementation does not verify that the acting user has any
-// particular relationship to the notification; any authenticated staff
-// user can read any notification.
+// particular relationship to the notification; any active staff
+// user with notifications.read can read the shared notification scope.
 //
 // # Target-type resolution
 //
@@ -367,7 +370,7 @@ func (s *NotificationService) List(ctx context.Context, page, limit int32, statu
 //
 // # Errors
 //
-// Returns ErrStaffNotFoundOrInactive if the context has no staff identity
+// Returns authz.ErrUnauthenticated if the context has no staff identity
 // or the staff user cannot be loaded. Returns ErrNotificationNotFound if
 // the notification lookup fails for any reason. Returns a wrapped error if
 // the statistics fetch fails — this is not mapped to a sentinel, so the
@@ -376,12 +379,15 @@ func (s *NotificationService) List(ctx context.Context, page, limit int32, statu
 // # Concurrency
 //
 // Safe for concurrent use.
+// Authorization is evaluated before domain I/O. Non-null scheduling input
+// additionally requires notifications.schedule on notification create/update.
+// Permission checks do not lock authority through the subsequent mutation.
 func (s *NotificationService) GetByID(ctx context.Context, id int64) (*NotificationDetail, error) {
-	actorID, ok := audit.GetStaffID(ctx)
-	if !ok {
-		return nil, ErrStaffNotFoundOrInactive
+	principal, err := s.authorization.Require(ctx, authz.NotificationsRead)
+	if err != nil {
+		return nil, err
 	}
-	staff, err := s.staffRepo.FindByID(ctx, actorID)
+	staff, err := s.staffRepo.FindByID(ctx, principal.ID)
 	if err != nil {
 		return nil, ErrStaffNotFoundOrInactive
 	}
@@ -519,11 +525,8 @@ type CreateParams struct {
 	// future with ErrInvalidScheduledTime.
 	ScheduledAt *time.Time
 
-	// CreatedBy is the acting staff user's ID. It is written to the
-	// notification's created_by column. The service does not re-verify
-	// that the ID corresponds to an active staff user — that check has
-	// already been performed using the context's staff identity, and the
-	// handler is expected to have passed the same ID.
+	// CreatedBy is retained for source compatibility. Create always replaces
+	// it with the verified principal ID; callers cannot select another creator.
 	CreatedBy int64
 }
 
@@ -531,9 +534,9 @@ type CreateParams struct {
 //
 // # Flow
 //
-//  1. Verifies the acting staff identity via the request context. A
-//     missing identity or an unloadable staff row produces
-//     ErrStaffNotFoundOrInactive.
+//  1. Require current active staff authority and the operation permission
+//     through authz. Missing/inactive identity is unauthenticated; lacking
+//     permission is forbidden; authority storage errors remain internal.
 //  2. Validates the target type against the three accepted values.
 //  3. Rejects a ScheduledAt that is not strictly in the future.
 //  4. For SEGMENT targets, requires a non-nil SegmentID and verifies the
@@ -573,7 +576,7 @@ type CreateParams struct {
 // # Errors
 //
 // Returns a sentinel error for each validation failure
-// (ErrStaffNotFoundOrInactive, ErrInvalidTargetType, ErrInvalidScheduledTime,
+// (authz.ErrUnauthenticated, ErrInvalidTargetType, ErrInvalidScheduledTime,
 // ErrSegmentIDRequired, ErrSegmentNotFound, ErrTargetsRequired,
 // ErrTemplateNotFound). Returns a wrapped error for repository failures
 // during the notification insert, a target insert, or the cleanup delete.
@@ -584,15 +587,19 @@ type CreateParams struct {
 // Safe for concurrent use. Two concurrent Creates with the same body and
 // targeting the same audience produce two independent notifications; the
 // service has no de-duplication of content.
+// Authorization is evaluated before domain I/O. Non-null scheduling input
+// additionally requires notifications.schedule on notification create/update.
+// Permission checks do not lock authority through the subsequent mutation.
 func (s *NotificationService) Create(ctx context.Context, params CreateParams) (*CreateNotificationResponse, error) {
-	actorID, ok := audit.GetStaffID(ctx)
-	if !ok {
-		return nil, ErrStaffNotFoundOrInactive
+	permissions := []authz.Permission{authz.NotificationsWrite}
+	if params.ScheduledAt != nil {
+		permissions = append(permissions, authz.NotificationsSchedule)
 	}
-	_, err := s.staffRepo.FindByID(ctx, actorID)
+	principal, err := s.authorization.Require(ctx, permissions...)
 	if err != nil {
-		return nil, ErrStaffNotFoundOrInactive
+		return nil, err
 	}
+	params.CreatedBy = principal.ID
 
 	if params.TargetType != string(TargetBroadcast) &&
 		params.TargetType != string(TargetSegment) &&
@@ -755,7 +762,9 @@ type UpdateParams struct {
 //
 // # Flow
 //
-//  1. Verifies the acting staff identity.
+//  1. Require current active staff authority and the operation permission
+//     through authz. Missing/inactive identity is unauthenticated; lacking
+//     permission is forbidden; authority storage errors remain internal.
 //  2. Loads the notification and checks its status.
 //  3. Builds an update struct pre-populated with the notification's
 //     current field values, so that fields not supplied by the caller
@@ -777,7 +786,7 @@ type UpdateParams struct {
 //
 // # Errors
 //
-// Returns ErrStaffNotFoundOrInactive, ErrNotificationNotFound,
+// Returns authz.ErrUnauthenticated, ErrNotificationNotFound,
 // ErrNotificationNotDraft, ErrTemplateNotFound, or ErrInvalidScheduledTime
 // for the corresponding conditions. Repository failures during the update
 // or the re-fetch are wrapped; the update failure is served through the
@@ -790,14 +799,16 @@ type UpdateParams struct {
 // Safe for concurrent use, but two concurrent Updates on the same
 // notification are not serialised. The final state reflects whichever
 // update commits last.
+// Authorization is evaluated before domain I/O. Non-null scheduling input
+// additionally requires notifications.schedule on notification create/update.
+// Permission checks do not lock authority through the subsequent mutation.
 func (s *NotificationService) Update(ctx context.Context, id int64, params UpdateParams) error {
-	actorID, ok := audit.GetStaffID(ctx)
-	if !ok {
-		return ErrStaffNotFoundOrInactive
+	permissions := []authz.Permission{authz.NotificationsWrite}
+	if params.ScheduledAt != nil {
+		permissions = append(permissions, authz.NotificationsSchedule)
 	}
-	_, err := s.staffRepo.FindByID(ctx, actorID)
-	if err != nil {
-		return ErrStaffNotFoundOrInactive
+	if _, err := s.authorization.Require(ctx, permissions...); err != nil {
+		return err
 	}
 
 	notif, err := s.notifRepo.FindByID(ctx, id)
@@ -878,7 +889,9 @@ func (s *NotificationService) Update(ctx context.Context, id int64, params Updat
 //
 // # Flow
 //
-//  1. Verifies the acting staff identity.
+//  1. Require current active staff authority and the operation permission
+//     through authz. Missing/inactive identity is unauthenticated; lacking
+//     permission is forbidden; authority storage errors remain internal.
 //  2. Loads the notification and checks its status.
 //  3. Deletes all target rows attached to the notification via
 //     targetRepo.DeleteByNotification.
@@ -897,7 +910,7 @@ func (s *NotificationService) Update(ctx context.Context, id int64, params Updat
 //
 // # Errors
 //
-// Returns ErrStaffNotFoundOrInactive, ErrNotificationNotFound, or
+// Returns authz.ErrUnauthenticated, ErrNotificationNotFound, or
 // ErrCannotDeleteSent for the corresponding conditions. Repository
 // failures during either delete step are wrapped; the prefix identifies
 // which step failed.
@@ -908,14 +921,12 @@ func (s *NotificationService) Update(ctx context.Context, id int64, params Updat
 // both pass the status check and both attempt the delete; the second will
 // typically be a no-op (the row is already gone) but may fail with a
 // foreign-key or row-not-found error depending on the SQL.
+// Authorization is evaluated before domain I/O. Non-null scheduling input
+// additionally requires notifications.schedule on notification create/update.
+// Permission checks do not lock authority through the subsequent mutation.
 func (s *NotificationService) Delete(ctx context.Context, id int64) error {
-	actorID, ok := audit.GetStaffID(ctx)
-	if !ok {
-		return ErrStaffNotFoundOrInactive
-	}
-	_, err := s.staffRepo.FindByID(ctx, actorID)
-	if err != nil {
-		return ErrStaffNotFoundOrInactive
+	if _, err := s.authorization.Require(ctx, authz.NotificationsWrite); err != nil {
+		return err
 	}
 
 	notif, err := s.notifRepo.FindByID(ctx, id)
@@ -958,7 +969,9 @@ func (s *NotificationService) Delete(ctx context.Context, id int64) error {
 //
 // # Flow
 //
-//  1. Verifies the acting staff identity.
+//  1. Require current active staff authority and the operation permission
+//     through authz. Missing/inactive identity is unauthenticated; lacking
+//     permission is forbidden; authority storage errors remain internal.
 //  2. Loads the notification detail via GetByID. Note that this is the
 //     full detail path, not a bare repository lookup — the method
 //     therefore performs the target-type resolution and the statistics
@@ -986,7 +999,7 @@ func (s *NotificationService) Delete(ctx context.Context, id int64) error {
 //
 // # Errors
 //
-// Returns ErrStaffNotFoundOrInactive or ErrNotificationNotFound for the
+// Returns authz.ErrUnauthenticated or ErrNotificationNotFound for the
 // corresponding conditions (the latter via the GetByID call), and
 // ErrNotificationNotDraft if the notification is not in DRAFT status.
 // Returns a wrapped error if the queue claim or Kafka publication fails; the
@@ -997,14 +1010,12 @@ func (s *NotificationService) Delete(ctx context.Context, id int64) error {
 // Safe for concurrent use. Concurrent Send calls for one notification are
 // serialised by the DRAFT-only update: exactly one can move the row to QUEUED
 // and publish the event; all others receive ErrNotificationNotDraft.
+// Authorization is evaluated before domain I/O. Non-null scheduling input
+// additionally requires notifications.schedule on notification create/update.
+// Permission checks do not lock authority through the subsequent mutation.
 func (s *NotificationService) Send(ctx context.Context, id int64) error {
-	actorID, ok := audit.GetStaffID(ctx)
-	if !ok {
-		return ErrStaffNotFoundOrInactive
-	}
-	_, err := s.staffRepo.FindByID(ctx, actorID)
-	if err != nil {
-		return ErrStaffNotFoundOrInactive
+	if _, err := s.authorization.Require(ctx, authz.NotificationsSend); err != nil {
+		return err
 	}
 
 	// Check if notification exists and is in DRAFT status

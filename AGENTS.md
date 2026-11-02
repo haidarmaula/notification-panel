@@ -39,8 +39,8 @@ Staff tests use authenticated actors, the four-argument UpdatePassword contract,
 real bcrypt fixtures and pgx.ErrNoRows for missing rows. Segment mocks are
 regenerated; list tests expect CountSearch and batched CountBySegmentIDs rather
 than obsolete per-row counts. Tests cover authorization/password rejection and
-repository failures without changing service behavior. All five tested packages
-(staff, segments, notifications, middleware, token) pass. These are unit tests,
+repository failures without changing service behavior. The original five tested packages
+(staff, segments, notifications, middleware, token) pass; M02a also adds authz unit tests. These are unit tests,
 not PostgreSQL/Kafka/FCM integration or production-readiness evidence.
 
 In restricted environments use `GOCACHE=/tmp/hello-go-review-cache` if the default
@@ -164,15 +164,15 @@ is never written by any Go code — treat adding a cancel path as new work, not 
 - **Audit action strings are persisted schema.** They live in `internal/audit/constants.go`
   (`ACTION_*`, `ENTITY_TYPE_*`); changing a value breaks downstream log-search tooling.
   Register new actions there, not inline.
-- **Role labels do not imply enforced permissions.** `VIEWER` is seeded as read-only,
-  but current notification/segment mutation routes/services do not enforce that operation
-  distinction (C21, open). Do not assume a JWT gate protects send/schedule/edit by role.
-  ADR-11 proposes service/route permissions; this is not implemented yet.
+- **Notification/segment/member permissions use `internal/authz` current DB authority.**
+  M02a fixed C21 with independent route/service guards, including non-null scheduling
+  fields. Do not replace them with token RoleName checks or an allow-all test fallback.
+  Legacy staff administration/session guards and transaction-time revocation/audit remain
+  separate follow-up; authorization is currently a statement snapshot, not a lock through mutation.
 - **500 responses must use the literal `"internal server error"`, never `err.Error()`.**
   `err.Error()` is correct only on mapped 4xx branches (401/403/404/409/400), where it surfaces a
-  domain sentinel. The blanket 500 leak was fixed, with exactly three hold-outs left — all in
-  `internal/features/segments/members_handler.go` (lines 108, 195, 258). Match the surrounding
-  handler rather than copying those three.
+  domain sentinel. M02a also fixed the three remaining members-handler unknown-500
+  leaks; new handlers must keep the same safe generic-error convention.
 - **Several list endpoints historically computed `Total` from an unfiltered `Count`, and some
   filters did not compose.** Fixes landed for users/staff/segments (search-aware `CountSearch`,
   batched `CountBySegmentIDs`). `members_service.go` is still the weakest area — check

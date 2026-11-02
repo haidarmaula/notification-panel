@@ -1,6 +1,6 @@
 {
   "policy_version": 1,
-  "status": "policy-confirmed-runtime-pending",
+  "status": "implemented-m02a-local-verified",
   "confirmed_on": "2026-11-02",
   "default": "deny",
   "roles": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],

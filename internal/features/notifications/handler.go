@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"hello/internal/authz"
 	"net/http"
 	"strconv"
 
@@ -106,6 +107,9 @@ func (h *NotificationHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	items, total, err := h.service.List(r.Context(), page, limit, status, targetType, keyword)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
@@ -150,6 +154,9 @@ func (h *NotificationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	detail, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		if errors.Is(err, ErrNotificationNotFound) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
@@ -239,6 +246,9 @@ func (h *NotificationHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CreatedBy:   staffID,
 	})
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrInvalidTargetType), errors.Is(err, ErrTemplateNotFound),
 			errors.Is(err, ErrSegmentNotFound), errors.Is(err, ErrInvalidScheduledTime),
@@ -308,6 +318,9 @@ func (h *NotificationHandler) Update(w http.ResponseWriter, r *http.Request) {
 		ScheduledAt: req.ScheduledAt,
 	})
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrNotificationNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
@@ -355,6 +368,9 @@ func (h *NotificationHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	err = h.service.Delete(r.Context(), id)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrNotificationNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
@@ -419,6 +435,9 @@ func (h *NotificationHandler) Send(w http.ResponseWriter, r *http.Request) {
 
 	err = h.service.Send(r.Context(), id)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrNotificationNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())

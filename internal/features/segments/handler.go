@@ -3,6 +3,7 @@ package segments
 import (
 	"encoding/json"
 	"errors"
+	"hello/internal/authz"
 	"net/http"
 	"strconv"
 
@@ -88,6 +89,9 @@ func (h *SegmentHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	segments, total, err := h.service.List(r.Context(), page, limit, search)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
@@ -157,6 +161,9 @@ func (h *SegmentHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 
 	segmentWithCount, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		if errors.Is(err, ErrSegmentNotFound) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
@@ -235,6 +242,9 @@ func (h *SegmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 		CreatedBy:   staffID,
 	})
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrSegmentNameTaken):
 			response.JSON(w, http.StatusConflict, nil, err.Error())
@@ -310,6 +320,9 @@ func (h *SegmentHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Description: req.Description,
 	})
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrSegmentNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
@@ -365,6 +378,9 @@ func (h *SegmentHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	err = h.service.Delete(r.Context(), id)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrSegmentNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())

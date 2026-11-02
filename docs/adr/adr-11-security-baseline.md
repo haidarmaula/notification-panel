@@ -1,6 +1,6 @@
 # ADR-11 — Identity, authorization, secrets and deployment security
 
-**Status:** proposed, 2026-11-02. Not implemented or security-approved.
+**Status:** proposed overall, 2026-11-02. M02a operation guards implemented/local-verified; remaining security decisions and release approval are pending.
 NEW companion SPEC: `docs/specs/adr-11-security-baseline.md` (not written).
 Gates: [API/data/security readiness](../analysis/api-data-security-readiness.md).
 
@@ -16,10 +16,10 @@ review completion does not mean acceptance or runtime implementation.
 
 ## Evidence and assumptions
 
-Current staff APIs generally require API key + JWT; only staff-management
-wiring has a super-admin gate. Seeded roles include VIEWER described Read only,
-but notification/segment mutation routes and NotificationService.Send do not
-enforce that distinction (C21, open source-verified finding). Mobile bearer
+Current staff APIs generally require API key + JWT. Staff-management still
+has a legacy super-admin gate; M02a now independently checks live DB authority
+on notification/segment/member routes and services. C21 is locally remediated;
+see [verification](../analysis/m02a-verification.md). Mobile bearer
 middleware restricts HS256/external_id but not required issuer/audience/exp;
 legacy /mobile/sync has separate body-JWT logic. Staff access/refresh TTLs are
 15m/24h; refresh reuse is not a persisted rotating session family.
@@ -213,9 +213,9 @@ leaves the same privilege escalation through a different endpoint.
 
 ### Consequences
 
-C21 remains open until service/route permission tests cover all mutations and
-privileged fields. Business role matrix is confirmed; enforcement, atomic
-mutation/audit and remaining security policies are not thereby implemented.
+C21 operation bypass is remediated by M02a route/service and negative API/DB
+tests. Atomic mutation/audit, staff administration/session controls and remaining
+security policies are not thereby implemented or release-approved.
 
 ## A-5. Request, resource and abuse limits
 

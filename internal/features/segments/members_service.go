@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hello/internal/authz"
 
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
@@ -60,6 +61,12 @@ var (
 // structural divergence is noted so that a future reader who has seen
 // interfaces.go does not assume the service depends on them.
 //
+// # Authorization
+//
+// Every method requires live staff authority: members.read for ListMembers
+// and members.write for AddMember/RemoveMember, before any domain lookup.
+// Token roles and previous route checks are not trusted.
+//
 // # Concurrency
 //
 // The service is stateless after construction and safe for concurrent use.
@@ -67,9 +74,10 @@ var (
 // invocations. The three repositories it holds are themselves safe for
 // concurrent use.
 type MembersService struct {
-	segmentRepo *repository.SegmentRepository
-	memberRepo  *repository.SegmentMemberRepository
-	userRepo    *repository.UserRepository
+	authorization authz.Checker
+	segmentRepo   *repository.SegmentRepository
+	memberRepo    *repository.SegmentMemberRepository
+	userRepo      *repository.UserRepository
 }
 
 // NewMembersService creates a new MembersService instance.
@@ -85,11 +93,16 @@ func NewMembersService(
 	segmentRepo *repository.SegmentRepository,
 	memberRepo *repository.SegmentMemberRepository,
 	userRepo *repository.UserRepository,
+	authorization authz.Checker,
 ) *MembersService {
+	if authorization == nil {
+		panic("members: authorization checker required")
+	}
 	return &MembersService{
-		segmentRepo: segmentRepo,
-		memberRepo:  memberRepo,
-		userRepo:    userRepo,
+		authorization: authorization,
+		segmentRepo:   segmentRepo,
+		memberRepo:    memberRepo,
+		userRepo:      userRepo,
 	}
 }
 
@@ -126,6 +139,9 @@ func NewMembersService(
 // membership states if an add or remove is in flight between their two
 // reads.
 func (s *MembersService) ListMembers(ctx context.Context, segmentID int64, page, limit int32) ([]Member, int64, error) {
+	if _, err := s.authorization.Require(ctx, authz.MembersRead); err != nil {
+		return nil, 0, err
+	}
 	_, err := s.segmentRepo.FindByID(ctx, segmentID)
 	if err != nil {
 		return nil, 0, ErrSegmentNotFound
@@ -194,6 +210,9 @@ func (s *MembersService) ListMembers(ctx context.Context, segmentID int64, page,
 // both attempt the insert; the outcome is the same as for a duplicate add
 // by a single caller.
 func (s *MembersService) AddMember(ctx context.Context, segmentID, userID int64) error {
+	if _, err := s.authorization.Require(ctx, authz.MembersWrite); err != nil {
+		return err
+	}
 	_, err := s.segmentRepo.FindByID(ctx, segmentID)
 	if err != nil {
 		return ErrSegmentNotFound
@@ -257,6 +276,9 @@ func (s *MembersService) AddMember(ctx context.Context, segmentID, userID int64)
 // matches and deletes the row; the second matches zero rows and returns
 // nil.
 func (s *MembersService) RemoveMember(ctx context.Context, segmentID, userID int64) error {
+	if _, err := s.authorization.Require(ctx, authz.MembersWrite); err != nil {
+		return err
+	}
 	_, err := s.segmentRepo.FindByID(ctx, segmentID)
 	if err != nil {
 		return ErrSegmentNotFound

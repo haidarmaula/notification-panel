@@ -14,10 +14,11 @@ All endpoints require authentication via:
 
 The authenticated staff ID is extracted from the JWT and used as the `created_by` field when creating resources.
 
-**Planned authorization change (not implemented):** the confirmed role policy
-allows VIEWER reads and restricts segment/member mutations to
-OPERATOR/ADMIN/SUPER_ADMIN. Current runtime has finding C21. See the
-[target authorization contract](authorization-api.md) and implementation status.
+**Authorization implemented (M02a, locally verified; not deployed):** VIEWER
+reads only; OPERATOR manages drafts/segments/members; send/non-null scheduling
+inputs require ADMIN/SUPER_ADMIN. Roles are read from the current DB, including
+service calls. See [authorization contract](authorization-api.md) and
+[verification limits](../analysis/m02a-verification.md).
 
 ---
 

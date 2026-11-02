@@ -62,6 +62,7 @@ func TestKafkaProducerRoundTrip(t *testing.T) {
 		t.Run(topic, func(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
+			startOffset := lastTopicOffset(t, ctx, topic)
 			producer := kafka.NewProducer("127.0.0.1:19092", topic)
 			defer producer.Close()
 			wantKey := "notification_42"
@@ -87,6 +88,7 @@ func TestKafkaProducerRoundTrip(t *testing.T) {
 				MinBytes: 1, MaxBytes: 1_000_000, MaxWait: 100 * time.Millisecond,
 			})
 			defer reader.Close()
+			require.NoError(t, reader.SetOffset(startOffset))
 			msg, err := reader.ReadMessage(ctx)
 			require.NoError(t, err)
 			require.Equal(t, wantKey, string(msg.Key))
@@ -153,4 +155,17 @@ func TestFirebaseSDKAgainstSimulation(t *testing.T) {
 		_, err = httpClient.Do(req)
 		require.ErrorContains(t, err, "rejects non-fixture")
 	})
+}
+
+// A shared fixture broker can already contain API acceptance events. Each
+// round-trip asserts its own publication range rather than assuming offset 0.
+func lastTopicOffset(t *testing.T, ctx context.Context, topic string) int64 {
+	t.Helper()
+	conn, err := broker.DialLeader(ctx, "tcp", "127.0.0.1:19092", topic, 0)
+	require.NoError(t, err)
+	defer conn.Close()
+	require.NoError(t, conn.SetDeadline(time.Now().Add(5*time.Second)))
+	offset, err := conn.ReadLastOffset()
+	require.NoError(t, err)
+	return offset
 }

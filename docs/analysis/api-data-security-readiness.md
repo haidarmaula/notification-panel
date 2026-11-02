@@ -30,7 +30,7 @@ approval/security test. Dokumen:
 | staff/profile dto.go dan segments/helpers.go | Field presence serta invalid pagination belum konsisten |
 | notifications/model.go vs SQL constraints | SENDING/notification-SENT constants tidak cocok vocabulary runtime |
 | notifications/routes.go + server wiring + NotificationService.Create/Send | Mutation dibungkus API key/JWT/audit; tidak ada role permission check yang membatasi VIEWER |
-| segments/routes.go dan service/member methods | Read-only role belum dibedakan pada jalur mutasi; temuan C21 dicatat open |
+| segments/routes.go dan service/member methods | Historical pre-M02a gap C21; operation guards kini locally verified di M02a, remaining security gates tetap terbuka |
 | 000015_seed_roles.up.sql | VIEWER memang dideskripsikan Read only; bukan kebijakan yang sudah ditegakkan |
 | token/jwt.go dan auth/service.go | Existing staff JWT/refresh belum mempunyai persistent rotation/revocation family |
 | middleware/mobile_jwt.go | HS256/external_id tersedia; required exp/issuer/audience perlu diperketat |
@@ -39,7 +39,7 @@ approval/security test. Dokumen:
 
 Review ini source-only. Tidak ada akun VIEWER yang digunakan untuk melakukan
 mutasi, credential yang dibaca, role/password yang diubah, restore/purge, atau
-live API/security/provider test. Rancangan tidak menutup C21 maupun finding lama.
+production/live-provider test. M02a kemudian menutup C21 dengan actual local API/DB/Kafka evidence, bukan rancangan saja; finding/gate lain tidak otomatis ditutup.
 
 ## Outstanding requirement / evidence gates
 
@@ -47,7 +47,7 @@ live API/security/provider test. Rancangan tidak menutup C21 maupun finding lama
 | --- | --- | --- |
 | A01 contract ownership | Existing caller inventory, OpenAPI/API version map, PATCH/status/auth compatibility | SPEC accepted |
 | A02 transactional correctness | Safe error/serialization, list/filter snapshot, audit rollback and CAS tests | Implementation accepted |
-| A03 role matrix | Business role matrix dikonfirmasi pengguna 2026-11-02; scoped SPEC M02a tersedia. Schedule durability/delegation implementation dan operational step-up masih pending | M02a role enforcement dapat dimulai; remaining authorization/security gates belum ditutup |
+| A03 role matrix | Business role matrix dikonfirmasi pengguna 2026-11-02; scoped SPEC M02a tersedia. Schedule durability/delegation implementation dan operational step-up masih pending | M02a role enforcement locally verified; remaining authorization/security gates belum ditutup |
 | D01 retention matrix | Owner/purpose/lifetime/action for each class; explicit pending-work exclusions | Retention/erasure SPEC accepted |
 | D02 RPO/RTO | Allowed lost-data interval and safe-service restoration time, DB/storage failure domains | Backup/restore design accepted |
 | D03 recovery proof | Base/WAL/key continuity, sealed restore, erasure/revocation replay, epoch/ID/consumer/provider reconciliation | Production go/no-go |

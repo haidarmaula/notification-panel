@@ -21,7 +21,7 @@ boleh dianggap selesai hanya karena rancangan atau file kode tersedia.
 | R9 | Aplikasi mobile memakai React Native | Dikonfirmasi pengguna; versi framework/native/library belum diverifikasi. |
 | R10 | Kafka akan di-deploy di server perusahaan sendiri (self-hosted) | Dikonfirmasi pengguna; jumlah host/failure domain/resource dan operator belum diketahui. |
 | R11 | V1 fokus broadcast/segment/individual, scheduling, recovery, receipt/statistik, keamanan dan operasi | Dikonfirmasi pengguna; UPLOAD, cancel/resubmit, rich media serta preferences/quiet hours ditunda. |
-| R12 | VIEWER read-only; OPERATOR draft/segment; send/schedule hanya ADMIN/SUPER_ADMIN; administrasi staff/role hanya SUPER_ADMIN | Dikonfirmasi pengguna 2026-11-02. SPEC M02a siap untuk subset notification/segment/member; enforcement runtime belum diterapkan. |
+| R12 | VIEWER read-only; OPERATOR draft/segment; send/schedule hanya ADMIN/SUPER_ADMIN; administrasi staff/role hanya SUPER_ADMIN | Dikonfirmasi pengguna 2026-11-02. SPEC M02a siap untuk subset notification/segment/member; guard M02a sudah diterapkan/diuji lokal; hardening staff administration dan security lain tetap pending. |
 
 Pengguna memperkirakan project Firebase sudah ada karena dipakai pada integrasi
 OneSignal. Itu menjadi titik awal inventory, **bukan** konfirmasi project ID,
@@ -122,7 +122,7 @@ memakai basename yang sama di `docs/specs/` dan belum dibuat.
 | 08 | [Observability](../adr/adr-08-observability.md) | Proposed: private health/readiness, structured logs, metric catalog/freshness, sparse-work alerts, dashboards/runbooks dan verification; belum diterapkan. |
 | 09 | [API conventions](../adr/adr-09-api-consistency.md) | Proposed: safe envelope/errors, state vocabulary, presence-aware PATCH/CAS, pagination/filter, audit/DTO dan compatibility; belum diterapkan. |
 | 10 | [Retention/recovery](../adr/adr-10-retention-recovery.md) | Proposed: safety floors, controlled erasure/archive, backup/PITR, sealed restore dan source epoch; policy/RPO/RTO belum ditetapkan. |
-| 11 | [Security baseline](../adr/adr-11-security-baseline.md) | Proposed keseluruhan; business role matrix dikonfirmasi dan scoped SPEC M02a ditulis. Enforcement/session/abuse/key/enrollment belum diterapkan/diuji. |
+| 11 | [Security baseline](../adr/adr-11-security-baseline.md) | Proposed keseluruhan; business role matrix dikonfirmasi dan scoped SPEC M02a ditulis. M02a operation enforcement diimplementasikan/diuji lokal; session/abuse/key/enrollment dan security lain tetap pending. |
 | 12 | NEW: optional product parity | Kondisional; bukan penghalang produksi jika fitur tersebut tidak masuk scope. |
 
 Review pertama: [ADR-01/02 review](adr-01-02-review.md). Status proposed berarti
@@ -144,7 +144,7 @@ Tidak ada live endpoint, scrape, dashboard atau notifikasi alert yang sudah
 dipasang hanya karena ADR-08/checklist tersedia.
 
 Gate API/data/security: [readiness register](api-data-security-readiness.md).
-C21 adalah temuan permission runtime yang masih open. Retention/RPO/RTO,
+C21 operation bypass sudah diremediasi dan diverifikasi lokal di [M02a](m02a-verification.md). Retention/RPO/RTO,
 identity policy dan perubahan kontrak masih perlu keputusan/verifikasi.
 
 Hasil review lintas ADR: [CR1–CR9 dan gate G1–G7](adr-01-11-consistency-review.md).
@@ -156,8 +156,8 @@ Step 18 menyediakan [CI checks dan bukti lokal](ci-readiness.md); hosted run
 belum diamati. Step 19 menyediakan [dependency environment dan bukti lokal](integration-readiness.md).
 Step 20 dimulai dengan [SPEC M02a](../specs/m02a-staff-operation-permissions.md),
 [policy JSON](../contracts/staff-permissions.json) dan
-[target API authorization](../api/authorization-api.md). Matrix role dikonfirmasi;
-berikutnya implementasi/test M02a. SPEC milestone lain ditulis saat dikerjakan,
+[API authorization](../api/authorization-api.md). M02a implemented/local-verified;
+berikutnya SPEC slice M02 lanjutan, termasuk staff administration/API hardening. SPEC milestone lain ditulis saat dikerjakan,
 bukan sekaligus. G5 selain role matrix tetap terbuka.
 Perbaikan baseline tidak harus menunggu seluruh gate release; acceptance SPEC
 fitur sensitif menunggu keputusan yang dipakainya. Step 15 belum ditandai penuh
@@ -195,7 +195,7 @@ pekerjaan pada baris yang belum dicentang sudah dimulai, sesuai catatan.
 - [x] 17. Regenerate mock segments; selaraskan actor/password/not-found fixtures staff dan filtered/batch count assertions; build dan seluruh unit test lulus pada 2026-11-02. Tidak ada perubahan perilaku service atau bukti integration/load test.
 - [x] 18. GitHub Actions + script lokal format/modules/build/test/vet/vulnerability; local checks/actionlint lulus, security dependencies diperbarui dan reachable scan nol. Main workflow tetap; hosted run/ruleset belum diverifikasi karena belum di-push.
 - [x] 19. Runner fixture terisolasi: 15 migration up/down/up, repository, kedua Kafka topic/producer round trip dan Firebase SDK HTTP simulation lulus lokal; guard/cleanup diverifikasi. Bukan test adapter/worker/new pipeline atau real FCM/APNs; hosted integration job belum tersedia.
-- [ ] 20. Berjalan per milestone: SPEC M02a permission siap dengan 18 acceptance cases dan matrix/14-route contract setelah konfirmasi role; SPEC lanjutan belum ditulis. Bukan bukti enforcement runtime.
+- [ ] 20. Berjalan per milestone: SPEC M02a dan implementasi/18-case evidence selesai secara scoped; 56 role/route API cases plus negative DB/Kafka tests lulus lokal. SPEC lanjutan belum ditulis; bukan bukti seluruh security/produksi selesai.
 
 ### Tahap 4 — delivery pipeline
 

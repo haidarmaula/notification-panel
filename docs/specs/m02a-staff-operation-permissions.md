@@ -1,9 +1,9 @@
 # SPEC M02a — Staff operation permissions
 
-Tanggal: 2026-11-02. Status: ready for scoped implementation; **belum
-diimplementasikan/diuji sebagai perilaku API**. Pengguna mengonfirmasi matrix
-role pada tanggal ini. ADR-11 keseluruhan tetap proposed; penerimaan policy
-ini tidak menerima seluruh session/enrollment/recovery/security design.
+Tanggal: 2026-11-02. Status: implemented and locally verified for M02a;
+[acceptance evidence](../analysis/m02a-verification.md). Belum di-deploy.
+Role matrix dikonfirmasi pengguna; ADR-11 keseluruhan tetap proposed dan
+session/enrollment/recovery/security gates lain tidak otomatis diterima.
 
 Sources: [ADR-11 A-4](../adr/adr-11-security-baseline.md),
 [ADR-09](../adr/adr-09-api-consistency.md),
@@ -20,7 +20,7 @@ HTTP auth tetap API key + staff access JWT. Success DTO/status/state guards
 existing tidak diganti oleh slice ini. Tidak ada endpoint baru, migration
 schema, permission-management UI atau automatic provider send.
 
-| Evidence yang diperiksa | Kondisi existing |
+| Evidence sebelum implementasi | Historical condition |
 | --- | --- |
 | `cmd/server/main.go`, kedua `routes.go` | API-key/JWT/audit chain tanpa operation-role gate untuk 14 routes |
 | `notifications/service.go`: Create/Update/Delete/Send | Membaca actor row tanpa pemeriksaan role atau IsActive eksplisit; JWT middleware memeriksa active di HTTP, tidak melindungi direct service callers |
@@ -32,8 +32,9 @@ schema, permission-management UI atau automatic provider send.
 | `members_handler.go` | Tiga unknown-500 branches masih mengirim err.Error(); harus aman ketika authorization error ditambahkan |
 | `notifications.Update` dan UpdateNotification SQL | PATCH scheduled_at mengganti timestamp, tetapi tidak mengubah status DRAFT menjadi SCHEDULED |
 
-Tidak ada runtime finding yang ditutup oleh penulisan SPEC ini. Query/symbol/file
-yang disebut NEW di bawah belum tersedia ketika SPEC ditulis.
+Tabel di atas adalah snapshot pre-implementation. C21 kini diremediasi oleh
+code/tests, bukan oleh penulisan SPEC; lihat evidence. NEW di bawah menandai
+artifact yang ditambahkan slice ini.
 
 ## 2. Policy yang dikonfirmasi dan route map
 
@@ -77,8 +78,9 @@ DB/role integrity failure menghasilkan error internal terbungkus, tidak
 disamarkan sebagai invalid credential atau 404. Cancellation/deadline tidak
 menghasilkan successful authorization atau background mutation.
 
-Nama API/komponen konkret ditetapkan saat implementasi, tetapi semua service
-harus bergantung pada interface kecil untuk menguji decision tanpa PostgreSQL.
+Komponen konkret adalah internal/authz.Authorizer, Checker.Require dan
+AuthorityRepository.GetStaffAuthority. Semua service bergantung pada interface
+Checker untuk menguji decision tanpa PostgreSQL.
 Implementasi production memakai repository/sqlc existing conventions; module
 constructor wajib memasang checker nyata, tanpa nil/allow-all fallback.
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"hello/internal/authz"
 	"log"
 
 	"github.com/jackc/pgx/v5"
@@ -21,14 +22,9 @@ import (
 // file that owns their methods, rather than in a separate errors.go; the
 // members sub-resource's sentinels live in members_service.go.
 var (
-	// ErrStaffNotFoundOrInactive is returned when the request context does
-	// not carry a staff identity, or when the identified staff user cannot
-	// be loaded from the database. It is the same value declared in the
-	// notifications and profile packages, but each package declares its
-	// own sentinel — a future consolidation into a shared error package
-	// would collapse them.
-	//
-	// The handler maps this to 401 Unauthorized.
+	// ErrStaffNotFoundOrInactive is retained for legacy detail/error mappings.
+	// New entry-point permission checks return authz.ErrUnauthenticated or
+	// authz.ErrForbidden; authority lookup failures remain internal errors.
 	ErrStaffNotFoundOrInactive = errors.New("staff account not found or inactive")
 
 	// ErrSegmentNotFound is returned when the requested segment ID does
@@ -104,15 +100,17 @@ var (
 // invocations. The interface-typed repositories are expected to be
 // concurrency-safe; the concrete implementations backed by pgxpool are.
 type SegmentService struct {
-	segmentRepo  SegmentRepository
-	memberRepo   SegmentMemberRepository
-	staffRepo    StaffUserRepository
-	auditService AuditService
+	authorization authz.Checker
+	segmentRepo   SegmentRepository
+	memberRepo    SegmentMemberRepository
+	staffRepo     StaffUserRepository
+	auditService  AuditService
 }
 
 // NewSegmentService creates a new SegmentService instance.
 //
-// All four parameters must be non-nil; none is validated, so a nil
+// The authorization checker is validated; domain collaborators must be non-nil.
+// Other dependencies are not validated, so a nil
 // repository or audit service will panic on the first method call that
 // uses it rather than at construction. In practice the dependencies are
 // wired by NewSegmentModule from the shared sqlc.Queries and the shared
@@ -129,12 +127,17 @@ func NewSegmentService(
 	memberRepo SegmentMemberRepository,
 	staffRepo StaffUserRepository,
 	auditService AuditService,
+	authorization authz.Checker,
 ) *SegmentService {
+	if authorization == nil {
+		panic("segments: authorization checker required")
+	}
 	return &SegmentService{
-		segmentRepo:  segmentRepo,
-		memberRepo:   memberRepo,
-		staffRepo:    staffRepo,
-		auditService: auditService,
+		authorization: authorization,
+		segmentRepo:   segmentRepo,
+		memberRepo:    memberRepo,
+		staffRepo:     staffRepo,
+		auditService:  auditService,
 	}
 }
 
@@ -192,7 +195,12 @@ func NewSegmentService(
 // # Concurrency
 //
 // Safe for concurrent use.
+// Current-authority permission checks run before domain I/O, independently
+// of route guards. They do not lock authority through the subsequent mutation.
 func (s *SegmentService) List(ctx context.Context, page, limit int32, search string) ([]SegmentWithCount, int64, error) {
+	if _, err := s.authorization.Require(ctx, authz.SegmentsRead); err != nil {
+		return nil, 0, err
+	}
 	offset := (page - 1) * limit
 
 	var segments []Segment
@@ -338,7 +346,12 @@ func (s *SegmentService) List(ctx context.Context, page, limit int32, search str
 // # Concurrency
 //
 // Safe for concurrent use.
+// Current-authority permission checks run before domain I/O, independently
+// of route guards. They do not lock authority through the subsequent mutation.
 func (s *SegmentService) GetByID(ctx context.Context, id int64) (*SegmentWithCount, error) {
+	if _, err := s.authorization.Require(ctx, authz.SegmentsRead); err != nil {
+		return nil, err
+	}
 	seg, err := s.segmentRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -396,10 +409,8 @@ type CreateParams struct {
 	// value. The two are distinguishable at the storage layer.
 	Description *string
 
-	// CreatedBy is the staff user ID recorded as the segment's creator.
-	// The service verifies that a staff user with this ID exists, but
-	// does *not* verify that it matches the acting staff user from the
-	// request context — see Create for the details.
+	// CreatedBy is retained for source compatibility. Create always replaces
+	// it with the verified principal ID; callers cannot select another creator.
 	CreatedBy int64
 }
 
@@ -407,9 +418,9 @@ type CreateParams struct {
 //
 // # Flow
 //
-//  1. Verify the acting staff identity from the request context via
-//     audit.GetStaffID. A missing identity, or a staff row that cannot be
-//     loaded, produces ErrStaffNotFoundOrInactive.
+//  1. Require current active staff authority and the operation permission
+//     through authz. Missing/inactive identity is unauthenticated; lacking
+//     permission is forbidden; authority storage errors remain internal.
 //  2. Check that params.Name is not already taken via
 //     segmentRepo.ExistsByName. A collision produces ErrSegmentNameTaken.
 //  3. Translate params.Description to a pgtype.Text — NULL when the
@@ -421,17 +432,11 @@ type CreateParams struct {
 //  6. Look up the creating staff user's display name for the response.
 //  7. Return the domain Segment.
 //
-// # CreatedBy is trusted, not derived from context
+// # Creator provenance
 //
-// The service verifies the *acting* staff user (from the JWT claims via
-// audit.GetStaffID) but writes the *supplied* params.CreatedBy into the
-// row. In the current handler wiring these are always the same value —
-// the handler passes the JWT-derived staff ID — so the two never diverge
-// in practice. The service does not enforce the equality, which means a
-// future caller that supplies a different CreatedBy would record that
-// value as the creator while the audit entry attributes the action to
-// the context-derived staff user. The authorisation and the attribution
-// would then be inconsistent.
+// The stored creator is derived from the authorized principal. Supplied
+// params.CreatedBy is ignored, including direct service calls; audit and
+// creator attribution therefore use the same authenticated staff identity.
 //
 // # Creator reference on staff-lookup failure
 //
@@ -457,7 +462,7 @@ type CreateParams struct {
 //
 // # Errors
 //
-// Returns ErrStaffNotFoundOrInactive for the context-identity check,
+// Returns authz.ErrUnauthenticated for the context-identity check,
 // ErrSegmentNameTaken for a name collision, and a wrapped error for any
 // repository failure (prefixes "check name existence: " and "create
 // segment: "). The wrapped errors are not sentinels and are served
@@ -467,15 +472,14 @@ type CreateParams struct {
 //
 // Safe for concurrent use. See the advisory-check note above for the
 // concurrency implications of the name check.
+// Current-authority permission checks run before domain I/O, independently
+// of route guards. They do not lock authority through the subsequent mutation.
 func (s *SegmentService) Create(ctx context.Context, params CreateParams) (*Segment, error) {
-	actorID, ok := audit.GetStaffID(ctx)
-	if !ok {
-		return nil, ErrStaffNotFoundOrInactive
-	}
-	_, err := s.staffRepo.FindByID(ctx, actorID)
+	principal, err := s.authorization.Require(ctx, authz.SegmentsWrite)
 	if err != nil {
-		return nil, ErrStaffNotFoundOrInactive
+		return nil, err
 	}
+	params.CreatedBy = principal.ID
 
 	exists, err := s.segmentRepo.ExistsByName(ctx, params.Name)
 	if err != nil {
@@ -563,8 +567,9 @@ type UpdateParams struct {
 //
 // # Flow
 //
-//  1. Verify the acting staff identity from the request context. A
-//     missing identity produces ErrStaffNotFoundOrInactive.
+//  1. Require current active staff authority and the operation permission
+//     through authz. Missing/inactive identity is unauthenticated; lacking
+//     permission is forbidden; authority storage errors remain internal.
 //  2. Load the existing segment. A missing row returns ErrSegmentNotFound;
 //     any other repository failure is wrapped with "get segment for update: "
 //     and returned as a non-sentinel error.
@@ -622,7 +627,7 @@ type UpdateParams struct {
 //
 // # Errors
 //
-// Returns ErrStaffNotFoundOrInactive, ErrSegmentNameTaken, or
+// Returns authz.ErrUnauthenticated, ErrSegmentNameTaken, or
 // ErrSegmentNotFound (only when the existing segment row is missing).
 // Other lookup, uniqueness-check, update, and re-fetch failures are
 // wrapped, not collapsed to a not-found sentinel; the handlers map those
@@ -633,14 +638,11 @@ type UpdateParams struct {
 // Safe for concurrent use, but two concurrent Updates on the same segment
 // are not serialised. The final state reflects whichever update commits
 // last.
+// Current-authority permission checks run before domain I/O, independently
+// of route guards. They do not lock authority through the subsequent mutation.
 func (s *SegmentService) Update(ctx context.Context, params UpdateParams) (*Segment, error) {
-	actorID, ok := audit.GetStaffID(ctx)
-	if !ok {
-		return nil, ErrStaffNotFoundOrInactive
-	}
-	_, err := s.staffRepo.FindByID(ctx, actorID)
-	if err != nil {
-		return nil, ErrStaffNotFoundOrInactive
+	if _, err := s.authorization.Require(ctx, authz.SegmentsWrite); err != nil {
+		return nil, err
 	}
 
 	existing, err := s.segmentRepo.FindByID(ctx, params.ID)
@@ -723,8 +725,9 @@ func (s *SegmentService) Update(ctx context.Context, params UpdateParams) (*Segm
 //
 // # Flow
 //
-//  1. Verify the acting staff identity from the request context. A
-//     missing identity produces ErrStaffNotFoundOrInactive.
+//  1. Require current active staff authority and the operation permission
+//     through authz. Missing/inactive identity is unauthenticated; lacking
+//     permission is forbidden; authority storage errors remain internal.
 //  2. Load the existing segment. A failure collapses to
 //     ErrSegmentNotFound.
 //  3. Count the segment's members. A count failure is wrapped with
@@ -758,7 +761,7 @@ func (s *SegmentService) Update(ctx context.Context, params UpdateParams) (*Segm
 //
 // # Errors
 //
-// Returns ErrStaffNotFoundOrInactive, ErrSegmentNotFound, or
+// Returns authz.ErrUnauthenticated, ErrSegmentNotFound, or
 // ErrSegmentHasMembers for the corresponding conditions. Returns wrapped
 // errors with prefixes "check members: " or "delete segment: " for
 // repository failures. None of the wrapped errors is a sentinel.
@@ -767,14 +770,11 @@ func (s *SegmentService) Update(ctx context.Context, params UpdateParams) (*Segm
 //
 // Not serialised against concurrent member additions. See the atomicity
 // note above.
+// Current-authority permission checks run before domain I/O, independently
+// of route guards. They do not lock authority through the subsequent mutation.
 func (s *SegmentService) Delete(ctx context.Context, id int64) error {
-	actorID, ok := audit.GetStaffID(ctx)
-	if !ok {
-		return ErrStaffNotFoundOrInactive
-	}
-	_, err := s.staffRepo.FindByID(ctx, actorID)
-	if err != nil {
-		return ErrStaffNotFoundOrInactive
+	if _, err := s.authorization.Require(ctx, authz.SegmentsWrite); err != nil {
+		return err
 	}
 
 	existing, err := s.segmentRepo.FindByID(ctx, id)

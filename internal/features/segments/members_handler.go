@@ -3,6 +3,7 @@ package segments
 import (
 	"encoding/json"
 	"errors"
+	"hello/internal/authz"
 	"net/http"
 
 	"hello/pkg/response"
@@ -21,8 +22,8 @@ import (
 // The three methods recognise a small set of service sentinels
 // (ErrSegmentNotFound, ErrUserNotFound, ErrMemberAlreadyExists,
 // ErrMemberNotFound) and map them to status codes. Any unrecognised error
-// falls through to a 500 whose response body carries err.Error() verbatim
-// — the same disclosure pattern used elsewhere in this codebase.
+// falls through to a safe generic 500. Authorization errors are mapped to
+// 401/403 before the existing domain branches.
 //
 // Note that, for the reasons documented on MembersService.RemoveMember,
 // ErrMemberNotFound is never actually produced by the service, so the
@@ -83,7 +84,7 @@ func NewMembersHandler(service *MembersService) *MembersHandler {
 //   - 404 Not Found: the service returned ErrSegmentNotFound — the
 //     segment does not exist.
 //   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//     the literal internal server error as the message.
 //   - 200 OK: a ListMembersResponse with the current page of members and
 //     pagination metadata.
 //
@@ -101,11 +102,14 @@ func (h *MembersHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 
 	members, total, err := h.service.ListMembers(r.Context(), segmentID, page, limit)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		if errors.Is(err, ErrSegmentNotFound) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
 		}
-		response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
 
@@ -160,7 +164,7 @@ func (h *MembersHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 //   - 409 Conflict: the service returned ErrMemberAlreadyExists. See the
 //     caveat above on when this is actually reachable.
 //   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//     the literal internal server error as the message.
 //   - 201 Created: no data payload; the message "member added"
 //     accompanies a nil data field.
 //
@@ -186,13 +190,16 @@ func (h *MembersHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 
 	err = h.service.AddMember(r.Context(), segmentID, req.UserID)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrSegmentNotFound), errors.Is(err, ErrUserNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 		case errors.Is(err, ErrMemberAlreadyExists):
 			response.JSON(w, http.StatusConflict, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
@@ -227,7 +234,7 @@ func (h *MembersHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 //     ErrUserNotFound. Also (in the current defective implementation) the
 //     unreachable ErrMemberNotFound branch.
 //   - 500 Internal Server Error: any other service error, served with
-//     err.Error() as the message.
+//     the literal internal server error as the message.
 //   - 200 OK: no data payload; the message "member removed" accompanies
 //     a nil data field.
 //
@@ -249,13 +256,16 @@ func (h *MembersHandler) RemoveMember(w http.ResponseWriter, r *http.Request) {
 
 	err = h.service.RemoveMember(r.Context(), segmentID, userID)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrSegmentNotFound), errors.Is(err, ErrUserNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 		case errors.Is(err, ErrMemberNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 		default:
-			response.JSON(w, http.StatusInternalServerError, nil, err.Error())
+			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		}
 		return
 	}
