@@ -99,6 +99,72 @@ func (_c *MockSegmentRepository_Count_Call) RunAndReturn(run func(ctx context.Co
 	return _c
 }
 
+// CountSearch provides a mock function for the type MockSegmentRepository
+func (_mock *MockSegmentRepository) CountSearch(ctx context.Context, keyword string) (int64, error) {
+	ret := _mock.Called(ctx, keyword)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountSearch")
+	}
+
+	var r0 int64
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (int64, error)); ok {
+		return returnFunc(ctx, keyword)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) int64); ok {
+		r0 = returnFunc(ctx, keyword)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, keyword)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockSegmentRepository_CountSearch_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountSearch'
+type MockSegmentRepository_CountSearch_Call struct {
+	*mock.Call
+}
+
+// CountSearch is a helper method to define mock.On call
+//   - ctx context.Context
+//   - keyword string
+func (_e *MockSegmentRepository_Expecter) CountSearch(ctx any, keyword any) *MockSegmentRepository_CountSearch_Call {
+	return &MockSegmentRepository_CountSearch_Call{Call: _e.mock.On("CountSearch", ctx, keyword)}
+}
+
+func (_c *MockSegmentRepository_CountSearch_Call) Run(run func(ctx context.Context, keyword string)) *MockSegmentRepository_CountSearch_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSegmentRepository_CountSearch_Call) Return(n int64, err error) *MockSegmentRepository_CountSearch_Call {
+	_c.Call.Return(n, err)
+	return _c
+}
+
+func (_c *MockSegmentRepository_CountSearch_Call) RunAndReturn(run func(ctx context.Context, keyword string) (int64, error)) *MockSegmentRepository_CountSearch_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // Create provides a mock function for the type MockSegmentRepository
 func (_mock *MockSegmentRepository) Create(ctx context.Context, params sqlc.CreateSegmentParams) (sqlc.Segment, error) {
 	ret := _mock.Called(ctx, params)
@@ -720,6 +786,74 @@ func (_c *MockSegmentMemberRepository_CountBySegment_Call) Return(n int64, err e
 }
 
 func (_c *MockSegmentMemberRepository_CountBySegment_Call) RunAndReturn(run func(ctx context.Context, segmentID int64) (int64, error)) *MockSegmentMemberRepository_CountBySegment_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// CountBySegmentIDs provides a mock function for the type MockSegmentMemberRepository
+func (_mock *MockSegmentMemberRepository) CountBySegmentIDs(ctx context.Context, segmentIDs []int64) ([]sqlc.CountSegmentMembersBySegmentIDsRow, error) {
+	ret := _mock.Called(ctx, segmentIDs)
+
+	if len(ret) == 0 {
+		panic("no return value specified for CountBySegmentIDs")
+	}
+
+	var r0 []sqlc.CountSegmentMembersBySegmentIDsRow
+	var r1 error
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []int64) ([]sqlc.CountSegmentMembersBySegmentIDsRow, error)); ok {
+		return returnFunc(ctx, segmentIDs)
+	}
+	if returnFunc, ok := ret.Get(0).(func(context.Context, []int64) []sqlc.CountSegmentMembersBySegmentIDsRow); ok {
+		r0 = returnFunc(ctx, segmentIDs)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]sqlc.CountSegmentMembersBySegmentIDsRow)
+		}
+	}
+	if returnFunc, ok := ret.Get(1).(func(context.Context, []int64) error); ok {
+		r1 = returnFunc(ctx, segmentIDs)
+	} else {
+		r1 = ret.Error(1)
+	}
+	return r0, r1
+}
+
+// MockSegmentMemberRepository_CountBySegmentIDs_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountBySegmentIDs'
+type MockSegmentMemberRepository_CountBySegmentIDs_Call struct {
+	*mock.Call
+}
+
+// CountBySegmentIDs is a helper method to define mock.On call
+//   - ctx context.Context
+//   - segmentIDs []int64
+func (_e *MockSegmentMemberRepository_Expecter) CountBySegmentIDs(ctx any, segmentIDs any) *MockSegmentMemberRepository_CountBySegmentIDs_Call {
+	return &MockSegmentMemberRepository_CountBySegmentIDs_Call{Call: _e.mock.On("CountBySegmentIDs", ctx, segmentIDs)}
+}
+
+func (_c *MockSegmentMemberRepository_CountBySegmentIDs_Call) Run(run func(ctx context.Context, segmentIDs []int64)) *MockSegmentMemberRepository_CountBySegmentIDs_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		var arg0 context.Context
+		if args[0] != nil {
+			arg0 = args[0].(context.Context)
+		}
+		var arg1 []int64
+		if args[1] != nil {
+			arg1 = args[1].([]int64)
+		}
+		run(
+			arg0,
+			arg1,
+		)
+	})
+	return _c
+}
+
+func (_c *MockSegmentMemberRepository_CountBySegmentIDs_Call) Return(countSegmentMembersBySegmentIDsRows []sqlc.CountSegmentMembersBySegmentIDsRow, err error) *MockSegmentMemberRepository_CountBySegmentIDs_Call {
+	_c.Call.Return(countSegmentMembersBySegmentIDsRows, err)
+	return _c
+}
+
+func (_c *MockSegmentMemberRepository_CountBySegmentIDs_Call) RunAndReturn(run func(ctx context.Context, segmentIDs []int64) ([]sqlc.CountSegmentMembersBySegmentIDsRow, error)) *MockSegmentMemberRepository_CountBySegmentIDs_Call {
 	_c.Call.Return(run)
 	return _c
 }

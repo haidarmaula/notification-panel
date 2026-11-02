@@ -7,7 +7,6 @@ Go notification-delivery backend (API server + Kafka worker + scheduler). Read t
 - **The Go module is `hello`, not `notification-panel`.** Every internal import is
   `hello/internal/...`. The `notification-panel` name in `README.md` is only the upstream repo name.
 - **`README.md` is stale in several places. Trust the code:**
-  - it claims "no automated tests are configured" — 6 test files across 5 packages exist;
   - it points at `internal/config/config.go` — that file is split into `base|server|worker|scheduler|bootstrap.config.go`;
   - its project tree lists files that no longer match `git ls-files`.
 - **Godoc here is unusually thorough and is the best map of the system** — it records known bugs,
@@ -23,7 +22,7 @@ Go notification-delivery backend (API server + Kafka worker + scheduler). Read t
 
 ```bash
 go build ./...          # compiles clean on main
-go test ./...           # RED on main — see below
+go test ./...           # unit tests; green baseline restored on 2026-11-02
 go tool mockery         # regenerate mocks; NOT a global binary, and NOT in the Makefile
 make sqlc               # regenerate internal/database/sqlc from db/{migrations,queries}
 ```
@@ -35,17 +34,17 @@ go test ./internal/features/notifications/...
 go test -run TestProcessor ./internal/features/notifications/...
 ```
 
-**`go test ./...` fails on a clean checkout of `main`.** These are pre-existing, not your change:
+**The unit-test baseline was restored on 2026-11-02 (production plan step 17).**
+Staff tests use authenticated actors, the four-argument UpdatePassword contract,
+real bcrypt fixtures and pgx.ErrNoRows for missing rows. Segment mocks are
+regenerated; list tests expect CountSearch and batched CountBySegmentIDs rather
+than obsolete per-row counts. Tests cover authorization/password rejection and
+repository failures without changing service behavior. All five tested packages
+(staff, segments, notifications, middleware, token) pass. These are unit tests,
+not PostgreSQL/Kafka/FCM integration or production-readiness evidence.
 
-| Package | Failure | Cause |
-|---|---|---|
-| `internal/features/staff` | build error | `service_test.go:488` calls `UpdatePassword` with 3 args; the service takes 4 (added a param) |
-| `internal/features/segments` | build error | committed `mocks/mocks.go` is stale — missing `CountSearch` and `CountBySegmentIDs` |
-
-`go tool mockery` fixes the segments *build* error, but the assertions then fail anyway: the
-service now batch-counts members via `CountBySegmentIDs` (commit `8e26baf`, the N+1 fix) while
-the tests still expect a per-segment `CountBySegment` call. Green packages:
-`internal/token`, `internal/middleware`, `internal/features/notifications`.
+In restricted environments use `GOCACHE=/tmp/hello-go-review-cache` if the default
+Go build cache is not writable.
 
 **If you change a repository interface** consumed by a mocked package, regenerate
 (`go tool mockery`) or the affected test package will not compile.

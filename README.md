@@ -519,12 +519,20 @@ make sh-worker
 
 ### Testing
 
-Currently no automated tests are configured. To add:
+Unit tests exist for staff, segments, notifications, middleware and token.
+Run them with `go test ./...`; regenerate committed mocks after interface
+changes with `go tool mockery` (configured in `.mockery.yml`).
+
+When adding tests:
 
 1. Create `*_test.go` files alongside implementation
 2. Use `testify` for assertions (already in go.mod)
-3. Mock external dependencies with `mockery` (configured in `.mockery.yml`)
+3. Mock repository interfaces with the pinned `go tool mockery`
 4. Run: `go test ./...`
+
+The green unit suite does not establish PostgreSQL/Kafka/provider integration,
+real-device delivery, load capacity or production readiness. See the
+[production roadmap](docs/analysis/production-readiness-plan.md).
 
 ---
 

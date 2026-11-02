@@ -3,12 +3,16 @@ package staff
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 
 	"hello/internal/database/sqlc"
 	"hello/internal/features/staff/mocks"
@@ -105,7 +109,7 @@ func TestStaffService_Create(t *testing.T) {
 			},
 			mockSetup: func(repo *mocks.MockStaffUserRepository, roleRepo *mocks.MockRoleRepository, audit *mocks.MockAuditService) {
 				repo.EXPECT().ExistsByEmail(mock.Anything, "new@example.com").Return(false, nil).Once()
-				roleRepo.EXPECT().FindByName(mock.Anything, "INVALID").Return(sqlc.Role{}, errors.New("not found")).Once()
+				roleRepo.EXPECT().FindByName(mock.Anything, "INVALID").Return(sqlc.Role{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrInvalidRole,
 			verifyResult: func(t *testing.T, staff *Staff) {
@@ -122,15 +126,61 @@ func TestStaffService_Create(t *testing.T) {
 			mockRoleRepo := mocks.NewMockRoleRepository(t)
 			mockAudit := mocks.NewMockAuditService(t)
 
+			mockStaffRepo.EXPECT().FindByID(mock.Anything, int64(99)).Return(dummyStaffUser(99), nil).Once()
+			mockRoleRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(sqlc.Role{ID: 1, Name: "SUPER_ADMIN"}, nil).Once()
 			tc.mockSetup(mockStaffRepo, mockRoleRepo, mockAudit)
 
 			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit)
-			staff, err := service.Create(context.Background(), tc.params)
+			staff, err := service.Create(ctxWithStaffID(99), tc.params)
 
 			assert.ErrorIs(t, err, tc.expectedError)
 			if tc.verifyResult != nil {
 				tc.verifyResult(t, staff)
 			}
+		})
+	}
+}
+
+// ============================================
+// CREATE AUTHORIZATION
+// ============================================
+
+func TestStaffService_CreateAuthorization(t *testing.T) {
+	t.Parallel()
+	dbError := errors.New("authorization database unavailable")
+	for _, tc := range []struct {
+		name          string
+		actorID       int64
+		actorError    error
+		roleError     error
+		expectedError error
+	}{
+		{name: "missing actor", expectedError: ErrForbidden},
+		{name: "admin cannot create staff", actorID: 99, expectedError: ErrForbidden},
+		{name: "actor lookup fails closed", actorID: 99, actorError: dbError, expectedError: dbError},
+		{name: "role lookup fails closed", actorID: 99, roleError: dbError, expectedError: dbError},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			repo := mocks.NewMockStaffUserRepository(t)
+			roles := mocks.NewMockRoleRepository(t)
+			audit := mocks.NewMockAuditService(t)
+			ctx := context.Background()
+			if tc.actorID != 0 {
+				ctx = ctxWithStaffID(tc.actorID)
+				repo.EXPECT().FindByID(mock.Anything, int64(99)).Return(dummyStaffUser(99), tc.actorError).Once()
+				if tc.actorError == nil {
+					roles.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyRole(), tc.roleError).Once()
+				}
+			}
+			service := NewStaffService(repo, roles, audit)
+			staff, err := service.Create(ctx, CreateStaffParams{
+				Role: "SUPER_ADMIN", Name: "New Staff", Email: "new@example.com", Password: "password123",
+			})
+			require.ErrorIs(t, err, tc.expectedError)
+			require.Nil(t, staff)
+			repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+			audit.AssertNotCalled(t, "Log", mock.Anything, mock.Anything)
 		})
 	}
 }
@@ -163,7 +213,7 @@ func TestStaffService_GetByID(t *testing.T) {
 			name: "not found",
 			id:   999,
 			mockSetup: func(repo *mocks.MockStaffUserRepository, roleRepo *mocks.MockRoleRepository) {
-				repo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, errors.New("not found")).Once()
+				repo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrStaffNotFound,
 		},
@@ -341,7 +391,7 @@ func TestStaffService_Update(t *testing.T) {
 			},
 			mockSetup: func(repo *mocks.MockStaffUserRepository, roleRepo *mocks.MockRoleRepository, audit *mocks.MockAuditService) {
 				repo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
-				roleRepo.EXPECT().FindByName(mock.Anything, "INVALID").Return(sqlc.Role{}, errors.New("not found")).Once()
+				roleRepo.EXPECT().FindByName(mock.Anything, "INVALID").Return(sqlc.Role{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrInvalidRole,
 			verifyResult: func(t *testing.T, staff *Staff) {
@@ -354,7 +404,7 @@ func TestStaffService_Update(t *testing.T) {
 				ID: 999,
 			},
 			mockSetup: func(repo *mocks.MockStaffUserRepository, roleRepo *mocks.MockRoleRepository, audit *mocks.MockAuditService) {
-				repo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, errors.New("not found")).Once()
+				repo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrStaffNotFound,
 			verifyResult: func(t *testing.T, staff *Staff) {
@@ -424,7 +474,7 @@ func TestStaffService_UpdateStatus(t *testing.T) {
 		mockAudit := mocks.NewMockAuditService(t)
 
 		id := int64(999)
-		mockStaffRepo.EXPECT().FindByID(mock.Anything, id).Return(sqlc.StaffUser{}, errors.New("not found")).Once()
+		mockStaffRepo.EXPECT().FindByID(mock.Anything, id).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
 
 		service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit)
 		staff, err := service.UpdateStatus(context.Background(), id, false)
@@ -440,54 +490,63 @@ func TestStaffService_UpdateStatus(t *testing.T) {
 
 func TestStaffService_UpdatePassword(t *testing.T) {
 	t.Parallel()
+	const currentPassword = "actor-password"
+	hash, err := bcrypt.GenerateFromPassword([]byte(currentPassword), bcrypt.MinCost)
+	require.NoError(t, err)
+	actor := dummyStaffUser(99)
+	actor.PasswordHash = string(hash)
+	dbError := errors.New("database unavailable")
 
-	type testCase struct {
-		name          string
-		id            int64
-		newPassword   string
-		mockSetup     func(*mocks.MockStaffUserRepository, *mocks.MockAuditService)
-		expectedError error
+	tests := []struct {
+		name            string
+		ctx             context.Context
+		role            string
+		currentPassword string
+		newPassword     string
+		targetError     error
+		updateError     error
+		expectedError   error
+	}{
+		{name: "authorized reset", ctx: ctxWithStaffID(99), role: "SUPER_ADMIN", currentPassword: currentPassword, newPassword: "new-password"},
+		{name: "missing actor", ctx: context.Background(), expectedError: ErrForbidden},
+		{name: "non super admin", ctx: ctxWithStaffID(99), role: "ADMIN", expectedError: ErrForbidden},
+		{name: "wrong current password", ctx: ctxWithStaffID(99), role: "SUPER_ADMIN", currentPassword: "wrong-password", expectedError: ErrInvalidCurrentPassword},
+		{name: "password too short", ctx: ctxWithStaffID(99), role: "SUPER_ADMIN", currentPassword: currentPassword, newPassword: "short", expectedError: ErrPasswordTooShort},
+		{name: "password too long", ctx: ctxWithStaffID(99), role: "SUPER_ADMIN", currentPassword: currentPassword, newPassword: strings.Repeat("x", 73), expectedError: ErrPasswordTooLong},
+		{name: "target not found", ctx: ctxWithStaffID(99), role: "SUPER_ADMIN", currentPassword: currentPassword, newPassword: "new-password", targetError: pgx.ErrNoRows, expectedError: ErrStaffNotFound},
+		{name: "target lookup unavailable", ctx: ctxWithStaffID(99), role: "SUPER_ADMIN", currentPassword: currentPassword, newPassword: "new-password", targetError: dbError, expectedError: dbError},
+		{name: "password write fails", ctx: ctxWithStaffID(99), role: "SUPER_ADMIN", currentPassword: currentPassword, newPassword: "new-password", updateError: dbError, expectedError: dbError},
 	}
-
-	tests := []testCase{
-		{
-			name:        "success",
-			id:          1,
-			newPassword: "newpass",
-			mockSetup: func(repo *mocks.MockStaffUserRepository, audit *mocks.MockAuditService) {
-				repo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
-				repo.EXPECT().UpdatePassword(mock.Anything, mock.MatchedBy(func(p sqlc.UpdateStaffPasswordParams) bool {
-					return p.ID == int64(1) && p.PasswordHash != ""
-				})).Return(nil).Once()
-				audit.EXPECT().Log(mock.Anything, mock.Anything).Return(nil).Once()
-			},
-			expectedError: nil,
-		},
-		{
-			name:        "staff not found",
-			id:          999,
-			newPassword: "newpass",
-			mockSetup: func(repo *mocks.MockStaffUserRepository, audit *mocks.MockAuditService) {
-				repo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, errors.New("not found")).Once()
-			},
-			expectedError: ErrStaffNotFound,
-		},
-	}
-
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-
-			mockStaffRepo := mocks.NewMockStaffUserRepository(t)
-			mockRoleRepo := mocks.NewMockRoleRepository(t)
-			mockAudit := mocks.NewMockAuditService(t)
-
-			tc.mockSetup(mockStaffRepo, mockAudit)
-
-			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit)
-			err := service.UpdatePassword(context.Background(), tc.id, tc.newPassword)
-
-			assert.ErrorIs(t, err, tc.expectedError)
+			repo := mocks.NewMockStaffUserRepository(t)
+			roles := mocks.NewMockRoleRepository(t)
+			audit := mocks.NewMockAuditService(t)
+			if tc.role != "" {
+				repo.EXPECT().FindByID(mock.Anything, int64(99)).Return(actor, nil).Once()
+				roles.EXPECT().FindByID(mock.Anything, actor.RoleID).Return(sqlc.Role{ID: actor.RoleID, Name: tc.role}, nil).Once()
+			}
+			if tc.role == "SUPER_ADMIN" && tc.currentPassword == currentPassword && len(tc.newPassword) >= minPasswordLength && len(tc.newPassword) <= maxPasswordLength {
+				repo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), tc.targetError).Once()
+				if tc.targetError == nil {
+					repo.EXPECT().UpdatePassword(mock.Anything, mock.MatchedBy(func(p sqlc.UpdateStaffPasswordParams) bool {
+						return p.ID == 1 && bcrypt.CompareHashAndPassword([]byte(p.PasswordHash), []byte(tc.newPassword)) == nil
+					})).Return(tc.updateError).Once()
+					if tc.updateError == nil {
+						audit.EXPECT().Log(mock.Anything, mock.Anything).Return(nil).Once()
+					}
+				}
+			}
+			service := NewStaffService(repo, roles, audit)
+			err := service.UpdatePassword(tc.ctx, 1, tc.currentPassword, tc.newPassword)
+			require.ErrorIs(t, err, tc.expectedError)
+			if tc.expectedError != nil {
+				if tc.updateError == nil {
+					repo.AssertNotCalled(t, "UpdatePassword", mock.Anything, mock.Anything)
+				}
+				audit.AssertNotCalled(t, "Log", mock.Anything, mock.Anything)
+			}
 		})
 	}
 }
@@ -524,7 +583,7 @@ func TestStaffService_Delete(t *testing.T) {
 			targetID: 999,
 			ctx:      ctxWithStaffID(2),
 			mockSetup: func(repo *mocks.MockStaffUserRepository, audit *mocks.MockAuditService) {
-				repo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, errors.New("not found")).Once()
+				repo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrStaffNotFound,
 		},

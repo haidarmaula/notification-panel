@@ -6,9 +6,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 
 	"hello/internal/database/sqlc"
 	"hello/internal/features/segments/mocks"
@@ -83,9 +85,10 @@ func TestSegmentsService_List(t *testing.T) {
 				}
 				repo.EXPECT().List(mock.Anything, int32(0), int32(10)).Return(rows, nil).Once()
 				repo.EXPECT().Count(mock.Anything).Return(int64(2), nil).Once()
-				// CountBySegment untuk setiap segment
-				memberRepo.EXPECT().CountBySegment(mock.Anything, int64(1)).Return(int64(5), nil).Once()
-				memberRepo.EXPECT().CountBySegment(mock.Anything, int64(2)).Return(int64(3), nil).Once()
+				memberRepo.EXPECT().CountBySegmentIDs(mock.Anything, []int64{1, 2}).Return([]sqlc.CountSegmentMembersBySegmentIDsRow{
+					{SegmentID: 2, MemberCount: 3},
+					{SegmentID: 1, MemberCount: 5},
+				}, nil).Once()
 			},
 			expectedError: nil,
 			verifyResult: func(t *testing.T, segments []SegmentWithCount, total int64) {
@@ -104,14 +107,14 @@ func TestSegmentsService_List(t *testing.T) {
 				rows := []sqlc.SearchSegmentsRow{
 					{ID: 1, Name: "Test Segment", CreatedBy: 1, CreatedByName: "Staff A"},
 				}
-				repo.EXPECT().Count(mock.Anything).Return(int64(1), nil).Once()
+				repo.EXPECT().CountSearch(mock.Anything, "test").Return(int64(7), nil).Once()
 				repo.EXPECT().Search(mock.Anything, "test", int32(0), int32(10)).Return(rows, nil).Once()
-				memberRepo.EXPECT().CountBySegment(mock.Anything, int64(1)).Return(int64(0), nil).Once()
+				memberRepo.EXPECT().CountBySegmentIDs(mock.Anything, []int64{1}).Return(nil, nil).Once()
 			},
 			expectedError: nil,
 			verifyResult: func(t *testing.T, segments []SegmentWithCount, total int64) {
 				assert.Len(t, segments, 1)
-				assert.Equal(t, int64(1), total)
+				assert.Equal(t, int64(7), total)
 				assert.Equal(t, "Test Segment", segments[0].Name)
 				assert.Equal(t, int64(0), segments[0].MemberCount)
 			},
@@ -136,6 +139,76 @@ func TestSegmentsService_List(t *testing.T) {
 			if tc.verifyResult != nil {
 				tc.verifyResult(t, segments, total)
 			}
+		})
+	}
+}
+
+// --------------------------------
+// List failures and empty page
+// --------------------------------
+
+func TestSegmentsService_ListFailuresAndEmptyPage(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name          string
+		search        string
+		setup         func(*mocks.MockSegmentRepository, *mocks.MockSegmentMemberRepository)
+		expectedError error
+	}{
+		{
+			name: "list failure",
+			setup: func(repo *mocks.MockSegmentRepository, members *mocks.MockSegmentMemberRepository) {
+				repo.EXPECT().List(mock.Anything, int32(0), int32(10)).Return(nil, errDB).Once()
+			}, expectedError: errDB,
+		},
+		{
+			name: "count failure",
+			setup: func(repo *mocks.MockSegmentRepository, members *mocks.MockSegmentMemberRepository) {
+				repo.EXPECT().List(mock.Anything, int32(0), int32(10)).Return(nil, nil).Once()
+				repo.EXPECT().Count(mock.Anything).Return(int64(0), errDB).Once()
+			}, expectedError: errDB,
+		},
+		{
+			name: "search failure", search: "test",
+			setup: func(repo *mocks.MockSegmentRepository, members *mocks.MockSegmentMemberRepository) {
+				repo.EXPECT().Search(mock.Anything, "test", int32(0), int32(10)).Return(nil, errDB).Once()
+			}, expectedError: errDB,
+		},
+		{
+			name: "filtered count failure", search: "test",
+			setup: func(repo *mocks.MockSegmentRepository, members *mocks.MockSegmentMemberRepository) {
+				repo.EXPECT().Search(mock.Anything, "test", int32(0), int32(10)).Return(nil, nil).Once()
+				repo.EXPECT().CountSearch(mock.Anything, "test").Return(int64(0), errDB).Once()
+			}, expectedError: errDB,
+		},
+		{
+			name: "batch count failure",
+			setup: func(repo *mocks.MockSegmentRepository, members *mocks.MockSegmentMemberRepository) {
+				repo.EXPECT().List(mock.Anything, int32(0), int32(10)).Return([]sqlc.ListSegmentsRow{{ID: 1}}, nil).Once()
+				repo.EXPECT().Count(mock.Anything).Return(int64(1), nil).Once()
+				members.EXPECT().CountBySegmentIDs(mock.Anything, []int64{1}).Return(nil, errDB).Once()
+			}, expectedError: errDB,
+		},
+		{
+			name: "empty page skips member query",
+			setup: func(repo *mocks.MockSegmentRepository, members *mocks.MockSegmentMemberRepository) {
+				repo.EXPECT().List(mock.Anything, int32(0), int32(10)).Return(nil, nil).Once()
+				repo.EXPECT().Count(mock.Anything).Return(int64(0), nil).Once()
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			repo := mocks.NewMockSegmentRepository(t)
+			members := mocks.NewMockSegmentMemberRepository(t)
+			staff := mocks.NewMockStaffUserRepository(t)
+			audit := mocks.NewMockAuditService(t)
+			tc.setup(repo, members)
+			service := NewSegmentService(repo, members, staff, audit)
+			segments, total, err := service.List(context.Background(), 1, 10, tc.search)
+			require.ErrorIs(t, err, tc.expectedError)
+			require.Empty(t, segments)
+			require.Zero(t, total)
 		})
 	}
 }
@@ -178,7 +251,7 @@ func TestSegmentsService_GetByID(t *testing.T) {
 			name: "segment not found",
 			id:   999,
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, memberRepo *mocks.MockSegmentMemberRepository) {
-				segmentRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.Segment{}, errors.New("not found")).Once()
+				segmentRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.Segment{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrSegmentNotFound,
 			verifyResult: func(t *testing.T, result *SegmentWithCount) {
@@ -191,7 +264,7 @@ func TestSegmentsService_GetByID(t *testing.T) {
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, memberRepo *mocks.MockSegmentMemberRepository) {
 				seg := dummySegment(1, "Test", "desc")
 				segmentRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(seg, nil).Once()
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(sqlc.StaffUser{}, errors.New("not found")).Once()
+				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
 				memberRepo.EXPECT().CountBySegment(mock.Anything, int64(1)).Return(int64(0), nil).Once()
 			},
 			expectedError: nil,
@@ -284,7 +357,7 @@ func TestSegmentsService_Create(t *testing.T) {
 			},
 			ctx: ctxWithStaffID(999),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, errors.New("not found")).Once()
+				staffRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrStaffNotFoundOrInactive,
 			verifyResult: func(t *testing.T, segment *Segment) {
@@ -512,7 +585,7 @@ func TestSegmentsService_Update(t *testing.T) {
 			},
 			ctx: ctxWithStaffID(999),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, errors.New("not found")).Once()
+				staffRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrStaffNotFoundOrInactive,
 			verifyResult: func(t *testing.T, segment *Segment) {
@@ -528,7 +601,7 @@ func TestSegmentsService_Update(t *testing.T) {
 			ctx: ctxWithStaffID(1),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
-				segmentRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.Segment{}, errors.New("not found")).Once()
+				segmentRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.Segment{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrSegmentNotFound,
 			verifyResult: func(t *testing.T, segment *Segment) {
@@ -682,7 +755,7 @@ func TestSegmentsService_Delete(t *testing.T) {
 			segmentID: 1,
 			ctx:       ctxWithStaffID(999),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, memberRepo *mocks.MockSegmentMemberRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
-				staffRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, errors.New("not found")).Once()
+				staffRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrStaffNotFoundOrInactive,
 		},
@@ -692,7 +765,7 @@ func TestSegmentsService_Delete(t *testing.T) {
 			ctx:       ctxWithStaffID(1),
 			mockSetup: func(segmentRepo *mocks.MockSegmentRepository, memberRepo *mocks.MockSegmentMemberRepository, staffRepo *mocks.MockStaffUserRepository, auditService *mocks.MockAuditService) {
 				staffRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), nil).Once()
-				segmentRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.Segment{}, errors.New("not found")).Once()
+				segmentRepo.EXPECT().FindByID(mock.Anything, int64(999)).Return(sqlc.Segment{}, pgx.ErrNoRows).Once()
 			},
 			expectedError: ErrSegmentNotFound,
 		},

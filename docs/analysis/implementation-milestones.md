@@ -8,7 +8,8 @@ Aturan bersama: [CR1–CR9 dan gate G1–G7](adr-01-11-consistency-review.md).
 
 Nomor step 01–46 tetap mengikuti production plan; milestone di sini mengelompokkan
 pekerjaan menurut dependensi, bukan mengharuskan semua keamanan menunggu pipeline.
-Semua milestone belum selesai ketika dokumen ini dibuat. Pekerjaan yang memakai
+M00 selesai pada 2026-11-02: mock diregenerasi, tests diselaraskan, seluruh unit
+test dan build lulus. M01–M10 masih belum selesai. Pekerjaan yang memakai
 keputusan belum settled harus mencatat proposed/test-only boundary dalam SPEC;
 tidak boleh diaktifkan ke production dengan asumsi tersembunyi.
 
@@ -82,9 +83,12 @@ acceptance case seluruh sistem sudah ditulis atau ADR sudah accepted.
 
 ## Titik mulai berikutnya
 
-Mulai M00/step 17. Masalah baseline yang sudah direproduksi: signature
-`StaffService.UpdatePassword` berubah, mocks segments belum memiliki CountSearch
-dan CountBySegmentIDs, sedangkan list tests masih mengharapkan per-segment count.
-Perbaiki tests/fixtures dan regenerate mock tanpa mengubah perilaku service untuk
-memuaskan test lama. Tidak perlu credential Firebase, akses server Laravel,
-angka SLO final atau host Kafka untuk menyelesaikannya.
+M00/step 17 selesai dengan `go tool mockery`, `go test ./...` dan `go build ./...`
+(memakai GOCACHE=/tmp/hello-go-review-cache di sandbox). Signature password,
+auth fixtures, pgx not-found sentinel, filtered count dan batch membership count
+sudah diselaraskan; tests juga memeriksa denial dan kegagalan repository.
+Tidak ada perubahan perilaku service atau test yang di-skip.
+
+Lanjut M01: step 18 untuk CI format/build/test/vet/vulnerability checks, lalu
+step 19 untuk lingkungan integrasi terisolasi. Provider/device/infrastruktur
+nyata belum diuji oleh penyelesaian M00.

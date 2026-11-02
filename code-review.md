@@ -416,7 +416,12 @@ Beyond the itemised findings, five architectural changes would eliminate whole c
 
 ### 1. Automated Testing
 
-Only `internal/features/staff/` has a `service_test.go`. Its mockery-based, table-driven structure is a sound template for every other feature. Testing the service layer with mocks would surface the error-collapse and TOCTOU issues documented here without a live database.
+Staff and segments have mockery-based service tests; notifications, middleware
+and token also have unit tests. The baseline was repaired on 2026-11-02 by
+regenerating segment mocks and aligning fixtures/assertions with current
+authorization, password and counting contracts. Green unit tests do not close
+runtime findings or prove concurrency/TOCTOU safety; PostgreSQL/Kafka/provider
+failure-window tests remain planned.
 
 ### 2. Shared Request Parsing
 
