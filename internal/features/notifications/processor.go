@@ -12,6 +12,33 @@ import (
 	"hello/internal/kafka"
 )
 
+// targetFetchLimit bounds the number of notification_target rows fetched
+// for a single notification during target expansion.
+//
+// A notification with more target rows than this limit has the excess
+// silently truncated by the underlying query. The expansion loop logs a
+// warning when the limit is reached so that the truncation is observable
+// in the worker logs rather than hidden — see finding H29 in
+// code-review.md for the original defect. A future revision that needs
+// unbounded target sets should replace the single-shot fetch with a
+// paginated loop.
+const targetFetchLimit = 10000
+
+// audienceFetchLimit bounds the number of users or segment members fetched
+// for a single BROADCAST or SEGMENT target.
+//
+// As with targetFetchLimit, the bound is defensive rather than operational:
+// it exists to keep a runaway query from exhausting worker memory, not to
+// cap the campaign size the system is designed to support. The expansion
+// loop logs a warning when the limit is reached, closing the silent-
+// truncation half of finding H29 in code-review.md.
+//
+// The value is deliberately large. At the current scale it will never be
+// reached for a normal campaign; if it is reached, the campaign has
+// outgrown the single-shot fan-out strategy and the worker should be
+// reworked to stream audience members rather than materialise them.
+const audienceFetchLimit = 1000000
+
 // Processor orchestrates the end-to-end delivery of a notification.
 //
 // It is the worker-side counterpart of NotificationService: where the service
@@ -42,21 +69,37 @@ import (
 //
 // # Idempotency and at-least-once semantics
 //
-// ProcessSendRequested is intended to be idempotent under Kafka's
-// at-least-once delivery: the first thing it does after loading the
-// notification is check whether its status is terminal, and if so, return
-// immediately. However, the idempotency check is partial — see
-// ProcessSendRequested for the specific states it covers and the states it
-// does not — and it does not protect against duplicate delivery rows for a
-// notification that crashed mid-processing.
+// ProcessSendRequested is idempotent under Kafka's at-least-once delivery:
+// the first thing it does after loading the notification is decide whether
+// the notification has already been processed, and if so, return without
+// dispatching again. The decision treats COMPLETED and FAILED as terminal
+// outright, and treats PROCESSING as terminal only when at least one
+// delivery row already exists for the notification — which indicates a
+// predecessor reached the delivery-recording stage before crashing. A
+// PROCESSING notification with no delivery rows is retried, on the
+// assumption that the predecessor crashed before it dispatched anything.
 //
-// # Missing transactional isolation
+// This closes finding H27 in code-review.md. A previous revision did not
+// inspect PROCESSING at all, so a crashed predecessor's notification was
+// re-dispatched unconditionally, producing duplicate pushes to every
+// device. The current behaviour trades a small risk of lost delivery (a
+// crash between the provider call and the first delivery insert) for the
+// certainty of no duplicate delivery.
 //
-// The processor performs its state transitions and its delivery inserts as
-// separate repository calls, with no enclosing database transaction.
-// A failure between the provider dispatch and the delivery-recording loop
-// leaves the notification in PROCESSING with no delivery rows; a retry
-// would then re-dispatch to the provider, potentially double-delivering.
+// The idempotency is still not transactionally airtight: the check and the
+// dispatch are not atomic against a concurrent invocation for the same
+// notification ID. See "Concurrency" below.
+//
+// # Delivery-row atomicity
+//
+// The delivery rows are inserted one at a time, each followed by a Kafka
+// publish. Neither the insert loop nor the publish is wrapped in a
+// transaction, and a mid-loop crash leaves a partial set of delivery rows
+// in the database. On the next attempt the idempotency guard (above)
+// detects the partial set and skips the notification, so the unrecorded
+// deliveries are lost rather than duplicated. A future revision that needs
+// at-most-once with no loss should record delivery intents before
+// dispatching to the provider, then mark them confirmed afterwards.
 //
 // # Concurrency
 //
@@ -122,18 +165,18 @@ func NewProcessor(
 
 // ProcessSendRequested handles a Kafka event to deliver a notification.
 // It expands targets, fetches tokens, calls the provider, records deliveries,
-// and updates the notification status. Idempotent: skips if already terminal.
-// On failure, the notification status is set to FAILED.
+// and updates the notification status. Idempotent under Kafka at-least-once
+// semantics: skips COMPLETED and FAILED outright, and skips PROCESSING when
+// delivery rows already exist. On unrecoverable failure the notification
+// status is set to FAILED.
 //
 // # Flow
 //
 //  1. Load the notification row by event.NotificationID. A missing row
 //     aborts with a wrapped error; the caller should log and drop the
 //     event (the row will not reappear).
-//  2. Check the row's status for terminality. If the status is "COMPLETED"
-//     or "FAILED", the method returns nil without further work — this is
-//     the idempotency guard. See "Idempotency check" below for the states
-//     it does and does not cover.
+//  2. Decide whether the notification has already been processed. See
+//     "Idempotency check" below for the exact rules.
 //  3. Transition the notification to "PROCESSING" via
 //     UpdateNotificationStatus. A failure here aborts.
 //  4. Resolve the notification's targets to a deduplicated set of user IDs
@@ -142,47 +185,59 @@ func NewProcessor(
 //  5. If the resolved user set is empty, transition to "COMPLETED" and
 //     return nil. Note that the notification is marked COMPLETED even
 //     though no delivery occurred — for a broadcast against a system with
-//     no active users, or a segment with no members, or a notification
-//     whose only target is of an unimplemented type, this is the path
-//     taken.
+//     no active users, a segment with no members, or a notification whose
+//     only target is of an unimplemented type, this is the path taken.
 //  6. Fetch the device tokens for the resolved users via
 //     DeviceTokenRepository.ListByUserIDs. A failure here sets status to
 //     FAILED. If the token set is empty (no active devices), transition
 //     to COMPLETED and return nil.
 //  7. Build a SendRequest from the notification and the token set, and
 //     invoke provider.Send. A failure here sets status to FAILED.
-//  8. For each SendResult, insert a notification_deliveries row. After a
-//     successful insert, publish a DeliveryUpdated event. Insert and publish
-//     errors are logged and skipped — they do not abort the loop.
+//  8. For each SendResult, insert a notification_deliveries row and, on
+//     success, publish a DeliveryUpdated event. Insert and publish errors
+//     are logged and skipped — they do not abort the loop.
 //  9. Transition the notification to "COMPLETED" and return nil.
 //
 // # Idempotency check
 //
-// The check at step 2 recognises only "COMPLETED" and "FAILED" as terminal.
-// Several states that are also terminal in practice are not covered:
+// The decision at step 2 distinguishes three cases:
 //
-//   - A notification left in "PROCESSING" by a crashed predecessor is
-//     re-processed, which re-dispatches the provider call and may create
-//     duplicate delivery rows.
-//   - A notification in "QUEUED" (set by the scheduler before publishing
-//     the Kafka event) is processed, which is correct.
-//   - A notification in "SENT" — which model.go declares as a terminal
-//     status but which this processor never writes — would be re-processed.
+//   - Status COMPLETED or FAILED: the notification is terminal and is
+//     skipped unconditionally. Returning nil (rather than an error) tells
+//     the Kafka consumer to commit the offset for this event, so the
+//     duplicate is not delivered again.
 //
-// The processor is therefore safe against re-delivery of the same Kafka
-// event only when the previous attempt completed successfully or failed
-// with the FAILED transition applied. A crash between provider dispatch
-// and the terminal status update results in a duplicate dispatch on retry.
+//   - Status PROCESSING with at least one delivery row present: a
+//     predecessor reached the delivery-recording stage before crashing.
+//     The notification is skipped, on the assumption that re-dispatching
+//     would duplicate the pushes that were already sent. The unrecorded
+//     remainder is lost rather than duplicated.
+//
+//   - Status PROCESSING with no delivery rows: a predecessor crashed
+//     before any delivery was recorded, or the same event is being
+//     processed for the first time. Either way, dispatching now is safe.
+//
+//   - Any other status (QUEUED, SCHEDULED, DRAFT, or an unrecognised
+//     value): the notification is processed. QUEUED is the normal case —
+//     the scheduler sets it before publishing the event — and the other
+//     values are processed defensively so that a notification that
+//     somehow entered the pipeline from an unexpected state is not
+//     permanently stranded.
+//
+// This behaviour closes finding H27 in code-review.md. A previous revision
+// recognised only COMPLETED and FAILED, so a notification left in
+// PROCESSING by a crashed predecessor was re-dispatched in full, producing
+// duplicate pushes to every device.
 //
 // # Provider contract dependence
 //
 // The processor depends on the provider returning one SendResult per input
-// token, in the same order as the SendRequest's Tokens slice. FCMProvider
-// honours this contract; OneSignalProvider does not — it filters short
-// tokens, so its result slice may be shorter than the input. When running
-// against OneSignalProvider, tokens dropped by the provider's filter are
-// silently lost: no delivery row is inserted for them, and they are not
-// counted as failures.
+// token, in the same order as the SendRequest's Tokens slice, and carrying
+// each token's PushToken in the corresponding result. Both providers now
+// honour this contract: FCMProvider has always done so, and
+// OneSignalProvider was corrected in the H19–H21 pass. A provider that
+// violates the contract will cause mis-attributed delivery rows; the
+// attribution logic below emits a warning when it cannot find a match.
 //
 // # Delivery-update publication
 //
@@ -196,27 +251,24 @@ func NewProcessor(
 //
 // # Device token attribution
 //
-// When recording delivery rows, the method attempts to resolve each
-// SendResult's user to a specific device_tokens row by iterating the
-// tokens slice and matching on UserID. Because the tokens slice contains
-// one entry per (user, device) pair, a user with multiple active devices
-// will match only the first one — the iteration `break`s as soon as any
-// token for that user is found.
+// Each delivery row is attributed to a specific device_tokens row by
+// matching the SendResult's PushToken against the tokens slice that was
+// dispatched. The push token is the identity that was actually sent to the
+// provider, so the match is exact and every delivery row for a multi-device
+// user is correctly attributed to the specific device the provider
+// reported on.
 //
-// The practical consequence is that every delivery row for a multi-device
-// user is recorded against the same device_tokens row (the first one
-// encountered in the slice), regardless of which device the provider
-// actually delivered to. Delivery attribution is therefore incorrect for
-// any user with more than one device. Matching on PushToken instead of
-// UserID would resolve this for providers that return per-device results,
-// but the current OneSignalProvider returns the same result for every
-// device in a batch, so even a correct match would not distinguish them.
+// This closes finding H28 in code-review.md. A previous revision matched on
+// UserID and broke at the first hit, so every delivery row for a multi-
+// device user was attributed to the same device regardless of which device
+// the provider had actually delivered to.
 //
-// When no match is found — which cannot happen with a well-behaved
+// When no match is found — which should not happen with a compliant
 // provider but is possible with a misbehaving one — deviceTokenID remains
-// 0 and the delivery row is inserted with a zero foreign key, which will
-// either be rejected by a foreign-key constraint or silently insert an
-// invalid reference.
+// 0, the row is inserted with a zero foreign key, and a warning is logged
+// naming the user and push token so the mismatch is visible. The schema's
+// foreign-key behaviour determines whether the insert is rejected or
+// silently stores an invalid reference.
 //
 // # Failure semantics
 //
@@ -244,9 +296,12 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 		return fmt.Errorf("fetch notification: %w", err)
 	}
 
-	// Idempotency: skip if already processed.
-	if notif.Status == "COMPLETED" || notif.Status == "FAILED" {
-		log.Printf("[Worker] Notification %d already processed, skipping", event.NotificationID)
+	// Idempotency: decide whether this notification has already been
+	// processed. See the "Idempotency check" section of the method
+	// documentation for the full decision table.
+	if skip, err := p.alreadyProcessed(ctx, notif); err != nil {
+		return err
+	} else if skip {
 		return nil
 	}
 
@@ -328,15 +383,26 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 		return fmt.Errorf("provider send: %w", err)
 	}
 
-	// Record each delivery result.
+	// Record each delivery result. The provider is expected to return one
+	// result per input token, each carrying the token's PushToken; the
+	// token is the identity we use to attribute the delivery to a specific
+	// device_tokens row.
 	for _, r := range results {
 		var deviceTokenID int64
 		for _, t := range tokens {
-			if t.UserID == r.UserID {
+			if t.PushToken == r.PushToken {
 				deviceTokenID = t.ID
 				break
 			}
 		}
+		if deviceTokenID == 0 {
+			log.Printf(
+				"[Worker] Could not attribute delivery to a device token for user %d (push token %q); recording with device_token_id=0",
+				r.UserID,
+				r.PushToken,
+			)
+		}
+
 		status := r.Status
 		if r.Error != nil {
 			status = "FAILED"
@@ -369,6 +435,74 @@ func (p *Processor) ProcessSendRequested(ctx context.Context, event kafka.Notifi
 
 	log.Printf("[Worker] Notification %d processed successfully", event.NotificationID)
 	return nil
+}
+
+// alreadyProcessed reports whether the supplied notification has already
+// been processed and should be skipped by ProcessSendRequested.
+//
+// The function is the idempotency guard for Kafka's at-least-once delivery
+// contract. It returns (true, nil) when the notification must not be
+// re-dispatched, (false, nil) when processing may proceed, and a non-nil
+// error only when the decision requires a database read that failed.
+//
+// # Parameter type
+//
+// notif is the row type returned by NotificationRepository.FindByID
+// (sqlc.GetNotificationByIDRow), not the base sqlc.Notification model.
+// The two diverge because the underlying query joins in additional context
+// beyond the notification table's own columns; the fields this function
+// reads — ID and Status — are present on both. A future revision that
+// changes the repository's return type must update this signature in
+// lockstep.
+//
+// # Decision table
+//
+//	COMPLETED, FAILED                     → skip (terminal)
+//	PROCESSING, delivery rows > 0         → skip (predecessor reached recording)
+//	PROCESSING, delivery rows == 0        → proceed (predecessor crashed early)
+//	any other status                      → proceed
+//
+// The PROCESSING case queries the delivery repository to distinguish a
+// crash-early predecessor (safe to retry) from a crash-late predecessor
+// (skip to avoid duplicate pushes). The query is a COUNT against an
+// indexed column and is cheap relative to the provider call that would
+// otherwise follow.
+//
+// # Errors
+//
+// The only error source is the delivery count query for a PROCESSING
+// notification. A failure there is returned wrapped with the prefix
+// "count existing deliveries: " so the caller (ProcessSendRequested) can
+// propagate it without further decoration; the notification is left in its
+// current state and the Kafka consumer will retry the event.
+//
+// # Concurrency
+//
+// Safe for concurrent use. The function holds no state between calls and
+// performs only read-only repository queries.
+func (p *Processor) alreadyProcessed(ctx context.Context, notif sqlc.GetNotificationByIDRow) (bool, error) {
+	switch notif.Status {
+	case "COMPLETED", "FAILED":
+		log.Printf("[Worker] Notification %d already processed (status=%s), skipping", notif.ID, notif.Status)
+		return true, nil
+	case "PROCESSING":
+		existing, err := p.deliveryRepo.CountByNotification(ctx, notif.ID)
+		if err != nil {
+			return false, fmt.Errorf("count existing deliveries: %w", err)
+		}
+		if existing > 0 {
+			log.Printf(
+				"[Worker] Notification %d is PROCESSING with %d delivery rows from a previous attempt, skipping to avoid duplicate delivery",
+				notif.ID,
+				existing,
+			)
+			return true, nil
+		}
+		log.Printf("[Worker] Notification %d is PROCESSING with no delivery rows; treating as a crash-early retry", notif.ID)
+		return false, nil
+	default:
+		return false, nil
+	}
 }
 
 // deliveryUpdatedEvent converts a provider result into the analytics event
@@ -404,13 +538,14 @@ func deliveryUpdatedEvent(notificationID int64, provider string, result SendResu
 // # Flow
 //
 // The method reads the notification's target rows — paginated at offset 0
-// with a limit of 10,000 — and iterates them, accumulating user IDs
-// according to each row's target type:
+// with a limit of targetFetchLimit — and iterates them, accumulating user
+// IDs according to each row's target type:
 //
 //   - BROADCAST: every user with status "ACTIVE", fetched via
-//     ListByStatus with a limit of 1,000,000.
+//     ListByStatus with a limit of audienceFetchLimit.
 //   - SEGMENT: every member of the segment identified by the row's
-//     segment_id, fetched via ListBySegment with a limit of 1,000,000.
+//     segment_id, fetched via ListBySegment with a limit of
+//     audienceFetchLimit.
 //   - INDIVIDUAL: the single user_id on the row, if it is non-NULL.
 //   - UPLOAD: not implemented. The case exists in the switch and
 //     performs a `continue` with a TODO comment; the row contributes no
@@ -420,20 +555,25 @@ func deliveryUpdatedEvent(notificationID int64, provider string, result SendResu
 // targeted by more than one strategy appears once. The dedup uses a boolean
 // set and preserves input order.
 //
-// # Effective limits
+// # Limit handling
 //
-// The pagination limits used here are effectively unbounded. A BROADCAST
-// against a system with more than one million active users will silently
-// truncate to the first million; a segment of similar size will do the
-// same. Neither limit is derived from configuration, and neither is
-// logged when it truncates. For the current scale this is a latent issue
-// rather than an active one, but it will become active without warning.
+// Both the target fetch and the audience fetches are bounded by named
+// constants (targetFetchLimit and audienceFetchLimit). When a fetch returns
+// exactly as many rows as its limit, the method logs a warning naming the
+// notification and the affected fetch, on the reasoning that a full page
+// almost always means the underlying set was larger and the excess was
+// silently dropped by the query's LIMIT clause.
 //
-// The 10,000-target limit on the initial fetch is more likely to be
-// reached in practice than either of the million-row limits: a
-// notification with more than 10,000 target rows — a plausible count for
-// an INDIVIDUAL notification addressed to a large audience — will have
-// the excess targets silently dropped.
+// This closes finding H29 in code-review.md. A previous revision used
+// unnamed literals for the same bounds and logged nothing when they were
+// reached, so a truncated audience was indistinguishable from a complete
+// one in the worker logs.
+//
+// The warning does not abort the expansion: the users that were returned
+// are still targeted, and the notification proceeds with a smaller
+// audience than the operator may have intended. A future revision that
+// needs to fail loudly on truncation should replace the single-shot fetch
+// with a paginated loop and remove the limits.
 //
 // # UPLOAD targets are silently ignored
 //
@@ -463,18 +603,32 @@ func deliveryUpdatedEvent(notificationID int64, provider string, result SendResu
 // state is mutated; the only shared fields on the receiver are the
 // repository pointers, which are concurrency-safe.
 func (p *Processor) expandTargets(ctx context.Context, notificationID int64) ([]int64, error) {
-	targets, err := p.targetRepo.ListByNotification(ctx, notificationID, 0, 10000)
+	targets, err := p.targetRepo.ListByNotification(ctx, notificationID, 0, targetFetchLimit)
 	if err != nil {
 		return nil, fmt.Errorf("list targets: %w", err)
+	}
+	if int32(len(targets)) == targetFetchLimit {
+		log.Printf(
+			"[Worker] Notification %d: target fetch returned the maximum of %d rows; any additional targets were truncated",
+			notificationID,
+			targetFetchLimit,
+		)
 	}
 
 	var userIDs []int64
 	for _, t := range targets {
 		switch t.TargetType {
 		case "BROADCAST":
-			users, err := p.userRepo.ListByStatus(ctx, "ACTIVE", 0, 1000000)
+			users, err := p.userRepo.ListByStatus(ctx, "ACTIVE", 0, audienceFetchLimit)
 			if err != nil {
 				return nil, fmt.Errorf("list active users: %w", err)
+			}
+			if int32(len(users)) == audienceFetchLimit {
+				log.Printf(
+					"[Worker] Notification %d: BROADCAST audience fetch returned the maximum of %d users; any additional users were truncated",
+					notificationID,
+					audienceFetchLimit,
+				)
 			}
 			for _, u := range users {
 				userIDs = append(userIDs, u.ID)
@@ -483,9 +637,17 @@ func (p *Processor) expandTargets(ctx context.Context, notificationID int64) ([]
 			if !t.SegmentID.Valid {
 				continue
 			}
-			members, err := p.memberRepo.ListBySegment(ctx, t.SegmentID.Int64, 0, 1000000)
+			members, err := p.memberRepo.ListBySegment(ctx, t.SegmentID.Int64, 0, audienceFetchLimit)
 			if err != nil {
 				return nil, fmt.Errorf("list segment members: %w", err)
+			}
+			if int32(len(members)) == audienceFetchLimit {
+				log.Printf(
+					"[Worker] Notification %d: SEGMENT %d member fetch returned the maximum of %d rows; any additional members were truncated",
+					notificationID,
+					t.SegmentID.Int64,
+					audienceFetchLimit,
+				)
 			}
 			for _, m := range members {
 				userIDs = append(userIDs, m.UserID)
