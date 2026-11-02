@@ -1,7 +1,7 @@
 # Unified dev Dockerfile for server & worker (hot reload via air).
 # Build with: docker build -f Dockerfile.dev --build-arg AIR_CONFIG=.air.server.toml -t notification-server-dev .
 #             docker build -f Dockerfile.dev --build-arg AIR_CONFIG=.air.worker.toml -t notification-worker-dev .
-FROM golang:1.26-alpine
+FROM golang:1.26.10-alpine
 
 RUN apk add --no-cache git ca-certificates build-base
 RUN go install github.com/air-verse/air@latest

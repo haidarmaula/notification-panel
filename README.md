@@ -2,7 +2,7 @@
 
 **Version:** 1.0  
 **Last Updated:** 2026-09-10  
-**Language:** Go 1.26.4
+**Language:** Go 1.26.10
 
 ---
 
@@ -201,7 +201,7 @@ internal/features/{module}/
 ### Prerequisites
 
 - **Docker & Docker Compose** (for containerized development)
-- **Go 1.26.4** (for local development)
+- **Go 1.26.10** (for local development)
 - **Make** (for command automation)
 - **PostgreSQL** 17 (via Docker)
 - **Kafka** 4.3.1 (via Docker)
