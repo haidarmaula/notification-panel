@@ -1,6 +1,6 @@
 # Notification Panel Backend — Code Review Findings
 
-**Version:** 1.5
+**Version:** 1.6
 
 **Last Updated:** 2026-11-03
 
@@ -239,8 +239,8 @@ Design inconsistencies, duplication, contract drift, and maintainability hazards
 | M40 | `internal/token/jwt.go` — `ParseAccessToken` | Signing algorithm is not restricted to HS256 — HS384 or HS512 tokens signed with the same secret validate |
 | M41 | `internal/token/jwt.go` | No `iss`, `aud`, or `sub` enforcement |
 | M42 | `internal/token/jwt.go` | No revocation mechanism — logout is client-side only |
-| M43 | `internal/features/auth/dto.go` | No request body size limit and no `Content-Type` check |
-| M44 | `internal/features/mobile/handler.go`, `internal/features/segments/handler.go`, `internal/features/staff/handler.go`, `internal/features/users/handler.go`, `internal/features/notifications/handler.go` | Every handler decodes without a body size limit |
+| M43 | `internal/features/auth` | **Partially fixed in M02d:** login/refresh use the 64KiB full-body limit with safe 413/400; real-module rejection tests pass locally. Content-Type enforcement remains open for compatibility. |
+| M44 | All 16 JSON input handlers, including profile | **Fixed in local code, M02d:** 64KiB small JSON / 1MiB campaign limits, complete bounded reads and single-value decoding. [Evidence](docs/analysis/m02d-verification.md): boundary/direct-handler/real-DB route tests; no rejected mutation or Kafka event. Other abuse controls remain open. |
 | M45 | HTTP layer | No rate limiting on `/api/v1/auth/login` |
 | M46 | HTTP layer | No CORS configuration for the admin portal |
 | M47 | `internal/features/mobile/service.go` — `verifyJWT` | Correctly enforces HMAC signing — but `internal/token` does not apply the same hardening |
@@ -400,7 +400,8 @@ Focus: design consistency and maintainability.
 - [ ] M1–M8 — consolidate the duplicated helpers and DTOs
 - [ ] M9–M14 — remove dead code
 - [ ] M15–M27 — reconcile the divergent contracts and naming conventions
-- [ ] M43, M44 — add request body size limits and `Content-Type` checks
+- [x] M43 (body cap), M44 — bounded full-body reads for all 16 JSON inputs, locally verified M02d
+- [ ] M43 — Content-Type enforcement and remaining request/abuse controls
 - [ ] H43 — add graceful shutdown to the API server
 - [ ] M35–M37 — migrate to structured logging with a request ID
 
@@ -475,6 +476,7 @@ need reconciliation.
 | 1.0 | 2026-09-14 | Initial findings inventory compiled from the full-codebase Godoc pass |
 | 1.1 | 2026-11-02 | Add open Kafka findings H47/H48/M48 from source/dependency review and key-partition probe; see `docs/analysis/kafka-readiness.md`. No runtime fix applied. |
 | 1.2 | 2026-11-02 | Add open role-permission finding C21 from route/service/seed review and recalculate summary counts from distinct IDs; see `docs/analysis/api-data-security-readiness.md`. No runtime fix applied. |
+| 1.6 | 2026-11-03 | Remediate M44 and the body-size portion of M43 with shared bounded JSON input; Content-Type and other abuse controls remain open. |
 | 1.5 | 2026-11-03 | Fix new staff audit credential snapshots (including Create/After); prepare and locally verify historical batch cleanup. Production history/backups remain an operator gate. |
 | 1.4 | 2026-11-03 | Reconcile C6/C7 and implement current-DB staff administration guards; retain session/transaction/audit redaction limitations. |
 | 1.3 | 2026-11-02 | Remediate C21 in M02a with current-authority route/service guards and locally verified negative API/DB/Kafka cases; remaining security/transactional limitations recorded in `docs/analysis/m02a-verification.md`. |

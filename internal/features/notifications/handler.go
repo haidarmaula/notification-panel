@@ -2,9 +2,9 @@ package notifications
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"hello/internal/authz"
+	"hello/internal/httprequest"
 	"net/http"
 	"strconv"
 
@@ -204,10 +204,11 @@ func (h *NotificationHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // # Concurrency
 //
 // Safe for concurrent use.
+//
+// JSON input is limited to 1 MiB; oversized bodies return 413 before service work.
 func (h *NotificationHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateNotificationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.CampaignJSONLimit) {
 		return
 	}
 
@@ -293,6 +294,8 @@ func (h *NotificationHandler) Create(w http.ResponseWriter, r *http.Request) {
 // # Concurrency
 //
 // Safe for concurrent use.
+//
+// JSON input is limited to 1 MiB; oversized bodies return 413 before service work.
 func (h *NotificationHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -301,8 +304,7 @@ func (h *NotificationHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateNotificationRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.CampaignJSONLimit) {
 		return
 	}
 

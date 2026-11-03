@@ -1,5 +1,8 @@
 # Mobile Sync API Documentation
 
+JSON input limits and shared 413/400 behavior are documented in
+[request body contract](request-bodies-api.md) (M02d, locally verified; not deployed).
+
 **Version:** 1.0  
 **Base URL:** `/api/v1`  
 **Content-Type:** `application/json`

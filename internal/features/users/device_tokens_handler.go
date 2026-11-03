@@ -1,8 +1,8 @@
 package users
 
 import (
-	"encoding/json"
 	"errors"
+	"hello/internal/httprequest"
 	"net/http"
 	"time"
 
@@ -199,10 +199,11 @@ func (h *DeviceTokenHandler) ListByUser(w http.ResponseWriter, r *http.Request) 
 // # Concurrency
 //
 // Safe for concurrent use.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *DeviceTokenHandler) Register(w http.ResponseWriter, r *http.Request) {
 	var req RegisterDeviceTokenRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	if req.PushToken == "" {
@@ -288,6 +289,8 @@ func (h *DeviceTokenHandler) Register(w http.ResponseWriter, r *http.Request) {
 // # Concurrency
 //
 // Safe for concurrent use.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *DeviceTokenHandler) Update(w http.ResponseWriter, r *http.Request) {
 	tokenID, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -296,8 +299,7 @@ func (h *DeviceTokenHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateDeviceTokenRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 

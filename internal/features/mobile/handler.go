@@ -1,8 +1,8 @@
 package mobile
 
 import (
-	"encoding/json"
 	"errors"
+	"hello/internal/httprequest"
 	"net/http"
 
 	"hello/pkg/response"
@@ -49,12 +49,8 @@ func NewMobileHandler(service *MobileService) *MobileHandler {
 //
 // # Request
 //
-// The body must be a JSON object matching SyncRequest. As with the auth
-// endpoints, there is no explicit body-size limit and no Content-Type check
-// — a large body consumes memory up to whatever the surrounding server
-// permits, and a body sent with a non-JSON Content-Type is still decoded.
-// Deployments that expose this endpoint to untrusted mobile clients should
-// add a body-size limit in front of the handler.
+// The body must match SyncRequest and fit the shared 64 KiB budget.
+// Exactly one JSON value is required; Content-Type checks remain unchanged.
 //
 // # Validation
 //
@@ -96,10 +92,11 @@ func NewMobileHandler(service *MobileService) *MobileHandler {
 //
 // Safe for concurrent use. Each invocation operates on its own request and
 // response writer.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *MobileHandler) Sync(w http.ResponseWriter, r *http.Request) {
 	var req SyncRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 

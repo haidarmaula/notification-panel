@@ -2,9 +2,9 @@ package staff
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"hello/internal/authz"
+	"hello/internal/httprequest"
 	"net/http"
 	"strconv"
 	"time"
@@ -164,10 +164,11 @@ func NewStaffHandler(service StaffServicer) *StaffHandler {
 // # Concurrency
 //
 // Safe for concurrent use.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateStaffRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	if req.Role == "" || req.Name == "" || req.Email == "" || req.Password == "" {
@@ -327,6 +328,8 @@ func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 // # Concurrency
 //
 // Safe for concurrent use.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -334,8 +337,7 @@ func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdateStaffRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	if req.Role == "" && req.Name == "" && req.Email == "" {
@@ -394,6 +396,8 @@ func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 //
 // Safe for concurrent use. Two concurrent status changes on the same
 // account are not serialised; the last write wins.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -401,8 +405,7 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdateStatusRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	staff, err := h.service.UpdateStatus(r.Context(), id, req.IsActive)
@@ -476,6 +479,8 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 // # Concurrency
 //
 // Safe for concurrent use.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -483,8 +488,7 @@ func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdatePasswordRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	if req.CurrentPassword == "" {

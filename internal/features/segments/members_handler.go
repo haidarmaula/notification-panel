@@ -1,9 +1,9 @@
 package segments
 
 import (
-	"encoding/json"
 	"errors"
 	"hello/internal/authz"
+	"hello/internal/httprequest"
 	"net/http"
 
 	"hello/pkg/response"
@@ -171,6 +171,8 @@ func (h *MembersHandler) ListMembers(w http.ResponseWriter, r *http.Request) {
 // # Concurrency
 //
 // Safe for concurrent use.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *MembersHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 	segmentID, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -179,8 +181,7 @@ func (h *MembersHandler) AddMember(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req AddMemberRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	if req.UserID == 0 {

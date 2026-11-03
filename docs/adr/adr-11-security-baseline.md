@@ -235,7 +235,15 @@ unknown protected fields and invalid identifiers before writes. Example proposed
 body caps: auth/receipt 16KiB, ordinary CRUD 64KiB, bounded campaign target input
 256KiB; no upload endpoint is implied. Validate target count/payload schema and
 Firebase payload limits separately; large broadcast resolves in DB, not a
-20,000-token HTTP body. Final numbers are benchmarked/accepted in SPEC.
+20,000-token HTTP body. Final production numbers require benchmark/acceptance.
+
+Implementation checkpoint M02d (2026-11-03): [SPEC](../specs/m02d-json-request-limits.md)
+uses initial fixed budgets of 64KiB for small JSON operations and 1MiB for
+campaign create/update. These supersede the illustrative caps above for current
+local code, allowing bounded explicit user-ID lists without assuming short IDs.
+They are initial safeguards, not load-validated final limits. Complete body reads
+and one-value parsing are enforced; Content-Type, duplicate/unknown protected
+fields, per-field/item/depth limits and other A-5 controls remain follow-up.
 
 Set HTTP header/read/write/idle and per-operation DB/provider deadlines; cap
 header/query lengths and connection/pool concurrency. Follow ADR-01 rate/lease

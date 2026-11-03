@@ -78,3 +78,7 @@ The application guard does not constrain direct SQL or older deployed binaries.
 Production data has not been inspected or scrubbed, and UPDATE does not erase
 old WAL/backups/exports. Operator completion and historical-copy handling must
 be tracked separately before a production remediation claim is made.
+
+Follow-up 2026-11-03: [M02d request limits](m02d-verification.md) is now
+implemented/local-verified. This document retains M02c's checkpoint evidence;
+M02 overall still requires baseline reassessment and remaining controls.

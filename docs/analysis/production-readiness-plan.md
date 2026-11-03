@@ -159,7 +159,8 @@ Step 20 dimulai dengan [SPEC M02a](../specs/m02a-staff-operation-permissions.md)
 [API authorization](../api/authorization-api.md). M02a implemented/local-verified;
 [M02b staff administration](m02b-verification.md) juga implemented/local-verified.
 [M02c audit redaction](m02c-verification.md) juga implemented/local-verified;
-historical cleanup produksi tetap operator gate. Berikutnya M02d request limits. SPEC milestone lain ditulis saat dikerjakan,
+historical cleanup produksi tetap operator gate. [M02d request limits](m02d-verification.md)
+juga implemented/local-verified; berikutnya evaluasi baseline M02 dan SPEC kontrol yang masih terbuka. SPEC milestone lain ditulis saat dikerjakan,
 bukan sekaligus. G5 selain role matrix tetap terbuka.
 Perbaikan baseline tidak harus menunggu seluruh gate release; acceptance SPEC
 fitur sensitif menunggu keputusan yang dipakainya. Step 15 belum ditandai penuh
@@ -197,7 +198,7 @@ pekerjaan pada baris yang belum dicentang sudah dimulai, sesuai catatan.
 - [x] 17. Regenerate mock segments; selaraskan actor/password/not-found fixtures staff dan filtered/batch count assertions; build dan seluruh unit test lulus pada 2026-11-02. Tidak ada perubahan perilaku service atau bukti integration/load test.
 - [x] 18. GitHub Actions + script lokal format/modules/build/test/vet/vulnerability; local checks/actionlint lulus, security dependencies diperbarui dan reachable scan nol. Main workflow tetap; hosted run/ruleset belum diverifikasi karena belum di-push.
 - [x] 19. Runner fixture terisolasi: 15 migration up/down/up, repository, kedua Kafka topic/producer round trip dan Firebase SDK HTTP simulation lulus lokal; guard/cleanup diverifikasi. Bukan test adapter/worker/new pipeline atau real FCM/APNs; hosted integration job belum tersedia.
-- [ ] 20. Berjalan per milestone: SPEC M02a dan implementasi/18-case evidence selesai secara scoped; 56 role/route API cases plus negative DB/Kafka tests lulus lokal. M02b staff administration juga selesai scoped dengan 28 role/route API cases dan lifecycle/demotion tests lokal; M02c audit redaction dan SQL cleanup fixture lulus lokal. Historical cleanup produksi belum dijalankan; bukan bukti seluruh security/produksi selesai.
+- [ ] 20. Berjalan per milestone: SPEC M02a dan implementasi/18-case evidence selesai secara scoped; 56 role/route API cases plus negative DB/Kafka tests lulus lokal. M02b staff administration juga selesai scoped dengan 28 role/route API cases dan lifecycle/demotion tests lokal; M02c audit redaction dan SQL cleanup fixture lulus lokal. M02d membatasi 16 input JSON; boundary/48 rejection route cases lulus lokal. Historical cleanup produksi belum dijalankan; bukan bukti seluruh security/produksi selesai.
 
 ### Tahap 4 — delivery pipeline
 

@@ -80,7 +80,8 @@ authority/mutation/audit tetap mengikuti transaksi pemilik data M03/M04;
 M02a tidak mengklaim revocation membatalkan operasi yang sudah diotorisasi.
 [M02c audit redaction](m02c-verification.md) implemented/local-verified; skrip
 historis dan runbook tersedia, tetapi cleanup produksi belum dijalankan.
-Session, request limits, audit durability dan API/security baseline lain
+[M02d request limits](m02d-verification.md) juga implemented/local-verified.
+Session, rate limits, Content-Type/field policy, audit durability dan API/security baseline lain
 tetap pekerjaan M02 lanjutan. Prasyarat M03/M04 adalah guard baseline dan kontrak identitas
 yang dipakainya, bukan menunggu semua transaksi future diimplementasikan di M02.
 
@@ -115,7 +116,8 @@ Tidak ada perubahan perilaku service atau test yang di-skip.
 M01 step 18/19 selesai sebagai [CI/local checks](ci-readiness.md) dan
 [dependency smoke](integration-readiness.md). Step 20/M02 dimulai dengan SPEC
 M02a dan M02b yang selesai implemented/local-verified; berikutnya slice M02
-untuk API security baseline lain, berikutnya M02d request limits; M02c audit
-redaction sudah implemented/local-verified dan historical cleanup tetap operator gate. Hosted execution,
+untuk API security baseline lain. M02c audit redaction dan M02d JSON body limits
+sudah implemented/local-verified; historical cleanup tetap operator gate.
+Berikutnya evaluasi baseline M02 dan SPEC kontrol yang masih terbuka sebelum M03. Hosted execution,
 production adapter/pipeline, real provider/device dan production infrastructure
 belum dibuktikan oleh penyelesaian fondasi ini.

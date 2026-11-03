@@ -1,8 +1,8 @@
 package auth
 
 import (
-	"encoding/json"
 	"errors"
+	"hello/internal/httprequest"
 	"net/http"
 
 	"hello/internal/token"
@@ -55,15 +55,9 @@ func NewAuthHandler(service *AuthService) *AuthHandler {
 //
 // # Request
 //
-// The body must be a JSON object matching LoginRequest. The handler reads it
-// with json.NewDecoder(r.Body).Decode. There is no explicit body size limit
-// and no Content-Type check: a sufficiently large body will consume memory
-// up to whatever limit the surrounding net/http server imposes (by default,
-// none), and a body sent with a non-JSON Content-Type will still be
-// decoded. Deployments that expose this endpoint to untrusted networks
-// should add a body-size limit and a Content-Type guard in front of the
-// handler; the README lists input sanitization as a not-yet-implemented
-// concern.
+// The body must match LoginRequest and fit the shared 64 KiB JSON budget.
+// Oversized bodies return 413; invalid or multiple JSON values return 400.
+// Content-Type enforcement remains unchanged for compatibility.
 //
 // # Responses
 //
@@ -81,11 +75,12 @@ func NewAuthHandler(service *AuthService) *AuthHandler {
 //
 // Safe for concurrent use. Each invocation operates on its own request and
 // response writer.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 
@@ -115,9 +110,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 //
 // # Request
 //
-// The body must be a JSON object matching RefreshTokenRequest. As with
-// Login, there is no body-size limit and no Content-Type check; the same
-// deployment-level hardening applies.
+// The body must match RefreshTokenRequest and fit the shared 64 KiB budget.
+// Exactly one JSON value is required; Content-Type checks remain unchanged.
 //
 // # Responses
 //
@@ -148,11 +142,12 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 //
 // Safe for concurrent use. Each invocation operates on its own request and
 // response writer.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	var req RefreshTokenRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 

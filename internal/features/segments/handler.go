@@ -1,9 +1,9 @@
 package segments
 
 import (
-	"encoding/json"
 	"errors"
 	"hello/internal/authz"
+	"hello/internal/httprequest"
 	"net/http"
 	"strconv"
 
@@ -219,10 +219,11 @@ func (h *SegmentHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 // # Concurrency
 //
 // Safe for concurrent use.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *SegmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateSegmentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	if req.Name == "" {
@@ -297,6 +298,8 @@ func (h *SegmentHandler) Create(w http.ResponseWriter, r *http.Request) {
 // # Concurrency
 //
 // Safe for concurrent use.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *SegmentHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -305,8 +308,7 @@ func (h *SegmentHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateSegmentRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	if req.Name == nil && req.Description == nil {

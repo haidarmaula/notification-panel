@@ -1,8 +1,8 @@
 package profile
 
 import (
-	"encoding/json"
 	"errors"
+	"hello/internal/httprequest"
 	"net/http"
 	"time"
 
@@ -137,6 +137,8 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 // # Concurrency
 //
 // Safe for concurrent use.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	staffID, ok := GetStaffIDFromContext(r.Context())
 	if !ok || staffID == 0 {
@@ -145,8 +147,7 @@ func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateProfileRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 
@@ -216,6 +217,8 @@ func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 // not land last has effectively been logged out of the change they just
 // made, in the sense that their intended new password is not the one now
 // stored.
+//
+// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *ProfileHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	staffID, ok := GetStaffIDFromContext(r.Context())
 	if !ok || staffID == 0 {
@@ -224,8 +227,7 @@ func (h *ProfileHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req UpdatePasswordRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 
