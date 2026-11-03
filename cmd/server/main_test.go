@@ -36,6 +36,8 @@ func TestServerRouteRetirement(t *testing.T) {
 		if route.Disposition == "retired-unmounted" {
 			retired++
 			require.Empty(t, pattern, route.Pattern)
+		} else if route.Disposition == "configured-mobile" {
+			require.Empty(t, pattern, route.Pattern)
 		} else {
 			require.Equal(t, route.Pattern, pattern)
 		}

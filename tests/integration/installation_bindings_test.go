@@ -5,15 +5,24 @@ package integration
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 	"hello/internal/database"
 	"hello/internal/database/sqlc"
+	"hello/internal/features/applications"
 	"hello/internal/installation"
 )
 
@@ -162,10 +171,77 @@ func TestInstallationBindingSchema(t *testing.T) {
 	require.EqualValues(t, 3, id(`SELECT count(*) FROM installation_bindings b JOIN mobile_installations i ON i.id=b.installation_id
 		WHERE i.public_id=$1 AND b.retired_at IS NOT NULL`, enrolled.State.PublicID))
 
+	testMobileLifecycleHTTP(t, tx, publicA)
+
 }
 
 type installationLifecycleFixture struct{ pgx.Tx }
 
 func (f installationLifecycleFixture) BeginTx(ctx context.Context, _ pgx.TxOptions) (pgx.Tx, error) {
 	return f.Begin(ctx)
+}
+
+func testMobileLifecycleHTTP(t *testing.T, tx pgx.Tx, project pgtype.UUID) {
+	t.Helper()
+	mobileKey, mobileSigner, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	originKey, originSigner, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	cfg, err := json.Marshal(map[string]any{
+		"current_key_version": 1, "fingerprint_key": bytes.Repeat([]byte{2}, 32),
+		"encryption_keys": []map[string]any{{"version": 1, "key": bytes.Repeat([]byte{1}, 32)}},
+		"projects": []map[string]any{{
+			"app_id": project.String(), "issuer": "fixture-mobile", "audience": "fixture-a", "purpose": "access", "namespace": "issuer-namespace",
+			"verification_key": []byte(mobileKey), "origin_issuer": "fixture-origin", "origin_audience": "fixture-enrollment", "origin_key": []byte(originKey),
+			"routes": []map[string]any{{"platform": "ANDROID", "address_type": installation.FCMRegistrationToken,
+				"provider_namespace": "shared-project", "provider_route_key": "fixture-route"}},
+		}},
+	})
+	require.NoError(t, err)
+	runtime, err := installation.LoadRuntime(bytes.NewReader(cfg), sqlc.New(tx), installationLifecycleFixture{tx})
+	require.NoError(t, err)
+	mux := http.NewServeMux()
+	applications.RegisterMobileLifecycle(mux, runtime)
+	now := time.Now()
+	mobileJWT, err := jwt.NewWithClaims(jwt.SigningMethodEdDSA, jwt.MapClaims{
+		"iss": "fixture-mobile", "aud": "fixture-a", "sub": "shared-subject", "purpose": "access", "exp": now.Add(time.Minute).Unix(),
+	}).SignedString(mobileSigner)
+	require.NoError(t, err)
+	digest := sha256.Sum256([]byte(mobileJWT))
+	origin, err := jwt.NewWithClaims(jwt.SigningMethodEdDSA, jwt.MapClaims{
+		"iss": "fixture-origin", "aud": "fixture-enrollment", "sub": "shared-subject", "purpose": "mobile_installation_enrollment",
+		"app_id": project.String(), "namespace": "issuer-namespace", "credential_digest": base64.RawURLEncoding.EncodeToString(digest[:]),
+		"jti": "fixture-mobile-http", "iat": now.Unix(), "exp": now.Add(time.Minute).Unix(),
+	}).SignedString(originSigner)
+	require.NoError(t, err)
+	path := "/api/v1/apps/" + project.String() + "/mobile/installations"
+	request := func(path string, data map[string]string, status int) *httptest.ResponseRecorder {
+		t.Helper()
+		body, err := json.Marshal(data)
+		require.NoError(t, err)
+		r := httptest.NewRequest(http.MethodPost, path, bytes.NewReader(body))
+		r.Header.Set("Content-Type", "application/json")
+		r.Header.Set("Authorization", "Bearer "+mobileJWT)
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, r)
+		require.Equal(t, status, w.Code, w.Body.String())
+		require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+		return w
+	}
+	enroll := map[string]string{"platform": "ANDROID", "address_type": installation.FCMRegistrationToken, "address": "http-fixture-address", "origin": origin}
+	enroll["provider_namespace"] = "client-override"
+	request(path, enroll, 400)
+	delete(enroll, "provider_namespace")
+	w := request(path, enroll, 201)
+	var result struct {
+		Data map[string]string `json:"data"`
+	}
+	require.NoError(t, json.Unmarshal(w.Body.Bytes(), &result))
+	require.NotEmpty(t, result.Data["proof"])
+	require.Equal(t, "1", result.Data["version"])
+	request(path, enroll, 401)
+	logout := map[string]string{"proof": result.Data["proof"], "version": "1"}
+	w = request(path+"/"+result.Data["installation_id"]+"/logout", logout, 200)
+	require.NotContains(t, w.Body.String(), "proof")
+	require.Contains(t, w.Body.String(), `"owner_epoch":"2"`)
 }

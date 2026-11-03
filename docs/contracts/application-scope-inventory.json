@@ -336,6 +336,10 @@
     }
   ],
   "routes": [
+    {"pattern": "POST /api/v1/apps/{app_id}/mobile/installations", "source": "internal/features/applications/mobile_lifecycle.go", "scope": "application-scoped", "disposition": "configured-mobile"},
+    {"pattern": "POST /api/v1/apps/{app_id}/mobile/installations/{installation_id}/refresh", "source": "internal/features/applications/mobile_lifecycle.go", "scope": "application-scoped", "disposition": "configured-mobile"},
+    {"pattern": "POST /api/v1/apps/{app_id}/mobile/installations/{installation_id}/logout", "source": "internal/features/applications/mobile_lifecycle.go", "scope": "application-scoped", "disposition": "configured-mobile"},
+    {"pattern": "POST /api/v1/apps/{app_id}/mobile/installations/{installation_id}/switch", "source": "internal/features/applications/mobile_lifecycle.go", "scope": "application-scoped", "disposition": "configured-mobile"},
     {"pattern": "GET /api/v1/apps/{app_id}/uploads", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
     {"pattern": "GET /api/v1/apps/{app_id}/uploads/{batch_id}/rows", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
     {"pattern": "GET /api/v1/apps/{app_id}/audit-logs", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},

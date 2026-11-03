@@ -1,0 +1,30 @@
+# Mobile installation lifecycle
+
+Mount these routes by setting MOBILE_POLICY_FILE to an operator-managed JSON
+file. The server rejects invalid configuration at startup. The file contains
+encryption keys and must be restricted to the server identity.
+
+| POST path under /api/v1/apps/{app_id}/mobile/installations | Required JSON fields | Success |
+| --- | --- | --- |
+| collection | platform, address_type, address, origin | 201 with state and proof |
+| /{installation_id}/refresh | proof, version, platform, address_type, address | 200 with state |
+| /{installation_id}/logout | proof, version | 200 with state |
+| /{installation_id}/switch | proof, version, platform, address_type, address | 200 with state |
+
+All routes use one Bearer mobile JWT. No staff API key is sent. The switch JWT
+represents the destination user. Version and owner_epoch are decimal strings.
+State includes installation_id, version and owner_epoch. The client stores the
+one-time enrollment proof securely. An invalid JWT or origin assertion returns
+401. Unknown installation or invalid proof returns 404. Stale version, address
+conflict and non-ACTIVE project return 409. Invalid input returns 400.
+Responses use the existing envelope and Cache-Control: no-store.
+
+The config file has current_key_version, fingerprint_key, encryption_keys
+(entries with version and key), and projects. Each project has app_id, issuer,
+audience, purpose, namespace, verification_key, origin_issuer, origin_audience,
+origin_key, and routes. A route has platform, address_type, provider_namespace
+and provider_route_key. Keys are standard base64. The server chooses the route
+by project, platform and address type. Each pair has at most one configured
+route. Per-project broker verification and provider eligibility require
+deployment evidence. A consumed origin assertion must be replaced before
+retrying enrollment.

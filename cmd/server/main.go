@@ -5,6 +5,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 
 	"hello/internal/config"
 	"hello/internal/database"
@@ -14,6 +15,7 @@ import (
 	"hello/internal/features/auth"
 	"hello/internal/features/profile"
 	"hello/internal/features/staff"
+	"hello/internal/installation"
 	"hello/internal/middleware"
 	"hello/internal/token"
 )
@@ -26,9 +28,24 @@ func main() {
 	}
 	defer db.Close()
 
+	queries := sqlc.New(db)
+	mux := serverRoutes(queries, db, cfg)
+	if path := os.Getenv("MOBILE_POLICY_FILE"); path != "" {
+		file, err := os.Open(path)
+		if err != nil {
+			log.Fatal("cannot open mobile policy file")
+		}
+		runtime, err := installation.LoadRuntime(file, queries, db)
+		file.Close()
+		if err != nil {
+			log.Fatal("invalid mobile policy configuration")
+		}
+		applications.RegisterMobileLifecycle(mux, runtime)
+	}
+
 	server := &http.Server{
 		Addr:    ":8080",
-		Handler: middleware.Logging(serverRoutes(sqlc.New(db), db, cfg)),
+		Handler: middleware.Logging(mux),
 	}
 	log.Println("server running :8080")
 	log.Fatal(server.ListenAndServe())

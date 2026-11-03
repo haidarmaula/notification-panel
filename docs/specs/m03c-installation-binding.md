@@ -1,6 +1,6 @@
 # M03c installation and binding contract
 
-Status: schema migration 000018 implemented. Protected enrollment, refresh, logout and owner switch are implemented. The project JWT verifier and identity lookup are implemented. Signed origin assertions and replay protection are implemented. HTTP wiring and deployment policy remain pending. Production issuer, origin verification,
+Status: schema migration 000018 implemented. Protected enrollment, refresh, logout and owner switch are implemented. The project JWT verifier and identity lookup are implemented. Signed origin assertions and replay protection are implemented. Mobile HTTP wiring is available through an explicit operator policy file. Deployment evidence remains pending. Production issuer, origin verification,
 provider route and secret configuration require per-project evidence.
 See [ADR-04](../adr/adr-04-provider-selection.md) and the
 [application scope plan](m03a-application-scope-plan.md).
@@ -108,8 +108,9 @@ route changes create a new generation. Logout and owner switches advance
 version and owner epoch. An address conflict rolls back retirement and
 the installation update.
 
-Mobile JWT/origin verification, key loading, HTTP contracts, provider
-invalidation and optional client metadata remain separate.
+The [mobile HTTP contract](../api/mobile-installations-api.md) wires JWT,
+origin and keys to this service. Provider invalidation and optional client
+metadata remain separate.
 
 ### Mobile authority
 

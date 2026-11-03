@@ -176,7 +176,9 @@ Step 20 berlanjut ke [M03c](../specs/m03c-installation-binding.md). Migrasi
 000018–000019 menambahkan schema instalasi dan binding. Proteksi alamat dan
 transaksi lifecycle tersedia. Verifier JWT per project dan mapping identitas
 000020 tersedia. Adapter origin bertanda tangan dan proteksi replay 000021
-tersedia. Berikutnya konfigurasi server dan kontrak HTTP mobile.
+tersedia. [API lifecycle mobile](../api/mobile-installations-api.md) dapat
+dipasang lewat policy server. Verifikasi consumer dan kebijakan deployment
+per project tetap terbuka.
 Gate integrasi dan kontrol rilis M02 tetap terbuka.
 
 ## 5. Checklist pelaksanaan
