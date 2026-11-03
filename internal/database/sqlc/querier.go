@@ -398,6 +398,7 @@ type Querier interface {
 	ReplaceScopedSegment(ctx context.Context, arg ReplaceScopedSegmentParams) (ReplaceScopedSegmentRow, error)
 	ReplaceScopedTemplate(ctx context.Context, arg ReplaceScopedTemplateParams) (ReplaceScopedTemplateRow, error)
 	ReserveInstallationBindingID(ctx context.Context) (int64, error)
+	ResolveMobileIdentity(ctx context.Context, arg ResolveMobileIdentityParams) (int64, error)
 	RetireInstallationBinding(ctx context.Context, arg RetireInstallationBindingParams) (int64, error)
 	ScopedSegmentHasReferences(ctx context.Context, segmentID int64) (bool, error)
 	ScopedSegmentNameTaken(ctx context.Context, arg ScopedSegmentNameTakenParams) (bool, error)

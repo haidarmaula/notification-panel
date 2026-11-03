@@ -1,6 +1,6 @@
 # M03c installation and binding contract
 
-Status: schema migration 000018 implemented. Protected enrollment, refresh, logout and owner switch are implemented. Mobile authority remains pending. Production issuer, origin verification,
+Status: schema migration 000018 implemented. Protected enrollment, refresh, logout and owner switch are implemented. The project JWT verifier and identity lookup are implemented. Origin adapter and HTTP wiring remain pending. Production issuer, origin verification,
 provider route and secret configuration require per-project evidence.
 See [ADR-04](../adr/adr-04-provider-selection.md) and the
 [application scope plan](m03a-application-scope-plan.md).
@@ -110,3 +110,19 @@ the installation update.
 
 Mobile JWT/origin verification, key loading, HTTP contracts, provider
 invalidation and optional client metadata remain separate.
+
+### Mobile authority
+
+The initial verifier pins EdDSA, a server-configured public key, issuer,
+single audience and purpose for each project. It requires an expiration and
+a mapped subject. An issuer/audience pair cannot be reused across configured
+projects. Migration 000020 maps (project, namespace, subject) to an active
+user through a scoped FK. Mapping is explicit and has no legacy fallback.
+
+Enrollment requires an origin verifier configured for the project. The
+adapter receives the project, namespace, subject and JWT digest, and owns
+the evidence protocol and challenge/replay checks. This slice verifies
+that evidence is required and routed to the pinned adapter. Deployment
+adapter, key provisioning, subject provisioning and HTTP wiring follow
+once the project policies are supplied. The lifecycle rechecks project
+and user status within its write transaction.

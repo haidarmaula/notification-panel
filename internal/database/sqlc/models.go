@@ -79,6 +79,13 @@ type InstallationBinding struct {
 	ActiveOwnerEpoch     pgtype.Int8        `db:"active_owner_epoch"`
 }
 
+type MobileIdentity struct {
+	ApplicationID     int64  `db:"application_id"`
+	IdentityNamespace string `db:"identity_namespace"`
+	Subject           string `db:"subject"`
+	UserID            int64  `db:"user_id"`
+}
+
 type MobileInstallation struct {
 	ID            int64              `db:"id"`
 	PublicID      pgtype.UUID        `db:"public_id"`

@@ -4,6 +4,7 @@
   "status": "source-inventory-not-runtime-isolation",
   "spec": "../specs/m03b-application-data-isolation.md",
   "tables": [
+    {"name": "mobile_identities", "scope": "application-scoped"},
     {"name": "mobile_installations", "scope": "application-scoped"},
     {"name": "installation_bindings", "scope": "application-scoped"},
     {
@@ -72,6 +73,7 @@
     }
   ],
   "query_files": [
+    {"path": "db/queries/mobile_identity.sql", "scope": "application-scoped", "names": ["ResolveMobileIdentity"]},
     {"path": "db/queries/installation_lifecycle.sql", "scope": "application-scoped", "names": ["AdvanceMobileInstallation", "CreateMobileInstallation", "InsertInstallationBinding", "LockActiveInstallationBinding", "LockInstallationProject", "LockInstallationUser", "LockMobileInstallation", "ReserveInstallationBindingID", "RetireInstallationBinding", "TouchMobileInstallation"]},
     {
       "path": "db/queries/applications.sql",

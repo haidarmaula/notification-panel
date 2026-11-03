@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/stretchr/testify/require"
 	"hello/internal/database"
+	"hello/internal/database/sqlc"
 	"hello/internal/installation"
 )
 
@@ -50,6 +51,14 @@ func TestInstallationBindingSchema(t *testing.T) {
 	userA := id("INSERT INTO users(application_id,external_id) VALUES($1,'binding-schema-user-a') RETURNING id", a)
 	userB := id("INSERT INTO users(application_id,external_id) VALUES($1,'binding-schema-user-b') RETURNING id", b)
 	nextOwner := id("INSERT INTO users(application_id,external_id) VALUES($1,'binding-schema-user-next') RETURNING id", a)
+
+	const mapping = "INSERT INTO mobile_identities(application_id,identity_namespace,subject,user_id) VALUES($1,'issuer-namespace','shared-subject',$2)"
+	reject("23503", mapping, a, userB)
+	exec(mapping, a, userA)
+	exec(mapping, b, userB)
+	resolved, err := sqlc.New(tx).ResolveMobileIdentity(ctx, sqlc.ResolveMobileIdentityParams{ApplicationID: b, IdentityNamespace: "issuer-namespace", Subject: "shared-subject"})
+	require.NoError(t, err)
+	require.Equal(t, userB, resolved)
 	const install = `INSERT INTO mobile_installations(application_id,owner_user_id,proof_verifier)
 		VALUES($1,$2,decode(repeat('ab',32),'hex')) RETURNING id`
 	reject("23503", install, a, userB)

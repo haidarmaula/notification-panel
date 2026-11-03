@@ -73,6 +73,7 @@ func TestBusinessApplicationScopeMigration(t *testing.T) {
 		require.NoError(t, e)
 		return string(b)
 	}
+	exec(read("db/migrations/000020_create_mobile_identities.down.sql"))
 	exec(read("db/migrations/000018_create_installation_bindings.down.sql"))
 	exec(down)
 	staff := id(`INSERT INTO staff_users(role_id,name,email,password_hash) SELECT id,'Scope fixture',gen_random_uuid()::text || '@fixture.invalid','fixture-only' FROM roles WHERE name='SUPER_ADMIN' RETURNING id`)
