@@ -16,7 +16,8 @@ SELECT
     is_active,
     last_seen_at,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM device_tokens
 WHERE id = sqlc.arg('id')
 LIMIT 1;
@@ -35,7 +36,8 @@ SELECT
     is_active,
     last_seen_at,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM device_tokens
 WHERE push_token = sqlc.arg('push_token')
 LIMIT 1;
@@ -150,7 +152,8 @@ SELECT
     is_active,
     last_seen_at,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM device_tokens
 WHERE user_id = sqlc.arg('user_id')
 ORDER BY created_at DESC
@@ -171,7 +174,8 @@ SELECT
     is_active,
     last_seen_at,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM device_tokens
 WHERE user_id = ANY(sqlc.arg('user_ids')::bigint[])
     AND is_active = true

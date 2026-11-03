@@ -48,7 +48,8 @@ RETURNING
     external_id,
     is_valid,
     error_message,
-    created_at
+    created_at,
+    application_id
 `
 
 type CreateUploadBatchRowParams struct {
@@ -76,6 +77,7 @@ func (q *Queries) CreateUploadBatchRow(ctx context.Context, arg CreateUploadBatc
 		&i.IsValid,
 		&i.ErrorMessage,
 		&i.CreatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -88,7 +90,8 @@ SELECT
     external_id,
     is_valid,
     error_message,
-    created_at
+    created_at,
+    application_id
 FROM upload_batch_rows
 WHERE batch_id = $1
 ORDER BY created_at
@@ -121,6 +124,7 @@ func (q *Queries) ListUploadBatchRows(ctx context.Context, arg ListUploadBatchRo
 			&i.IsValid,
 			&i.ErrorMessage,
 			&i.CreatedAt,
+			&i.ApplicationID,
 		); err != nil {
 			return nil, err
 		}

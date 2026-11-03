@@ -75,7 +75,8 @@ RETURNING
     delivered_at,
     opened_at,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 `
 
 type CreateNotificationDeliveryParams struct {
@@ -115,6 +116,7 @@ func (q *Queries) CreateNotificationDelivery(ctx context.Context, arg CreateNoti
 		&i.OpenedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }

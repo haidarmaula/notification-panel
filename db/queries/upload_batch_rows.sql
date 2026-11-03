@@ -21,7 +21,8 @@ RETURNING
     external_id,
     is_valid,
     error_message,
-    created_at;
+    created_at,
+    application_id;
 
 -- ==========================================
 -- LIST
@@ -34,7 +35,8 @@ SELECT
     external_id,
     is_valid,
     error_message,
-    created_at
+    created_at,
+    application_id
 FROM upload_batch_rows
 WHERE batch_id = sqlc.arg('batch_id')
 ORDER BY created_at

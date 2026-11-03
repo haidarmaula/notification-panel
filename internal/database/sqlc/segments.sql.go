@@ -58,7 +58,8 @@ RETURNING
     description,
     created_by,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 `
 
 type CreateSegmentParams struct {
@@ -80,6 +81,7 @@ func (q *Queries) CreateSegment(ctx context.Context, arg CreateSegmentParams) (S
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -126,7 +128,8 @@ SELECT
     description,
     created_by,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM segments
 WHERE id = $1
 LIMIT 1
@@ -145,6 +148,7 @@ func (q *Queries) GetSegmentByID(ctx context.Context, id int64) (Segment, error)
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -156,7 +160,8 @@ SELECT
     description,
     created_by,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM segments
 WHERE name = $1
 LIMIT 1
@@ -172,6 +177,7 @@ func (q *Queries) GetSegmentByName(ctx context.Context, name string) (Segment, e
 		&i.CreatedBy,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }

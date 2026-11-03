@@ -132,7 +132,8 @@ local-verified. [M03a.3 HTTP](m03a3-verification.md) juga implemented/local-veri
 sepuluh endpoint registry/grants, PROVISIONING only. Berikutnya M03b scoped
 schema/query/API dan legacy worker/scheduler/fanout gate sebelum data app kedua.
 [M03b.1 inventory/design](m03b1-scope-inventory.md) selesai tanpa perubahan runtime;
-berikutnya M03b.2 schema/preflight/backfill. [SPEC transisi](../specs/m03b-application-data-isolation.md)
+[M03b.2a expansion/preflight/backfill](m03b2a-verification.md) kini lulus lokal;
+berikutnya scoped callers M03b.3, kemudian finalisasi constraint bersama cutover. [SPEC transisi](../specs/m03b-application-data-isolation.md)
 merinci lima kelompok M03b; belum merupakan bukti isolasi.
 M02 release controls belum dinyatakan selesai. Hosted execution,
 production adapter/pipeline, real provider/device dan production infrastructure

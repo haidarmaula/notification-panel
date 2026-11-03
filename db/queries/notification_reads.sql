@@ -17,7 +17,8 @@ RETURNING
     id,
     notification_id,
     user_id,
-    read_at;
+    read_at,
+    application_id;
 
 -- ==========================================
 -- EXISTS

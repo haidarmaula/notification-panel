@@ -101,7 +101,8 @@ RETURNING
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 `
 
 type CreateUserParams struct {
@@ -130,6 +131,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -191,7 +193,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 WHERE email = $1
 LIMIT 1
@@ -208,6 +211,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email pgtype.Text) (User, 
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -220,7 +224,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 WHERE external_id = $1
 LIMIT 1
@@ -237,6 +242,7 @@ func (q *Queries) GetUserByExternalID(ctx context.Context, externalID string) (U
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -250,7 +256,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 WHERE id = $1
 LIMIT 1
@@ -270,6 +277,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id int64) (User, error) {
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -283,7 +291,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 ORDER BY name
 LIMIT $2
@@ -315,6 +324,7 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ApplicationID,
 		); err != nil {
 			return nil, err
 		}
@@ -335,7 +345,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 WHERE status = $1
 ORDER BY name
@@ -369,6 +380,7 @@ func (q *Queries) ListUsersByStatus(ctx context.Context, arg ListUsersByStatusPa
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ApplicationID,
 		); err != nil {
 			return nil, err
 		}
@@ -388,7 +400,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 WHERE
     ($1::text = '' OR name ILIKE '%' || $1 || '%'
@@ -432,6 +445,7 @@ func (q *Queries) ListUsersWithFilters(ctx context.Context, arg ListUsersWithFil
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ApplicationID,
 		); err != nil {
 			return nil, err
 		}
@@ -452,7 +466,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 WHERE
     name ILIKE '%' || $1 || '%'
@@ -489,6 +504,7 @@ func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]Use
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ApplicationID,
 		); err != nil {
 			return nil, err
 		}

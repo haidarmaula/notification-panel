@@ -44,7 +44,8 @@ RETURNING
     id,
     notification_id,
     user_id,
-    read_at
+    read_at,
+    application_id
 `
 
 type CreateNotificationReadParams struct {
@@ -63,6 +64,7 @@ func (q *Queries) CreateNotificationRead(ctx context.Context, arg CreateNotifica
 		&i.NotificationID,
 		&i.UserID,
 		&i.ReadAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }

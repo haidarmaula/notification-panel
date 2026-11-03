@@ -1,7 +1,9 @@
 # M03b — Existing data, queries and API application isolation
 
-2026-11-03. **M03b.1 source inventory and migration/retirement design only.**
-No schema, query, route or worker isolation is implemented by this document.
+2026-11-03. **M03b.1 inventory/design complete; M03b.2a additive schema/tooling locally verified.**
+Business query/API/worker isolation is not implemented.
+[Expansion contract](m03b2-business-scope-expansion.md),
+[verification](../analysis/m03b2a-verification.md).
 [M03a registry](m03a-application-registry.md) is locally implemented; every project
 remains PROVISIONING. Normative boundary: [ADR-12](../adr/adr-12-multi-application-isolation.md).
 Source baseline: [reviewed inventory](../contracts/application-scope-inventory.json)
@@ -220,7 +222,8 @@ execution and updates. These are separate from M03b's structural isolation gate.
 | M03b.4 | Scoped campaign/template/target/delivery/read/upload/audit access and projections | Cross-app references rejected atomically; safe optional/delete behavior; draft invariants; full no-side-effect negatives; no deferred features added |
 | M03b.5 | Legacy retirement/deployment gate and complete isolation verification | Every inventory entry scoped, intentionally global or unreachable; old writers stopped; A/B API/SQL/background tests and rollout/rollback evidence |
 
-M03b.2–5 are not implemented. Each may need focused commits; these labels are
+M03b.2a expansion/preflight/reviewed backfill is locally verified. Final M03b.2
+NOT NULL/scoped keys and M03b.3–5 remain pending. Each may need focused commits; these labels are
 work groups, not time estimates or a fixed count of coding tasks. Current source
 inventory checking is not the final runtime isolation checker. Activation can
 remain blocked on M03c/d and M04–M06 even after structural M03b checks pass.

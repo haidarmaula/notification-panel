@@ -10,7 +10,8 @@ SELECT
     total_rows,
     valid_rows,
     invalid_rows,
-    created_at
+    created_at,
+    application_id
 FROM upload_batches
 WHERE id = sqlc.arg('id')
 LIMIT 1;
@@ -41,7 +42,8 @@ RETURNING
     total_rows,
     valid_rows,
     invalid_rows,
-    created_at;
+    created_at,
+    application_id;
 
 -- ==========================================
 -- LIST

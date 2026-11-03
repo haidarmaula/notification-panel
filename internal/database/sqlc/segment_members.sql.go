@@ -89,7 +89,8 @@ RETURNING
     id,
     segment_id,
     user_id,
-    created_at
+    created_at,
+    application_id
 `
 
 type CreateSegmentMemberParams struct {
@@ -108,6 +109,7 @@ func (q *Queries) CreateSegmentMember(ctx context.Context, arg CreateSegmentMemb
 		&i.SegmentID,
 		&i.UserID,
 		&i.CreatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -173,7 +175,8 @@ SELECT
     id,
     segment_id,
     user_id,
-    created_at
+    created_at,
+    application_id
 FROM segment_members
 WHERE id = $1
 LIMIT 1
@@ -190,6 +193,7 @@ func (q *Queries) GetSegmentMemberByID(ctx context.Context, id int64) (SegmentMe
 		&i.SegmentID,
 		&i.UserID,
 		&i.CreatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }

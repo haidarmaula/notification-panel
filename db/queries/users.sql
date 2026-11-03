@@ -10,7 +10,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 WHERE id = sqlc.arg('id')
 LIMIT 1;
@@ -23,7 +24,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 WHERE external_id = sqlc.arg('external_id')
 LIMIT 1;
@@ -36,7 +38,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 WHERE email = sqlc.arg('email')
 LIMIT 1;
@@ -83,7 +86,8 @@ RETURNING
     email,
     status,
     created_at,
-    updated_at;
+    updated_at,
+    application_id;
 
 -- ==========================================
 -- UPDATE
@@ -126,7 +130,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 ORDER BY name
 LIMIT sqlc.arg('limit')
@@ -144,7 +149,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 WHERE
     name ILIKE '%' || sqlc.arg('keyword') || '%'
@@ -174,7 +180,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 WHERE status = sqlc.arg('status')
 ORDER BY name
@@ -202,7 +209,8 @@ SELECT
     email,
     status,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM users
 WHERE
     (sqlc.arg('keyword')::text = '' OR name ILIKE '%' || sqlc.arg('keyword') || '%'

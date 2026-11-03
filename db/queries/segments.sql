@@ -9,7 +9,8 @@ SELECT
     description,
     created_by,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM segments
 WHERE id = sqlc.arg('id')
 LIMIT 1;
@@ -21,7 +22,8 @@ SELECT
     description,
     created_by,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM segments
 WHERE name = sqlc.arg('name')
 LIMIT 1;
@@ -58,7 +60,8 @@ RETURNING
     description,
     created_by,
     created_at,
-    updated_at;
+    updated_at,
+    application_id;
 
 -- ==========================================
 -- UPDATE

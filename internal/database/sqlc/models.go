@@ -57,23 +57,25 @@ type DeviceToken struct {
 	LastSeenAt     pgtype.Timestamptz `db:"last_seen_at"`
 	CreatedAt      pgtype.Timestamptz `db:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `db:"updated_at"`
+	ApplicationID  pgtype.Int8        `db:"application_id"`
 }
 
 type Notification struct {
-	ID           int64              `db:"id"`
-	TemplateID   pgtype.Int8        `db:"template_id"`
-	TemplateName pgtype.Text        `db:"template_name"`
-	Title        string             `db:"title"`
-	Body         string             `db:"body"`
-	Payload      []byte             `db:"payload"`
-	Priority     string             `db:"priority"`
-	Status       string             `db:"status"`
-	ScheduledAt  pgtype.Timestamptz `db:"scheduled_at"`
-	PublishedAt  pgtype.Timestamptz `db:"published_at"`
-	CompletedAt  pgtype.Timestamptz `db:"completed_at"`
-	CreatedBy    int64              `db:"created_by"`
-	CreatedAt    pgtype.Timestamptz `db:"created_at"`
-	UpdatedAt    pgtype.Timestamptz `db:"updated_at"`
+	ID            int64              `db:"id"`
+	TemplateID    pgtype.Int8        `db:"template_id"`
+	TemplateName  pgtype.Text        `db:"template_name"`
+	Title         string             `db:"title"`
+	Body          string             `db:"body"`
+	Payload       []byte             `db:"payload"`
+	Priority      string             `db:"priority"`
+	Status        string             `db:"status"`
+	ScheduledAt   pgtype.Timestamptz `db:"scheduled_at"`
+	PublishedAt   pgtype.Timestamptz `db:"published_at"`
+	CompletedAt   pgtype.Timestamptz `db:"completed_at"`
+	CreatedBy     int64              `db:"created_by"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
+	ApplicationID pgtype.Int8        `db:"application_id"`
 }
 
 type NotificationDelivery struct {
@@ -91,6 +93,7 @@ type NotificationDelivery struct {
 	OpenedAt          pgtype.Timestamptz `db:"opened_at"`
 	CreatedAt         pgtype.Timestamptz `db:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `db:"updated_at"`
+	ApplicationID     pgtype.Int8        `db:"application_id"`
 }
 
 type NotificationRead struct {
@@ -98,6 +101,7 @@ type NotificationRead struct {
 	NotificationID int64              `db:"notification_id"`
 	UserID         int64              `db:"user_id"`
 	ReadAt         pgtype.Timestamptz `db:"read_at"`
+	ApplicationID  pgtype.Int8        `db:"application_id"`
 }
 
 type NotificationTarget struct {
@@ -108,6 +112,7 @@ type NotificationTarget struct {
 	UserID         pgtype.Int8        `db:"user_id"`
 	UploadBatchID  pgtype.Int8        `db:"upload_batch_id"`
 	CreatedAt      pgtype.Timestamptz `db:"created_at"`
+	ApplicationID  pgtype.Int8        `db:"application_id"`
 }
 
 type Role struct {
@@ -119,19 +124,21 @@ type Role struct {
 }
 
 type Segment struct {
-	ID          int64              `db:"id"`
-	Name        string             `db:"name"`
-	Description pgtype.Text        `db:"description"`
-	CreatedBy   int64              `db:"created_by"`
-	CreatedAt   pgtype.Timestamptz `db:"created_at"`
-	UpdatedAt   pgtype.Timestamptz `db:"updated_at"`
+	ID            int64              `db:"id"`
+	Name          string             `db:"name"`
+	Description   pgtype.Text        `db:"description"`
+	CreatedBy     int64              `db:"created_by"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
+	ApplicationID pgtype.Int8        `db:"application_id"`
 }
 
 type SegmentMember struct {
-	ID        int64              `db:"id"`
-	SegmentID int64              `db:"segment_id"`
-	UserID    int64              `db:"user_id"`
-	CreatedAt pgtype.Timestamptz `db:"created_at"`
+	ID            int64              `db:"id"`
+	SegmentID     int64              `db:"segment_id"`
+	UserID        int64              `db:"user_id"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	ApplicationID pgtype.Int8        `db:"application_id"`
 }
 
 type StaffUser struct {
@@ -155,6 +162,7 @@ type Template struct {
 	IsActive      bool               `db:"is_active"`
 	CreatedAt     pgtype.Timestamptz `db:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
+	ApplicationID pgtype.Int8        `db:"application_id"`
 }
 
 type UploadBatch struct {
@@ -165,23 +173,26 @@ type UploadBatch struct {
 	ValidRows        int32              `db:"valid_rows"`
 	InvalidRows      int32              `db:"invalid_rows"`
 	CreatedAt        pgtype.Timestamptz `db:"created_at"`
+	ApplicationID    pgtype.Int8        `db:"application_id"`
 }
 
 type UploadBatchRow struct {
-	ID           int64              `db:"id"`
-	BatchID      int64              `db:"batch_id"`
-	ExternalID   string             `db:"external_id"`
-	IsValid      bool               `db:"is_valid"`
-	ErrorMessage pgtype.Text        `db:"error_message"`
-	CreatedAt    pgtype.Timestamptz `db:"created_at"`
+	ID            int64              `db:"id"`
+	BatchID       int64              `db:"batch_id"`
+	ExternalID    string             `db:"external_id"`
+	IsValid       bool               `db:"is_valid"`
+	ErrorMessage  pgtype.Text        `db:"error_message"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	ApplicationID pgtype.Int8        `db:"application_id"`
 }
 
 type User struct {
-	ID         int64              `db:"id"`
-	ExternalID string             `db:"external_id"`
-	Name       pgtype.Text        `db:"name"`
-	Email      pgtype.Text        `db:"email"`
-	Status     string             `db:"status"`
-	CreatedAt  pgtype.Timestamptz `db:"created_at"`
-	UpdatedAt  pgtype.Timestamptz `db:"updated_at"`
+	ID            int64              `db:"id"`
+	ExternalID    string             `db:"external_id"`
+	Name          pgtype.Text        `db:"name"`
+	Email         pgtype.Text        `db:"email"`
+	Status        string             `db:"status"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
+	ApplicationID pgtype.Int8        `db:"application_id"`
 }

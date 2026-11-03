@@ -174,7 +174,8 @@ SELECT
     is_active,
     last_seen_at,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM device_tokens
 WHERE id = $1
 LIMIT 1
@@ -200,6 +201,7 @@ func (q *Queries) GetDeviceTokenByID(ctx context.Context, id int64) (DeviceToken
 		&i.LastSeenAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -218,7 +220,8 @@ SELECT
     is_active,
     last_seen_at,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM device_tokens
 WHERE push_token = $1
 LIMIT 1
@@ -241,6 +244,7 @@ func (q *Queries) GetDeviceTokenByPushToken(ctx context.Context, pushToken strin
 		&i.LastSeenAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -260,7 +264,8 @@ SELECT
     is_active,
     last_seen_at,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM device_tokens
 WHERE user_id = $1
 ORDER BY created_at DESC
@@ -300,6 +305,7 @@ func (q *Queries) ListDeviceTokensByUser(ctx context.Context, arg ListDeviceToke
 			&i.LastSeenAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ApplicationID,
 		); err != nil {
 			return nil, err
 		}
@@ -325,7 +331,8 @@ SELECT
     is_active,
     last_seen_at,
     created_at,
-    updated_at
+    updated_at,
+    application_id
 FROM device_tokens
 WHERE user_id = ANY($1::bigint[])
     AND is_active = true
@@ -355,6 +362,7 @@ func (q *Queries) ListDeviceTokensByUserIDs(ctx context.Context, userIds []int64
 			&i.LastSeenAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ApplicationID,
 		); err != nil {
 			return nil, err
 		}

@@ -330,6 +330,11 @@ func TestApplicationRegistryMigrationRoundTrip(t *testing.T) {
 	tx, err := pool.Begin(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(context.Background())
+	// Roll back dependent expansion first, inside this rollback-only fixture.
+	expansionDown, err := os.ReadFile("../../db/migrations/000017_expand_business_application_scope.down.sql")
+	require.NoError(t, err)
+	_, err = tx.Exec(ctx, string(expansionDown))
+	require.NoError(t, err)
 	up, err := os.ReadFile("../../db/migrations/000016_create_application_registry.up.sql")
 	require.NoError(t, err)
 	down, err := os.ReadFile("../../db/migrations/000016_create_application_registry.down.sql")

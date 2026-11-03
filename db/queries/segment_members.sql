@@ -7,7 +7,8 @@ SELECT
     id,
     segment_id,
     user_id,
-    created_at
+    created_at,
+    application_id
 FROM segment_members
 WHERE id = sqlc.arg('id')
 LIMIT 1;
@@ -41,7 +42,8 @@ RETURNING
     id,
     segment_id,
     user_id,
-    created_at;
+    created_at,
+    application_id;
 
 -- ==========================================
 -- DELETE

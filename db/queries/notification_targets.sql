@@ -34,7 +34,8 @@ RETURNING
     segment_id,
     user_id,
     upload_batch_id,
-    created_at;
+    created_at,
+    application_id;
 
 -- ==========================================
 -- LIST

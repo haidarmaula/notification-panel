@@ -571,6 +571,26 @@ insert a second application's business data while current global legacy queries
 remain reachable. Existing uniqueness on external_id/push_token is not the
 future app/project-aware identity contract.
 
+## Additive business ownership expansion — M03b.2a
+
+Migration **000017** is [locally verified](analysis/m03b2a-verification.md).
+[Exact schema and operator-tool contract](specs/m03b2-business-scope-expansion.md).
+All eleven legacy business tables gain nullable application_id (no default),
+validated app/composite parent references and immutable assigned ownership under
+ordinary DML. Parent keys include app/id; deliveries additionally bind the device
+and its user. Template deletion clears only template_id, retaining app scope.
+Global external_id/push_token uniqueness remains conservative until scoped
+identity/address policies exist. These are structural safeguards, not runtime
+isolation: NULL legacy rows and global queries are still present.
+
+Apply 000017 **before** the new binary; full-model projections now select the new
+column. It takes table/index/constraint locks and needs a rehearsed maintenance
+window. No implicit app/backfill is performed. The count-only preflight and
+reviewed single-app SQL backfill require explicit operator mapping/quiescence;
+see the exact contract before use. Down refuses any assigned business ownership
+and cannot serve as a production rollback after mapping. New app business data,
+final NOT NULL/scoped keys, scoped services/APIs and legacy retirement remain gated.
+
 ## Design Decisions
 
 ### Why is `notification_targets` stored separately?

@@ -50,7 +50,8 @@ RETURNING
     total_rows,
     valid_rows,
     invalid_rows,
-    created_at
+    created_at,
+    application_id
 `
 
 type CreateUploadBatchParams struct {
@@ -81,6 +82,7 @@ func (q *Queries) CreateUploadBatch(ctx context.Context, arg CreateUploadBatchPa
 		&i.ValidRows,
 		&i.InvalidRows,
 		&i.CreatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -94,7 +96,8 @@ SELECT
     total_rows,
     valid_rows,
     invalid_rows,
-    created_at
+    created_at,
+    application_id
 FROM upload_batches
 WHERE id = $1
 LIMIT 1
@@ -114,6 +117,7 @@ func (q *Queries) GetUploadBatchByID(ctx context.Context, id int64) (UploadBatch
 		&i.ValidRows,
 		&i.InvalidRows,
 		&i.CreatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }

@@ -54,7 +54,8 @@ RETURNING
     delivered_at,
     opened_at,
     created_at,
-    updated_at;
+    updated_at,
+    application_id;
 
 -- ==========================================
 -- UPDATE STATUS

@@ -170,8 +170,10 @@ diimplementasikan/diuji lokal. [M03a.2 services](m03a2-verification.md) juga
 local-verified. [M03a.3 HTTP](m03a3-verification.md) juga implemented/local-verified;
 sepuluh endpoint registry/grants tersedia dengan PROVISIONING only. Berikutnya
 M03b scope schema/query/API dan legacy pipeline sebelum data bisnis app kedua.
-[M03b.1 inventory/design](m03b1-scope-inventory.md) sudah dicatat; berikutnya
-M03b.2 schema/preflight/backfill menurut [SPEC transisi](../specs/m03b-application-data-isolation.md). Gate integrasi tetap eksplisit. M02 release controls tetap terbuka. SPEC milestone lain ditulis saat dikerjakan,
+[M03b.1 inventory/design](m03b1-scope-inventory.md) dan
+[M03b.2a expansion](m03b2a-verification.md) selesai secara scoped/local-verified.
+Berikutnya scoped callers M03b.3; finalisasi constraint/cutover tetap terbuka menurut
+[SPEC transisi](../specs/m03b-application-data-isolation.md). Gate integrasi tetap eksplisit. M02 release controls tetap terbuka. SPEC milestone lain ditulis saat dikerjakan,
 bukan sekaligus. G5 selain role matrix tetap terbuka.
 Perbaikan baseline tidak harus menunggu seluruh gate release; acceptance SPEC
 fitur sensitif menunggu keputusan yang dipakainya. Step 15 belum ditandai penuh
