@@ -11,8 +11,9 @@ checks. [M03a.3 HTTP](../analysis/m03a3-verification.md) is also local-verified.
 [M03b.1 inventory/design](../analysis/m03b1-scope-inventory.md) now has an
 [exact transition SPEC](m03b-application-data-isolation.md). [M03b.2a expansion](m03b2-business-scope-expansion.md) is now locally verified.
 M03b.3 begins with the [scoped user/device query contract](m03b3-scoped-user-reads.md).
-The staff HTTP reads now enforce application authority. The next slice addresses
-segment/member access. Final NOT NULL and scoped keys follow coordinated caller
+Staff HTTP reads now enforce application authority for users, devices,
+[segments and members](../api/scoped-segments-api.md). The next slice scopes
+segment and membership writes. Final NOT NULL and scoped keys follow coordinated caller
 replacement.
 
 ## M03a — Registry and scope foundation

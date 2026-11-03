@@ -237,6 +237,7 @@ type Querier interface {
 	// ==========================================
 	GetRoleByID(ctx context.Context, id int64) (Role, error)
 	GetRoleByName(ctx context.Context, name string) (Role, error)
+	GetScopedSegment(ctx context.Context, arg GetScopedSegmentParams) (GetScopedSegmentRow, error)
 	GetScopedUser(ctx context.Context, arg GetScopedUserParams) (GetScopedUserRow, error)
 	// ==========================================
 	// GET
@@ -305,6 +306,8 @@ type Querier interface {
 	// ==========================================
 	ListRoles(ctx context.Context, arg ListRolesParams) ([]Role, error)
 	ListScheduledNotificationsDue(ctx context.Context, limit int32) ([]ListScheduledNotificationsDueRow, error)
+	ListScopedSegmentMembers(ctx context.Context, arg ListScopedSegmentMembersParams) ([]ListScopedSegmentMembersRow, error)
+	ListScopedSegments(ctx context.Context, arg ListScopedSegmentsParams) ([]ListScopedSegmentsRow, error)
 	ListScopedUserDevices(ctx context.Context, arg ListScopedUserDevicesParams) ([]ListScopedUserDevicesRow, error)
 	ListScopedUsers(ctx context.Context, arg ListScopedUsersParams) ([]ListScopedUsersRow, error)
 	// ==========================================

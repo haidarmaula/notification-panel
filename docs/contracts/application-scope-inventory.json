@@ -188,6 +188,11 @@
       ]
     },
     {
+      "path": "db/queries/scoped_segment_reads.sql",
+      "scope": "application-scoped",
+      "names": ["GetScopedSegment", "ListScopedSegmentMembers", "ListScopedSegments"]
+    },
+    {
       "path": "db/queries/scoped_user_reads.sql",
       "scope": "application-scoped",
       "names": [
@@ -306,6 +311,9 @@
     }
   ],
   "routes": [
+    {"pattern": "GET /api/v1/apps/{app_id}/segments", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
+    {"pattern": "GET /api/v1/apps/{app_id}/segments/{segment_id}", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
+    {"pattern": "GET /api/v1/apps/{app_id}/segments/{segment_id}/members", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
     {"pattern": "GET /api/v1/apps/{app_id}/users", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
     {"pattern": "GET /api/v1/apps/{app_id}/users/{user_id}", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
     {"pattern": "GET /api/v1/apps/{app_id}/users/{user_id}/devices", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},

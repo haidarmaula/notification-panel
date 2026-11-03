@@ -143,7 +143,7 @@ func TestApplicationHTTP(t *testing.T) {
 			require.Equal(t, a.PublicID.String(), v["id"])
 			require.Equal(t, "1", v["revision"])
 			require.Equal(t, "PROVISIONING", v["status"])
-			for _, suffix := range []string{"/users", "/users/9", "/users/9/devices"} {
+			for _, suffix := range []string{"/users", "/users/9", "/users/9/devices", "/segments", "/segments/9", "/segments/9/members"} {
 				request(t, role, "GET", public+suffix, "", nil, 409)
 			}
 			require.Equal(t, applications.ApplicationETag(a), w.Header().Get("ETag"))
