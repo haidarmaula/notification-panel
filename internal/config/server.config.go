@@ -98,21 +98,5 @@ func LoadServerConfig() *ServerConfig {
 		log.Fatal("REFRESH_SECRET is required")
 	}
 
-	if cfg.MobileJWTSecret == "" {
-		log.Fatal("MOBILE_JWT_SECRET is required")
-	}
-
-	if cfg.SuperAdminRole == "" {
-		log.Fatal("SUPER_ADMIN_ROLE is required")
-	}
-
-	if cfg.KafkaBroker == "" {
-		log.Fatal("KafkaBroker is required")
-	}
-
-	if cfg.SendTopic == "" {
-		log.Fatal("SendTopic is required")
-	}
-
 	return cfg
 }

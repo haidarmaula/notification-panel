@@ -21,7 +21,8 @@ Scoped list, detail, draft replacement and deletion share the same contract.
 [Project template management](../api/scoped-templates-api.md) supports retirement
 while retaining campaign references. [Campaign delivery and read history](../api/scoped-campaign-history-api.md)
 now use project-scoped projections. [Upload and audit history](../api/scoped-upload-audit-api.md) exposes scoped
-metadata. The next slice inventories and gates legacy access for cutover.
+metadata. [Legacy retirement and the ownership finalizer](m03b-cutover.md)
+prepare the deployment cutover.
 
 ## M03a — Registry and scope foundation
 

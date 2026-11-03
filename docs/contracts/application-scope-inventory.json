@@ -364,25 +364,25 @@
       "pattern": "DELETE /api/v1/device-tokens/{id}",
       "source": "internal/features/users/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "DELETE /api/v1/notifications/{id}",
       "source": "internal/features/notifications/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "DELETE /api/v1/segments/{id}",
       "source": "internal/features/segments/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "DELETE /api/v1/segments/{id}/members/{userId}",
       "source": "internal/features/segments/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "DELETE /api/v1/staff/{id}",
@@ -430,13 +430,13 @@
       "pattern": "GET /api/v1/notifications",
       "source": "internal/features/notifications/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "GET /api/v1/notifications/{id}",
       "source": "internal/features/notifications/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "GET /api/v1/profile",
@@ -448,19 +448,19 @@
       "pattern": "GET /api/v1/segments",
       "source": "internal/features/segments/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "GET /api/v1/segments/{id}",
       "source": "internal/features/segments/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "GET /api/v1/segments/{id}/members",
       "source": "internal/features/segments/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "GET /api/v1/staff",
@@ -478,37 +478,37 @@
       "pattern": "GET /api/v1/users",
       "source": "internal/features/users/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "GET /api/v1/users/search",
       "source": "internal/features/users/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "GET /api/v1/users/{id}",
       "source": "internal/features/users/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "GET /api/v1/users/{id}/device-tokens",
       "source": "internal/features/users/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "GET /api/v1/users/{id}/notifications",
       "source": "internal/features/users/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "GET /api/v1/users/{id}/segments",
       "source": "internal/features/users/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "PATCH /api/v1/admin/apps/{app_id}",
@@ -520,13 +520,13 @@
       "pattern": "PATCH /api/v1/device-tokens/{id}",
       "source": "internal/features/users/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "PATCH /api/v1/notifications/{id}",
       "source": "internal/features/notifications/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "PATCH /api/v1/profile",
@@ -544,7 +544,7 @@
       "pattern": "PATCH /api/v1/segments/{id}",
       "source": "internal/features/segments/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "PATCH /api/v1/staff/{id}",
@@ -586,37 +586,37 @@
       "pattern": "POST /api/v1/device-tokens",
       "source": "internal/features/users/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "POST /api/v1/mobile/sync",
       "source": "internal/features/mobile/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "POST /api/v1/notifications",
       "source": "internal/features/notifications/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "POST /api/v1/notifications/{id}/send",
       "source": "internal/features/notifications/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "POST /api/v1/segments",
       "source": "internal/features/segments/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "POST /api/v1/segments/{id}/members",
       "source": "internal/features/segments/routes.go",
       "scope": "application-legacy",
-      "disposition": "retire-before-multi-app-business-data"
+      "disposition": "retired-unmounted"
     },
     {
       "pattern": "POST /api/v1/staff",
@@ -638,15 +638,15 @@
     },
     {
       "path": "cmd/scheduler/main.go",
-      "disposition": "Old global due query/direct Kafka publication must be drained/stopped or replaced; durable scoped handoff belongs to M04."
+      "disposition": "Retired entry point exits before starting database or Kafka work."
     },
     {
       "path": "cmd/server/main.go",
-      "disposition": "Compose app-scoped business APIs; remove all 24 global business registrations before multi-app business data. Preserve global staff/auth/profile and registry."
+      "disposition": "Only scoped business and staff/control routes are mounted."
     },
     {
       "path": "cmd/worker/main.go",
-      "disposition": "Old unscoped OneSignal processor must be drained/stopped or replaced; no old worker can run against multi-app data."
+      "disposition": "Retired entry point exits before starting database or provider work."
     }
   ]
 }

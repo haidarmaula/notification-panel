@@ -78,8 +78,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      kafka:
-        condition: service_healthy
     ports:
       - "8080:8080"
     environment:
@@ -92,13 +90,9 @@ services:
       API_KEY: ${API_KEY}
       ACCESS_SECRET: ${ACCESS_SECRET}
       REFRESH_SECRET: ${REFRESH_SECRET}
-      MOBILE_JWT_SECRET: ${MOBILE_JWT_SECRET}
       BOOTSTRAP_SUPER_ADMIN_NAME: ${BOOTSTRAP_SUPER_ADMIN_NAME}
       BOOTSTRAP_SUPER_ADMIN_EMAIL: ${BOOTSTRAP_SUPER_ADMIN_EMAIL}
       BOOTSTRAP_SUPER_ADMIN_PASSWORD: ${BOOTSTRAP_SUPER_ADMIN_PASSWORD}
-      KAFKA_BROKER: kafka:9094
-      KAFKA_SEND_TOPIC: ${KAFKA_SEND_TOPIC}
-      SUPER_ADMIN_ROLE: ${SUPER_ADMIN_ROLE}
     volumes:
       - .:/app
       - /app/tmp
@@ -106,82 +100,6 @@ services:
       - go-build-cache:/root/.cache/go-build
     networks:
       - notification-network
-
-  # hot reload via air, source mounted
-  worker-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-      args:
-        AIR_CONFIG: .air.worker.toml
-    container_name: notification-worker-dev
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
-      DB_SSLMODE: ${DB_SSLMODE}
-      ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID}
-      ONESIGNAL_API_KEY: ${ONESIGNAL_API_KEY}
-      KAFKA_BROKER: kafka:9094
-      KAFKA_SEND_TOPIC: ${KAFKA_SEND_TOPIC}
-      KAFKA_UPDATE_TOPIC: ${KAFKA_UPDATE_TOPIC}
-    volumes:
-      - .:/app
-      - /app/tmp
-      - go-mod-cache:/go/pkg/mod
-      - go-build-cache:/root/.cache/go-build
-    networks:
-      - notification-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
-
-  # hot reload via air, source mounted
-  scheduler-dev:
-    build:
-      context: .
-      dockerfile: Dockerfile.dev
-      args:
-        AIR_CONFIG: .air.scheduler.toml
-    container_name: notification-scheduler-dev
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
-    environment:
-      DB_HOST: postgres
-      DB_PORT: 5432
-      DB_USER: ${DB_USER}
-      DB_PASSWORD: ${DB_PASSWORD}
-      DB_NAME: ${DB_NAME}
-      DB_SSLMODE: ${DB_SSLMODE}
-      SCHEDULER_INTERVAL: ${SCHEDULER_INTERVAL}
-      KAFKA_BROKER: kafka:9094
-      KAFKA_SEND_TOPIC: ${KAFKA_SEND_TOPIC}
-    volumes:
-      - .:/app
-      - /app/tmp
-      - go-mod-cache:/go/pkg/mod
-      - go-build-cache:/root/.cache/go-build
-    networks:
-      - notification-network
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "10m"
-        max-file: "3"
 
 volumes:
   postgres_data:

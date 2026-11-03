@@ -618,3 +618,10 @@ Administrators can send notifications by uploading Excel files containing recipi
 | Version | Date       | Description |
 |---------|------------|-------------|
 | 1.0     | 2026-07-23 | Initial database documentation |
+
+### Ownership finalization at cutover
+
+After reviewed backfill and writer retirement, the offline ownership finalizer
+sets application_id NOT NULL on all eleven business tables in one statement.
+See the [cutover procedure](specs/m03b-cutover.md) for verification and rollback
+requirements.

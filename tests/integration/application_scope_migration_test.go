@@ -191,4 +191,19 @@ func TestBusinessApplicationScopeMigration(t *testing.T) {
 	exec("DELETE FROM users WHERE id=$1", user)
 	require.Zero(t, id("SELECT count(*) FROM device_tokens WHERE id=$1", device))
 	require.Zero(t, id("SELECT count(*) FROM notification_deliveries WHERE id=$1", delivery))
+	finalize, err := os.ReadFile("../../scripts/sql/finalize-application-ownership.sql")
+	require.NoError(t, err)
+	unassigned := id("INSERT INTO upload_batches(uploaded_by,original_filename) VALUES($1,'unassigned') RETURNING id", staff)
+	expect("23502", string(finalize))
+	// The rejected statement must roll back NOT NULL on earlier tables.
+	probe := id("INSERT INTO users(external_id) VALUES('scope-finalization-probe') RETURNING id")
+	exec("DELETE FROM users WHERE id=$1", probe)
+	exec("DELETE FROM upload_batches WHERE id=$1", unassigned)
+	exec(string(finalize))
+	require.EqualValues(t, 11, id(`SELECT count(*) FROM information_schema.columns
+		WHERE table_schema='public' AND column_name='application_id' AND is_nullable='NO'
+		AND table_name IN ('users','device_tokens','templates','segments','segment_members','notifications',
+			'upload_batches','upload_batch_rows','notification_targets','notification_deliveries','notification_reads')`))
+	expect("23502", "INSERT INTO users(external_id) VALUES('rejected-unassigned')")
+
 }

@@ -20,23 +20,17 @@ readonly SESSION="dev"
 readonly -a WINDOW_NAMES=(
     "nvim"
     "logs-server"
-    "logs-worker"
-    "logs-scheduler"
     "shell"
 )
 
 readonly -a WINDOW_COMMANDS=(
     "nvim"
     "make logs-server"
-    "make logs-worker"
-    "make logs-scheduler"
     ""
 )
 
 readonly -a WINDOW_REQUIRES_DOCKER=(
     false
-    true
-    true
     true
     false
 )

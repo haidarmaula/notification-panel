@@ -222,8 +222,10 @@ execution and updates. These are separate from M03b's structural isolation gate.
 | M03b.4 | Scoped campaign/template/target/delivery/read/upload/audit access and projections | Cross-app references rejected atomically; safe optional/delete behavior; draft invariants; full no-side-effect negatives; no deferred features added |
 | M03b.5 | Legacy retirement/deployment gate and complete isolation verification | Every inventory entry scoped, intentionally global or unreachable; old writers stopped; A/B API/SQL/background tests and rollout/rollback evidence |
 
-M03b.2a expansion/preflight/reviewed backfill is locally verified. Final M03b.2
-NOT NULL/scoped keys and M03b.3–5 remain pending. Each may need focused commits; these labels are
+M03b.2a expansion and scoped API slices M03b.3–4 are locally verified.
+[M03b.5 repository retirement and ownership finalizer](m03b-cutover.md)
+prepare the production transition. Deployment evidence and identity/address
+constraints remain open. Each may need focused commits; these labels are
 work groups, not time estimates or a fixed count of coding tasks. Current source
 inventory checking is not the final runtime isolation checker. Activation can
 remain blocked on M03c/d and M04–M06 even after structural M03b checks pass.
