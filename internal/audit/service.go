@@ -29,6 +29,7 @@ package audit
 
 import (
 	"context"
+	"errors"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 
@@ -98,6 +99,9 @@ func NewAuditService(repo *repository.AuditLogRepository) *AuditService {
 // LogParams and its own marshalled buffers; no shared mutable state exists
 // on the receiver.
 func (s *AuditService) Log(ctx context.Context, params LogParams) error {
+	if params.ApplicationID < 0 {
+		return errors.New("invalid audit application scope")
+	}
 	// Password changes record metadata only, regardless of the entity label.
 	if params.Action == ACTION_STAFF_UPDATE_PASSWORD && (params.Before != nil || params.After != nil) {
 		return ErrUnsafeStaffSnapshot
@@ -113,15 +117,16 @@ func (s *AuditService) Log(ctx context.Context, params LogParams) error {
 
 	staffID, ipAddress, userAgent, _ := GetAuditContext(ctx)
 	_, err = s.repo.Create(ctx, sqlc.CreateAuditLogParams{
-		ActorUserID: staffID,
-		Action:      params.Action,
-		EntityType:  params.EntityType,
-		EntityName:  pgtype.Text{String: params.EntityName, Valid: params.EntityName != ""},
-		EntityID:    pgtype.Int8{Int64: params.EntityID, Valid: params.EntityID != 0},
-		BeforeJson:  beforeJSON,
-		AfterJson:   afterJSON,
-		IpAddress:   pgtype.Text{String: ipAddress, Valid: ipAddress != ""},
-		UserAgent:   pgtype.Text{String: userAgent, Valid: userAgent != ""},
+		ActorUserID:   staffID,
+		ApplicationID: pgtype.Int8{Int64: params.ApplicationID, Valid: params.ApplicationID > 0},
+		Action:        params.Action,
+		EntityType:    params.EntityType,
+		EntityName:    pgtype.Text{String: params.EntityName, Valid: params.EntityName != ""},
+		EntityID:      pgtype.Int8{Int64: params.EntityID, Valid: params.EntityID != 0},
+		BeforeJson:    beforeJSON,
+		AfterJson:     afterJSON,
+		IpAddress:     pgtype.Text{String: ipAddress, Valid: ipAddress != ""},
+		UserAgent:     pgtype.Text{String: userAgent, Valid: userAgent != ""},
 	})
 
 	return err

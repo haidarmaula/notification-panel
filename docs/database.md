@@ -561,10 +561,12 @@ proposes an application registry, scoped external identities, app-qualified
 business aggregates/children and composite reference constraints; global staff
 control-plane data remains separate. [M03a–d](specs/m03a-application-scope-plan.md)
 will define scoped backfill/constraints before sqlc generation.
-The [M03a registry SPEC](specs/m03a-application-registry.md) now specifies candidate
-applications/grants plus nullable audit application_id, PROVISIONING-only status
-and atomic control-plane audit. Next migration candidate is 000016, not yet created.
-No columns, migrations or queries changed in this design checkpoint. Do not
+The [M03a registry SPEC](specs/m03a-application-registry.md) now specifies
+applications/grants plus nullable audit application_id and PROVISIONING-only status.
+Migration 000016, queries/sqlc and repository are [locally verified](analysis/m03a1-verification.md);
+atomic control-plane services and HTTP remain pending. No backfill or activation
+was added. Apply the migration before new binaries; review preexisting registry
+audit entity labels and coordinate any destructive downgrade. Do not
 insert a second application's business data while current global legacy queries
 remain reachable. Existing uniqueness on external_id/push_token is not the
 future app/project-aware identity contract.

@@ -79,3 +79,8 @@ M01 selesai sebagai checks + lingkungan lokal yang dapat diulang. Berikutnya
 step 20: SPEC slice M02 permission/API baseline; G5 perlu settled untuk policy
 yang diimplementasikan. Tambahkan integration/failure cases setiap milestone,
 bukan menganggap dependency smoke sudah membuktikan seluruh backend reliable.
+
+M03a.1 update 2026-11-03: the runner now exercises 16 migrations, including
+registry/grant/audit-scope constraints and real-DB CAS/locking/round-trip tests.
+See [evidence](m03a1-verification.md). The table above retains the original
+15-migration checkpoint; no new live-provider or production evidence is implied.

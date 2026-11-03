@@ -31,6 +31,7 @@ const createAuditLog = `-- name: CreateAuditLog :one
 
 INSERT INTO audit_logs (
     actor_user_id,
+    application_id,
     action,
     entity_type,
     entity_name,
@@ -49,32 +50,23 @@ VALUES (
     $6,
     $7,
     $8,
-    $9
+    $9,
+    $10
 )
-RETURNING
-    id,
-    actor_user_id,
-    action,
-    entity_type,
-    entity_name,
-    entity_id,
-    before_json,
-    after_json,
-    ip_address,
-    user_agent,
-    created_at
+RETURNING id, actor_user_id, action, entity_type, entity_name, entity_id, before_json, after_json, ip_address, user_agent, created_at, application_id
 `
 
 type CreateAuditLogParams struct {
-	ActorUserID int64       `db:"actor_user_id"`
-	Action      string      `db:"action"`
-	EntityType  string      `db:"entity_type"`
-	EntityName  pgtype.Text `db:"entity_name"`
-	EntityID    pgtype.Int8 `db:"entity_id"`
-	BeforeJson  []byte      `db:"before_json"`
-	AfterJson   []byte      `db:"after_json"`
-	IpAddress   pgtype.Text `db:"ip_address"`
-	UserAgent   pgtype.Text `db:"user_agent"`
+	ActorUserID   int64       `db:"actor_user_id"`
+	ApplicationID pgtype.Int8 `db:"application_id"`
+	Action        string      `db:"action"`
+	EntityType    string      `db:"entity_type"`
+	EntityName    pgtype.Text `db:"entity_name"`
+	EntityID      pgtype.Int8 `db:"entity_id"`
+	BeforeJson    []byte      `db:"before_json"`
+	AfterJson     []byte      `db:"after_json"`
+	IpAddress     pgtype.Text `db:"ip_address"`
+	UserAgent     pgtype.Text `db:"user_agent"`
 }
 
 // ==========================================
@@ -83,6 +75,7 @@ type CreateAuditLogParams struct {
 func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error) {
 	row := q.db.QueryRow(ctx, createAuditLog,
 		arg.ActorUserID,
+		arg.ApplicationID,
 		arg.Action,
 		arg.EntityType,
 		arg.EntityName,
@@ -105,6 +98,7 @@ func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) 
 		&i.IpAddress,
 		&i.UserAgent,
 		&i.CreatedAt,
+		&i.ApplicationID,
 	)
 	return i, err
 }
@@ -114,6 +108,7 @@ const getAuditLogByID = `-- name: GetAuditLogByID :one
 SELECT
     id,
     actor_user_id,
+    application_id,
     action,
     entity_type,
     entity_id,
@@ -127,15 +122,16 @@ LIMIT 1
 `
 
 type GetAuditLogByIDRow struct {
-	ID          int64              `db:"id"`
-	ActorUserID int64              `db:"actor_user_id"`
-	Action      string             `db:"action"`
-	EntityType  string             `db:"entity_type"`
-	EntityID    pgtype.Int8        `db:"entity_id"`
-	BeforeJson  []byte             `db:"before_json"`
-	AfterJson   []byte             `db:"after_json"`
-	IpAddress   pgtype.Text        `db:"ip_address"`
-	CreatedAt   pgtype.Timestamptz `db:"created_at"`
+	ID            int64              `db:"id"`
+	ActorUserID   int64              `db:"actor_user_id"`
+	ApplicationID pgtype.Int8        `db:"application_id"`
+	Action        string             `db:"action"`
+	EntityType    string             `db:"entity_type"`
+	EntityID      pgtype.Int8        `db:"entity_id"`
+	BeforeJson    []byte             `db:"before_json"`
+	AfterJson     []byte             `db:"after_json"`
+	IpAddress     pgtype.Text        `db:"ip_address"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
 }
 
 // ==========================================
@@ -147,6 +143,7 @@ func (q *Queries) GetAuditLogByID(ctx context.Context, id int64) (GetAuditLogByI
 	err := row.Scan(
 		&i.ID,
 		&i.ActorUserID,
+		&i.ApplicationID,
 		&i.Action,
 		&i.EntityType,
 		&i.EntityID,
@@ -163,6 +160,7 @@ const listAuditLogs = `-- name: ListAuditLogs :many
 SELECT
     al.id,
     su.name AS actor_name,
+    al.application_id,
     al.action,
     al.entity_type,
     al.entity_id,
@@ -182,13 +180,14 @@ type ListAuditLogsParams struct {
 }
 
 type ListAuditLogsRow struct {
-	ID         int64              `db:"id"`
-	ActorName  string             `db:"actor_name"`
-	Action     string             `db:"action"`
-	EntityType string             `db:"entity_type"`
-	EntityID   pgtype.Int8        `db:"entity_id"`
-	IpAddress  pgtype.Text        `db:"ip_address"`
-	CreatedAt  pgtype.Timestamptz `db:"created_at"`
+	ID            int64              `db:"id"`
+	ActorName     string             `db:"actor_name"`
+	ApplicationID pgtype.Int8        `db:"application_id"`
+	Action        string             `db:"action"`
+	EntityType    string             `db:"entity_type"`
+	EntityID      pgtype.Int8        `db:"entity_id"`
+	IpAddress     pgtype.Text        `db:"ip_address"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
 }
 
 // ==========================================
@@ -206,6 +205,7 @@ func (q *Queries) ListAuditLogs(ctx context.Context, arg ListAuditLogsParams) ([
 		if err := rows.Scan(
 			&i.ID,
 			&i.ActorName,
+			&i.ApplicationID,
 			&i.Action,
 			&i.EntityType,
 			&i.EntityID,

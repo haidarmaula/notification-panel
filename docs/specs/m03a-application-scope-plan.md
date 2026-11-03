@@ -1,11 +1,13 @@
 # M03 application-scope implementation plan
 
-Date: 2026-11-03. Status: **proposed sequence/contracts; no runtime or migration yet**.
+Date: 2026-11-03. Status: **M03a.1 persistence locally implemented;
+application services/HTTP and remaining slices not implemented**.
 Normative design: [ADR-12](../adr/adr-12-multi-application-isolation.md).
 Each implementation slice needs its exact transaction/API/migration SPEC.
 [M03a registry SPEC](m03a-application-registry.md) and its
 [proposed OpenAPI](../contracts/application-registry.openapi.json) are now written;
-implementation is still pending.
+[M03a.1 schema/query/repository evidence](../analysis/m03a1-verification.md) is
+now available; M03a.2 services and M03a.3 HTTP remain pending.
 
 ## M03a — Registry and scope foundation
 

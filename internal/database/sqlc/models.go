@@ -8,18 +8,39 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+type Application struct {
+	ID        int64              `db:"id"`
+	PublicID  pgtype.UUID        `db:"public_id"`
+	Key       string             `db:"key"`
+	Name      string             `db:"name"`
+	Status    string             `db:"status"`
+	Revision  int64              `db:"revision"`
+	CreatedAt pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt pgtype.Timestamptz `db:"updated_at"`
+}
+
+type ApplicationStaffGrant struct {
+	ApplicationID int64              `db:"application_id"`
+	StaffID       int64              `db:"staff_id"`
+	IsActive      bool               `db:"is_active"`
+	Revision      int64              `db:"revision"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
+}
+
 type AuditLog struct {
-	ID          int64              `db:"id"`
-	ActorUserID int64              `db:"actor_user_id"`
-	Action      string             `db:"action"`
-	EntityType  string             `db:"entity_type"`
-	EntityName  pgtype.Text        `db:"entity_name"`
-	EntityID    pgtype.Int8        `db:"entity_id"`
-	BeforeJson  []byte             `db:"before_json"`
-	AfterJson   []byte             `db:"after_json"`
-	IpAddress   pgtype.Text        `db:"ip_address"`
-	UserAgent   pgtype.Text        `db:"user_agent"`
-	CreatedAt   pgtype.Timestamptz `db:"created_at"`
+	ID            int64              `db:"id"`
+	ActorUserID   int64              `db:"actor_user_id"`
+	Action        string             `db:"action"`
+	EntityType    string             `db:"entity_type"`
+	EntityName    pgtype.Text        `db:"entity_name"`
+	EntityID      pgtype.Int8        `db:"entity_id"`
+	BeforeJson    []byte             `db:"before_json"`
+	AfterJson     []byte             `db:"after_json"`
+	IpAddress     pgtype.Text        `db:"ip_address"`
+	UserAgent     pgtype.Text        `db:"user_agent"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	ApplicationID pgtype.Int8        `db:"application_id"`
 }
 
 type DeviceToken struct {

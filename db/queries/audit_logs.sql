@@ -6,6 +6,7 @@
 SELECT
     id,
     actor_user_id,
+    application_id,
     action,
     entity_type,
     entity_id,
@@ -24,6 +25,7 @@ LIMIT 1;
 -- name: CreateAuditLog :one
 INSERT INTO audit_logs (
     actor_user_id,
+    application_id,
     action,
     entity_type,
     entity_name,
@@ -35,6 +37,7 @@ INSERT INTO audit_logs (
 )
 VALUES (
     sqlc.arg('actor_user_id'),
+    sqlc.narg('application_id'),
     sqlc.arg('action'),
     sqlc.arg('entity_type'),
     sqlc.arg('entity_name'),
@@ -44,18 +47,7 @@ VALUES (
     sqlc.arg('ip_address'),
     sqlc.arg('user_agent')
 )
-RETURNING
-    id,
-    actor_user_id,
-    action,
-    entity_type,
-    entity_name,
-    entity_id,
-    before_json,
-    after_json,
-    ip_address,
-    user_agent,
-    created_at;
+RETURNING *;
 
 -- ==========================================
 -- LIST
@@ -65,6 +57,7 @@ RETURNING
 SELECT
     al.id,
     su.name AS actor_name,
+    al.application_id,
     al.action,
     al.entity_type,
     al.entity_id,

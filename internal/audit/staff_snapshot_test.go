@@ -112,3 +112,16 @@ func TestOtherAuditEncodingAndFailuresUnchanged(t *testing.T) {
 	q.err = errors.New("fixture repository unavailable")
 	require.ErrorIs(t, s.Log(ctx, LogParams{EntityType: ENTITY_TYPE_STAFF, After: StaffSnapshot{}}), q.err)
 }
+
+func TestOptionalApplicationAuditScope(t *testing.T) {
+	q := &auditQueries{}
+	service := NewAuditService(repository.NewAuditLogRepository(q))
+	require.NoError(t, service.Log(context.Background(), LogParams{ApplicationID: 7}))
+	require.True(t, q.params.ApplicationID.Valid)
+	require.Equal(t, int64(7), q.params.ApplicationID.Int64)
+	require.NoError(t, service.Log(context.Background(), LogParams{}))
+	require.False(t, q.params.ApplicationID.Valid)
+	q.calls = 0
+	require.EqualError(t, service.Log(context.Background(), LogParams{ApplicationID: -7}), "invalid audit application scope")
+	require.Zero(t, q.calls)
+}

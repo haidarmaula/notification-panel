@@ -1,6 +1,7 @@
 # M03a — Application registry and staff scope foundation
 
-2026-11-03. **Implementation SPEC; proposed contract, not implemented.**
+2026-11-03. **M03a.1 persistence implemented/local-verified; HTTP/service contract
+still proposed and unimplemented.** [Evidence](../analysis/m03a1-verification.md).
 Requirement: one admin panel can manage multiple independent application projects.
 [ADR-12](../adr/adr-12-multi-application-isolation.md) defines the boundary;
 [this OpenAPI](../contracts/application-registry.openapi.json) defines proposed HTTP
@@ -33,7 +34,7 @@ policy review remains open; no new project/business routes are enabled by this d
 
 ## 2. Candidate schema and migration
 
-Next migration number at this checkpoint is 000016 (recheck before implementation).
+Migration 000016 is now implemented and fixture-verified for M03a.1.
 Create paired up/down files BEFORE sqlc generation; no generated files hand-edited.
 
 | Table/column | Definition / invariant |

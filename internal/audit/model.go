@@ -23,6 +23,10 @@ package audit
 // construct, populate, and pass to Log within a single goroutine; sharing an
 // instance across goroutines requires external synchronisation.
 type LogParams struct {
+	// ApplicationID is optional global-scope context (0 => SQL NULL). New registry
+	// entities require a positive internal application ID, enforced by the DB.
+	ApplicationID int64
+
 	// Action is the verb describing what happened. Use one of the
 	// ACTION_* constants declared in this package; free-form values are
 	// accepted by the database but will not be understood by downstream

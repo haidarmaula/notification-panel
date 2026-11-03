@@ -78,6 +78,9 @@ type Querier interface {
 	CountUsers(ctx context.Context) (int64, error)
 	CountUsersByStatus(ctx context.Context, status string) (int64, error)
 	CountUsersWithFilters(ctx context.Context, arg CountUsersWithFiltersParams) (int64, error)
+	// Registry metadata only. No application activation/deletion/identity reassignment.
+	CreateApplication(ctx context.Context, arg CreateApplicationParams) (Application, error)
+	CreateApplicationStaffGrant(ctx context.Context, arg CreateApplicationStaffGrantParams) (ApplicationStaffGrant, error)
 	// ==========================================
 	// CREATE
 	// ==========================================
@@ -206,6 +209,11 @@ type Querier interface {
 	// EXISTS
 	// ==========================================
 	ExistsUserByExternalID(ctx context.Context, externalID string) (bool, error)
+	// Keep staff row when app/grant is absent, for correct 401/404 distinctions.
+	// No authorization/permission/status decision is implied by this data lookup.
+	GetApplicationAuthority(ctx context.Context, arg GetApplicationAuthorityParams) (GetApplicationAuthorityRow, error)
+	GetApplicationByPublicID(ctx context.Context, publicID pgtype.UUID) (Application, error)
+	GetApplicationStaffGrant(ctx context.Context, arg GetApplicationStaffGrantParams) (ApplicationStaffGrant, error)
 	// ==========================================
 	// GET
 	// ==========================================
@@ -259,6 +267,8 @@ type Querier interface {
 	// GET
 	// ==========================================
 	GetUserByID(ctx context.Context, id int64) (User, error)
+	// Includes revoked grants; application identity validated by owning service.
+	ListApplicationStaffGrants(ctx context.Context, arg ListApplicationStaffGrantsParams) (ListApplicationStaffGrantsRow, error)
 	// ==========================================
 	// LIST
 	// ==========================================
@@ -268,6 +278,10 @@ type Querier interface {
 	// ==========================================
 	ListDeviceTokensByUser(ctx context.Context, arg ListDeviceTokensByUserParams) ([]DeviceToken, error)
 	ListDeviceTokensByUserIDs(ctx context.Context, userIds []int64) ([]DeviceToken, error)
+	// Does not authenticate the caller; service must check current authority first.
+	ListGrantedApplications(ctx context.Context, arg ListGrantedApplicationsParams) (ListGrantedApplicationsRow, error)
+	// One snapshot for both total and page, including an empty/out-of-range page.
+	ListManagedApplications(ctx context.Context, arg ListManagedApplicationsParams) (ListManagedApplicationsRow, error)
 	// ==========================================
 	// LIST
 	// ==========================================
@@ -333,6 +347,7 @@ type Querier interface {
 	// ==========================================
 	ListUsersByStatus(ctx context.Context, arg ListUsersByStatusParams) ([]User, error)
 	ListUsersWithFilters(ctx context.Context, arg ListUsersWithFiltersParams) ([]User, error)
+	LockApplicationByPublicID(ctx context.Context, publicID pgtype.UUID) (Application, error)
 	// ==========================================
 	// UPDATE STATUS
 	// ==========================================
@@ -340,6 +355,8 @@ type Querier interface {
 	MarkNotificationFailed(ctx context.Context, arg MarkNotificationFailedParams) error
 	MarkNotificationOpened(ctx context.Context, id int64) error
 	MarkNotificationSent(ctx context.Context, id int64) error
+	// Caller holds application lock and handles matching no-op before this CAS.
+	RenameApplication(ctx context.Context, arg RenameApplicationParams) (Application, error)
 	// ==========================================
 	// SEARCH
 	// ==========================================
@@ -360,6 +377,8 @@ type Querier interface {
 	// SEARCH
 	// ==========================================
 	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]User, error)
+	// Caller holds app lock; no-op and conditional semantics belong to service.
+	SetApplicationStaffGrantActive(ctx context.Context, arg SetApplicationStaffGrantActiveParams) (ApplicationStaffGrant, error)
 	// ==========================================
 	// UPDATE
 	// ==========================================

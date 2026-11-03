@@ -85,3 +85,12 @@ run. No Go/schema/runtime changes, new DB tests, migrations or endpoint executio
 Next concrete work is M03a.1 paired migration, queries, sqlc and DB constraints;
 then resolver/transaction services and HTTP/regression cases. All earlier multi-app
 activation, legacy query/background process and G3/G5/G7 gates remain open.
+
+## M03a.1 persistence checkpoint
+
+[Migration/query/repository evidence](m03a1-verification.md) is now available:
+000016 and generated sqlc, provisioning-only metadata/grants, optional audit app
+scope, single-snapshot pagination and real-DB constraint/locking/CAS tests pass.
+This supersedes the earlier design-only status for persistence, not for HTTP or
+authorization. No project data backfill, operational app or business isolation
+is enabled. Next: M03a.2 resolver/services/atomic audit, then M03a.3 endpoints.

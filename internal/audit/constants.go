@@ -88,3 +88,14 @@ const (
 	// notifications row.
 	ENTITY_TYPE_NOTIFICATION = "notification"
 )
+
+// Application registry action/entity values are persisted schema. No registry
+// HTTP services are wired yet; metadata/grant mutations will own atomic audits.
+const (
+	ACTION_APPLICATION_CREATE       = "APPLICATION_CREATE"
+	ACTION_APPLICATION_UPDATE       = "APPLICATION_UPDATE"
+	ACTION_APPLICATION_GRANT_ENABLE = "APPLICATION_GRANT_ENABLE"
+	ACTION_APPLICATION_GRANT_REVOKE = "APPLICATION_GRANT_REVOKE"
+	ENTITY_TYPE_APPLICATION         = "application"
+	ENTITY_TYPE_APPLICATION_GRANT   = "application_grant"
+)
