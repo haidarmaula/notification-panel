@@ -12,6 +12,7 @@ import (
 	"hello/internal/authz"
 	"hello/internal/features/notifications"
 	"hello/internal/features/segments"
+	"hello/internal/features/staff"
 )
 
 func TestEveryHandlerMapsAuthorizationErrors(t *testing.T) {
@@ -30,11 +31,17 @@ func TestEveryHandlerMapsAuthorizationErrors(t *testing.T) {
 			n := notifications.NewNotificationHandler(notifications.NewNotificationService(nil, nil, nil, nil, nil, nil, nil, nil, nil, checker))
 			s := segments.NewSegmentHandler(segments.NewSegmentService(nil, nil, nil, nil, checker))
 			m := segments.NewMembersHandler(segments.NewMembersService(nil, nil, nil, checker))
+			staffHandler := staff.NewStaffHandler(staff.NewStaffService(nil, nil, nil, checker))
 			handlers := []struct {
 				name    string
 				handler http.HandlerFunc
 				body    string
 			}{
+				{"staff.list", staffHandler.List, ""}, {"staff.get", staffHandler.GetByID, ""},
+				{"staff.create", staffHandler.Create, `{"role":"ADMIN","name":"Fixture","email":"fixture@example.invalid","password":"fixture-password"}`},
+				{"staff.update", staffHandler.Update, `{"name":"Fixture"}`}, {"staff.status", staffHandler.UpdateStatus, `{"is_active":true}`},
+				{"staff.password", staffHandler.UpdatePassword, `{"current_password":"fixture-password","password":"new-password"}`},
+				{"staff.delete", staffHandler.Delete, ""},
 				{"notification.list", n.List, ""}, {"notification.get", n.GetByID, ""},
 				{"notification.create", n.Create, `{"title":"Fixture","body":"Fixture"}`},
 				{"notification.update", n.Update, `{"title":"Fixture"}`}, {"notification.delete", n.Delete, ""}, {"notification.send", n.Send, ""},

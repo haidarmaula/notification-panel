@@ -9,23 +9,11 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"hello/internal/audit"
+	"hello/internal/authz"
 	"hello/internal/database/sqlc"
 
 	"golang.org/x/crypto/bcrypt"
 )
-
-// superAdminRoleName is the role name that the service requires a caller
-// to hold before it will perform a staff-management operation.
-//
-// The value mirrors the literal used by the bootstrap package to seed
-// the initial super-admin account; the two sites are intentionally kept
-// in sync. A future revision that centralises the constant — see L3 in
-// code-review.md — should update both.
-//
-// It is compared verbatim against roles.name, so the roles table must
-// store the value with the exact casing used here. The comparison is
-// case-sensitive.
-const superAdminRoleName = "SUPER_ADMIN"
 
 // Password policy bounds enforced by validatePasswordPolicy.
 //
@@ -104,48 +92,11 @@ var (
 	// HTTP response is identical to the Create conflict.
 	ErrEmailAlreadyUsed = errors.New("email already used by another staff")
 
-	// ErrCannotDeleteSelf is returned by Delete when the acting staff
-	// user — identified from the request context via audit.GetStaffID —
-	// is the same as the target of the delete. The guard exists to
-	// prevent a super-admin from locking themselves out of the system.
-	//
-	// # Fail-open on missing context identity
-	//
-	// The guard is evaluated only when the context carries a staff
-	// identity. If audit.GetStaffID returns ok == false, the check is
-	// skipped entirely and the delete proceeds. In the current wiring the
-	// JWT middleware guarantees a present identity for every authenticated
-	// request, so this path is not reachable through the HTTP API. It
-	// would be reachable from a caller that invokes Delete with a
-	// context that does not carry the middleware's identity value — for
-	// example, a background job. See Delete for the full analysis.
-	//
-	// The handler maps this to 403 Forbidden.
+	// ErrCannotDeleteSelf forbids deleting the authenticated principal.
 	ErrCannotDeleteSelf = errors.New("cannot delete your own account")
 
-	// ErrForbidden is returned by Create and UpdatePassword when the
-	// acting staff user does not hold the SUPER_ADMIN role, or when the
-	// acting identity cannot be resolved from the request context at all.
-	//
-	// The sentinel is the service-layer counterpart of the HTTP
-	// middleware's super-admin gate. It exists because a caller that can
-	// create a staff user can also create a super admin, and a caller
-	// that can reset another account's password can take over that
-	// account; the service therefore enforces the privilege boundary
-	// independently of the route wiring. A future route added without
-	// the middleware — or a caller that invokes the service directly,
-	// such as a background job or a test — will be rejected before any
-	// other work is performed.
-	//
-	// The check is fail-closed: a missing identity returns ErrForbidden
-	// rather than being silently treated as a super admin. This differs
-	// from the fail-open self-deletion guard in Delete, because the two
-	// guards protect different properties: Delete protects an individual
-	// account from a lockout, while the super-admin guard protects the
-	// privilege boundary of the system.
-	//
-	// The handler maps this to 403 Forbidden.
-	ErrForbidden = errors.New("forbidden")
+	// ErrForbidden aliases the shared current-authority permission denial.
+	ErrForbidden = authz.ErrForbidden
 
 	// ErrPasswordTooShort is returned by UpdatePassword when the supplied
 	// new password is shorter than minPasswordLength. The length is
@@ -203,7 +154,7 @@ type CreateStaffParams struct {
 	// match an existing roles row produces ErrInvalidRole.
 	//
 	// A caller that supplies "SUPER_ADMIN" is permitted to do so provided
-	// the actor passes the requireSuperAdmin check; the service does not
+	// the actor passes the staff.manage authority check; the service does not
 	// impose any additional restriction on which roles a super admin may
 	// assign.
 	Role string
@@ -256,155 +207,43 @@ type UpdateStaffParams struct {
 	Email string
 }
 
-// StaffService provides business logic for staff management.
-//
-// It is the service layer for the administrative staff-user lifecycle:
-// provisioning new accounts, reading and listing existing ones, changing
-// metadata, toggling active status, resetting passwords, and deleting
-// accounts. The service depends on three interfaces declared in
-// interfaces.go and is itself abstracted behind StaffServicer for the
-// handler's benefit — making this the only feature module in the codebase
-// where the handler, the service, and the service's dependencies are all
-// interface-typed.
-//
-// # Dependencies
-//
-//   - staffRepo — the StaffUserRepository interface, for all staff_users
-//     table access.
-//   - roleRepo — the RoleRepository interface, for resolving role names
-//     to IDs and IDs to names.
-//   - auditService — the single-method AuditService interface, for
-//     recording administrative actions. Audit failures are logged but do
-//     not abort the surrounding operation.
-//
-// All three must be non-nil. The service does not own them and does not
-// dispose of them.
-//
-// # Authorisation model
-//
-// The service performs role-based authorisation at two call sites:
-// Create and UpdatePassword both invoke requireSuperAdmin before doing
-// any other work. All other methods trust that the caller has already
-// been authorised by the HTTP middleware chain, which applies the
-// super-admin role gate before any staff endpoint is reached. The
-// self-deletion guard in Delete reads the acting staff identity from
-// the request context but does not verify the actor's role.
-//
-// The Create-time and UpdatePassword-time checks are deliberately
-// defense-in-depth: the HTTP layer already gates those routes, but the
-// service enforces the super-admin invariant independently so that a
-// future route added without the middleware cannot silently widen
-// access. The invariant is not currently enforced on Update,
-// UpdateStatus, or Delete; those methods rely on the middleware alone.
-//
-// UpdatePassword additionally requires the actor to re-enter their own
-// password as a confirmation step; see the method's documentation for
-// the rationale.
-//
-// # Password policy
-//
-// The service enforces a minimum length of minPasswordLength and a
-// maximum length of maxPasswordLength on passwords submitted through
-// UpdatePassword. The policy is checked before any repository call, so
-// an out-of-range password is rejected without touching the database.
-// Create does not currently enforce the same policy; the omission is
-// documented on Create.
-//
-// # Concurrency
-//
-// The service is stateless after construction and safe for concurrent use.
-// It holds no per-request state and shares nothing mutable between
-// invocations. The three interfaces it holds are expected to be
-// concurrency-safe; the concrete implementations backed by pgxpool are.
+// StaffService manages staff with independent current-DB authority checks on
+// every public operation. Checks are statement snapshots, not transaction locks.
+// Password reset additionally re-authenticates the actor. Audits remain best effort.
 type StaffService struct {
+	permissions  authz.Checker
 	staffRepo    StaffUserRepository
 	roleRepo     RoleRepository
 	auditService AuditService
 }
 
-// NewStaffService creates a new StaffService instance.
-//
-// All three parameters must be non-nil; none is validated, so a nil
-// repository or audit service will panic on the first method call that
-// uses it rather than at construction. In practice the dependencies are
-// wired by NewStaffModule from the shared sqlc.Queries and the shared
-// audit service.
-//
-// # Interface-typed parameters
-//
-// Because the parameters are declared as interfaces, a caller may pass
-// either the concrete repository types from
-// internal/database/repository or test fakes. The module passes the
-// concrete types; unit tests (see service_test.go in this package) pass
-// mockery-generated fakes without a live database.
-func NewStaffService(staffRepo StaffUserRepository, roleRepo RoleRepository, auditService AuditService) *StaffService {
-	return &StaffService{
-		staffRepo:    staffRepo,
-		roleRepo:     roleRepo,
-		auditService: auditService,
+// NewStaffService requires an explicit current-authority checker; no fallback exists.
+func NewStaffService(staffRepo StaffUserRepository, roleRepo RoleRepository, auditService AuditService, permissions authz.Checker) *StaffService {
+	if permissions == nil {
+		panic("staff: authorization checker is required")
 	}
+	return &StaffService{staffRepo: staffRepo, roleRepo: roleRepo, auditService: auditService, permissions: permissions}
 }
 
-// requireSuperAdmin verifies that the acting staff user holds the
-// super-admin role, and returns the actor's row on success.
-//
-// The acting identity is read from the request context via
-// audit.GetStaffID. A missing identity, a lookup failure for the
-// corresponding staff_users row, or a role name that does not equal
-// superAdminRoleName all cause the function to return an error. The
-// caller is expected to propagate the error unchanged.
-//
-// # Return value
-//
-// On success the function returns the actor's full staff_users row. The
-// row carries the actor's PasswordHash, which UpdatePassword uses to
-// verify the re-authentication step. Callers that do not need the row
-// — currently Create — may discard it with `_`.
-//
-// # Failure modes
-//
-// Three outcomes are distinguished:
-//
-//   - A missing identity returns ErrForbidden. The caller is not
-//     authenticated; treating the absence as "definitely not a super
-//     admin" is the fail-closed choice.
-//   - A role name that does not equal superAdminRoleName returns
-//     ErrForbidden. The caller is authenticated but not authorised.
-//   - A repository failure during the actor or role lookup returns a
-//     wrapped, non-sentinel error. The identity is presumed valid — it
-//     was set by the JWT middleware — so a lookup failure indicates an
-//     infrastructure problem rather than an authorisation problem, and
-//     is surfaced as a 500 by the handler rather than a 403.
-//
-// # Callers
-//
-// The helper is invoked by Create and UpdatePassword. Update,
-// UpdateStatus, and Delete have the same theoretical gap — the service
-// does not enforce the super-admin invariant for those methods — and a
-// future revision may extend this call to them as well. The helper is
-// declared on *StaffService rather than as a free function so that it
-// has direct access to staffRepo and roleRepo without additional
-// parameters.
-//
-// # Concurrency
-//
-// Safe for concurrent use. The helper holds no state between calls and
-// performs only read-only repository lookups.
-func (s *StaffService) requireSuperAdmin(ctx context.Context) (*sqlc.StaffUser, error) {
-	actorID, ok := audit.GetStaffID(ctx)
-	if !ok {
-		return nil, ErrForbidden
-	}
-	actor, err := s.staffRepo.FindByID(ctx, actorID)
+// passwordActor checks staff management permission before loading the actor's hash.
+// Missing/inactive actors fail closed; infrastructure failures remain internal.
+func (s *StaffService) passwordActor(ctx context.Context) (*sqlc.StaffUser, error) {
+	principal, err := s.permissions.Require(ctx, authz.StaffManage)
 	if err != nil {
-		return nil, fmt.Errorf("authorization: get actor: %w", err)
+		return nil, err
 	}
-	role, err := s.roleRepo.FindByID(ctx, actor.RoleID)
+	actor, err := s.staffRepo.FindByID(ctx, principal.ID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, authz.ErrUnauthenticated
+	}
 	if err != nil {
-		return nil, fmt.Errorf("authorization: get actor role: %w", err)
+		return nil, fmt.Errorf("load password actor: %w", err)
 	}
-	if role.Name != superAdminRoleName {
-		return nil, ErrForbidden
+	if actor.ID != principal.ID {
+		return nil, errors.New("inconsistent password actor identity")
+	}
+	if !actor.IsActive {
+		return nil, authz.ErrUnauthenticated
 	}
 	return &actor, nil
 }
@@ -444,6 +283,8 @@ func validatePasswordPolicy(password string) error {
 }
 
 // Create creates a new staff user.
+// Requires current-DB staff.manage before business work. Authentication and
+// permission failures use shared authz errors.
 // It validates email uniqueness, hashes the password, and assigns a role.
 // Returns the created Staff object or an error.
 // Possible errors: ErrForbidden, ErrEmailAlreadyRegistered, ErrInvalidRole.
@@ -451,10 +292,9 @@ func validatePasswordPolicy(password string) error {
 // # Flow
 //
 //  0. Verify that the acting staff user holds the super-admin role via
-//     requireSuperAdmin. This is a fail-closed check: a missing identity
-//     or a non-super-admin role returns ErrForbidden before any other
-//     work is performed. See the helper's documentation for the full
-//     failure taxonomy.
+//     the current-DB staff.manage checker before any business work. Missing
+//     identity returns authz.ErrUnauthenticated; insufficient role returns
+//     ErrForbidden. See authz.Authorizer.Require for the failure taxonomy.
 //  1. Check for an existing staff user with the same email via
 //     staffRepo.ExistsByEmail. A match returns ErrEmailAlreadyRegistered.
 //  2. Hash params.Password with bcrypt at bcrypt.DefaultCost. A hashing
@@ -512,8 +352,8 @@ func validatePasswordPolicy(password string) error {
 //
 // # Errors
 //
-// Returns ErrForbidden when the acting caller is not a super admin, or
-// when the acting identity is absent from the context. Returns
+// Returns ErrForbidden when the current DB role lacks permission, and
+// authz.ErrUnauthenticated for missing/deleted/inactive identity. Returns
 // ErrEmailAlreadyRegistered or ErrInvalidRole for the corresponding
 // conditions. Returns a wrapped error for the actor-lookup, role-lookup,
 // email-check, password-hash, or insert steps; none of the wrapped
@@ -525,7 +365,7 @@ func validatePasswordPolicy(password string) error {
 // Safe for concurrent use. See the advisory-check note above for the
 // concurrency implications of the email check.
 func (s *StaffService) Create(ctx context.Context, params CreateStaffParams) (*Staff, error) {
-	if _, err := s.requireSuperAdmin(ctx); err != nil {
+	if _, err := s.permissions.Require(ctx, authz.StaffManage); err != nil {
 		return nil, err
 	}
 
@@ -587,6 +427,8 @@ func (s *StaffService) Create(ctx context.Context, params CreateStaffParams) (*S
 }
 
 // GetByID retrieves a staff user by ID along with their role name.
+// Requires current-DB staff.manage before target reads or other business work.
+// Authentication/permission failures use the shared authz errors.
 // Returns ErrStaffNotFound if the user does not exist.
 //
 // # Flow
@@ -611,6 +453,14 @@ func (s *StaffService) Create(ctx context.Context, params CreateStaffParams) (*S
 //
 // Safe for concurrent use.
 func (s *StaffService) GetByID(ctx context.Context, id int64) (*Staff, error) {
+	if _, err := s.permissions.Require(ctx, authz.StaffManage); err != nil {
+		return nil, err
+	}
+	return s.getByID(ctx, id)
+}
+
+// getByID is only used after the owning public operation authorized the caller.
+func (s *StaffService) getByID(ctx context.Context, id int64) (*Staff, error) {
 	staff, err := s.staffRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -637,6 +487,8 @@ func (s *StaffService) GetByID(ctx context.Context, id int64) (*Staff, error) {
 }
 
 // List returns a paginated list of staff users with optional search by name or email.
+// Requires current-DB staff.manage before target reads or other business work.
+// Authentication/permission failures use the shared authz errors.
 // Returns the list of Staff objects, total count, and any error.
 //
 // # Flow
@@ -674,6 +526,9 @@ func (s *StaffService) GetByID(ctx context.Context, id int64) (*Staff, error) {
 //
 // Safe for concurrent use.
 func (s *StaffService) List(ctx context.Context, page, limit int32, search string) ([]Staff, int64, error) {
+	if _, err := s.permissions.Require(ctx, authz.StaffManage); err != nil {
+		return nil, 0, err
+	}
 	offset := (page - 1) * limit
 
 	var staffs []Staff
@@ -729,6 +584,8 @@ func (s *StaffService) List(ctx context.Context, page, limit int32, search strin
 }
 
 // Update updates a staff user's role, name, or email.
+// Requires current-DB staff.manage before target reads or other business work.
+// Authentication/permission failures use the shared authz errors.
 // Returns the updated Staff object or an error.
 // Possible errors: ErrStaffNotFound, ErrInvalidRole, ErrEmailAlreadyUsed.
 //
@@ -747,23 +604,12 @@ func (s *StaffService) List(ctx context.Context, page, limit int32, search strin
 //     check for a collision via ExistsByEmail. A collision returns
 //     ErrEmailAlreadyUsed.
 //  6. Issue the UPDATE.
-//  7. Re-fetch via GetByID to obtain the post-update state — a role
+//  7. Re-fetch via private getByID to obtain the post-update state — a role
 //     lookup is performed as part of this re-fetch, which adds a round
 //     trip and introduces a failure mode (see below).
 //  8. Write an audit entry recording the before and after snapshots. An
 //     audit failure is logged and does not abort the operation.
 //  9. Return the updated Staff.
-//
-// # Absence of a caller-authorisation check
-//
-// Unlike Create, this method does not verify that the acting staff user
-// is a super admin. The check is not applied because the HTTP layer
-// already gates the route and because the same privilege boundary
-// applies to any caller that can reach the handler. A caller that can
-// invoke Update can also change a staff user's role — including
-// elevating a non-privileged account to SUPER_ADMIN — so the invariant
-// that Create enforces is equally relevant here. A future revision may
-// extend requireSuperAdmin to this method as well.
 //
 // # Re-fetch failure produces a 500 after the write landed
 //
@@ -802,6 +648,9 @@ func (s *StaffService) List(ctx context.Context, page, limit int32, search strin
 // row are not serialised. The final state reflects whichever update
 // commits last.
 func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*Staff, error) {
+	if _, err := s.permissions.Require(ctx, authz.StaffManage); err != nil {
+		return nil, err
+	}
 	existing, err := s.staffRepo.FindByID(ctx, params.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -844,7 +693,7 @@ func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*S
 		return nil, fmt.Errorf("update staff: %w", err)
 	}
 
-	staff, err := s.GetByID(ctx, params.ID)
+	staff, err := s.getByID(ctx, params.ID)
 	if err == nil {
 		if errLog := s.auditService.Log(ctx, audit.LogParams{
 			Action:     audit.ACTION_STAFF_UPDATE,
@@ -869,6 +718,8 @@ func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*S
 }
 
 // UpdateStatus changes the active status of a staff user.
+// Requires current-DB staff.manage before target reads or other business work.
+// Authentication/permission failures use the shared authz errors.
 // Returns the updated Staff object or an error.
 // Possible error: ErrStaffNotFound.
 //
@@ -878,16 +729,9 @@ func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*S
 //     ErrStaffNotFound; any other repository failure is wrapped with
 //     "get staff for update status: " and returned as a non-sentinel error.
 //  2. Write the new status via staffRepo.UpdateStatus.
-//  3. Re-fetch via GetByID to obtain the post-update state — which
+//  3. Re-fetch via private getByID to obtain the post-update state — which
 //     performs its own role lookup.
 //  4. Write an audit entry recording the before and after snapshots.
-//
-// # Absence of a caller-authorisation check
-//
-// As with Update, this method does not independently verify that the
-// acting caller is a super admin. Deactivating another super admin is a
-// privileged operation that the HTTP middleware gate covers; the service
-// does not enforce the invariant itself.
 //
 // # Re-fetch failure produces a 500 after the write landed
 //
@@ -917,6 +761,9 @@ func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*S
 // Safe for concurrent use. Two concurrent status changes on the same
 // account are not serialised; the last write wins.
 func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool) (*Staff, error) {
+	if _, err := s.permissions.Require(ctx, authz.StaffManage); err != nil {
+		return nil, err
+	}
 	existing, err := s.staffRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -929,7 +776,7 @@ func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool
 		return nil, fmt.Errorf("update status: %w", err)
 	}
 
-	staff, err := s.GetByID(ctx, id)
+	staff, err := s.getByID(ctx, id)
 	if err == nil {
 		if errLog := s.auditService.Log(ctx, audit.LogParams{
 			Action:     audit.ACTION_STAFF_UPDATE_STATUS,
@@ -975,10 +822,10 @@ func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool
 //
 // # Flow
 //
-//  1. Call requireSuperAdmin. On success it returns the actor's full
+//  1. Call passwordActor. It checks current DB authority, then returns the actor's full
 //     staff_users row, including the bcrypt hash of the actor's current
 //     password. A missing identity or a non-super-admin role returns
-//     ErrForbidden before any other work is performed.
+//     authz.ErrUnauthenticated/ErrForbidden before business work.
 //  2. Verify the supplied currentPassword against the actor's stored
 //     hash via bcrypt.CompareHashAndPassword. A mismatch returns
 //     ErrInvalidCurrentPassword.
@@ -1051,8 +898,8 @@ func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool
 //
 // # Errors
 //
-// Returns ErrForbidden when the acting caller is not a super admin, or
-// when the acting identity is absent from the context. Returns
+// Returns ErrForbidden for insufficient permission and authz.ErrUnauthenticated
+// for missing, deleted or inactive identity. Returns
 // ErrInvalidCurrentPassword when the supplied confirmation password does
 // not match the actor's stored hash. Returns ErrPasswordTooShort or
 // ErrPasswordTooLong when the new password violates the policy. Returns
@@ -1074,7 +921,7 @@ func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool
 // account, so a caller cannot invalidate their own in-flight reset by
 // resetting their own password in parallel.
 func (s *StaffService) UpdatePassword(ctx context.Context, id int64, currentPassword, newPassword string) error {
-	actor, err := s.requireSuperAdmin(ctx)
+	actor, err := s.passwordActor(ctx)
 	if err != nil {
 		return err
 	}
@@ -1127,6 +974,8 @@ func (s *StaffService) UpdatePassword(ctx context.Context, id int64, currentPass
 }
 
 // Delete removes a staff user by ID.
+// Requires current-DB staff.manage before target reads or other business work.
+// Authentication/permission failures use the shared authz errors.
 // Prevents self-deletion and logs an audit entry on success.
 // Returns ErrStaffNotFound or ErrCannotDeleteSelf.
 //
@@ -1135,45 +984,10 @@ func (s *StaffService) UpdatePassword(ctx context.Context, id int64, currentPass
 //  1. Load the target staff row. A missing row returns
 //     ErrStaffNotFound; any other repository failure is wrapped with
 //     "get staff for delete: " and returned as a non-sentinel error.
-//  2. Read the acting staff identity from the request context via
-//     audit.GetStaffID and, if present, compare it to the delete target.
+//  2. Compare the authorized principal ID to the delete target.
 //     A match returns ErrCannotDeleteSelf.
 //  3. Delete the staff row.
 //  4. Write an audit entry recording the deletion.
-//
-// # The self-deletion guard is fail-open on missing context identity
-//
-// The guard is evaluated only when the context carries a staff identity:
-//
-//	actorID, ok := audit.GetStaffID(ctx)
-//	if ok && actorID == id {
-//	    return ErrCannotDeleteSelf
-//	}
-//
-// If audit.GetStaffID returns ok == false — the context has no staff
-// identity, or the identity is of the wrong type — the check is skipped
-// and the delete proceeds. In the current wiring every authenticated HTTP
-// request carries a staff identity set by the JWT middleware, so this
-// path is not reachable through the API. It would be reachable from a
-// caller that invokes Delete with a plain context.Background(), such as
-// a background job or a test that does not populate the context. The
-// safety property ("a super-admin cannot delete themselves") is
-// therefore enforced conditionally, not absolutely.
-//
-// The fail-open behaviour is intentional and differs from the
-// fail-closed choice made by requireSuperAdmin for Create and
-// UpdatePassword. The guards protect different properties: the
-// self-deletion guard protects an individual account from a lockout,
-// while the super-admin guard protects the privilege boundary of the
-// system.
-//
-// # Absence of a caller-authorisation check
-//
-// This method does not independently verify that the acting caller is a
-// super admin. Deleting another super admin is a privileged operation
-// that the HTTP middleware gate covers; the service does not enforce
-// the invariant itself. A future revision may extend requireSuperAdmin
-// to this method as well.
 //
 // # Hard delete
 //
@@ -1188,7 +1002,7 @@ func (s *StaffService) UpdatePassword(ctx context.Context, id int64, currentPass
 //
 // Returns ErrStaffNotFound only when the target staff row is absent.
 // Other initial-lookup failures are wrapped. ErrCannotDeleteSelf is
-// returned for a self-delete with a present context identity. Delete
+// returned for a self-delete by the verified principal. Delete
 // failures are returned as-is and are served as 500 by the handler.
 //
 // # Concurrency
@@ -1198,6 +1012,10 @@ func (s *StaffService) UpdatePassword(ctx context.Context, id int64, currentPass
 // is either a no-op or a row-not-found error at the SQL level depending
 // on the delete query's semantics.
 func (s *StaffService) Delete(ctx context.Context, id int64) error {
+	principal, err := s.permissions.Require(ctx, authz.StaffManage)
+	if err != nil {
+		return err
+	}
 	existing, err := s.staffRepo.FindByID(ctx, id)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -1206,8 +1024,7 @@ func (s *StaffService) Delete(ctx context.Context, id int64) error {
 		return fmt.Errorf("get staff for delete: %w", err)
 	}
 
-	actorID, ok := audit.GetStaffID(ctx)
-	if ok && actorID == id {
+	if principal.ID == id {
 		return ErrCannotDeleteSelf
 	}
 

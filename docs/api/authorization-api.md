@@ -1,7 +1,7 @@
 # Staff operation authorization contract
 
-Status: **implemented in code, locally verified; not deployed**, 2026-11-02.
-Notification/segment/member APIs enforce the confirmed matrix. C21's scoped
+Status: **implemented in code, locally verified; not deployed**, updated 2026-11-03.
+Notification/segment/member and staff administration APIs enforce the confirmed matrix. C21's scoped
 operation bypass is remediated; see [evidence and remaining limits](../analysis/m02a-verification.md),
 [SPEC](../specs/m02a-staff-operation-permissions.md), and
 [canonical role/route matrix](../contracts/staff-permissions.json).
@@ -10,15 +10,15 @@ All routes retain API key (`X-API-Key`) plus staff access Bearer JWT.
 Permission is checked against the active staff account/current DB role;
 the token's role claim and UI visibility are not authority.
 
-| Role | Existing business reads | Draft/segment/member mutations | Send/schedule | Staff administration target |
+| Role | Existing business reads | Draft/segment/member mutations | Send/schedule | Staff administration |
 | --- | --- | --- | --- | --- |
 | VIEWER | Allowed | Denied | Denied | Denied |
 | OPERATOR | Allowed | Allowed | Denied | Denied |
 | ADMIN | Allowed | Allowed | Allowed | Denied |
 | SUPER_ADMIN | Allowed | Allowed | Allowed | Allowed |
 
-Staff administration enforcement is outside this first slice; existing staff
-middleware/services are not claimed hardened by this contract. Operational
+[M02b](../specs/m02b-staff-administration.md) adds current-DB `staff.manage`
+route/service guards to all seven staff endpoints; see [local evidence](../analysis/m02b-verification.md). Operational
 hold/requeue/restore needs a separate scoped operator policy, not SUPER_ADMIN
 role alone. The matrix does not add owner-only or tenant-specific restrictions.
 

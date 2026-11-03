@@ -1,6 +1,6 @@
 {
-  "policy_version": 1,
-  "status": "implemented-m02a-local-verified",
+  "policy_version": 2,
+  "status": "implemented-m02a-m02b-local-verified",
   "confirmed_on": "2026-11-02",
   "default": "deny",
   "roles": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
@@ -12,7 +12,8 @@
     "segments.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
     "segments.write": ["OPERATOR", "ADMIN", "SUPER_ADMIN"],
     "segments.members.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
-    "segments.members.write": ["OPERATOR", "ADMIN", "SUPER_ADMIN"]
+    "segments.members.write": ["OPERATOR", "ADMIN", "SUPER_ADMIN"],
+    "staff.manage": ["SUPER_ADMIN"]
   },
   "routes": [
     {"method": "GET", "path": "/api/v1/notifications", "permission": "notifications.read"},
@@ -34,8 +35,17 @@
     {"method": "POST", "path": "/api/v1/notifications", "field": "scheduled_at", "condition": "decoded non-null timestamp", "permission": "notifications.schedule"},
     {"method": "PATCH", "path": "/api/v1/notifications/{id}", "field": "scheduled_at", "condition": "decoded non-null timestamp", "permission": "notifications.schedule"}
   ],
+  "staff_routes": [
+    {"method": "GET", "path": "/api/v1/staff", "permission": "staff.manage"},
+    {"method": "GET", "path": "/api/v1/staff/{id}", "permission": "staff.manage"},
+    {"method": "POST", "path": "/api/v1/staff", "permission": "staff.manage"},
+    {"method": "PATCH", "path": "/api/v1/staff/{id}", "permission": "staff.manage"},
+    {"method": "PATCH", "path": "/api/v1/staff/{id}/status", "permission": "staff.manage"},
+    {"method": "PATCH", "path": "/api/v1/staff/{id}/password", "permission": "staff.manage"},
+    {"method": "DELETE", "path": "/api/v1/staff/{id}", "permission": "staff.manage"}
+  ],
   "staff_administration": {
     "allowed_roles": ["SUPER_ADMIN"],
-    "enforced_by_this_slice": false
+    "enforced_by_this_slice": true
   }
 }

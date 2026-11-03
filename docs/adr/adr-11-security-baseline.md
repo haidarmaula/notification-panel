@@ -176,7 +176,9 @@ management, send/schedule only ADMIN/SUPER_ADMIN, staff/role administration only
 SUPER_ADMIN. This accepts the scoped policy, not the whole ADR or runtime.
 [SPEC M02a](../specs/m02a-staff-operation-permissions.md) and the
 [policy contract](../contracts/staff-permissions.json) start notification/segment/
-member enforcement; operational step-up remains proposed and separate.
+member enforcement; [M02b](../specs/m02b-staff-administration.md) adds existing staff
+administration current-authority guards, locally verified 2026-11-03. Operational
+step-up remains proposed and separate.
 
 | Operation | VIEWER | OPERATOR | ADMIN | SUPER_ADMIN |
 | --- | --- | --- | --- | --- |
@@ -214,7 +216,8 @@ leaves the same privilege escalation through a different endpoint.
 ### Consequences
 
 C21 operation bypass is remediated by M02a route/service and negative API/DB
-tests. Atomic mutation/audit, staff administration/session controls and remaining
+tests; M02b adds existing staff route/service guards. Atomic mutation/audit,
+session controls and remaining
 security policies are not thereby implemented or release-approved.
 
 ## A-5. Request, resource and abuse limits

@@ -2,6 +2,7 @@ package staff
 
 import (
 	"hello/internal/audit"
+	"hello/internal/authz"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 	"hello/internal/middleware"
@@ -41,6 +42,7 @@ import (
 type StaffModule struct {
 	middlewares []middleware.Middleware
 	handler     *StaffHandler
+	permissions authz.Checker
 }
 
 // NewStaffModule creates a new StaffModule instance with the given database queries and middlewares.
@@ -67,7 +69,7 @@ type StaffModule struct {
 // queries must be non-nil and is expected to be the shared instance from
 // cmd/server. The middlewares parameter is variadic so that the caller can
 // pass whichever cross-cutting concerns apply to the staff endpoints — in
-// the current wiring the API-key, JWT, super-admin, and audit middlewares
+// the current wiring the API-key, JWT and audit middlewares
 // — without the module hardcoding a chain. The order in which they are
 // supplied is the order in which they are applied; see middleware.Chain
 // for the composition rule.
@@ -82,12 +84,14 @@ func NewStaffModule(queries *sqlc.Queries, middlewares ...middleware.Middleware)
 	auditRepo := repository.NewAuditLogRepository(queries)
 
 	auditService := audit.NewAuditService(auditRepo)
-	staffService := NewStaffService(staffRepo, roleRepo, auditService)
+	permissions := authz.New(staffRepo)
+	staffService := NewStaffService(staffRepo, roleRepo, auditService, permissions)
 
 	handler := NewStaffHandler(staffService)
 
 	return &StaffModule{
 		middlewares: middlewares,
 		handler:     handler,
+		permissions: permissions,
 	}
 }

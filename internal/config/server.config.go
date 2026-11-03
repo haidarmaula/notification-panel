@@ -38,11 +38,9 @@ type ServerConfig struct {
 	// corresponding value in the Laravel deployment.
 	MobileJWTSecret string
 
-	// SuperAdminRole is the role name that grants unrestricted administrative
-	// access (SUPER_ADMIN_ROLE). It is compared against the role attached to
-	// the authenticated staff user by the SuperAdminMiddleware. Note that the
-	// bootstrap utility does not read this field — see the bootstrap package
-	// for the implications.
+	// SuperAdminRole retains the required legacy SUPER_ADMIN_ROLE setting for
+	// config compatibility. Staff routes/services now use the fixed current-DB
+	// staff.manage policy in internal/authz; this value cannot grant permission.
 	SuperAdminRole string
 
 	// KafkaBroker is the address of the Kafka broker used to publish send

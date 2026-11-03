@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
 
+	"hello/internal/authz"
 	"hello/internal/database/sqlc"
 	"hello/internal/features/staff/mocks"
 	"hello/internal/middleware"
@@ -126,11 +127,9 @@ func TestStaffService_Create(t *testing.T) {
 			mockRoleRepo := mocks.NewMockRoleRepository(t)
 			mockAudit := mocks.NewMockAuditService(t)
 
-			mockStaffRepo.EXPECT().FindByID(mock.Anything, int64(99)).Return(dummyStaffUser(99), nil).Once()
-			mockRoleRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(sqlc.Role{ID: 1, Name: "SUPER_ADMIN"}, nil).Once()
 			tc.mockSetup(mockStaffRepo, mockRoleRepo, mockAudit)
 
-			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit)
+			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
 			staff, err := service.Create(ctxWithStaffID(99), tc.params)
 
 			assert.ErrorIs(t, err, tc.expectedError)
@@ -144,46 +143,6 @@ func TestStaffService_Create(t *testing.T) {
 // ============================================
 // CREATE AUTHORIZATION
 // ============================================
-
-func TestStaffService_CreateAuthorization(t *testing.T) {
-	t.Parallel()
-	dbError := errors.New("authorization database unavailable")
-	for _, tc := range []struct {
-		name          string
-		actorID       int64
-		actorError    error
-		roleError     error
-		expectedError error
-	}{
-		{name: "missing actor", expectedError: ErrForbidden},
-		{name: "admin cannot create staff", actorID: 99, expectedError: ErrForbidden},
-		{name: "actor lookup fails closed", actorID: 99, actorError: dbError, expectedError: dbError},
-		{name: "role lookup fails closed", actorID: 99, roleError: dbError, expectedError: dbError},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-			repo := mocks.NewMockStaffUserRepository(t)
-			roles := mocks.NewMockRoleRepository(t)
-			audit := mocks.NewMockAuditService(t)
-			ctx := context.Background()
-			if tc.actorID != 0 {
-				ctx = ctxWithStaffID(tc.actorID)
-				repo.EXPECT().FindByID(mock.Anything, int64(99)).Return(dummyStaffUser(99), tc.actorError).Once()
-				if tc.actorError == nil {
-					roles.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyRole(), tc.roleError).Once()
-				}
-			}
-			service := NewStaffService(repo, roles, audit)
-			staff, err := service.Create(ctx, CreateStaffParams{
-				Role: "SUPER_ADMIN", Name: "New Staff", Email: "new@example.com", Password: "password123",
-			})
-			require.ErrorIs(t, err, tc.expectedError)
-			require.Nil(t, staff)
-			repo.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
-			audit.AssertNotCalled(t, "Log", mock.Anything, mock.Anything)
-		})
-	}
-}
 
 // ============================================
 // GET BY ID
@@ -229,8 +188,8 @@ func TestStaffService_GetByID(t *testing.T) {
 
 			tc.mockSetup(mockStaffRepo, mockRoleRepo)
 
-			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit)
-			staff, err := service.GetByID(context.Background(), tc.id)
+			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
+			staff, err := service.GetByID(ctxWithStaffID(99), tc.id)
 
 			assert.ErrorIs(t, err, tc.expectedError)
 			if err == nil {
@@ -310,8 +269,8 @@ func TestStaffService_List(t *testing.T) {
 
 			tc.mockSetup(mockStaffRepo)
 
-			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit)
-			staffs, total, err := service.List(context.Background(), tc.page, tc.limit, tc.search)
+			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
+			staffs, total, err := service.List(ctxWithStaffID(99), tc.page, tc.limit, tc.search)
 
 			assert.ErrorIs(t, err, tc.expectedError)
 			if tc.verifyResult != nil {
@@ -423,8 +382,8 @@ func TestStaffService_Update(t *testing.T) {
 
 			tc.mockSetup(mockStaffRepo, mockRoleRepo, mockAudit)
 
-			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit)
-			staff, err := service.Update(context.Background(), tc.params)
+			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
+			staff, err := service.Update(ctxWithStaffID(99), tc.params)
 
 			assert.ErrorIs(t, err, tc.expectedError)
 			if tc.verifyResult != nil {
@@ -459,8 +418,8 @@ func TestStaffService_UpdateStatus(t *testing.T) {
 		mockRoleRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyRole(), nil).Once()
 		mockAudit.EXPECT().Log(mock.Anything, mock.Anything).Return(nil).Once()
 
-		service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit)
-		staff, err := service.UpdateStatus(context.Background(), id, false)
+		service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
+		staff, err := service.UpdateStatus(ctxWithStaffID(99), id, false)
 
 		assert.NoError(t, err)
 		assert.False(t, staff.IsActive)
@@ -476,8 +435,8 @@ func TestStaffService_UpdateStatus(t *testing.T) {
 		id := int64(999)
 		mockStaffRepo.EXPECT().FindByID(mock.Anything, id).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
 
-		service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit)
-		staff, err := service.UpdateStatus(context.Background(), id, false)
+		service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
+		staff, err := service.UpdateStatus(ctxWithStaffID(99), id, false)
 
 		assert.Nil(t, staff)
 		assert.ErrorIs(t, err, ErrStaffNotFound)
@@ -508,7 +467,7 @@ func TestStaffService_UpdatePassword(t *testing.T) {
 		expectedError   error
 	}{
 		{name: "authorized reset", ctx: ctxWithStaffID(99), role: "SUPER_ADMIN", currentPassword: currentPassword, newPassword: "new-password"},
-		{name: "missing actor", ctx: context.Background(), expectedError: ErrForbidden},
+		{name: "missing actor", ctx: context.Background(), expectedError: authz.ErrUnauthenticated},
 		{name: "non super admin", ctx: ctxWithStaffID(99), role: "ADMIN", expectedError: ErrForbidden},
 		{name: "wrong current password", ctx: ctxWithStaffID(99), role: "SUPER_ADMIN", currentPassword: "wrong-password", expectedError: ErrInvalidCurrentPassword},
 		{name: "password too short", ctx: ctxWithStaffID(99), role: "SUPER_ADMIN", currentPassword: currentPassword, newPassword: "short", expectedError: ErrPasswordTooShort},
@@ -523,9 +482,8 @@ func TestStaffService_UpdatePassword(t *testing.T) {
 			repo := mocks.NewMockStaffUserRepository(t)
 			roles := mocks.NewMockRoleRepository(t)
 			audit := mocks.NewMockAuditService(t)
-			if tc.role != "" {
+			if tc.role == "SUPER_ADMIN" {
 				repo.EXPECT().FindByID(mock.Anything, int64(99)).Return(actor, nil).Once()
-				roles.EXPECT().FindByID(mock.Anything, actor.RoleID).Return(sqlc.Role{ID: actor.RoleID, Name: tc.role}, nil).Once()
 			}
 			if tc.role == "SUPER_ADMIN" && tc.currentPassword == currentPassword && len(tc.newPassword) >= minPasswordLength && len(tc.newPassword) <= maxPasswordLength {
 				repo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyStaffUser(1), tc.targetError).Once()
@@ -538,7 +496,7 @@ func TestStaffService_UpdatePassword(t *testing.T) {
 					}
 				}
 			}
-			service := NewStaffService(repo, roles, audit)
+			service := NewStaffService(repo, roles, audit, testAuthority(tc.role))
 			err := service.UpdatePassword(tc.ctx, 1, tc.currentPassword, tc.newPassword)
 			require.ErrorIs(t, err, tc.expectedError)
 			if tc.expectedError != nil {
@@ -608,10 +566,18 @@ func TestStaffService_Delete(t *testing.T) {
 
 			tc.mockSetup(mockStaffRepo, mockAudit)
 
-			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit)
+			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
 			err := service.Delete(tc.ctx, tc.targetID)
 
 			assert.ErrorIs(t, err, tc.expectedError)
 		})
 	}
 }
+
+// Fixtures use the real policy checker with an explicit database-authority row.
+type authorityFixture struct{ role string }
+
+func (f authorityFixture) GetStaffAuthority(_ context.Context, id int64) (sqlc.GetStaffAuthorityRow, error) {
+	return sqlc.GetStaffAuthorityRow{ID: id, IsActive: true, RoleName: pgtype.Text{String: f.role, Valid: true}}, nil
+}
+func testAuthority(role string) authz.Checker { return authz.New(authorityFixture{role: role}) }

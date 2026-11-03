@@ -74,11 +74,12 @@ role bisnis dari G5, bukan enrollment/session/operational policy lainnya.
 Target API ada di [authorization contract](../api/authorization-api.md).
 
 Shared current-authority checker/query, matrix tests, route/service wiring dan
-real-DB/API negative tests M02a selesai. Berikutnya SPEC slice M02 lanjutan. Atomic
+real-DB/API negative tests M02a selesai. [M02b staff administration](m02b-verification.md)
+juga implemented/local-verified pada 2026-11-03: tujuh route dan service memakai current DB authority. Atomic
 authority/mutation/audit tetap mengikuti transaksi pemilik data M03/M04;
 M02a tidak mengklaim revocation membatalkan operasi yang sudah diotorisasi.
-Staff administration hardening dan API/security baseline lain tetap pekerjaan
-M02 lanjutan. Prasyarat M03/M04 adalah guard baseline dan kontrak identitas
+Session, request limits, audit redaction/durability dan API/security baseline lain
+tetap pekerjaan M02 lanjutan. Prasyarat M03/M04 adalah guard baseline dan kontrak identitas
 yang dipakainya, bukan menunggu semua transaksi future diimplementasikan di M02.
 
 ## Cara menyelesaikan satu milestone
@@ -111,7 +112,7 @@ Tidak ada perubahan perilaku service atau test yang di-skip.
 
 M01 step 18/19 selesai sebagai [CI/local checks](ci-readiness.md) dan
 [dependency smoke](integration-readiness.md). Step 20/M02 dimulai dengan SPEC
-M02a yang selesai implemented/local-verified; berikutnya SPEC M02 lanjutan
-untuk staff administration/API security baseline. Hosted execution,
+M02a dan M02b yang selesai implemented/local-verified; berikutnya slice M02
+untuk API security baseline lain, termasuk request limits/audit redaction. Hosted execution,
 production adapter/pipeline, real provider/device dan production infrastructure
 belum dibuktikan oleh penyelesaian fondasi ini.

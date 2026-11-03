@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"hello/internal/authz"
 	"net/http"
 	"strconv"
 	"time"
@@ -36,9 +37,8 @@ import (
 // Every method takes a context.Context as its first parameter. This is
 // the request context from the HTTP layer, and it carries the acting
 // staff user's identity (via middleware.UserContextKey). The service
-// reads that identity for the super-admin check in Create and
-// UpdatePassword, for the self-deletion check in Delete, and for
-// audit-log attribution.
+// checks current database authority on every operation and derives the
+// self-deletion principal and audit attribution from the authenticated identity.
 type StaffServicer interface {
 	// Create provisions a new staff account. See StaffService.Create for
 	// the validation and error semantics.
@@ -138,7 +138,7 @@ func NewStaffHandler(service StaffServicer) *StaffHandler {
 //
 // The service enforces the super-admin invariant independently of the
 // HTTP layer (see StaffService.Create and ErrForbidden). In the current
-// wiring the route is also gated by the super-admin middleware, so a
+// wiring the route is also gated by current-DB staff.manage permission, so a
 // caller that reaches this handler has already been checked once; the
 // service check is defense in depth. When the service returns
 // ErrForbidden, the handler maps it to 403 Forbidden.
@@ -149,8 +149,7 @@ func NewStaffHandler(service StaffServicer) *StaffHandler {
 //     was empty, or the service returned ErrInvalidRole (the role name
 //     did not resolve to a row).
 //   - 403 Forbidden: the service returned ErrForbidden — the acting
-//     staff user is not a super admin, or the acting identity is absent
-//     from the request context.
+//     staff user is not a super admin. Missing/inactive identity returns 401.
 //   - 409 Conflict: the service returned ErrEmailAlreadyRegistered — a
 //     staff user with the same email already exists. The check is
 //     advisory; a concurrent create with the same email can race past
@@ -183,6 +182,9 @@ func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Password: req.Password,
 	})
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrEmailAlreadyRegistered):
 			response.JSON(w, http.StatusConflict, nil, err.Error())
@@ -224,6 +226,9 @@ func (h *StaffHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 	}
 	staff, err := h.service.GetByID(r.Context(), id)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		if errors.Is(err, ErrStaffNotFound) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
@@ -270,6 +275,9 @@ func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 
 	items, total, err := h.service.List(r.Context(), page, limit, search)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
 		return
 	}
@@ -342,6 +350,9 @@ func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Email: req.Email,
 	})
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrStaffNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
@@ -396,6 +407,9 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	staff, err := h.service.UpdateStatus(r.Context(), id, req.IsActive)
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		if errors.Is(err, ErrStaffNotFound) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 			return
@@ -449,8 +463,7 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 //     current_password or password, or a new password that violates the
 //     length policy (ErrPasswordTooShort / ErrPasswordTooLong).
 //   - 403 Forbidden: the service returned ErrForbidden — the acting
-//     staff user is not a super admin, or the acting identity is absent
-//     from the request context. Also returned for
+//     staff user is not a super admin. Missing/inactive identity returns 401. Also returned for
 //     ErrInvalidCurrentPassword — the current_password value did not
 //     match the acting super-admin's stored hash.
 //   - 404 Not Found: the service returned ErrStaffNotFound.
@@ -483,6 +496,9 @@ func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := h.service.UpdatePassword(r.Context(), id, req.CurrentPassword, req.Password); err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrStaffNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
@@ -538,6 +554,9 @@ func (h *StaffHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err = h.service.Delete(r.Context(), id); err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrStaffNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())

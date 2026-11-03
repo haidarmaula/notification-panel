@@ -14,7 +14,19 @@ All endpoints require authentication via:
 
 **Role Requirement:** All staff management endpoints are restricted to users with the **SUPER_ADMIN** role. Regular staff cannot access these endpoints.
 
-The authenticated staff ID is extracted from the JWT and used for authorization checks.
+The JWT identifies the account. Both route and service independently load its
+current database authority; only active SUPER_ADMIN accounts have `staff.manage`.
+The JWT role claim and legacy `SUPER_ADMIN_ROLE` config do not grant permission.
+Implemented locally in M02b (2026-11-03), not deployed; see
+[contract and evidence](../analysis/m02b-verification.md).
+
+Missing/deleted/inactive identity returns 401; insufficient permission returns
+403 `insufficient permissions`; authority failures return 500 `internal server error`.
+Earlier API-key/JWT middleware may return its existing authentication messages.
+All seven routes share this gate, before request decoding. Password reset still
+requires the actor's current password. Self-deletion remains forbidden.
+Checks are statement snapshots, not locks through mutation; sessions are not
+revoked by a password reset. Existing success statuses/DTOs remain unchanged.
 
 ---
 

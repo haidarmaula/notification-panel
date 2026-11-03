@@ -1,8 +1,8 @@
 # Notification Panel Backend — Code Review Findings
 
-**Version:** 1.3
+**Version:** 1.4
 
-**Last Updated:** 2026-11-02
+**Last Updated:** 2026-11-03
 
 **Scope:** Full codebase audit conducted during the Godoc documentation pass  
 **Coverage:** `cmd/`, `internal/`, `pkg/` — every non-test, non-generated `.go` file
@@ -47,8 +47,8 @@ Crashes, security bypasses, data corruption, or issues that affect every user of
 | C3 | `internal/features/users/device_tokens_handler.go` — `Register` | `user_id` taken from request body; only the shared API key gates the endpoint | Any caller with the API key can register a device for any user |
 | C4 | `internal/features/users/device_tokens_handler.go` — `Delete` | No ownership check — deletes any device token by ID | Any caller with the API key can remove any device registration |
 | C5 | `internal/middleware/audit.go` — `extractClientIP` | Trusts `X-Forwarded-For` without verifying a trusted proxy terminates the request | IP spoofing in audit trail if the service is ever exposed directly |
-| C6 | `internal/features/staff/service.go` — `Create` | No caller authorisation check in the service layer | Any caller with API key + JWT can create a `SUPER_ADMIN` account; the HTTP-layer role gate is the only defence |
-| C7 | `internal/features/staff/service.go` — `UpdatePassword` | No current-password check, no actor-authority check, no password policy | Admin can reset any account's password; no complexity or length enforcement anywhere in the codebase |
+| C6 | `internal/features/staff` — administrative authority | **Remediated in M02b, locally verified 2026-11-03:** all seven routes and public service methods require active current-DB SUPER_ADMIN via `staff.manage`; JWT role gate removed from server wiring | [Evidence](docs/analysis/m02b-verification.md): four-role/seven-route matrix, stale JWT/committed demotion, direct-service fail-closed checks. Statement snapshots, not transactional revocation; not deployed. |
+| C7 | `internal/features/staff/service.go` — `UpdatePassword` | **Original claim superseded:** actor password confirmation and 8–72-byte reset bounds already existed; M02b preserves them and adds shared current-authority checks plus fail-closed actor lookup | Reset success/rejection and actor lookup failures pass unit tests; real-DB reset and wrong-password tests pass. No claim of complete password/session policy: reset does not revoke sessions; create policy remains separate. |
 | C8 | `internal/middleware/jwt.go` — `JWTMiddleware` | Does not check staff active status | A deactivated staff user's existing tokens continue to work until expiry; no effective revocation |
 | C21 | `internal/authz`; notification/segment/member routes and services | **Fixed in code, locally verified 2026-11-02 (M02a):** current DB authority guards cover all 14 routes, nine mutation services and non-null create/PATCH scheduling input; creators are principal-derived | [Verification](docs/analysis/m02a-verification.md): four-role real-DB/API matrix, direct service denials, stale claims/committed demotion and no-write/no-Kafka tests pass. Statement-time authorization is not a lock through mutation; staff administration/session/atomic audit remain follow-up. Not deployed. |
 
@@ -475,6 +475,7 @@ need reconciliation.
 | 1.0 | 2026-09-14 | Initial findings inventory compiled from the full-codebase Godoc pass |
 | 1.1 | 2026-11-02 | Add open Kafka findings H47/H48/M48 from source/dependency review and key-partition probe; see `docs/analysis/kafka-readiness.md`. No runtime fix applied. |
 | 1.2 | 2026-11-02 | Add open role-permission finding C21 from route/service/seed review and recalculate summary counts from distinct IDs; see `docs/analysis/api-data-security-readiness.md`. No runtime fix applied. |
+| 1.4 | 2026-11-03 | Reconcile C6/C7 and implement current-DB staff administration guards; retain session/transaction/audit redaction limitations. |
 | 1.3 | 2026-11-02 | Remediate C21 in M02a with current-authority route/service guards and locally verified negative API/DB/Kafka cases; remaining security/transactional limitations recorded in `docs/analysis/m02a-verification.md`. |
 
 ---
@@ -486,3 +487,5 @@ For the overall codebase architecture and development workflow, see the main `RE
 For the database schema and entity relationships, see `docs/database.md`.
 ---
 ---
+
+M02b update (2026-11-03): C6/C7 reconciled with current code and [local evidence](docs/analysis/m02b-verification.md). Existing staff/audit snapshots need a separate redaction review: Update/UpdateStatus/Delete pass full repository rows as Before payloads, including PasswordHash; M02b does not change these persisted payloads.

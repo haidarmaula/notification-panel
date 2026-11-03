@@ -118,7 +118,6 @@ func main() {
 	apiKeyMW := middleware.NewAPIKeyMiddleware(cfg.APIKey)
 	jwtMW := middleware.NewJWTMiddleware(tokenManager, staffRepoForJWT)
 	mobileJWTMW := middleware.NewMobileJWTMiddleware(cfg.MobileJWTSecret)
-	superAdminMW := middleware.NewSuperAdminMiddleware(cfg.SuperAdminRole)
 	auditMW := middleware.NewAuditMiddleware()
 
 	mux := http.NewServeMux()
@@ -141,7 +140,7 @@ func main() {
 	authModule := auth.NewAuthModule(queries, tokenManager, apiKeyMW.Use)
 	authModule.RegisterRoutes(mux)
 
-	staffModule := staff.NewStaffModule(queries, apiKeyMW.Use, jwtMW.Use, superAdminMW.Use, auditMW.Use)
+	staffModule := staff.NewStaffModule(queries, apiKeyMW.Use, jwtMW.Use, auditMW.Use)
 	staffModule.RegisterRoutes(mux)
 
 	profileModule := profile.NewProfileModule(queries, apiKeyMW.Use, jwtMW.Use)

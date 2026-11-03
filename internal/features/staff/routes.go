@@ -1,6 +1,7 @@
 package staff
 
 import (
+	"hello/internal/authz"
 	"hello/internal/middleware"
 	"net/http"
 )
@@ -17,12 +18,9 @@ import (
 //   - PATCH  /api/v1/staff/{id}/password      — StaffHandler.UpdatePassword
 //   - DELETE /api/v1/staff/{id}               — StaffHandler.Delete
 //
-// Every route is wrapped by the module's middleware chain, which the
-// caller supplied at construction time — in the current wiring the
-// API-key, JWT, super-admin, and audit middlewares. The super-admin gate
-// is what makes these endpoints administrative: only a super-admin can
-// invoke any of them. There is no unauthenticated or role-unrestricted
-// route in this feature.
+// Every route checks current database staff.manage permission, granted only to
+// active SUPER_ADMIN accounts, inside the supplied API-key/JWT/audit chain.
+// The service independently rechecks; JWT RoleName is never permission authority.
 //
 // # Prefix convention
 //
@@ -49,11 +47,11 @@ func (m *StaffModule) RegisterRoutes(mux *http.ServeMux) {
 
 	use := middleware.Chain(m.middlewares...)
 
-	mux.HandleFunc("GET "+prefix+"/staff", use(m.handler.List))
-	mux.HandleFunc("GET "+prefix+"/staff/{id}", use(m.handler.GetByID))
-	mux.HandleFunc("POST "+prefix+"/staff", use(m.handler.Create))
-	mux.HandleFunc("PATCH "+prefix+"/staff/{id}", use(m.handler.Update))
-	mux.HandleFunc("PATCH "+prefix+"/staff/{id}/status", use(m.handler.UpdateStatus))
-	mux.HandleFunc("PATCH "+prefix+"/staff/{id}/password", use(m.handler.UpdatePassword))
-	mux.HandleFunc("DELETE "+prefix+"/staff/{id}", use(m.handler.Delete))
+	mux.HandleFunc("GET "+prefix+"/staff", use(authz.Guard(m.permissions, authz.StaffManage, m.handler.List)))
+	mux.HandleFunc("GET "+prefix+"/staff/{id}", use(authz.Guard(m.permissions, authz.StaffManage, m.handler.GetByID)))
+	mux.HandleFunc("POST "+prefix+"/staff", use(authz.Guard(m.permissions, authz.StaffManage, m.handler.Create)))
+	mux.HandleFunc("PATCH "+prefix+"/staff/{id}", use(authz.Guard(m.permissions, authz.StaffManage, m.handler.Update)))
+	mux.HandleFunc("PATCH "+prefix+"/staff/{id}/status", use(authz.Guard(m.permissions, authz.StaffManage, m.handler.UpdateStatus)))
+	mux.HandleFunc("PATCH "+prefix+"/staff/{id}/password", use(authz.Guard(m.permissions, authz.StaffManage, m.handler.UpdatePassword)))
+	mux.HandleFunc("DELETE "+prefix+"/staff/{id}", use(authz.Guard(m.permissions, authz.StaffManage, m.handler.Delete)))
 }
