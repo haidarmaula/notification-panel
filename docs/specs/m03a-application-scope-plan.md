@@ -60,6 +60,9 @@ Do not mark isolation done after adding a nullable app_id column.
 
 ## M03c — Immutable installation/binding and scoped auth
 
+[Installation and binding contract](m03c-installation-binding.md) defines the
+proposed storage, authority and lifecycle invariants.
+
 Build the original M03 lifecycle contract on that scope: app-scoped external
 identity, stable installation proof, immutable address/owner generations,
 owner_epoch, refresh/logout/account switch and recovery conflict handling.
