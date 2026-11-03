@@ -1,5 +1,11 @@
 # ADR-04 — FCM transport, credentials and registration lifecycle
 
+Application-scope amendment (2026-11-03): [ADR-12](adr-12-multi-application-isolation.md)
+requires explicit app scope and per-app policy across this design. kaiapps2 is
+one consumer; existing unscoped examples are not a modern cross-app contract.
+This is proposed design, not implemented isolation; see CR10 in the
+[consistency register](../analysis/adr-01-11-consistency-review.md).
+
 **Status:** proposed, revised 2026-11-02. Design only, not implemented or accepted.
 NEW companion SPEC: `docs/specs/adr-04-provider-selection.md` (not written).
 See [review](../analysis/adr-04-05-review.md) and

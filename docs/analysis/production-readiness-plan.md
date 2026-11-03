@@ -11,9 +11,9 @@ boleh dianggap selesai hanya karena rancangan atau file kode tersedia.
 | ID | Kebutuhan | Status / konsekuensi |
 | --- | --- | --- |
 | R1 | Repository ini hanya backend; portal admin di repository lain | Dikonfirmasi pengguna. Kontrak API termasuk scope, implementasi UI tidak. |
-| R2 | Sekitar 20.000 perangkat aktif | Dikonfirmasi pengguna; jumlah user unik dan perangkat per user belum diketahui. |
+| R2 | Sekitar 20.000 perangkat aktif untuk konteks awal | Dikonfirmasi pengguna; ini bukan kapasitas per aplikasi atau kapasitas total multi-aplikasi yang sudah divalidasi. Jumlah aplikasi/aggregate peak belum ditentukan. |
 | R3 | Sekitar 5 campaign per bulan | Dikonfirmasi pengguna; bukan 100 campaign/detik. |
-| R4 | Broadcast terbesar menjangkau seluruh user aktif | Dikonfirmasi pengguna; fan-out harus menghitung seluruh perangkat eligible pada audience tersebut. |
+| R4 | Broadcast terbesar menjangkau seluruh user aktif pada aplikasi yang dipilih | Dengan kebutuhan multi-aplikasi, broadcast tidak boleh melintasi batas aplikasi; fan-out menghitung perangkat eligible dalam scope tersebut. |
 | R5 | OneSignal akan diganti dengan FCM | Dikonfirmasi pengguna; fallback OneSignal permanen tidak menjadi kebutuhan. |
 | R6 | Android dan iOS didukung | Dikonfirmasi pengguna. |
 | R7 | Backend mengirim melalui FCM untuk kedua platform; iOS melalui APNs di sisi Firebase | Dikonfirmasi pengguna. Provider APNs langsung di backend tidak dibutuhkan untuk versi pertama. |
@@ -22,6 +22,7 @@ boleh dianggap selesai hanya karena rancangan atau file kode tersedia.
 | R10 | Kafka akan di-deploy di server perusahaan sendiri (self-hosted) | Dikonfirmasi pengguna; jumlah host/failure domain/resource dan operator belum diketahui. |
 | R11 | V1 fokus broadcast/segment/individual, scheduling, recovery, receipt/statistik, keamanan dan operasi | Dikonfirmasi pengguna; UPLOAD, cancel/resubmit, rich media serta preferences/quiet hours ditunda. |
 | R12 | VIEWER read-only; OPERATOR draft/segment; send/schedule hanya ADMIN/SUPER_ADMIN; administrasi staff/role hanya SUPER_ADMIN | Dikonfirmasi pengguna 2026-11-02. SPEC M02a siap untuk subset notification/segment/member; guard M02a sudah diterapkan/diuji lokal; staff administration M02b juga implemented/local-verified; security lain tetap pending. |
+| R13 | Backend generik untuk banyak aplikasi mobile, bukan khusus kaiapps2 | Dikonfirmasi pengguna 2026-11-03. [ADR-12](../adr/adr-12-multi-application-isolation.md) dan [rencana M03](../specs/m03a-application-scope-plan.md) proposed; runtime/schema saat ini belum mengisolasi aplikasi. |
 
 Pengguna memperkirakan project Firebase sudah ada karena dipakai pada integrasi
 OneSignal. Itu menjadi titik awal inventory, **bukan** konfirmasi project ID,
@@ -123,7 +124,7 @@ memakai basename yang sama di `docs/specs/` dan belum dibuat.
 | 09 | [API conventions](../adr/adr-09-api-consistency.md) | Proposed: safe envelope/errors, state vocabulary, presence-aware PATCH/CAS, pagination/filter, audit/DTO dan compatibility; belum diterapkan. |
 | 10 | [Retention/recovery](../adr/adr-10-retention-recovery.md) | Proposed: safety floors, controlled erasure/archive, backup/PITR, sealed restore dan source epoch; policy/RPO/RTO belum ditetapkan. |
 | 11 | [Security baseline](../adr/adr-11-security-baseline.md) | Proposed keseluruhan; business role matrix dikonfirmasi dan scoped SPEC M02a ditulis. M02a operation enforcement diimplementasikan/diuji lokal; session/abuse/key/enrollment dan security lain tetap pending. |
-| 12 | NEW: optional product parity | Kondisional; bukan penghalang produksi jika fitur tersebut tidak masuk scope. |
+| 12 | [Multi-application isolation](../adr/adr-12-multi-application-isolation.md) | NEW proposed: aplikasi sebagai batas identity/data/permission/provider/event/receipt; belum diimplementasikan. Optional product parity tetap backlog tanpa nomor ADR yang ditetapkan. |
 
 Review pertama: [ADR-01/02 review](adr-01-02-review.md). Status proposed berarti
 belum diterima; nama migration yang disebut ADR hanya reservasi rancangan.
@@ -162,7 +163,8 @@ Step 20 dimulai dengan [SPEC M02a](../specs/m02a-staff-operation-permissions.md)
 historical cleanup produksi tetap operator gate. [M02d request limits](m02d-verification.md)
 juga implemented/local-verified. [Evaluasi baseline](m02-baseline-assessment.md)
 dan [M02e staff JWT](m02e-verification.md) selesai scoped; berikutnya inspeksi
-React Native dan SPEC M03 dengan gate integrasi eksplisit. M02 release controls tetap terbuka. SPEC milestone lain ditulis saat dikerjakan,
+rancangan generic multi-aplikasi dan M03a registry/scope sebelum instalasi;
+kaiapps2 hanya consumer uji pertama. Gate integrasi tetap eksplisit. M02 release controls tetap terbuka. SPEC milestone lain ditulis saat dikerjakan,
 bukan sekaligus. G5 selain role matrix tetap terbuka.
 Perbaikan baseline tidak harus menunggu seluruh gate release; acceptance SPEC
 fitur sensitif menunggu keputusan yang dipakainya. Step 15 belum ditandai penuh

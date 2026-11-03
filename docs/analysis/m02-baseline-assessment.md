@@ -57,11 +57,12 @@ These source findings explain the remaining gates; they are not new runtime fixe
 
 ## Concrete next sequence
 
-1. Inspect the authorized React Native branch for login/logout/account-switch,
-   token refresh, OneSignal usage and notification/receipt entry points. Record
-   evidence without changing its checkout or exposing credentials.
-2. Write the M03 installation/binding/enrollment SPEC and shared mobile JWT/proof
-   contract. List exactly which Laravel issuer facts still need verification.
+1. Establish the generic multi-application boundary first: [ADR-12](../adr/adr-12-multi-application-isolation.md)
+   and [M03a–d plan](../specs/m03a-application-scope-plan.md). Registry/grants and
+   scoped queries/legacy route gate precede app-aware installation/binding work.
+2. Write the generic scoped installation/binding/enrollment and mobile JWT/proof
+   contract, then validate kaiapps2 as one consumer. Each app has its own trusted
+   identity policy; Laravel is not a universal dependency. List unverified issuer facts.
 3. Implement the agreed backend schema/repositories/transactions and focused race
    tests, preserving immutable ownership/epochs and the CR1 lock order. Keep
    unresolved integration paths disabled/test-only until their gates are settled.
@@ -76,3 +77,7 @@ current branch matches, the working tree was clean and its head was
 `3f35661d16b076455011ba316a3be69ede9b6668`. This assessment has not yet inspected
 its application code or verified Firebase/APNs/Laravel configuration. Path access
 resolves repository discovery, not G3 integration acceptance.
+
+Scope update 2026-11-03: existing M02 grants/tests are operation-level, not app
+membership isolation. ADR-12 requires new application guards and A/B evidence.
+The confirmed multi-app requirement does not make current runtime multi-app safe.

@@ -13,7 +13,8 @@ token/logout lifecycle, pembatasan traffic dan audit adalah kontrol inti.
 Localisation bukan janji fitur v1; kontrak harus menjelaskan input yang didukung.
 
 Kafka self-hosted dikonfirmasi; jumlah host independen **belum diketahui**.
-Repo React Native tersedia tetapi lokasinya belum diberikan. Repo Laravel
+Repo React Native kaiapps2 tersedia di path yang diotorisasi dan branch
+feat/notifications; hanya referensi consumer pertama, bukan batas platform. Repo Laravel
 tidak tersedia; aplikasinya berjalan langsung di server. Verifikasi auth dapat
 memakai kontrak/config teredaksi serta token uji melalui pemilik sistem;
 tidak membutuhkan penyalinan credential produksi atau akses server otomatis.
@@ -36,6 +37,7 @@ memerlukan keputusan yang benar-benar dipakai milestone itu.
 | CR7 | Topic name/partition/offset bisa dipakai ulang setelah topic recreation | Quarantine unik berdasarkan physical log source incarnation + partition + offset | 02,07,10 |
 | CR8 | source_epoch mencampur identitas acceptance, recovery dan Kafka source | Pisahkan origin_epoch, source_epoch dan log_source_id; bagian 4 | 02,03,05,07,10 |
 | CR9 | Expiry capability dari waktu schedule diterima bisa habis sebelum pengiriman | Receipt capability expiry = persisted deadline_at + proposed 7d | 01,05,10,11 |
+| CR10 | Multi-aplikasi dikonfirmasi setelah review awal; data/permission/event saat ini global | [ADR-12](../adr/adr-12-multi-application-isolation.md) mewajibkan app scope end-to-end, no default-app fallback dan legacy query gate sebelum app kedua. Rencana [M03a–d](../specs/m03a-application-scope-plan.md); belum ada implementasi/test A/B | 01–12 |
 
 Resolusi tersebut sudah dimasukkan ke ADR terkait atau protokol bersama di sini.
 Status “resolved in design” tidak menutup finding runtime `code-review.md`.
@@ -129,9 +131,9 @@ provider delivery tidak dijanjikan.
 | --- | --- | --- |
 | G1 Scope | Core dikonfirmasi; input yang tidak didukung harus eksplisit | Batas contract SPEC, bukan baseline tests |
 | G2 Freshness/performance | TTL, numeric SLO, acceptance target dan quota aggregate belum disepakati | Final scheduling/retry config, benchmark acceptance dan release |
-| G3 Mobile/auth | Lokasi repo RN, SDK/native version, issuer/audience/JWKS/revocation contract Laravel belum diverifikasi | Enrollment/receipt auth SPEC acceptance dan cutover |
+| G3 Mobile/auth | kaiapps2 path/branch ditemukan sebagai consumer pertama; SDK/native behavior belum dibaca. Trusted issuer/audience/proof/revocation wajib per aplikasi, bukan Laravel global | Enrollment/receipt auth SPEC acceptance dan cutover |
 | G4 Infrastructure | Kafka host/failure domains, DB/staging/TLS dan operator belum diketahui | Production deployment/HA claim |
-| G5 Security policy | Business role matrix dikonfirmasi pengguna; M02a scoped SPEC dan operation guards locally verified. Enrollment proof/recovery, gateway/BFF/operational policy tetap terbuka | Enabling modern enrollment/identity/perimeter dan remaining security SPEC; bukan penghalang M02a role enforcement. C21 remediated dalam scope M02a; remaining security gates tetap terbuka |
+| G5 Security policy | Multi-app requirement dikonfirmasi; detail app grants/control-plane ADR-12 masih proposed. Business role matrix dikonfirmasi pengguna; M02a scoped SPEC dan operation guards locally verified. Enrollment proof/recovery, gateway/BFF/operational policy tetap terbuka | Enabling modern enrollment/identity/perimeter dan remaining security SPEC; bukan penghalang M02a role enforcement. C21 remediated dalam scope M02a; remaining security gates tetap terbuka |
 | G6 Data/recovery | Retention, erasure, RPO/RTO, backup ownership dan consumer inventory belum ditentukan | Maintenance/recovery SPEC acceptance dan release |
 | G7 Firebase/cutover | Project/app/APNs config, credentials access, legacy automation/exclusive cohort belum diverifikasi | Real provider/device pilot dan OneSignal retirement |
 
@@ -160,3 +162,24 @@ yang diperlukan ditutup dan penerimaan ADR dicatat per dokumen.
 Pemeriksaan dokumen meliputi link lokal, struktur ADR, whitespace dan konsistensi
 teks. Semua kasus concurrency/failure di tabel ini membutuhkan integration test;
 belum ada hasil runtime, load, mobile atau restore yang dibuktikan review ini.
+
+## Multi-application amendment (2026-11-03)
+
+ADR-12 adds a normative scope requirement to the historical ADR-01–11 review;
+old unqualified API/schema examples are not permission to omit app context.
+No original reliability/epoch/lock-order invariant is removed.
+
+| Existing ADR | Required application amendment, not implemented |
+| --- | --- |
+| 01–03 retry/worker/outbox | App-qualified intents, policy/holds/idempotency/events/recovery; validate app against canonical campaign before work |
+| 04 provider | Registry-owned app/project/platform route and credentials; app-bound enrollment, conflict/proof and immutable binding |
+| 05 receipts | Capability app/deployment context, app-bound owner/binding and scoped dedup/statistics |
+| 06 cutover | Per-app/cohort migration and exclusive routing; kaiapps2 is one integration example |
+| 07–08 Kafka/operations | Preserve current key bytes; scoped event verification, shared project quotas/app fairness, app-aware holds/observability |
+| 09 API | Explicit application paths/current grants, all read/filter/count/write scope, no optional/default-app fallback |
+| 10 recovery | Preserve app ownership/namespace, grants/route identity and per-app tombstone floors across approved restore |
+| 11 security | Role AND current app grant, per-app issuer/origin proof and environment separation; new cross-app negative tests |
+
+CR10 design acceptance is conditional; the old CR1–CR9 local reasoning and M02
+single-app tests are not A/B isolation evidence. Existing Kafka key migration
+and transaction lock-order review requirements remain in force.

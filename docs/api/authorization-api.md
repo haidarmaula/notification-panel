@@ -6,6 +6,11 @@ operation bypass is remediated; see [evidence and remaining limits](../analysis/
 [SPEC](../specs/m02a-staff-operation-permissions.md), and
 [canonical role/route matrix](../contracts/staff-permissions.json).
 
+Multi-application requirement update: this implemented matrix checks operation
+roles, not app membership. [ADR-12](../adr/adr-12-multi-application-isolation.md)
+and [proposed API scope](application-scope-proposal.md) require a new application
+boundary and A/B tests before multi-app activation; those guards are not shipped.
+
 All routes retain API key (`X-API-Key`) plus staff access Bearer JWT.
 Permission is checked against the active staff account/current DB role;
 the token's role claim and UI visibility are not authority.

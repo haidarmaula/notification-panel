@@ -1,5 +1,11 @@
 # ADR-11 — Identity, authorization, secrets and deployment security
 
+Application-scope amendment (2026-11-03): [ADR-12](adr-12-multi-application-isolation.md)
+requires explicit app scope and per-app policy across this design. kaiapps2 is
+one consumer; existing unscoped examples are not a modern cross-app contract.
+This is proposed design, not implemented isolation; see CR10 in the
+[consistency register](../analysis/adr-01-11-consistency-review.md).
+
 **Status:** proposed overall, 2026-11-02. M02a operation guards implemented/local-verified; remaining security decisions and release approval are pending.
 NEW companion SPEC: `docs/specs/adr-11-security-baseline.md` (not written).
 Gates: [API/data/security readiness](../analysis/api-data-security-readiness.md).

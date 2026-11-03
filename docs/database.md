@@ -554,6 +554,18 @@ not evidence that production history, replicas or backups have been cleaned.
 
 ---
 
+## Multi-application design checkpoint (2026-11-03)
+
+Current tables still lack application isolation. [ADR-12](adr/adr-12-multi-application-isolation.md)
+proposes an application registry, scoped external identities, app-qualified
+business aggregates/children and composite reference constraints; global staff
+control-plane data remains separate. [M03a–d](specs/m03a-application-scope-plan.md)
+will define the exact paired migrations/backfill/constraints before sqlc generation.
+No columns, migrations or queries changed in this design checkpoint. Do not
+insert a second application's business data while current global legacy queries
+remain reachable. Existing uniqueness on external_id/push_token is not the
+future app/project-aware identity contract.
+
 ## Design Decisions
 
 ### Why is `notification_targets` stored separately?
