@@ -199,6 +199,43 @@ func TestScopedSegmentWrites(t *testing.T) {
 		require.Len(t, reads.Data.Items, 1)
 		require.Equal(t, fmt.Sprint(user), reads.Data.Items[0]["user_id"])
 
+		uploads := "/api/v1/apps/" + public + "/uploads"
+		batch := number("INSERT INTO upload_batches(application_id,uploaded_by,original_filename,total_rows,valid_rows) VALUES($1,$2,'private-file',1,1) RETURNING id", appID, staff)
+		foreignBatch := number("INSERT INTO upload_batches(application_id,uploaded_by,original_filename) VALUES($1,$2,'foreign-file') RETURNING id", other, staff)
+		exec("INSERT INTO upload_batch_rows(application_id,batch_id,external_id,error_message) VALUES($1,$2,'private-subject','private-error')", appID, batch)
+		exec("INSERT INTO upload_batch_rows(batch_id,external_id) VALUES($1,'legacy-subject')", batch)
+		request(http.MethodGet, fmt.Sprintf("%s/%d/rows", uploads, foreignBatch), "", 404)
+		var page struct {
+			Data struct {
+				Items []map[string]any `json:"items"`
+			} `json:"data"`
+		}
+		w = request(http.MethodGet, uploads, "", 200)
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &page))
+		require.Len(t, page.Data.Items, 1)
+		require.Equal(t, fmt.Sprint(batch), page.Data.Items[0]["id"])
+		require.NotContains(t, w.Body.String(), "private-file")
+		page.Data.Items = nil
+		w = request(http.MethodGet, fmt.Sprintf("%s/%d/rows", uploads, batch), "", 200)
+		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &page))
+		require.Len(t, page.Data.Items, 1)
+		require.Len(t, page.Data.Items[0], 3)
+		require.NotContains(t, w.Body.String(), "private-subject")
+		require.NotContains(t, w.Body.String(), "private-error")
+
+		audits := "/api/v1/apps/" + public + "/audit-logs"
+		exec(`INSERT INTO audit_logs(application_id,actor_user_id,action,entity_type,before_json,ip_address) VALUES($1,$2,'OWN_MARKER','fixture','{"private":true}','private-ip')`, appID, staff)
+		exec("INSERT INTO audit_logs(application_id,actor_user_id,action,entity_type) VALUES($1,$2,'FOREIGN_MARKER','fixture')", other, staff)
+		exec("INSERT INTO audit_logs(actor_user_id,action,entity_type) VALUES($1,'GLOBAL_MARKER','fixture')", staff)
+		w = request(http.MethodGet, audits, "", 200)
+		require.Contains(t, w.Body.String(), "OWN_MARKER")
+		for _, hidden := range []string{"FOREIGN_MARKER", "GLOBAL_MARKER", "private-ip", "before_json", "private"} {
+			require.NotContains(t, w.Body.String(), hidden)
+		}
+		exec("UPDATE staff_users SET role_id=(SELECT id FROM roles WHERE name='VIEWER') WHERE id=$1", staff)
+		request(http.MethodGet, audits, "", 403)
+		request(http.MethodGet, uploads, "", 200)
+
 	}
 
 }

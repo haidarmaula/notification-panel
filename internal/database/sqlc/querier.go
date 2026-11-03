@@ -251,6 +251,7 @@ type Querier interface {
 	GetScopedCampaignID(ctx context.Context, arg GetScopedCampaignIDParams) (int64, error)
 	GetScopedSegment(ctx context.Context, arg GetScopedSegmentParams) (GetScopedSegmentRow, error)
 	GetScopedTemplate(ctx context.Context, arg GetScopedTemplateParams) (GetScopedTemplateRow, error)
+	GetScopedUploadBatchID(ctx context.Context, arg GetScopedUploadBatchIDParams) (int64, error)
 	GetScopedUser(ctx context.Context, arg GetScopedUserParams) (GetScopedUserRow, error)
 	// ==========================================
 	// GET
@@ -319,12 +320,15 @@ type Querier interface {
 	// ==========================================
 	ListRoles(ctx context.Context, arg ListRolesParams) ([]Role, error)
 	ListScheduledNotificationsDue(ctx context.Context, limit int32) ([]ListScheduledNotificationsDueRow, error)
+	ListScopedAuditLogs(ctx context.Context, arg ListScopedAuditLogsParams) ([]ListScopedAuditLogsRow, error)
 	ListScopedCampaignDeliveries(ctx context.Context, arg ListScopedCampaignDeliveriesParams) ([]ListScopedCampaignDeliveriesRow, error)
 	ListScopedCampaignReads(ctx context.Context, arg ListScopedCampaignReadsParams) ([]ListScopedCampaignReadsRow, error)
 	ListScopedCampaigns(ctx context.Context, arg ListScopedCampaignsParams) ([]ListScopedCampaignsRow, error)
 	ListScopedSegmentMembers(ctx context.Context, arg ListScopedSegmentMembersParams) ([]ListScopedSegmentMembersRow, error)
 	ListScopedSegments(ctx context.Context, arg ListScopedSegmentsParams) ([]ListScopedSegmentsRow, error)
 	ListScopedTemplates(ctx context.Context, arg ListScopedTemplatesParams) ([]ListScopedTemplatesRow, error)
+	ListScopedUploadBatches(ctx context.Context, arg ListScopedUploadBatchesParams) ([]ListScopedUploadBatchesRow, error)
+	ListScopedUploadRows(ctx context.Context, arg ListScopedUploadRowsParams) ([]ListScopedUploadRowsRow, error)
 	ListScopedUserDevices(ctx context.Context, arg ListScopedUserDevicesParams) ([]ListScopedUserDevicesRow, error)
 	ListScopedUsers(ctx context.Context, arg ListScopedUsersParams) ([]ListScopedUsersRow, error)
 	// ==========================================

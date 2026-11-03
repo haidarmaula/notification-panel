@@ -112,7 +112,7 @@ func (a *ApplicationAuthorizer) RequireApplication(ctx context.Context, id pgtyp
 // Control-plane staff/project administration cannot be delegated by an app scope.
 func applicationOperation(p Permission) bool {
 	switch p {
-	case ApplicationsRead, UsersRead, NotificationsRead, NotificationsWrite, NotificationsSend, NotificationsSchedule, SegmentsRead, SegmentsWrite, MembersRead, MembersWrite:
+	case ApplicationsRead, AuditRead, UsersRead, NotificationsRead, NotificationsWrite, NotificationsSend, NotificationsSchedule, SegmentsRead, SegmentsWrite, MembersRead, MembersWrite:
 		return true
 	default:
 		return false

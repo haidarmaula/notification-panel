@@ -1,5 +1,5 @@
 {
-  "policy_version": 4,
+  "policy_version": 5,
   "status": "implemented-m02a-m02b-local-verified",
   "confirmed_on": "2026-11-02",
   "default": "deny",
@@ -14,6 +14,7 @@
     "segments.members.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
     "segments.members.write": ["OPERATOR", "ADMIN", "SUPER_ADMIN"],
     "staff.manage": ["SUPER_ADMIN"],
+    "audit.read": ["ADMIN", "SUPER_ADMIN"],
     "users.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
     "applications.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
     "applications.manage": ["SUPER_ADMIN"]
