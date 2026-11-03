@@ -72,6 +72,7 @@
     }
   ],
   "query_files": [
+    {"path": "db/queries/installation_lifecycle.sql", "scope": "application-scoped", "names": ["AdvanceMobileInstallation", "CreateMobileInstallation", "InsertInstallationBinding", "LockActiveInstallationBinding", "LockInstallationProject", "LockInstallationUser", "LockMobileInstallation", "ReserveInstallationBindingID", "RetireInstallationBinding", "TouchMobileInstallation"]},
     {
       "path": "db/queries/applications.sql",
       "scope": "registry-control",

@@ -88,6 +88,7 @@ type MobileInstallation struct {
 	Version       int64              `db:"version"`
 	OwnerEpoch    int64              `db:"owner_epoch"`
 	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	LastSeenAt    pgtype.Timestamptz `db:"last_seen_at"`
 }
 
 type Notification struct {

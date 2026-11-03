@@ -1,6 +1,6 @@
 # M03c installation and binding contract
 
-Status: schema migration 000018 implemented. Lifecycle and mobile authority remain pending. Production issuer, origin verification,
+Status: schema migration 000018 implemented. Protected enrollment, refresh, logout and owner switch are implemented. Mobile authority remains pending. Production issuer, origin verification,
 provider route and secret configuration require per-project evidence.
 See [ADR-04](../adr/adr-04-provider-selection.md) and the
 [application scope plan](m03a-application-scope-plan.md).
@@ -97,3 +97,16 @@ sharing a provider namespace and across encryption key changes. Namespace,
 address type and address bytes are length-prefixed. The package takes keys
 from its caller. Deployment key loading, trusted route selection and
 transactional writes belong to the lifecycle slice.
+
+### Lifecycle persistence
+
+The internal service accepts a principal and route resolved by trusted
+server policy. It locks the project, authenticated user, installation and
+active binding in that order. Enrollment returns proof after commit.
+Exact refresh touches last_seen_at, added in migration 000019. Address or
+route changes create a new generation. Logout and owner switches advance
+version and owner epoch. An address conflict rolls back retirement and
+the installation update.
+
+Mobile JWT/origin verification, key loading, HTTP contracts, provider
+invalidation and optional client metadata remain separate.
