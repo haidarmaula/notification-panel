@@ -199,6 +199,7 @@
       "names": ["GetScopedSegment", "ListScopedSegmentMembers", "ListScopedSegments"]
     },
     {"path": "db/queries/scoped_segment_writes.sql", "scope": "application-scoped", "names": ["CreateScopedSegment", "CreateScopedSegmentMember", "DeleteScopedSegment", "DeleteScopedSegmentMember", "LockScopedSegment", "ReplaceScopedSegment", "ScopedSegmentHasReferences", "ScopedSegmentNameTaken"]},
+    {"path": "db/queries/scoped_templates.sql", "scope": "application-scoped", "names": ["CreateScopedTemplate", "GetScopedTemplate", "ListScopedTemplates", "ReplaceScopedTemplate"]},
     {
       "path": "db/queries/scoped_user_reads.sql",
       "scope": "application-scoped",
@@ -318,6 +319,10 @@
     }
   ],
   "routes": [
+    {"pattern": "GET /api/v1/apps/{app_id}/templates", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
+    {"pattern": "GET /api/v1/apps/{app_id}/templates/{template_id}", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
+    {"pattern": "POST /api/v1/apps/{app_id}/templates", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
+    {"pattern": "PUT /api/v1/apps/{app_id}/templates/{template_id}", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
     {"pattern": "GET /api/v1/apps/{app_id}/campaigns", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
     {"pattern": "GET /api/v1/apps/{app_id}/campaigns/{campaign_id}", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
     {"pattern": "PUT /api/v1/apps/{app_id}/campaigns/{campaign_id}", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},

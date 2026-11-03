@@ -153,6 +153,25 @@ func TestScopedSegmentWrites(t *testing.T) {
 		require.Zero(t, number("SELECT count(*) FROM notification_targets WHERE notification_id=$1", campaignID))
 		require.EqualValues(t, 2, number("SELECT count(*) FROM audit_logs WHERE application_id=$1 AND action IN ('NOTIFICATION_UPDATE','NOTIFICATION_DELETE')", appID))
 
+		templates := "/api/v1/apps/" + public + "/templates"
+		templatePath := fmt.Sprintf("%s/%d", templates, template)
+		foreignTemplatePath := fmt.Sprintf("%s/%d", templates, foreignTemplate)
+		active := `{"name":"New template","title_template":"Title","body_template":"Body","is_active":true}`
+		inactive := `{"name":"Retired","title_template":"Title","body_template":"Body","is_active":false}`
+		request(http.MethodGet, foreignTemplatePath, "", 404)
+		request(http.MethodPut, foreignTemplatePath, inactive, 404)
+		require.NotContains(t, request(http.MethodGet, templates, "", 200).Body.String(), "Foreign")
+		exec("ALTER TABLE audit_logs ADD CONSTRAINT reject_fixture_template CHECK(action <> 'TEMPLATE_CREATE') NOT VALID")
+		request(http.MethodPost, templates, active, 500)
+		require.EqualValues(t, 1, number("SELECT count(*) FROM templates WHERE application_id=$1", appID))
+		exec("ALTER TABLE audit_logs DROP CONSTRAINT reject_fixture_template")
+		request(http.MethodPost, templates, active, 201)
+		request(http.MethodPost, campaigns, draft(template, segment, user), 201)
+		request(http.MethodPut, templatePath, inactive, 200)
+		request(http.MethodPost, campaigns, draft(template, segment, user), 404)
+		require.EqualValues(t, 1, number("SELECT count(*) FROM notifications WHERE application_id=$1 AND template_id=$2", appID, template))
+		require.EqualValues(t, 2, number("SELECT count(*) FROM audit_logs WHERE application_id=$1 AND entity_type='template'", appID))
+
 	}
 
 }

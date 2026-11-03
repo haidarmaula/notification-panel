@@ -116,6 +116,7 @@ type Querier interface {
 	CreateScopedCampaignTarget(ctx context.Context, arg CreateScopedCampaignTargetParams) (int64, error)
 	CreateScopedSegment(ctx context.Context, arg CreateScopedSegmentParams) (CreateScopedSegmentRow, error)
 	CreateScopedSegmentMember(ctx context.Context, arg CreateScopedSegmentMemberParams) (int64, error)
+	CreateScopedTemplate(ctx context.Context, arg CreateScopedTemplateParams) (CreateScopedTemplateRow, error)
 	// ==========================================
 	// CREATE
 	// ==========================================
@@ -248,6 +249,7 @@ type Querier interface {
 	GetRoleByName(ctx context.Context, name string) (Role, error)
 	GetScopedCampaign(ctx context.Context, arg GetScopedCampaignParams) (GetScopedCampaignRow, error)
 	GetScopedSegment(ctx context.Context, arg GetScopedSegmentParams) (GetScopedSegmentRow, error)
+	GetScopedTemplate(ctx context.Context, arg GetScopedTemplateParams) (GetScopedTemplateRow, error)
 	GetScopedUser(ctx context.Context, arg GetScopedUserParams) (GetScopedUserRow, error)
 	// ==========================================
 	// GET
@@ -319,6 +321,7 @@ type Querier interface {
 	ListScopedCampaigns(ctx context.Context, arg ListScopedCampaignsParams) ([]ListScopedCampaignsRow, error)
 	ListScopedSegmentMembers(ctx context.Context, arg ListScopedSegmentMembersParams) ([]ListScopedSegmentMembersRow, error)
 	ListScopedSegments(ctx context.Context, arg ListScopedSegmentsParams) ([]ListScopedSegmentsRow, error)
+	ListScopedTemplates(ctx context.Context, arg ListScopedTemplatesParams) ([]ListScopedTemplatesRow, error)
 	ListScopedUserDevices(ctx context.Context, arg ListScopedUserDevicesParams) ([]ListScopedUserDevicesRow, error)
 	ListScopedUsers(ctx context.Context, arg ListScopedUsersParams) ([]ListScopedUsersRow, error)
 	// ==========================================
@@ -379,6 +382,7 @@ type Querier interface {
 	RenameApplication(ctx context.Context, arg RenameApplicationParams) (Application, error)
 	ReplaceScopedCampaignDraft(ctx context.Context, arg ReplaceScopedCampaignDraftParams) (int64, error)
 	ReplaceScopedSegment(ctx context.Context, arg ReplaceScopedSegmentParams) (ReplaceScopedSegmentRow, error)
+	ReplaceScopedTemplate(ctx context.Context, arg ReplaceScopedTemplateParams) (ReplaceScopedTemplateRow, error)
 	ScopedSegmentHasReferences(ctx context.Context, segmentID int64) (bool, error)
 	ScopedSegmentNameTaken(ctx context.Context, arg ScopedSegmentNameTakenParams) (bool, error)
 	// ==========================================
