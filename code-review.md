@@ -507,3 +507,6 @@ Scoped segment routes address C14/C15 with the membership unique constraint and
 DELETE RETURNING. They serialize name checks and segment mutations per project
 (H34), and lock the segment before checking references (H35). These safeguards
 apply to the project routes. Legacy route retirement is tracked separately.
+
+The project campaign draft create route addresses H41 with a single transaction
+for the campaign, targets and audit. Legacy route retirement is separate.

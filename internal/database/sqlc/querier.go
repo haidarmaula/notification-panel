@@ -110,6 +110,8 @@ type Querier interface {
 	// CREATE
 	// ==========================================
 	CreateRole(ctx context.Context, arg CreateRoleParams) (Role, error)
+	CreateScopedCampaignDraft(ctx context.Context, arg CreateScopedCampaignDraftParams) (int64, error)
+	CreateScopedCampaignTarget(ctx context.Context, arg CreateScopedCampaignTargetParams) (int64, error)
 	CreateScopedSegment(ctx context.Context, arg CreateScopedSegmentParams) (CreateScopedSegmentRow, error)
 	CreateScopedSegmentMember(ctx context.Context, arg CreateScopedSegmentMemberParams) (int64, error)
 	// ==========================================
@@ -358,6 +360,7 @@ type Querier interface {
 	ListUsersByStatus(ctx context.Context, arg ListUsersByStatusParams) ([]User, error)
 	ListUsersWithFilters(ctx context.Context, arg ListUsersWithFiltersParams) ([]User, error)
 	LockApplicationByPublicID(ctx context.Context, publicID pgtype.UUID) (Application, error)
+	LockScopedCampaignTemplate(ctx context.Context, arg LockScopedCampaignTemplateParams) (string, error)
 	LockScopedSegment(ctx context.Context, arg LockScopedSegmentParams) (LockScopedSegmentRow, error)
 	// ==========================================
 	// UPDATE STATUS

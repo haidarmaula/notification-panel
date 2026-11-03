@@ -99,4 +99,32 @@ func TestScopedSegmentWrites(t *testing.T) {
 	request(http.MethodDelete, path, "", 204)
 	require.Zero(t, number("SELECT count(*) FROM segments WHERE application_id=$1", appID))
 	require.EqualValues(t, 5, number("SELECT count(*) FROM audit_logs WHERE application_id=$1 AND actor_user_id=$2", appID, staff))
+	{ // Campaign draft references and rollback.
+		campaigns := "/api/v1/apps/" + public + "/campaigns"
+		template := number("INSERT INTO templates(application_id,name,title_template,body_template,created_by) VALUES($1,'Template','Title','Body',$2) RETURNING id", appID, staff)
+		foreignTemplate := number("INSERT INTO templates(application_id,name,title_template,body_template,created_by) VALUES($1,'Foreign','Title','Body',$2) RETURNING id", other, staff)
+		segment := number("INSERT INTO segments(application_id,name,created_by) VALUES($1,'Local campaign segment',$2) RETURNING id", appID, staff)
+		foreignSegment := number("INSERT INTO segments(application_id,name,created_by) VALUES($1,'Foreign campaign segment',$2) RETURNING id", other, staff)
+		draft := func(templateID, segmentID, userID int64) string {
+			return fmt.Sprintf(`{"title":"Title","body":"Body","template_id":"%d","targets":[{"type":"SEGMENT","id":"%d"},{"type":"INDIVIDUAL","id":"%d"}]}`, templateID, segmentID, userID)
+		}
+		assertEmpty := func() {
+			require.Zero(t, number("SELECT count(*) FROM notifications WHERE application_id=$1", appID))
+			require.Zero(t, number("SELECT count(*) FROM notification_targets WHERE application_id=$1", appID))
+			require.Zero(t, number("SELECT count(*) FROM audit_logs WHERE application_id=$1 AND action='NOTIFICATION_CREATE'", appID))
+		}
+		request(http.MethodPost, campaigns, draft(foreignTemplate, segment, user), 404)
+		request(http.MethodPost, campaigns, draft(template, foreignSegment, user), 404)
+		request(http.MethodPost, campaigns, draft(template, segment, foreign), 404)
+		assertEmpty()
+		exec("ALTER TABLE audit_logs ADD CONSTRAINT reject_fixture_campaign CHECK(action <> 'NOTIFICATION_CREATE') NOT VALID")
+		request(http.MethodPost, campaigns, draft(template, segment, user), 500)
+		assertEmpty()
+		exec("ALTER TABLE audit_logs DROP CONSTRAINT reject_fixture_campaign")
+		request(http.MethodPost, campaigns, draft(template, segment, user), 201)
+		require.EqualValues(t, 1, number("SELECT count(*) FROM notifications WHERE application_id=$1 AND status='DRAFT' AND template_id=$2 AND template_name='Template'", appID, template))
+		require.EqualValues(t, 2, number("SELECT count(*) FROM notification_targets WHERE application_id=$1", appID))
+		require.EqualValues(t, 1, number("SELECT count(*) FROM audit_logs WHERE application_id=$1 AND action='NOTIFICATION_CREATE'", appID))
+	}
+
 }

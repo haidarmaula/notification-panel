@@ -16,6 +16,9 @@ Staff HTTP reads now enforce application authority for users, devices,
 audit records in the mutation transaction. Final NOT NULL and scoped keys follow coordinated caller
 replacement.
 
+M03b.4 starts with [scoped campaign draft creation](../api/scoped-campaign-drafts-api.md).
+Draft edits, deletes, reads and the remaining business projections follow.
+
 ## M03a — Registry and scope foundation
 
 Define immutable application IDs and PROVISIONING-only registry status first.

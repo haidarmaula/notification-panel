@@ -42,6 +42,7 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	register("PUT /api/v1/apps/{app_id}/segments/{segment_id}/members/{user_id}", authz.MembersWrite, m.handler.WriteSegmentMember)
 	register("DELETE /api/v1/apps/{app_id}/segments/{segment_id}/members/{user_id}", authz.MembersWrite, m.handler.WriteSegmentMember)
 
+	register("POST /api/v1/apps/{app_id}/campaigns", authz.NotificationsWrite, m.handler.CreateCampaignDraft)
 	register("GET /api/v1/admin/apps", authz.ApplicationsManage, m.handler.ListManaged)
 	register("POST /api/v1/admin/apps", authz.ApplicationsManage, m.handler.Create)
 	register("GET /api/v1/admin/apps/{app_id}", authz.ApplicationsManage, m.handler.GetManaged)
