@@ -172,7 +172,9 @@ sepuluh endpoint registry/grants tersedia dengan PROVISIONING only. Berikutnya
 M03b scope schema/query/API dan legacy pipeline sebelum data bisnis app kedua.
 M03b.1–M03b.5 selesai di repo dan teruji lokal sampai commit `1b02f1f`.
 [Cutover M03b](../specs/m03b-cutover.md) di lingkungan tujuan masih terbuka.
-Step 20 berlanjut ke [kontrak instalasi dan binding M03c](../specs/m03c-installation-binding.md).
+Step 20 berlanjut ke [M03c](../specs/m03c-installation-binding.md). Migrasi
+000018 menambahkan schema instalasi dan binding. Berikutnya proteksi alamat dan
+transaksi lifecycle.
 Gate integrasi dan kontrol rilis M02 tetap terbuka.
 
 ## 5. Checklist pelaksanaan

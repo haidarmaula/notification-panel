@@ -1,6 +1,6 @@
 # M03c installation and binding contract
 
-Status: proposed implementation contract. Production issuer, origin verification,
+Status: schema migration 000018 implemented. Lifecycle and mobile authority remain pending. Production issuer, origin verification,
 provider route and secret configuration require per-project evidence.
 See [ADR-04](../adr/adr-04-provider-selection.md) and the
 [application scope plan](m03a-application-scope-plan.md).

@@ -60,6 +60,36 @@ type DeviceToken struct {
 	ApplicationID  pgtype.Int8        `db:"application_id"`
 }
 
+type InstallationBinding struct {
+	ID                   int64              `db:"id"`
+	ApplicationID        int64              `db:"application_id"`
+	InstallationID       int64              `db:"installation_id"`
+	OwnerUserID          int64              `db:"owner_user_id"`
+	OwnerEpoch           int64              `db:"owner_epoch"`
+	Platform             string             `db:"platform"`
+	ProviderNamespace    string             `db:"provider_namespace"`
+	ProviderRouteKey     string             `db:"provider_route_key"`
+	AddressType          string             `db:"address_type"`
+	AddressFingerprint   []byte             `db:"address_fingerprint"`
+	AddressCiphertext    []byte             `db:"address_ciphertext"`
+	EncryptionKeyVersion int32              `db:"encryption_key_version"`
+	CreatedAt            pgtype.Timestamptz `db:"created_at"`
+	RetiredAt            pgtype.Timestamptz `db:"retired_at"`
+	ActiveOwnerUserID    pgtype.Int8        `db:"active_owner_user_id"`
+	ActiveOwnerEpoch     pgtype.Int8        `db:"active_owner_epoch"`
+}
+
+type MobileInstallation struct {
+	ID            int64              `db:"id"`
+	PublicID      pgtype.UUID        `db:"public_id"`
+	ApplicationID int64              `db:"application_id"`
+	OwnerUserID   pgtype.Int8        `db:"owner_user_id"`
+	ProofVerifier []byte             `db:"proof_verifier"`
+	Version       int64              `db:"version"`
+	OwnerEpoch    int64              `db:"owner_epoch"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+}
+
 type Notification struct {
 	ID            int64              `db:"id"`
 	TemplateID    pgtype.Int8        `db:"template_id"`

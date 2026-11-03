@@ -4,6 +4,8 @@
   "status": "source-inventory-not-runtime-isolation",
   "spec": "../specs/m03b-application-data-isolation.md",
   "tables": [
+    {"name": "mobile_installations", "scope": "application-scoped"},
+    {"name": "installation_bindings", "scope": "application-scoped"},
     {
       "name": "application_staff_grants",
       "scope": "registry-control"

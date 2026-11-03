@@ -625,3 +625,18 @@ After reviewed backfill and writer retirement, the offline ownership finalizer
 sets application_id NOT NULL on all eleven business tables in one statement.
 See the [cutover procedure](specs/m03b-cutover.md) for verification and rollback
 requirements.
+
+### Modern installation bindings (M03c)
+
+Migration 000018 adds mobile_installations and installation_bindings.
+Installations keep a verifier, project, current owner, version and owner
+epoch. Each immutable binding keeps its original owner, route and protected
+address. A deferred composite foreign key matches active bindings to the
+current installation owner and epoch. Retired bindings retain their original
+attribution. Partial unique indexes enforce one active binding per
+installation and one active address claim per provider namespace and type,
+including across apps that share a provider namespace.
+
+The application layer must supply the verifier, ciphertext, fingerprint and
+trusted route. Migration rollback requires empty tables. See the
+[installation and binding contract](specs/m03c-installation-binding.md).
