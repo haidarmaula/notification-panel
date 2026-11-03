@@ -47,7 +47,7 @@
     {"method": "DELETE", "path": "/api/v1/staff/{id}", "permission": "staff.manage"}
   ],
   "application_registry": {
-    "status": "service-only-m03a2-no-http",
+    "status": "implemented-m03a3-http-local-verified",
     "contract": "application-registry.openapi.json",
     "business_access": "role AND explicit current DB app grant, no SUPER_ADMIN wildcard"
   },

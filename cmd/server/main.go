@@ -46,6 +46,7 @@ import (
 	"hello/internal/middleware"
 	"hello/internal/token"
 
+	"hello/internal/features/applications"
 	"hello/internal/features/auth"
 	"hello/internal/features/mobile"
 	"hello/internal/features/notifications"
@@ -139,6 +140,8 @@ func main() {
 
 	authModule := auth.NewAuthModule(queries, tokenManager, apiKeyMW.Use)
 	authModule.RegisterRoutes(mux)
+
+	applications.NewModule(queries, db, apiKeyMW.Use, jwtMW.Use, auditMW.Use).RegisterRoutes(mux)
 
 	staffModule := staff.NewStaffModule(queries, apiKeyMW.Use, jwtMW.Use, auditMW.Use)
 	staffModule.RegisterRoutes(mux)

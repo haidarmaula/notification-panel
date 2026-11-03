@@ -101,10 +101,16 @@ func ApplicationETag(app sqlc.Application) string {
 	return fmt.Sprintf(`"app:%s:%d"`, app.PublicID.String(), app.Revision)
 }
 func GrantETag(app sqlc.Application, g sqlc.ApplicationStaffGrant) string {
-	return fmt.Sprintf(`"grant:%s:%d:%d"`, app.PublicID.String(), g.StaffID, g.Revision)
+	return GrantETagForID(app.PublicID, g)
 }
 
 type GrantResult struct {
 	Grant   sqlc.ApplicationStaffGrant
 	Created bool
+}
+
+// GrantETagForID formats a verified route's public app UUID and returned grant.
+// It is a concurrency token, not proof of membership or operation permission.
+func GrantETagForID(id pgtype.UUID, g sqlc.ApplicationStaffGrant) string {
+	return fmt.Sprintf(`"grant:%s:%d:%d"`, id.String(), g.StaffID, g.Revision)
 }

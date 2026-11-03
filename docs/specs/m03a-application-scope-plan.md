@@ -1,14 +1,14 @@
 # M03 application-scope implementation plan
 
-Date: 2026-11-03. Status: **M03a.1 persistence and M03a.2 resolver/services locally implemented;
-HTTP and remaining slices not implemented**.
+Date: 2026-11-03. Status: **M03a.1–3 registry locally implemented/verified; M03b–d not implemented**.
 Normative design: [ADR-12](../adr/adr-12-multi-application-isolation.md).
 Each implementation slice needs its exact transaction/API/migration SPEC.
 [M03a registry SPEC](m03a-application-registry.md) and its
-[proposed OpenAPI](../contracts/application-registry.openapi.json) are now written;
+[registry OpenAPI](../contracts/application-registry.openapi.json) are now written;
 [M03a.1 schema/query/repository evidence](../analysis/m03a1-verification.md) is
 now available; [M03a.2 services](../analysis/m03a2-verification.md) also pass local
-checks. M03a.3 HTTP remains pending.
+checks. [M03a.3 HTTP](../analysis/m03a3-verification.md) is also local-verified.
+Next: M03b scoped data/query/API and legacy pipeline gate.
 
 ## M03a — Registry and scope foundation
 

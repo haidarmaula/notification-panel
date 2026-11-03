@@ -165,10 +165,11 @@ juga implemented/local-verified. [Evaluasi baseline](m02-baseline-assessment.md)
 dan [M02e staff JWT](m02e-verification.md) selesai scoped; berikutnya inspeksi
 rancangan generic multi-aplikasi dan M03a registry/scope sebelum instalasi;
 kaiapps2 hanya consumer uji pertama. [SPEC M03a](../specs/m03a-application-registry.md)
-dan proposed OpenAPI sudah ditulis. [M03a.1 persistence](m03a1-verification.md)
+dan registry OpenAPI sudah ditulis. [M03a.1 persistence](m03a1-verification.md)
 diimplementasikan/diuji lokal. [M03a.2 services](m03a2-verification.md) juga
-local-verified; berikutnya HTTP M03a.3.
-Belum ada endpoint registry atau data aplikasi kedua. Gate integrasi tetap eksplisit. M02 release controls tetap terbuka. SPEC milestone lain ditulis saat dikerjakan,
+local-verified. [M03a.3 HTTP](m03a3-verification.md) juga implemented/local-verified;
+sepuluh endpoint registry/grants tersedia dengan PROVISIONING only. Berikutnya
+M03b scope schema/query/API dan legacy pipeline sebelum data bisnis app kedua. Gate integrasi tetap eksplisit. M02 release controls tetap terbuka. SPEC milestone lain ditulis saat dikerjakan,
 bukan sekaligus. G5 selain role matrix tetap terbuka.
 Perbaikan baseline tidak harus menunggu seluruh gate release; acceptance SPEC
 fitur sensitif menunggu keputusan yang dipakainya. Step 15 belum ditandai penuh

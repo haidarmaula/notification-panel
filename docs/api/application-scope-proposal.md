@@ -1,6 +1,6 @@
 # Application scope — proposed API contract
 
-2026-11-03. **Design only: no app-scoped endpoints or isolation implemented.**
+2026-11-03. **Business API scope remains proposed; provisioning registry HTTP is implemented locally.**
 [ADR-12](../adr/adr-12-multi-application-isolation.md),
 [M03 sequence](../specs/m03a-application-scope-plan.md).
 
@@ -9,8 +9,9 @@ example `/api/v1/apps/{app_id}/notifications` and
 `/api/v1/apps/{app_id}/segments`. These are proposed namespace examples, not
 currently callable endpoints. Exact lifecycle methods and DTOs are specified per implementation slice.
 The initial registry/control-plane methods now have a
-[concrete proposed OpenAPI](../contracts/application-registry.openapi.json) and
-[M03a SPEC](../specs/m03a-application-registry.md); all remain unimplemented.
+[registry OpenAPI](../contracts/application-registry.openapi.json) and
+[M03a SPEC](../specs/m03a-application-registry.md). See the implemented
+[registry API guide](applications-api.md); business resource isolation remains pending.
 The registry separates `/api/v1/admin/apps` management from `/api/v1/apps`
 caller-granted metadata and permits PROVISIONING only.
 
@@ -18,7 +19,7 @@ caller-granted metadata and permits PROVISIONING only.
 | --- | --- |
 | Application selector | Immutable opaque app ID resolved by backend; client cannot override it using body/header/query fields |
 | Staff business access | Existing operation role permission AND current active DB app grant; token role/app strings are not authority |
-| Global control plane | Staff directory/profile/auth separate; SUPER_ADMIN application/grant administration policy remains proposed |
+| Global control plane | Staff directory/profile/auth separate; SUPER_ADMIN registry/grant administration implemented in M03a; business scoping pending |
 | Mobile identity | Configured per-app issuer/audience/purpose and app-origin/proof contract; no mandatory Laravel/React Native implementation |
 | User subject | Same external subject in apps A/B maps to distinct notification users by default |
 | BROADCAST | Eligible devices only within the selected app |

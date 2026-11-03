@@ -1,11 +1,11 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Application registry and staff grants \u2014 proposed M03a",
+    "title": "Application registry and staff grants \u2014 M03a",
     "version": "0.1.0",
-    "description": "DESIGN ONLY. No endpoint in this contract is implemented. Canonical behavior: docs/specs/m03a-application-registry.md. M03a metadata remains PROVISIONING; no business data, activation, credentials or provider send."
+    "description": "Implemented and locally verified M03a.3 registry HTTP API. Canonical behavior: docs/specs/m03a-application-registry.md. M03a metadata remains PROVISIONING; no business data, activation, credentials or provider send."
   },
-  "x-implementation-status": "proposed-not-implemented",
+  "x-implementation-status": "implemented-m03a3-local-verified",
   "security": [
     {
       "ApiKey": [],
@@ -17,7 +17,7 @@
       "get": {
         "operationId": "listGrantedApplications",
         "summary": "listGrantedApplications",
-        "x-implementation-status": "proposed-not-implemented",
+        "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "app-grant",
         "x-required-permission": "applications.read",
         "x-reject-unknown-query-parameters": true,
@@ -55,7 +55,7 @@
       "get": {
         "operationId": "getGrantedApplication",
         "summary": "getGrantedApplication",
-        "x-implementation-status": "proposed-not-implemented",
+        "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "app-grant",
         "x-required-permission": "applications.read",
         "x-reject-unknown-query-parameters": true,
@@ -90,7 +90,7 @@
       "get": {
         "operationId": "listManagedApplications",
         "summary": "listManagedApplications",
-        "x-implementation-status": "proposed-not-implemented",
+        "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
         "x-reject-unknown-query-parameters": true,
@@ -129,7 +129,7 @@
       "post": {
         "operationId": "createApplication",
         "summary": "createApplication",
-        "x-implementation-status": "proposed-not-implemented",
+        "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
         "x-reject-unknown-query-parameters": true,
@@ -180,7 +180,7 @@
       "get": {
         "operationId": "getManagedApplication",
         "summary": "getManagedApplication",
-        "x-implementation-status": "proposed-not-implemented",
+        "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
         "x-reject-unknown-query-parameters": true,
@@ -213,7 +213,7 @@
       "patch": {
         "operationId": "renameApplication",
         "summary": "renameApplication",
-        "x-implementation-status": "proposed-not-implemented",
+        "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
         "x-reject-unknown-query-parameters": true,
@@ -278,7 +278,7 @@
       "get": {
         "operationId": "listApplicationStaffGrants",
         "summary": "listApplicationStaffGrants",
-        "x-implementation-status": "proposed-not-implemented",
+        "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
         "x-reject-unknown-query-parameters": true,
@@ -319,7 +319,7 @@
       "get": {
         "operationId": "getApplicationStaffGrant",
         "summary": "getApplicationStaffGrant",
-        "x-implementation-status": "proposed-not-implemented",
+        "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
         "x-reject-unknown-query-parameters": true,
@@ -355,7 +355,7 @@
       "put": {
         "operationId": "enableApplicationStaffGrant",
         "summary": "enableApplicationStaffGrant",
-        "x-implementation-status": "proposed-not-implemented",
+        "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
         "x-reject-unknown-query-parameters": true,
@@ -427,7 +427,7 @@
       "delete": {
         "operationId": "revokeApplicationStaffGrant",
         "summary": "revokeApplicationStaffGrant",
-        "x-implementation-status": "proposed-not-implemented",
+        "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
         "x-reject-unknown-query-parameters": true,

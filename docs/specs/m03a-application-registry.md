@@ -1,11 +1,11 @@
 # M03a — Application registry and staff scope foundation
 
-2026-11-03. **M03a.1 persistence and M03a.2 resolver/services locally implemented;
-HTTP still proposed/unimplemented.** [Persistence](../analysis/m03a1-verification.md),
-[service evidence](../analysis/m03a2-verification.md).
+2026-11-03. **M03a.1–3 registry persistence, resolver/services and HTTP locally implemented/verified.** [Persistence](../analysis/m03a1-verification.md),
+[service evidence](../analysis/m03a2-verification.md),
+[HTTP evidence](../analysis/m03a3-verification.md).
 Requirement: one admin panel can manage multiple independent application projects.
 [ADR-12](../adr/adr-12-multi-application-isolation.md) defines the boundary;
-[this OpenAPI](../contracts/application-registry.openapi.json) defines proposed HTTP
+[this OpenAPI](../contracts/application-registry.openapi.json) defines the implemented registry HTTP
 shapes. Existing routes/permissions do not change merely because this SPEC exists.
 
 ## 1. Scope and permissions

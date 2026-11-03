@@ -24,27 +24,8 @@ const (
 // return before business work. Unknown fields retain encoding/json semantics.
 // Route authentication/authorization remains the caller's responsibility.
 func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any, limit int64) bool {
-	if limit <= 0 {
-		panic("httprequest: positive JSON body limit required")
-	}
-	if r.Body == nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
-		return false
-	}
-	body := http.MaxBytesReader(w, r.Body, limit)
-	defer body.Close()
-	if r.ContentLength > limit {
-		response.JSON(w, http.StatusRequestEntityTooLarge, nil, "request body too large")
-		return false
-	}
-	data, err := io.ReadAll(body)
-	var tooLarge *http.MaxBytesError
-	if errors.As(err, &tooLarge) {
-		response.JSON(w, http.StatusRequestEntityTooLarge, nil, "request body too large")
-		return false
-	}
-	if err != nil {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+	data, ok := readBody(w, r, limit)
+	if !ok {
 		return false
 	}
 	// Unmarshal consumes one complete value, rejecting trailing data before a
@@ -54,4 +35,32 @@ func DecodeJSON(w http.ResponseWriter, r *http.Request, dst any, limit int64) bo
 		return false
 	}
 	return true
+}
+
+// readBody bounds the complete input before any parser can accept a prefix.
+func readBody(w http.ResponseWriter, r *http.Request, limit int64) ([]byte, bool) {
+	if limit <= 0 {
+		panic("httprequest: positive JSON body limit required")
+	}
+	if r.Body == nil {
+		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+		return nil, false
+	}
+	body := http.MaxBytesReader(w, r.Body, limit)
+	defer body.Close()
+	if r.ContentLength > limit {
+		response.JSON(w, http.StatusRequestEntityTooLarge, nil, "request body too large")
+		return nil, false
+	}
+	data, err := io.ReadAll(body)
+	var tooLarge *http.MaxBytesError
+	if errors.As(err, &tooLarge) {
+		response.JSON(w, http.StatusRequestEntityTooLarge, nil, "request body too large")
+		return nil, false
+	}
+	if err != nil {
+		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
+		return nil, false
+	}
+	return data, true
 }
