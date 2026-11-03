@@ -81,3 +81,19 @@ deleting history is part of this slice.
    switch versus invalidation, shared-provider address races and rollback after
    conflicting insert. Verify that historic delivery attribution survives and
    no token or proof appears in a response except the initial enrollment secret.
+
+### Protection implementation
+
+The protection package uses a base64url-encoded 32-byte random installation
+credential and a domain-separated SHA-256 verifier. It seals exact address
+bytes with AES-256-GCM and a fresh random nonce. Reserve the binding ID before
+sealing so the application ID, installation ID, binding ID and encryption key
+version can authenticate the ciphertext. Keep old encryption keys available
+while retained ciphertext needs them. Rotate before a key reaches the Go GCM
+random-nonce limit of 2^32 encryptions.
+
+The separate HMAC-SHA-256 fingerprint key stays stable across applications
+sharing a provider namespace and across encryption key changes. Namespace,
+address type and address bytes are length-prefixed. The package takes keys
+from its caller. Deployment key loading, trusted route selection and
+transactional writes belong to the lifecycle slice.
