@@ -526,6 +526,22 @@ Records all administrative actions performed through the Web Admin portal.
 | `user_agent`  | TEXT          | User agent string                              |
 | `created_at`  | TIMESTAMPTZ   | Record creation timestamp                      |
 
+### Staff snapshot contract (M02c)
+
+New staff audit JSON uses only ID, RoleID, optional RoleName, Name, Email,
+IsActive, CreatedAt and UpdatedAt, preserving existing field casing. Password
+hashes/credentials are excluded at the feature boundary; AuditService rejects
+raw staff rows/maps. Password-reset events have SQL NULL before/after snapshots.
+Name/email remain intentional audit PII. Other entity serialization is unchanged.
+
+No schema change or sqlc regeneration is needed: the existing JSONB columns
+remain. Historical credential removal is an explicit bounded data operation,
+separate from automatic migrations, because it changes persisted audit state
+and cannot reconstruct removed credentials after commit. See
+[SPEC](specs/m02c-staff-audit-redaction.md) and
+[operator procedure](runbooks/staff-audit-redaction.md). Local verification is
+not evidence that production history, replicas or backups have been cleaned.
+
 ### Example Actions
 
 | Action                    | Description                                    |

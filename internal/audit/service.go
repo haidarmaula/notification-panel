@@ -29,7 +29,6 @@ package audit
 
 import (
 	"context"
-	"encoding/json"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 
@@ -63,7 +62,7 @@ func NewAuditService(repo *repository.AuditLogRepository) *AuditService {
 //
 // # Behaviour
 //
-// The method marshals params.Before and params.After to JSON (omitting each
+// The method encodes params.Before and params.After to JSON (omitting each
 // when nil), extracts the actor ID, client IP, and User-Agent from ctx via
 // GetAuditContext, and persists the result through the underlying repository.
 // Zero-valued optional fields are translated to SQL NULLs so that the audit
@@ -80,7 +79,9 @@ func NewAuditService(repo *repository.AuditLogRepository) *AuditService {
 //
 // # Errors
 //
-// Log returns an error in two cases:
+// Staff snapshots must use StaffSnapshot; password-reset snapshots are forbidden.
+// Unsafe payloads return ErrUnsafeStaffSnapshot before any insert.
+// Log also returns an error in these cases:
 //
 //   - params.Before or params.After cannot be marshalled to JSON (for
 //     example, because the value contains a channel, function, or cyclic
@@ -97,21 +98,17 @@ func NewAuditService(repo *repository.AuditLogRepository) *AuditService {
 // LogParams and its own marshalled buffers; no shared mutable state exists
 // on the receiver.
 func (s *AuditService) Log(ctx context.Context, params LogParams) error {
-	var beforeJSON, afterJSON []byte
-	var err error
-
-	if params.Before != nil {
-		beforeJSON, err = json.Marshal(params.Before)
-		if err != nil {
-			return err
-		}
+	// Password changes record metadata only, regardless of the entity label.
+	if params.Action == ACTION_STAFF_UPDATE_PASSWORD && (params.Before != nil || params.After != nil) {
+		return ErrUnsafeStaffSnapshot
 	}
-
-	if params.After != nil {
-		afterJSON, err = json.Marshal(params.After)
-		if err != nil {
-			return err
-		}
+	beforeJSON, err := marshalSnapshot(params.EntityType, params.Before)
+	if err != nil {
+		return err
+	}
+	afterJSON, err := marshalSnapshot(params.EntityType, params.After)
+	if err != nil {
+		return err
 	}
 
 	staffID, ipAddress, userAgent, _ := GetAuditContext(ctx)

@@ -48,9 +48,10 @@ type LogParams struct {
 
 	// Before is the entity state before the action, serialised to JSON by
 	// AuditService.Log. Nil indicates "no prior state" (typically a create
-	// event) and causes the column to be written as NULL. Any
-	// JSON-marshalable value is accepted; unmarshalable values cause Log
-	// to return an error before any database write occurs.
+	// event) and causes the column to be written as NULL. Staff entities
+	// require StaffSnapshot (or a pointer); password resets forbid snapshots.
+	// Other entities accept JSON-marshalable values. Unsafe/invalid payloads
+	// cause Log to return an error before any database write occurs.
 	Before any
 
 	// After is the entity state after the action, serialised to JSON by

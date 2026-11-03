@@ -402,7 +402,7 @@ func (s *StaffService) Create(ctx context.Context, params CreateStaffParams) (*S
 		EntityType: audit.ENTITY_TYPE_STAFF,
 		EntityName: staff.Name,
 		EntityID:   staff.ID,
-		After:      staff,
+		After:      snapshotStaffRow(staff),
 	}); errLog != nil {
 		log.Printf(
 			"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
@@ -700,8 +700,8 @@ func (s *StaffService) Update(ctx context.Context, params UpdateStaffParams) (*S
 			EntityType: audit.ENTITY_TYPE_STAFF,
 			EntityName: staff.Name,
 			EntityID:   staff.ID,
-			Before:     existing,
-			After:      staff,
+			Before:     snapshotStaffRow(existing),
+			After:      snapshotStaff(*staff),
 		}); errLog != nil {
 			log.Printf(
 				"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
@@ -783,8 +783,8 @@ func (s *StaffService) UpdateStatus(ctx context.Context, id int64, isActive bool
 			EntityType: audit.ENTITY_TYPE_STAFF,
 			EntityName: staff.Name,
 			EntityID:   staff.ID,
-			Before:     existing,
-			After:      staff,
+			Before:     snapshotStaffRow(existing),
+			After:      snapshotStaff(*staff),
 		}); errLog != nil {
 			log.Printf(
 				"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",
@@ -1035,7 +1035,7 @@ func (s *StaffService) Delete(ctx context.Context, id int64) error {
 			EntityType: audit.ENTITY_TYPE_STAFF,
 			EntityName: existing.Name,
 			EntityID:   existing.ID,
-			Before:     existing,
+			Before:     snapshotStaffRow(existing),
 		}); errLog != nil {
 			log.Printf(
 				"[Server] Audit log failed: action=%s entity=%s id=%d name=%s error=%v",

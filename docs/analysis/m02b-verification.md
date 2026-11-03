@@ -74,3 +74,8 @@ remaining identity/session and API baseline contracts. No new vulnerability scan
 was run for this slice (no dependency changes); the previous scan is historical
 evidence. Hosted CI, production deployment, external auth/mobile integration,
 real provider delivery, capacity, recovery and production readiness remain open.
+
+Follow-up 2026-11-03: [M02c](m02c-verification.md) fixes new staff audit snapshots,
+including the additional Create/After exposure found during implementation.
+Historical cleanup is prepared/tested locally, not executed on production.
+The limitations above describe the M02b checkpoint.

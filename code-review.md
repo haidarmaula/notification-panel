@@ -1,6 +1,6 @@
 # Notification Panel Backend — Code Review Findings
 
-**Version:** 1.4
+**Version:** 1.5
 
 **Last Updated:** 2026-11-03
 
@@ -475,6 +475,7 @@ need reconciliation.
 | 1.0 | 2026-09-14 | Initial findings inventory compiled from the full-codebase Godoc pass |
 | 1.1 | 2026-11-02 | Add open Kafka findings H47/H48/M48 from source/dependency review and key-partition probe; see `docs/analysis/kafka-readiness.md`. No runtime fix applied. |
 | 1.2 | 2026-11-02 | Add open role-permission finding C21 from route/service/seed review and recalculate summary counts from distinct IDs; see `docs/analysis/api-data-security-readiness.md`. No runtime fix applied. |
+| 1.5 | 2026-11-03 | Fix new staff audit credential snapshots (including Create/After); prepare and locally verify historical batch cleanup. Production history/backups remain an operator gate. |
 | 1.4 | 2026-11-03 | Reconcile C6/C7 and implement current-DB staff administration guards; retain session/transaction/audit redaction limitations. |
 | 1.3 | 2026-11-02 | Remediate C21 in M02a with current-authority route/service guards and locally verified negative API/DB/Kafka cases; remaining security/transactional limitations recorded in `docs/analysis/m02a-verification.md`. |
 
@@ -489,3 +490,11 @@ For the database schema and entity relationships, see `docs/database.md`.
 ---
 
 M02b update (2026-11-03): C6/C7 reconciled with current code and [local evidence](docs/analysis/m02b-verification.md). Existing staff/audit snapshots need a separate redaction review: Update/UpdateStatus/Delete pass full repository rows as Before payloads, including PasswordHash; M02b does not change these persisted payloads.
+
+M02c update (2026-11-03): the staff audit exposure above is fixed for new writes
+using explicit StaffSnapshot projections and a strict AuditService staff payload
+guard. Create/After was also credential-bearing and is covered. Persisted fixture
+audits and historical cleanup SQL pass local PostgreSQL tests; see
+[evidence](docs/analysis/m02c-verification.md). Production history and historical
+copies are not claimed cleaned; [operator procedure](docs/runbooks/staff-audit-redaction.md).
+Audit durability/atomicity remains open; other entity payloads are unchanged.

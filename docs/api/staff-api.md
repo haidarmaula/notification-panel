@@ -25,6 +25,10 @@ Missing/deleted/inactive identity returns 401; insufficient permission returns
 Earlier API-key/JWT middleware may return its existing authentication messages.
 All seven routes share this gate, before request decoding. Password reset still
 requires the actor's current password. Self-deletion remains forbidden.
+M02c excludes password material from newly written staff audit snapshots;
+password reset records metadata only. [Historical cleanup](../runbooks/staff-audit-redaction.md)
+is a separate operator operation, not an API endpoint.
+
 Checks are statement snapshots, not locks through mutation; sessions are not
 revoked by a password reset. Existing success statuses/DTOs remain unchanged.
 

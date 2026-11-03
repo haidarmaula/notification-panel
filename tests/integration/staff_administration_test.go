@@ -94,6 +94,8 @@ func TestStaffAdministrationAPI(t *testing.T) {
 						claim = "VIEWER"
 					}
 					before := snapshot()
+					var auditsBefore int64
+					require.NoError(t, tx.QueryRow(ctx, "SELECT count(*) FROM audit_logs").Scan(&auditsBefore))
 					w := request(mux, route.Method, path, body, sign(actor, claim), "")
 					want := 403
 					if role == "SUPER_ADMIN" {
@@ -106,6 +108,12 @@ func TestStaffAdministrationAPI(t *testing.T) {
 					require.Equal(t, want, w.Code, w.Body.String())
 					require.NotContains(t, w.Body.String(), "password_hash")
 					require.NotContains(t, w.Body.String(), string(hash))
+					if role == "SUPER_ADMIN" && route.Method != "GET" {
+						var auditsAfter int64
+						require.NoError(t, tx.QueryRow(ctx, "SELECT count(*) FROM audit_logs").Scan(&auditsAfter))
+						require.Equal(t, auditsBefore+1, auditsAfter, "successful mutation must persist a fixture audit")
+					}
+
 					if want == 403 {
 						require.Equal(t, before, snapshot(), "denial mutated staff/audit")
 					}
@@ -113,6 +121,47 @@ func TestStaffAdministrationAPI(t *testing.T) {
 			}
 		})
 	}
+	t.Run("persisted snapshots contain only allowed fields", func(t *testing.T) {
+		rows, err := tx.Query(ctx, "SELECT action,before_json,after_json,entity_id,actor_user_id FROM audit_logs WHERE entity_type='staff_user' ORDER BY id")
+		require.NoError(t, err)
+		defer rows.Close()
+		actions := map[string]bool{}
+		allowed := map[string]bool{"ID": true, "RoleID": true, "RoleName": true, "Name": true, "Email": true, "IsActive": true, "CreatedAt": true, "UpdatedAt": true}
+		for rows.Next() {
+			var action string
+			var before, after []byte
+			var entity, actor int64
+			require.NoError(t, rows.Scan(&action, &before, &after, &entity, &actor))
+			actions[action] = true
+			require.Positive(t, entity)
+			require.Positive(t, actor)
+			if action == "STAFF_UPDATE_PASSWORD" {
+				require.Nil(t, before)
+				require.Nil(t, after)
+				continue
+			}
+			for _, data := range [][]byte{before, after} {
+				if data == nil {
+					continue
+				}
+				var payload map[string]any
+				require.NoError(t, json.Unmarshal(data, &payload))
+				for key := range payload {
+					require.True(t, allowed[key], "unexpected audit key: %s", key)
+				}
+				require.Equal(t, float64(entity), payload["ID"])
+				require.Contains(t, payload, "Name")
+				require.Contains(t, payload, "RoleID")
+				require.NotContains(t, string(data), string(hash))
+				require.NotContains(t, string(data), "password")
+			}
+		}
+		require.NoError(t, rows.Err())
+		for _, action := range []string{"STAFF_CREATE", "STAFF_UPDATE", "STAFF_UPDATE_STATUS", "STAFF_UPDATE_PASSWORD", "STAFF_DELETE"} {
+			require.True(t, actions[action], "missing audit action: %s", action)
+		}
+	})
+
 	t.Run("credentials and account lifecycle", func(t *testing.T) {
 		actor := seed("SUPER_ADMIN")
 		access := sign(actor, "SUPER_ADMIN")

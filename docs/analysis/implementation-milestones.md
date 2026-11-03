@@ -78,7 +78,9 @@ real-DB/API negative tests M02a selesai. [M02b staff administration](m02b-verifi
 juga implemented/local-verified pada 2026-11-03: tujuh route dan service memakai current DB authority. Atomic
 authority/mutation/audit tetap mengikuti transaksi pemilik data M03/M04;
 M02a tidak mengklaim revocation membatalkan operasi yang sudah diotorisasi.
-Session, request limits, audit redaction/durability dan API/security baseline lain
+[M02c audit redaction](m02c-verification.md) implemented/local-verified; skrip
+historis dan runbook tersedia, tetapi cleanup produksi belum dijalankan.
+Session, request limits, audit durability dan API/security baseline lain
 tetap pekerjaan M02 lanjutan. Prasyarat M03/M04 adalah guard baseline dan kontrak identitas
 yang dipakainya, bukan menunggu semua transaksi future diimplementasikan di M02.
 
@@ -113,6 +115,7 @@ Tidak ada perubahan perilaku service atau test yang di-skip.
 M01 step 18/19 selesai sebagai [CI/local checks](ci-readiness.md) dan
 [dependency smoke](integration-readiness.md). Step 20/M02 dimulai dengan SPEC
 M02a dan M02b yang selesai implemented/local-verified; berikutnya slice M02
-untuk API security baseline lain, termasuk request limits/audit redaction. Hosted execution,
+untuk API security baseline lain, berikutnya M02d request limits; M02c audit
+redaction sudah implemented/local-verified dan historical cleanup tetap operator gate. Hosted execution,
 production adapter/pipeline, real provider/device dan production infrastructure
 belum dibuktikan oleh penyelesaian fondasi ini.
