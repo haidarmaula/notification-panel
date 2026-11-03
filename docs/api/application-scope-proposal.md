@@ -7,8 +7,12 @@
 Modern application-owned resources will use explicit application context, for
 example `/api/v1/apps/{app_id}/notifications` and
 `/api/v1/apps/{app_id}/segments`. These are proposed namespace examples, not
-currently callable endpoints. Exact lifecycle/control-plane methods and DTOs
-are specified per implementation slice.
+currently callable endpoints. Exact lifecycle methods and DTOs are specified per implementation slice.
+The initial registry/control-plane methods now have a
+[concrete proposed OpenAPI](../contracts/application-registry.openapi.json) and
+[M03a SPEC](../specs/m03a-application-registry.md); all remain unimplemented.
+The registry separates `/api/v1/admin/apps` management from `/api/v1/apps`
+caller-granted metadata and permits PROVISIONING only.
 
 | Concern | Proposed caller-visible contract |
 | --- | --- |

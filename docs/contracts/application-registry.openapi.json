@@ -1,0 +1,1257 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Application registry and staff grants \u2014 proposed M03a",
+    "version": "0.1.0",
+    "description": "DESIGN ONLY. No endpoint in this contract is implemented. Canonical behavior: docs/specs/m03a-application-registry.md. M03a metadata remains PROVISIONING; no business data, activation, credentials or provider send."
+  },
+  "x-implementation-status": "proposed-not-implemented",
+  "security": [
+    {
+      "ApiKey": [],
+      "StaffJWT": []
+    }
+  ],
+  "paths": {
+    "/api/v1/apps": {
+      "get": {
+        "operationId": "listGrantedApplications",
+        "summary": "listGrantedApplications",
+        "x-implementation-status": "proposed-not-implemented",
+        "x-access-mode": "app-grant",
+        "x-required-permission": "applications.read",
+        "x-reject-unknown-query-parameters": true,
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ApplicationList200"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ]
+      }
+    },
+    "/api/v1/apps/{app_id}": {
+      "get": {
+        "operationId": "getGrantedApplication",
+        "summary": "getGrantedApplication",
+        "x-implementation-status": "proposed-not-implemented",
+        "x-access-mode": "app-grant",
+        "x-required-permission": "applications.read",
+        "x-reject-unknown-query-parameters": true,
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Application200"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppID"
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/apps": {
+      "get": {
+        "operationId": "listManagedApplications",
+        "summary": "listManagedApplications",
+        "x-implementation-status": "proposed-not-implemented",
+        "x-access-mode": "control-plane",
+        "x-required-permission": "applications.manage",
+        "x-reject-unknown-query-parameters": true,
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/ApplicationList200"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "$ref": "#/components/parameters/ExactKey"
+          }
+        ]
+      },
+      "post": {
+        "operationId": "createApplication",
+        "summary": "createApplication",
+        "x-implementation-status": "proposed-not-implemented",
+        "x-access-mode": "control-plane",
+        "x-required-permission": "applications.manage",
+        "x-reject-unknown-query-parameters": true,
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/Application201"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateApplication"
+              }
+            }
+          }
+        },
+        "x-max-body-bytes": 65536,
+        "x-reject-duplicate-json-fields": true
+      }
+    },
+    "/api/v1/admin/apps/{app_id}": {
+      "get": {
+        "operationId": "getManagedApplication",
+        "summary": "getManagedApplication",
+        "x-implementation-status": "proposed-not-implemented",
+        "x-access-mode": "control-plane",
+        "x-required-permission": "applications.manage",
+        "x-reject-unknown-query-parameters": true,
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Application200"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppID"
+          }
+        ]
+      },
+      "patch": {
+        "operationId": "renameApplication",
+        "summary": "renameApplication",
+        "x-implementation-status": "proposed-not-implemented",
+        "x-access-mode": "control-plane",
+        "x-required-permission": "applications.manage",
+        "x-reject-unknown-query-parameters": true,
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Application200"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "412": {
+            "$ref": "#/components/responses/Error412"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "428": {
+            "$ref": "#/components/responses/Error428"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppID"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchApplication"
+              }
+            }
+          }
+        },
+        "x-max-body-bytes": 65536,
+        "x-reject-duplicate-json-fields": true
+      }
+    },
+    "/api/v1/admin/apps/{app_id}/staff-grants": {
+      "get": {
+        "operationId": "listApplicationStaffGrants",
+        "summary": "listApplicationStaffGrants",
+        "x-implementation-status": "proposed-not-implemented",
+        "x-access-mode": "control-plane",
+        "x-required-permission": "applications.manage",
+        "x-reject-unknown-query-parameters": true,
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/GrantList200"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppID"
+          },
+          {
+            "$ref": "#/components/parameters/Page"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/apps/{app_id}/staff-grants/{staff_id}": {
+      "get": {
+        "operationId": "getApplicationStaffGrant",
+        "summary": "getApplicationStaffGrant",
+        "x-implementation-status": "proposed-not-implemented",
+        "x-access-mode": "control-plane",
+        "x-required-permission": "applications.manage",
+        "x-reject-unknown-query-parameters": true,
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Grant200"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppID"
+          },
+          {
+            "$ref": "#/components/parameters/StaffID"
+          }
+        ]
+      },
+      "put": {
+        "operationId": "enableApplicationStaffGrant",
+        "summary": "enableApplicationStaffGrant",
+        "x-implementation-status": "proposed-not-implemented",
+        "x-access-mode": "control-plane",
+        "x-required-permission": "applications.manage",
+        "x-reject-unknown-query-parameters": true,
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Grant200"
+          },
+          "201": {
+            "$ref": "#/components/responses/Grant201"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "412": {
+            "$ref": "#/components/responses/Error412"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "428": {
+            "$ref": "#/components/responses/Error428"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppID"
+          },
+          {
+            "$ref": "#/components/parameters/StaffID"
+          },
+          {
+            "$ref": "#/components/parameters/OptionalIfMatch"
+          },
+          {
+            "$ref": "#/components/parameters/IfNoneMatch"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnableGrant"
+              }
+            }
+          }
+        },
+        "x-max-body-bytes": 65536,
+        "x-reject-duplicate-json-fields": true
+      },
+      "delete": {
+        "operationId": "revokeApplicationStaffGrant",
+        "summary": "revokeApplicationStaffGrant",
+        "x-implementation-status": "proposed-not-implemented",
+        "x-access-mode": "control-plane",
+        "x-required-permission": "applications.manage",
+        "x-reject-unknown-query-parameters": true,
+        "responses": {
+          "204": {
+            "$ref": "#/components/responses/GrantRevoked204"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "412": {
+            "$ref": "#/components/responses/Error412"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "428": {
+            "$ref": "#/components/responses/Error428"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          }
+        },
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/AppID"
+          },
+          {
+            "$ref": "#/components/parameters/StaffID"
+          },
+          {
+            "$ref": "#/components/parameters/IfMatch"
+          }
+        ],
+        "description": "Empty body only; soft revoke with conditional audit. Nonempty body is 400."
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key"
+      },
+      "StaffJWT": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "parameters": {
+      "AppID": {
+        "name": "app_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "StaffID": {
+        "name": "staff_id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*$",
+          "maxLength": 19,
+          "description": "Positive decimal int64 string, validated for range by server."
+        }
+      },
+      "Page": {
+        "name": "page",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 1
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "ExactKey": {
+        "name": "key",
+        "in": "query",
+        "schema": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{1,61}[a-z0-9]$"
+        }
+      },
+      "IfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "required": true,
+        "schema": {
+          "type": "string"
+        },
+        "description": "One exact strong ETag; missing 428, stale 412; weak/list/wildcard unsupported (400)."
+      },
+      "OptionalIfMatch": {
+        "name": "If-Match",
+        "in": "header",
+        "schema": {
+          "type": "string"
+        },
+        "description": "Required for existing/reactivated grant; mutually exclusive with If-None-Match."
+      },
+      "IfNoneMatch": {
+        "name": "If-None-Match",
+        "in": "header",
+        "schema": {
+          "const": "*"
+        },
+        "description": "Required for first grant row; mutually exclusive with If-Match. If neither: 428."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "success": {
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "Application": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "key",
+          "name",
+          "status",
+          "revision",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,61}[a-z0-9]$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "x-max-utf8-bytes": 128,
+            "description": "Trimmed nonempty name, maximum 128 UTF-8 bytes; maxLength alone is not byte validation."
+          },
+          "status": {
+            "const": "PROVISIONING"
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$",
+            "maxLength": 19,
+            "description": "Positive decimal int64 string, validated for range by server."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "examples": [
+          {
+            "id": "7ecb1da1-e534-4ca6-a860-7a9ae954ced8",
+            "key": "mobile-a",
+            "name": "Aplikasi A",
+            "status": "PROVISIONING",
+            "revision": "1",
+            "created_at": "2026-11-03T00:00:00Z",
+            "updated_at": "2026-11-03T00:00:00Z"
+          }
+        ]
+      },
+      "StaffGrant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "application_id",
+          "staff_id",
+          "is_active",
+          "revision",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "application_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "staff_id": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$",
+            "maxLength": 19,
+            "description": "Positive decimal int64 string, validated for range by server."
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "revision": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]*$",
+            "maxLength": 19,
+            "description": "Positive decimal int64 string, validated for range by server."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "examples": [
+          {
+            "application_id": "7ecb1da1-e534-4ca6-a860-7a9ae954ced8",
+            "staff_id": "42",
+            "is_active": true,
+            "revision": "1",
+            "created_at": "2026-11-03T00:00:00Z",
+            "updated_at": "2026-11-03T00:00:00Z"
+          }
+        ]
+      },
+      "CreateApplication": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "name"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{1,61}[a-z0-9]$"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "x-max-utf8-bytes": 128,
+            "description": "Trimmed nonempty name, maximum 128 UTF-8 bytes; maxLength alone is not byte validation."
+          }
+        },
+        "examples": [
+          {
+            "key": "mobile-a",
+            "name": "Aplikasi A"
+          }
+        ]
+      },
+      "PatchApplication": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128,
+            "x-max-utf8-bytes": 128,
+            "description": "Trimmed nonempty name, maximum 128 UTF-8 bytes; maxLength alone is not byte validation."
+          }
+        },
+        "examples": [
+          {
+            "name": "Nama baru"
+          }
+        ]
+      },
+      "EnableGrant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "is_active"
+        ],
+        "properties": {
+          "is_active": {
+            "const": true
+          }
+        },
+        "examples": [
+          {
+            "is_active": true
+          }
+        ]
+      },
+      "ApplicationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/Application"
+          }
+        },
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "id": "7ecb1da1-e534-4ca6-a860-7a9ae954ced8",
+              "key": "mobile-a",
+              "name": "Aplikasi A",
+              "status": "PROVISIONING",
+              "revision": "1",
+              "created_at": "2026-11-03T00:00:00Z",
+              "updated_at": "2026-11-03T00:00:00Z"
+            }
+          }
+        ]
+      },
+      "ApplicationListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "items",
+              "total",
+              "page",
+              "limit"
+            ],
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/Application"
+                }
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "page": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              }
+            }
+          }
+        },
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "items": [
+                {
+                  "id": "7ecb1da1-e534-4ca6-a860-7a9ae954ced8",
+                  "key": "mobile-a",
+                  "name": "Aplikasi A",
+                  "status": "PROVISIONING",
+                  "revision": "1",
+                  "created_at": "2026-11-03T00:00:00Z",
+                  "updated_at": "2026-11-03T00:00:00Z"
+                }
+              ],
+              "total": 1,
+              "page": 1,
+              "limit": 20
+            }
+          }
+        ]
+      },
+      "StaffGrantResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/StaffGrant"
+          }
+        },
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "application_id": "7ecb1da1-e534-4ca6-a860-7a9ae954ced8",
+              "staff_id": "42",
+              "is_active": true,
+              "revision": "1",
+              "created_at": "2026-11-03T00:00:00Z",
+              "updated_at": "2026-11-03T00:00:00Z"
+            }
+          }
+        ]
+      },
+      "StaffGrantListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "success",
+          "data"
+        ],
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "items",
+              "total",
+              "page",
+              "limit"
+            ],
+            "properties": {
+              "items": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/StaffGrant"
+                }
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "page": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 1000
+              },
+              "limit": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 100
+              }
+            }
+          }
+        },
+        "examples": [
+          {
+            "success": true,
+            "data": {
+              "items": [
+                {
+                  "application_id": "7ecb1da1-e534-4ca6-a860-7a9ae954ced8",
+                  "staff_id": "42",
+                  "is_active": true,
+                  "revision": "1",
+                  "created_at": "2026-11-03T00:00:00Z",
+                  "updated_at": "2026-11-03T00:00:00Z"
+                }
+              ],
+              "total": 1,
+              "page": 1,
+              "limit": 20
+            }
+          }
+        ]
+      }
+    },
+    "headers": {
+      "NoStore": {
+        "description": "Do not cache registry or grant responses.",
+        "schema": {
+          "const": "no-store"
+        }
+      },
+      "ApplicationETag": {
+        "description": "Strong application identity/revision ETag, opaque to clients.",
+        "schema": {
+          "type": "string"
+        },
+        "example": "\"app:7ecb1da1-e534-4ca6-a860-7a9ae954ced8:1\""
+      },
+      "GrantETag": {
+        "description": "Strong grant identity/revision ETag, opaque to clients.",
+        "schema": {
+          "type": "string"
+        },
+        "example": "\"grant:7ecb1da1-e534-4ca6-a860-7a9ae954ced8:42:1\""
+      }
+    },
+    "responses": {
+      "ApplicationList200": {
+        "description": "Success",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApplicationListResponse"
+            }
+          }
+        }
+      },
+      "Error400": {
+        "description": "Invalid input or unsupported precondition form.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error401": {
+        "description": "Authentication/account invalid.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error403": {
+        "description": "Current role lacks operation permission.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error404": {
+        "description": "Missing/ungranted application or missing grant/staff, without business existence oracle.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error500": {
+        "description": "internal server error",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Application200": {
+        "description": "Success",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "ETag": {
+            "$ref": "#/components/headers/ApplicationETag"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApplicationResponse"
+            }
+          }
+        }
+      },
+      "Application201": {
+        "description": "Provisioning registry row created; no automatic business grant or activation.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "ETag": {
+            "$ref": "#/components/headers/ApplicationETag"
+          },
+          "Location": {
+            "schema": {
+              "type": "string"
+            },
+            "description": "Relative canonical admin resource URL."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ApplicationResponse"
+            }
+          }
+        }
+      },
+      "Error409": {
+        "description": "Immutable key conflict or inactive target staff.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error413": {
+        "description": "Body too large.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error415": {
+        "description": "application/json required, optional charset=utf-8.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error412": {
+        "description": "Precondition no longer matches resource.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error428": {
+        "description": "Required conditional header missing.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "GrantList200": {
+        "description": "Success",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/StaffGrantListResponse"
+            }
+          }
+        }
+      },
+      "Grant200": {
+        "description": "Success",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "ETag": {
+            "$ref": "#/components/headers/GrantETag"
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/StaffGrantResponse"
+            }
+          }
+        }
+      },
+      "Grant201": {
+        "description": "First explicit grant created.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          },
+          "ETag": {
+            "$ref": "#/components/headers/GrantETag"
+          },
+          "Location": {
+            "schema": {
+              "type": "string"
+            },
+            "description": "Relative canonical admin resource URL."
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/StaffGrantResponse"
+            }
+          }
+        }
+      },
+      "GrantRevoked204": {
+        "description": "Grant inactive; no response body.",
+        "headers": {
+          "Cache-Control": {
+            "$ref": "#/components/headers/NoStore"
+          }
+        }
+      }
+    }
+  }
+}

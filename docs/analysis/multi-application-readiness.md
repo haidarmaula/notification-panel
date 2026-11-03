@@ -67,3 +67,21 @@ App grant policy, per-app issuer/origin evidence, legacy mapping and provider
 inventory remain G3/G5/G7 acceptance items. Number of apps, aggregate device load
 and concurrent campaigns remain G2 sizing inputs; the earlier 20k/5-campaign
 baseline must not silently become a per-app or fleet capacity guarantee.
+
+## M03a contract checkpoint
+
+The [exact registry SPEC](../specs/m03a-application-registry.md) and
+[OpenAPI 3.1 contract](../contracts/application-registry.openapi.json) now define
+10 proposed routes, global-management versus caller-granted metadata, UUID/immutable
+key, PROVISIONING-only creation, soft grant revocation, conditional ETags and
+atomic mutation/audit. Provider/auth binding storage is deferred until its exact
+policy models exist; metadata cannot claim operational readiness.
+
+Validation at this checkpoint parses JSON, resolves local OpenAPI references,
+checks ten unique operations/security/permission/body/response declarations and
+example/schema invariants, plus local documentation links and diff whitespace.
+This is structural/custom validation, not a full OpenAPI validator or a live API
+run. No Go/schema/runtime changes, new DB tests, migrations or endpoint execution.
+Next concrete work is M03a.1 paired migration, queries, sqlc and DB constraints;
+then resolver/transaction services and HTTP/regression cases. All earlier multi-app
+activation, legacy query/background process and G3/G5/G7 gates remain open.

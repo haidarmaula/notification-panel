@@ -164,7 +164,9 @@ historical cleanup produksi tetap operator gate. [M02d request limits](m02d-veri
 juga implemented/local-verified. [Evaluasi baseline](m02-baseline-assessment.md)
 dan [M02e staff JWT](m02e-verification.md) selesai scoped; berikutnya inspeksi
 rancangan generic multi-aplikasi dan M03a registry/scope sebelum instalasi;
-kaiapps2 hanya consumer uji pertama. Gate integrasi tetap eksplisit. M02 release controls tetap terbuka. SPEC milestone lain ditulis saat dikerjakan,
+kaiapps2 hanya consumer uji pertama. [SPEC M03a](../specs/m03a-application-registry.md)
+dan proposed OpenAPI sudah ditulis; berikutnya implementasi schema/query registry.
+Belum ada endpoint registry atau data aplikasi kedua. Gate integrasi tetap eksplisit. M02 release controls tetap terbuka. SPEC milestone lain ditulis saat dikerjakan,
 bukan sekaligus. G5 selain role matrix tetap terbuka.
 Perbaikan baseline tidak harus menunggu seluruh gate release; acceptance SPEC
 fitur sensitif menunggu keputusan yang dipakainya. Step 15 belum ditandai penuh

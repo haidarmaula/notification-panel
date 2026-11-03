@@ -560,7 +560,10 @@ Current tables still lack application isolation. [ADR-12](adr/adr-12-multi-appli
 proposes an application registry, scoped external identities, app-qualified
 business aggregates/children and composite reference constraints; global staff
 control-plane data remains separate. [M03a–d](specs/m03a-application-scope-plan.md)
-will define the exact paired migrations/backfill/constraints before sqlc generation.
+will define scoped backfill/constraints before sqlc generation.
+The [M03a registry SPEC](specs/m03a-application-registry.md) now specifies candidate
+applications/grants plus nullable audit application_id, PROVISIONING-only status
+and atomic control-plane audit. Next migration candidate is 000016, not yet created.
 No columns, migrations or queries changed in this design checkpoint. Do not
 insert a second application's business data while current global legacy queries
 remain reachable. Existing uniqueness on external_id/push_token is not the

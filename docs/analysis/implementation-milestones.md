@@ -125,6 +125,8 @@ Evaluasi baseline dan M02e selesai secara scoped/local-verified. Berikutnya
 [ADR-12 multi-aplikasi](../adr/adr-12-multi-application-isolation.md) dan
 [rencana M03a–d](../specs/m03a-application-scope-plan.md): registry/scope dahulu,
 baru identity/binding generik; kaiapps2 consumer pertama, bukan batas platform.
+[Exact SPEC M03a](../specs/m03a-application-registry.md) dan proposed OpenAPI sudah
+ditulis; berikutnya M03a.1 migration/query/sqlc, belum ada registry runtime.
 M02 release controls belum dinyatakan selesai. Hosted execution,
 production adapter/pipeline, real provider/device dan production infrastructure
 belum dibuktikan oleh penyelesaian fondasi ini.

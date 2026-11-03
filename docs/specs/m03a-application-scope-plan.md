@@ -2,12 +2,17 @@
 
 Date: 2026-11-03. Status: **proposed sequence/contracts; no runtime or migration yet**.
 Normative design: [ADR-12](../adr/adr-12-multi-application-isolation.md).
-Each implementation slice still needs its exact transaction/API/migration SPEC.
+Each implementation slice needs its exact transaction/API/migration SPEC.
+[M03a registry SPEC](m03a-application-registry.md) and its
+[proposed OpenAPI](../contracts/application-registry.openapi.json) are now written;
+implementation is still pending.
 
 ## M03a — Registry and scope foundation
 
-Define immutable application IDs, statuses and server-owned provider/auth policy
-references. Specify global SUPER_ADMIN control-plane operations and explicit
+Define immutable application IDs and PROVISIONING-only registry status first.
+The exact M03a SPEC defers provider/auth reference storage until the referenced
+policy model is specified; there is no placeholder credential/config readiness.
+Specify global SUPER_ADMIN control-plane operations and explicit
 business app grants (G5 acceptance still needed). Add paired migrations/sqlc only
 when implementing; do not hand-edit generated code. Establish a resolved
 application principal/context and current-DB role+grant checker with no optional
