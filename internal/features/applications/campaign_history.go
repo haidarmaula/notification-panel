@@ -1,0 +1,99 @@
+package applications
+
+import (
+	"context"
+	"net/http"
+	"strconv"
+
+	"github.com/jackc/pgx/v5/pgtype"
+	"hello/internal/authz"
+	"hello/internal/database/sqlc"
+	"hello/pkg/response"
+)
+
+type deliveryDTO struct {
+	ID          string             `json:"id"`
+	UserID      string             `json:"user_id"`
+	DeviceID    string             `json:"device_id"`
+	Status      string             `json:"status"`
+	SentAt      pgtype.Timestamptz `json:"sent_at"`
+	DeliveredAt pgtype.Timestamptz `json:"delivered_at"`
+	OpenedAt    pgtype.Timestamptz `json:"opened_at"`
+}
+
+type campaignReadDTO struct {
+	ID     string             `json:"id"`
+	UserID string             `json:"user_id"`
+	ReadAt pgtype.Timestamptz `json:"read_at"`
+}
+
+func (s *Service) campaignHistoryScope(ctx context.Context, id pgtype.UUID, campaignID int64) (int64, error) {
+	scope, err := authz.NewApplicationAuthorizer(s.q).RequireApplication(ctx, id, authz.NotificationsRead)
+	if err != nil {
+		return 0, err
+	}
+	_, err = s.q.GetScopedCampaignID(ctx, sqlc.GetScopedCampaignIDParams{ApplicationID: scope.ApplicationID, CampaignID: campaignID})
+	return scope.ApplicationID, campaignLookupError(err)
+}
+
+func (s *Service) listCampaignDeliveries(ctx context.Context, id pgtype.UUID, campaignID int64, page userReadPage) ([]sqlc.ListScopedCampaignDeliveriesRow, error) {
+	appID, err := s.campaignHistoryScope(ctx, id, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	return s.q.ListScopedCampaignDeliveries(ctx, sqlc.ListScopedCampaignDeliveriesParams{ApplicationID: appID, CampaignID: campaignID, AfterID: page.after, PageSize: page.limit + 1})
+}
+
+func (s *Service) listCampaignReads(ctx context.Context, id pgtype.UUID, campaignID int64, page userReadPage) ([]sqlc.ListScopedCampaignReadsRow, error) {
+	appID, err := s.campaignHistoryScope(ctx, id, campaignID)
+	if err != nil {
+		return nil, err
+	}
+	return s.q.ListScopedCampaignReads(ctx, sqlc.ListScopedCampaignReadsParams{ApplicationID: appID, CampaignID: campaignID, AfterID: page.after, PageSize: page.limit + 1})
+}
+
+func (h *Handler) ListCampaignDeliveries(w http.ResponseWriter, r *http.Request) {
+	id, campaignID, err := campaignPathID(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	page, err := readPagination(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	rows, err := h.service.listCampaignDeliveries(r.Context(), id, campaignID, page)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	result := makeReadPage(rows, page.limit, func(row sqlc.ListScopedCampaignDeliveriesRow) (deliveryDTO, string) {
+		item := deliveryDTO{strconv.FormatInt(row.ID, 10), strconv.FormatInt(row.UserID, 10), strconv.FormatInt(row.DeviceTokenID, 10), row.Status, row.SentAt, row.DeliveredAt, row.OpenedAt}
+		return item, item.ID
+	})
+	response.JSON(w, http.StatusOK, result, "success")
+}
+
+func (h *Handler) ListCampaignReads(w http.ResponseWriter, r *http.Request) {
+	id, campaignID, err := campaignPathID(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	page, err := readPagination(r)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	rows, err := h.service.listCampaignReads(r.Context(), id, campaignID, page)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	result := makeReadPage(rows, page.limit, func(row sqlc.ListScopedCampaignReadsRow) (campaignReadDTO, string) {
+		item := campaignReadDTO{strconv.FormatInt(row.ID, 10), strconv.FormatInt(row.UserID, 10), row.ReadAt}
+		return item, item.ID
+	})
+	response.JSON(w, http.StatusOK, result, "success")
+}

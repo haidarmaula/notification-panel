@@ -19,7 +19,8 @@ replacement.
 M03b.4 starts with [scoped campaign draft creation](../api/scoped-campaign-drafts-api.md).
 Scoped list, detail, draft replacement and deletion share the same contract.
 [Project template management](../api/scoped-templates-api.md) supports retirement
-while retaining campaign references. Delivery, read, upload and audit projections follow.
+while retaining campaign references. [Campaign delivery and read history](../api/scoped-campaign-history-api.md)
+now use project-scoped projections. Upload and audit access follow.
 
 ## M03a — Registry and scope foundation
 

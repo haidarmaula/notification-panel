@@ -107,7 +107,7 @@ func (s *Service) mutateCampaign(ctx context.Context, id pgtype.UUID, campaignID
 	})
 }
 
-func campaignPath(r *http.Request) (pgtype.UUID, int64, error) {
+func campaignPathID(r *http.Request) (pgtype.UUID, int64, error) {
 	id, err := pathID(r)
 	if err != nil {
 		return id, 0, err
@@ -116,10 +116,15 @@ func campaignPath(r *http.Request) (pgtype.UUID, int64, error) {
 	if !ok {
 		return id, 0, errInvalidCampaignID
 	}
-	if _, err := query(r); err != nil {
+	return id, campaign.Int64, nil
+}
+func campaignPath(r *http.Request) (pgtype.UUID, int64, error) {
+	id, campaignID, err := campaignPathID(r)
+	if err != nil {
 		return id, 0, err
 	}
-	return id, campaign.Int64, nil
+	_, err = query(r)
+	return id, campaignID, err
 }
 
 func (h *Handler) ListCampaigns(w http.ResponseWriter, r *http.Request) {

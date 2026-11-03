@@ -248,6 +248,7 @@ type Querier interface {
 	GetRoleByID(ctx context.Context, id int64) (Role, error)
 	GetRoleByName(ctx context.Context, name string) (Role, error)
 	GetScopedCampaign(ctx context.Context, arg GetScopedCampaignParams) (GetScopedCampaignRow, error)
+	GetScopedCampaignID(ctx context.Context, arg GetScopedCampaignIDParams) (int64, error)
 	GetScopedSegment(ctx context.Context, arg GetScopedSegmentParams) (GetScopedSegmentRow, error)
 	GetScopedTemplate(ctx context.Context, arg GetScopedTemplateParams) (GetScopedTemplateRow, error)
 	GetScopedUser(ctx context.Context, arg GetScopedUserParams) (GetScopedUserRow, error)
@@ -318,6 +319,8 @@ type Querier interface {
 	// ==========================================
 	ListRoles(ctx context.Context, arg ListRolesParams) ([]Role, error)
 	ListScheduledNotificationsDue(ctx context.Context, limit int32) ([]ListScheduledNotificationsDueRow, error)
+	ListScopedCampaignDeliveries(ctx context.Context, arg ListScopedCampaignDeliveriesParams) ([]ListScopedCampaignDeliveriesRow, error)
+	ListScopedCampaignReads(ctx context.Context, arg ListScopedCampaignReadsParams) ([]ListScopedCampaignReadsRow, error)
 	ListScopedCampaigns(ctx context.Context, arg ListScopedCampaignsParams) ([]ListScopedCampaignsRow, error)
 	ListScopedSegmentMembers(ctx context.Context, arg ListScopedSegmentMembersParams) ([]ListScopedSegmentMembersRow, error)
 	ListScopedSegments(ctx context.Context, arg ListScopedSegmentsParams) ([]ListScopedSegmentsRow, error)
