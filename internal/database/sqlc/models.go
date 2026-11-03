@@ -98,6 +98,13 @@ type MobileInstallation struct {
 	LastSeenAt    pgtype.Timestamptz `db:"last_seen_at"`
 }
 
+type MobileOriginUse struct {
+	ApplicationPublicID pgtype.UUID        `db:"application_public_id"`
+	Issuer              string             `db:"issuer"`
+	NonceDigest         []byte             `db:"nonce_digest"`
+	ExpiresAt           pgtype.Timestamptz `db:"expires_at"`
+}
+
 type Notification struct {
 	ID            int64              `db:"id"`
 	TemplateID    pgtype.Int8        `db:"template_id"`

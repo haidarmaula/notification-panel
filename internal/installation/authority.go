@@ -130,7 +130,7 @@ func (a *MobileAuthority) authenticate(ctx context.Context, project pgtype.UUID,
 		}
 		binding := OriginContext{ProjectID: project, Namespace: policy.Namespace, Subject: claims.Subject, CredentialDigest: sha256.Sum256([]byte(credential))}
 		if err := policy.Origin.VerifyOrigin(ctx, binding, *evidence); err != nil {
-			return Principal{}, ErrMobileOrigin
+			return Principal{}, err
 		}
 	}
 	return Principal{ApplicationID: app.ID, UserID: userID}, nil

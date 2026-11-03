@@ -1,6 +1,6 @@
 # M03c installation and binding contract
 
-Status: schema migration 000018 implemented. Protected enrollment, refresh, logout and owner switch are implemented. The project JWT verifier and identity lookup are implemented. Origin adapter and HTTP wiring remain pending. Production issuer, origin verification,
+Status: schema migration 000018 implemented. Protected enrollment, refresh, logout and owner switch are implemented. The project JWT verifier and identity lookup are implemented. Signed origin assertions and replay protection are implemented. HTTP wiring and deployment policy remain pending. Production issuer, origin verification,
 provider route and secret configuration require per-project evidence.
 See [ADR-04](../adr/adr-04-provider-selection.md) and the
 [application scope plan](m03a-application-scope-plan.md).
@@ -126,3 +126,21 @@ that evidence is required and routed to the pinned adapter. Deployment
 adapter, key provisioning, subject provisioning and HTTP wiring follow
 once the project policies are supplied. The lifecycle rechecks project
 and user status within its write transaction.
+
+### Signed origin adapter
+
+The server adapter pins an EdDSA broker public key, issuer and audience.
+The trusted broker must verify platform evidence before signing. Its
+assertion has purpose mobile_installation_enrollment and binds app_id,
+namespace, subject and the base64url SHA-256 digest of the exact mobile
+JWT. Require iat, exp and a unique jti. The lifetime is at most two minutes.
+
+Migration 000021 consumes the assertion once using the project, issuer and
+SHA-256 digest of jti. PostgreSQL rejects expired assertions and duplicate
+claims. Consumption precedes enrollment. After an enrollment failure the
+client needs a fresh broker assertion. Keep unexpired replay markers, and
+include expired marker cleanup in operational retention. Configure the
+broker trust key independently from the mobile access token key.
+
+The adapter verifies broker assertions. Broker deployment and its
+platform-evidence checks require per-project validation before activation.

@@ -14,6 +14,7 @@ type Querier interface {
 	AdvanceMobileInstallation(ctx context.Context, arg AdvanceMobileInstallationParams) (MobileInstallation, error)
 	CampaignHasProtectedChildren(ctx context.Context, arg CampaignHasProtectedChildrenParams) (bool, error)
 	ClearScopedCampaignTargets(ctx context.Context, arg ClearScopedCampaignTargetsParams) error
+	ConsumeMobileOrigin(ctx context.Context, arg ConsumeMobileOriginParams) (int64, error)
 	// ==========================================
 	// COUNT
 	// ==========================================

@@ -10,6 +10,7 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
 	"hello/internal/database"
 	"hello/internal/database/sqlc"
@@ -52,6 +53,22 @@ func TestInstallationBindingSchema(t *testing.T) {
 	userB := id("INSERT INTO users(application_id,external_id) VALUES($1,'binding-schema-user-b') RETURNING id", b)
 	nextOwner := id("INSERT INTO users(application_id,external_id) VALUES($1,'binding-schema-user-next') RETURNING id", a)
 
+	var publicA pgtype.UUID
+	require.NoError(t, tx.QueryRow(ctx, "SELECT public_id FROM applications WHERE id=$1", a).Scan(&publicA))
+	q := sqlc.New(tx)
+	originUse := sqlc.ConsumeMobileOriginParams{ApplicationPublicID: publicA, Issuer: "fixture-broker", NonceDigest: bytes.Repeat([]byte{3}, 32),
+		ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(time.Minute), Valid: true}}
+	used, err := q.ConsumeMobileOrigin(ctx, originUse)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, used)
+	used, err = q.ConsumeMobileOrigin(ctx, originUse)
+	require.NoError(t, err)
+	require.Zero(t, used)
+	originUse.NonceDigest = bytes.Repeat([]byte{4}, 32)
+	originUse.ExpiresAt.Time = time.Now().Add(-time.Minute)
+	used, err = q.ConsumeMobileOrigin(ctx, originUse)
+	require.NoError(t, err)
+	require.Zero(t, used)
 	const mapping = "INSERT INTO mobile_identities(application_id,identity_namespace,subject,user_id) VALUES($1,'issuer-namespace','shared-subject',$2)"
 	reject("23503", mapping, a, userB)
 	exec(mapping, a, userA)
