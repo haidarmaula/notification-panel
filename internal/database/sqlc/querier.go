@@ -110,6 +110,8 @@ type Querier interface {
 	// CREATE
 	// ==========================================
 	CreateRole(ctx context.Context, arg CreateRoleParams) (Role, error)
+	CreateScopedSegment(ctx context.Context, arg CreateScopedSegmentParams) (CreateScopedSegmentRow, error)
+	CreateScopedSegmentMember(ctx context.Context, arg CreateScopedSegmentMemberParams) (int64, error)
 	// ==========================================
 	// CREATE
 	// ==========================================
@@ -155,6 +157,8 @@ type Querier interface {
 	// DELETE
 	// ==========================================
 	DeleteRole(ctx context.Context, id int64) error
+	DeleteScopedSegment(ctx context.Context, arg DeleteScopedSegmentParams) error
+	DeleteScopedSegmentMember(ctx context.Context, arg DeleteScopedSegmentMemberParams) (int64, error)
 	// ==========================================
 	// DELETE
 	// ==========================================
@@ -354,6 +358,7 @@ type Querier interface {
 	ListUsersByStatus(ctx context.Context, arg ListUsersByStatusParams) ([]User, error)
 	ListUsersWithFilters(ctx context.Context, arg ListUsersWithFiltersParams) ([]User, error)
 	LockApplicationByPublicID(ctx context.Context, publicID pgtype.UUID) (Application, error)
+	LockScopedSegment(ctx context.Context, arg LockScopedSegmentParams) (LockScopedSegmentRow, error)
 	// ==========================================
 	// UPDATE STATUS
 	// ==========================================
@@ -363,6 +368,9 @@ type Querier interface {
 	MarkNotificationSent(ctx context.Context, id int64) error
 	// Caller holds application lock and handles matching no-op before this CAS.
 	RenameApplication(ctx context.Context, arg RenameApplicationParams) (Application, error)
+	ReplaceScopedSegment(ctx context.Context, arg ReplaceScopedSegmentParams) (ReplaceScopedSegmentRow, error)
+	ScopedSegmentHasReferences(ctx context.Context, segmentID int64) (bool, error)
+	ScopedSegmentNameTaken(ctx context.Context, arg ScopedSegmentNameTakenParams) (bool, error)
 	// ==========================================
 	// SEARCH
 	// ==========================================

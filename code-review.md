@@ -501,3 +501,9 @@ audits and historical cleanup SQL pass local PostgreSQL tests; see
 [evidence](docs/analysis/m02c-verification.md). Production history and historical
 copies are not claimed cleaned; [operator procedure](docs/runbooks/staff-audit-redaction.md).
 Audit durability/atomicity remains open; other entity payloads are unchanged.
+
+
+Scoped segment routes address C14/C15 with the membership unique constraint and
+DELETE RETURNING. They serialize name checks and segment mutations per project
+(H34), and lock the segment before checking references (H35). These safeguards
+apply to the project routes. Legacy route retirement is tracked separately.

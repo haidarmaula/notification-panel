@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-// Module owns registry and project-scoped staff read routes.
+// Module owns registry and project-scoped staff routes.
 type Module struct {
 	handler     *Handler
 	permissions authz.Checker
@@ -35,6 +35,12 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	register("GET /api/v1/apps/{app_id}/segments", authz.SegmentsRead, m.handler.ListSegments)
 	register("GET /api/v1/apps/{app_id}/segments/{segment_id}", authz.SegmentsRead, m.handler.GetSegment)
 	register("GET /api/v1/apps/{app_id}/segments/{segment_id}/members", authz.MembersRead, m.handler.ListSegmentMembers)
+
+	register("POST /api/v1/apps/{app_id}/segments", authz.SegmentsWrite, m.handler.WriteSegment)
+	register("PUT /api/v1/apps/{app_id}/segments/{segment_id}", authz.SegmentsWrite, m.handler.WriteSegment)
+	register("DELETE /api/v1/apps/{app_id}/segments/{segment_id}", authz.SegmentsWrite, m.handler.WriteSegment)
+	register("PUT /api/v1/apps/{app_id}/segments/{segment_id}/members/{user_id}", authz.MembersWrite, m.handler.WriteSegmentMember)
+	register("DELETE /api/v1/apps/{app_id}/segments/{segment_id}/members/{user_id}", authz.MembersWrite, m.handler.WriteSegmentMember)
 
 	register("GET /api/v1/admin/apps", authz.ApplicationsManage, m.handler.ListManaged)
 	register("POST /api/v1/admin/apps", authz.ApplicationsManage, m.handler.Create)
