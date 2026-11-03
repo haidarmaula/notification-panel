@@ -127,7 +127,8 @@ Evaluasi baseline dan M02e selesai secara scoped/local-verified. Berikutnya
 baru identity/binding generik; kaiapps2 consumer pertama, bukan batas platform.
 [Exact SPEC M03a](../specs/m03a-application-registry.md) dan proposed OpenAPI sudah
 ditulis; [M03a.1 persistence](m03a1-verification.md) implemented/local-verified.
-Berikutnya M03a.2 resolver/services/atomic audit; endpoint registry belum ada.
+[M03a.2 resolver/services/atomic audit](m03a2-verification.md) juga implemented/
+local-verified. Berikutnya M03a.3 HTTP; endpoint registry belum ada.
 M02 release controls belum dinyatakan selesai. Hosted execution,
 production adapter/pipeline, real provider/device dan production infrastructure
 belum dibuktikan oleh penyelesaian fondasi ini.

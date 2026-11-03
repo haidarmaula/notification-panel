@@ -41,3 +41,8 @@ FCM project/credential resolution is server-owned; no request chooses a credenti
 file, arbitrary project, SDK client or provider endpoint. Body limits and provider
 payload/target limits are separate controls. Future DTOs must retain safe errors,
 explicit presence/idempotency semantics and the existing no-credential audit rule.
+
+M03a.2 checkpoint: [registry resolver/services](../analysis/m03a2-verification.md)
+are locally verified, including atomic audit and grant/ETag semantics. The HTTP
+paths in this document remain unavailable until M03a.3; the existing global
+business API/pipeline remains outside those new guards.

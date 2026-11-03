@@ -1,5 +1,5 @@
 {
-  "policy_version": 2,
+  "policy_version": 3,
   "status": "implemented-m02a-m02b-local-verified",
   "confirmed_on": "2026-11-02",
   "default": "deny",
@@ -13,7 +13,9 @@
     "segments.write": ["OPERATOR", "ADMIN", "SUPER_ADMIN"],
     "segments.members.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
     "segments.members.write": ["OPERATOR", "ADMIN", "SUPER_ADMIN"],
-    "staff.manage": ["SUPER_ADMIN"]
+    "staff.manage": ["SUPER_ADMIN"],
+    "applications.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
+    "applications.manage": ["SUPER_ADMIN"]
   },
   "routes": [
     {"method": "GET", "path": "/api/v1/notifications", "permission": "notifications.read"},
@@ -44,6 +46,11 @@
     {"method": "PATCH", "path": "/api/v1/staff/{id}/password", "permission": "staff.manage"},
     {"method": "DELETE", "path": "/api/v1/staff/{id}", "permission": "staff.manage"}
   ],
+  "application_registry": {
+    "status": "service-only-m03a2-no-http",
+    "contract": "application-registry.openapi.json",
+    "business_access": "role AND explicit current DB app grant, no SUPER_ADMIN wildcard"
+  },
   "staff_administration": {
     "allowed_roles": ["SUPER_ADMIN"],
     "enforced_by_this_slice": true

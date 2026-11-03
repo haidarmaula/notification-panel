@@ -94,3 +94,13 @@ scope, single-snapshot pagination and real-DB constraint/locking/CAS tests pass.
 This supersedes the earlier design-only status for persistence, not for HTTP or
 authorization. No project data backfill, operational app or business isolation
 is enabled. Next: M03a.2 resolver/services/atomic audit, then M03a.3 endpoints.
+
+## M03a.2 service checkpoint
+
+[Service/resolver evidence](m03a2-verification.md): current role plus explicit app
+grant, separate SUPER_ADMIN control-plane permission, no implicit creator grant,
+conditional no-op/CAS semantics, bounded transaction retry and atomic safe audit
+are locally verified. Real-DB tests cover cross-app metadata denial, audit insert
+fault rollback, concurrent writes, revoke/regrant, demotion recheck and target
+deletion after lookup. No new routes, active projects or business data; M03a.3
+HTTP and the subsequent M03b all-legacy-route/background-query gate remain open.

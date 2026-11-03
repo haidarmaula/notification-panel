@@ -1,7 +1,8 @@
 # M03a — Application registry and staff scope foundation
 
-2026-11-03. **M03a.1 persistence implemented/local-verified; HTTP/service contract
-still proposed and unimplemented.** [Evidence](../analysis/m03a1-verification.md).
+2026-11-03. **M03a.1 persistence and M03a.2 resolver/services locally implemented;
+HTTP still proposed/unimplemented.** [Persistence](../analysis/m03a1-verification.md),
+[service evidence](../analysis/m03a2-verification.md).
 Requirement: one admin panel can manage multiple independent application projects.
 [ADR-12](../adr/adr-12-multi-application-isolation.md) defines the boundary;
 [this OpenAPI](../contracts/application-registry.openapi.json) defines proposed HTTP
@@ -81,6 +82,8 @@ All routes: existing API key AND HS256 staff access JWT/active account, current 
 role guard, independent service guard. New write DTOs reject unknown/duplicate
 fields (including IDs, status, credentials), malformed/multiple JSON and bodies
 above 64KiB. Existing 16 JSON handlers retain their M02d compatibility behavior.
+Name validation rejects controls before trimming; permitted surrounding Unicode
+whitespace is normalized, then the nonempty/128-byte budget is checked.
 New JSON writes require application/json (optional charset=utf-8); missing/other
 media types or non-identity Content-Encoding return 415. Validate raw UTF-8
 before JSON conversion and reject control characters in the decoded name

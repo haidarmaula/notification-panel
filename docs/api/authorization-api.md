@@ -9,7 +9,9 @@ operation bypass is remediated; see [evidence and remaining limits](../analysis/
 Multi-application requirement update: this implemented matrix checks operation
 roles, not app membership. [ADR-12](../adr/adr-12-multi-application-isolation.md)
 and [proposed API scope](application-scope-proposal.md) require a new application
-boundary and A/B tests before multi-app activation; those guards are not shipped.
+boundary and A/B tests before multi-app activation.
+[M03a.2](../analysis/m03a2-verification.md) adds a locally verified registry
+resolver/service layer; HTTP wiring and business-pipeline isolation remain pending.
 
 All routes retain API key (`X-API-Key`) plus staff access Bearer JWT.
 Permission is checked against the active staff account/current DB role;

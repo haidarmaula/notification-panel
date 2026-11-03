@@ -93,3 +93,7 @@ remain proposed. No app grants grant runtime access through old services, no
 second-app business rows/backfill were introduced and no multi-app isolation claim
 is made. Next is M03a.2 required resolver/current-authority services, conditional
 semantics and atomic audit; then M03a.3 HTTP/strict input and role/API tests.
+
+Follow-up: [M03a.2 resolver/services](m03a2-verification.md) now implement the
+registry service transaction/permission layer with real-DB audit-failure tests.
+HTTP/server wiring remains pending; this document retains the persistence checkpoint.

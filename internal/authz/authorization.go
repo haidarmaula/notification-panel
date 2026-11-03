@@ -18,6 +18,8 @@ import (
 type Permission string
 
 const (
+	ApplicationsRead      Permission = "applications.read"
+	ApplicationsManage    Permission = "applications.manage"
 	StaffManage           Permission = "staff.manage"
 	NotificationsRead     Permission = "notifications.read"
 	NotificationsWrite    Permission = "notifications.draft.write"
@@ -35,6 +37,8 @@ var (
 )
 
 var grants = map[Permission][]string{
+	ApplicationsRead:      {"VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"},
+	ApplicationsManage:    {"SUPER_ADMIN"},
 	StaffManage:           {"SUPER_ADMIN"},
 	NotificationsRead:     {"VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"},
 	NotificationsWrite:    {"OPERATOR", "ADMIN", "SUPER_ADMIN"},
