@@ -1,7 +1,7 @@
 # M03b.3a — Project-scoped user and device reads
 
 This persistence contract prepares staff user detail, user listing and device
-metadata. A future service must resolve the internal project ID from current
+metadata. The service resolves the internal project ID from current
 staff authority and an explicit app grant. These queries take that ID explicitly.
 They exclude unassigned legacy rows and provide no fallback to global lookups.
 
@@ -19,9 +19,9 @@ They exclude unassigned legacy rows and provide no fallback to global lookups.
 
 Invalid scope, cursor or limit yields no rows at this persistence boundary.
 Database errors propagate to the caller. API validation, user-facing errors
-and permission assignments belong to the service and HTTP contract. A future
-device handler must resolve the parent in scope to distinguish missing users
+and permission assignments belong to the service and HTTP contract. The
+device handler resolves the parent in scope to distinguish missing users
 from an empty device list.
 
-These queries are separate from legacy readers and remain unwired to HTTP.
-The existing PROVISIONING gate applies to future business routes.
+These queries back the [staff read endpoints](../api/scoped-users-api.md).
+The existing PROVISIONING gate applies to these business routes.

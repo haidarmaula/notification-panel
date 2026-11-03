@@ -8,8 +8,7 @@ import (
 	"net/http"
 )
 
-// Module owns provisioning registry routes. No enrollment/activation/business
-// routing is added. All handlers retain independent service authority checks.
+// Module owns registry and project-scoped staff read routes.
 type Module struct {
 	handler     *Handler
 	permissions authz.Checker
@@ -30,6 +29,9 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	}
 	register("GET /api/v1/apps", authz.ApplicationsRead, m.handler.ListGranted)
 	register("GET /api/v1/apps/{app_id}", authz.ApplicationsRead, m.handler.GetGranted)
+	register("GET /api/v1/apps/{app_id}/users", authz.UsersRead, m.handler.ListUsers)
+	register("GET /api/v1/apps/{app_id}/users/{user_id}", authz.UsersRead, m.handler.GetUser)
+	register("GET /api/v1/apps/{app_id}/users/{user_id}/devices", authz.UsersRead, m.handler.ListUserDevices)
 	register("GET /api/v1/admin/apps", authz.ApplicationsManage, m.handler.ListManaged)
 	register("POST /api/v1/admin/apps", authz.ApplicationsManage, m.handler.Create)
 	register("GET /api/v1/admin/apps/{app_id}", authz.ApplicationsManage, m.handler.GetManaged)

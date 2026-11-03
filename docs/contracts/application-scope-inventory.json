@@ -306,6 +306,9 @@
     }
   ],
   "routes": [
+    {"pattern": "GET /api/v1/apps/{app_id}/users", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
+    {"pattern": "GET /api/v1/apps/{app_id}/users/{user_id}", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
+    {"pattern": "GET /api/v1/apps/{app_id}/users/{user_id}/devices", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
     {
       "pattern": "DELETE /api/v1/admin/apps/{app_id}/staff-grants/{staff_id}",
       "source": "internal/features/applications/module.go",

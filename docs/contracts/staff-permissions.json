@@ -1,5 +1,5 @@
 {
-  "policy_version": 3,
+  "policy_version": 4,
   "status": "implemented-m02a-m02b-local-verified",
   "confirmed_on": "2026-11-02",
   "default": "deny",
@@ -14,6 +14,7 @@
     "segments.members.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
     "segments.members.write": ["OPERATOR", "ADMIN", "SUPER_ADMIN"],
     "staff.manage": ["SUPER_ADMIN"],
+    "users.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
     "applications.read": ["VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"],
     "applications.manage": ["SUPER_ADMIN"]
   },
@@ -50,6 +51,12 @@
     "status": "implemented-m03a3-http-local-verified",
     "contract": "application-registry.openapi.json",
     "business_access": "role AND explicit current DB app grant, no SUPER_ADMIN wildcard"
+  },
+  "scoped_user_reads": {
+    "permission": "users.read",
+    "requires_active_application": true,
+    "requires_explicit_grant": true,
+    "contract": "../api/scoped-users-api.md"
   },
   "staff_administration": {
     "allowed_roles": ["SUPER_ADMIN"],

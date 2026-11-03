@@ -133,6 +133,7 @@ func TestApplicationHTTP(t *testing.T) {
 	t.Run("explicit memberships for every role including super", func(t *testing.T) {
 		// Global super registry access does not grant application access.
 		request(t, "SUPER_ADMIN", "GET", public, "", nil, 404)
+		request(t, "SUPER_ADMIN", "GET", public+"/users", "", nil, 404)
 		for _, role := range []string{"VIEWER", "OPERATOR", "ADMIN", "SUPER_ADMIN"} {
 			_, e := service.EnableGrant(super, a.PublicID, actors[role], applications.Preconditions{IfNoneMatch: "*"})
 			require.NoError(t, e)
@@ -142,6 +143,9 @@ func TestApplicationHTTP(t *testing.T) {
 			require.Equal(t, a.PublicID.String(), v["id"])
 			require.Equal(t, "1", v["revision"])
 			require.Equal(t, "PROVISIONING", v["status"])
+			for _, suffix := range []string{"/users", "/users/9", "/users/9/devices"} {
+				request(t, role, "GET", public+suffix, "", nil, 409)
+			}
 			require.Equal(t, applications.ApplicationETag(a), w.Header().Get("ETag"))
 			v = data(request(t, role, "GET", "/api/v1/apps", "", nil, 200))
 			require.Equal(t, float64(1), v["total"])
