@@ -10,8 +10,10 @@ now available; [M03a.2 services](../analysis/m03a2-verification.md) also pass lo
 checks. [M03a.3 HTTP](../analysis/m03a3-verification.md) is also local-verified.
 [M03b.1 inventory/design](../analysis/m03b1-scope-inventory.md) now has an
 [exact transition SPEC](m03b-application-data-isolation.md). [M03b.2a expansion](m03b2-business-scope-expansion.md) is now locally verified.
-Next: M03b.3 scoped users/devices/segments; final NOT NULL/scoped keys must
-follow coordinated caller replacement. Business isolation remains pending.
+M03b.3 begins with the [scoped user/device query contract](m03b3-scoped-user-reads.md).
+The next slice wires application authority and staff HTTP reads, then addresses
+segment/member access. Final NOT NULL and scoped keys follow coordinated caller
+replacement.
 
 ## M03a — Registry and scope foundation
 

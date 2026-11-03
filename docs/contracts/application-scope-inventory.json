@@ -188,6 +188,15 @@
       ]
     },
     {
+      "path": "db/queries/scoped_user_reads.sql",
+      "scope": "application-scoped",
+      "names": [
+        "GetScopedUser",
+        "ListScopedUserDevices",
+        "ListScopedUsers"
+      ]
+    },
+    {
       "path": "db/queries/segment_members.sql",
       "scope": "application-legacy",
       "names": [

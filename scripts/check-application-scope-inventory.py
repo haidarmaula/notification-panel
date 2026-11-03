@@ -83,7 +83,7 @@ def main():
         if actual[kind] != expected[kind]:
             print(f"Inventory drift in {kind}; review source and update the manifest.", file=sys.stderr)
             failed = True
-    valid = {"application-legacy", "global-control", "registry-control", "mixed-audit"}
+    valid = {"application-legacy", "global-control", "registry-control", "mixed-audit", "application-scoped"}
     for group in ("tables", "query_files", "routes"):
         for item in manifest[group]:
             if item["scope"] not in valid:
