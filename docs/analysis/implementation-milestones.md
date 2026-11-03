@@ -82,7 +82,10 @@ M02a tidak mengklaim revocation membatalkan operasi yang sudah diotorisasi.
 historis dan runbook tersedia, tetapi cleanup produksi belum dijalankan.
 [M02d request limits](m02d-verification.md) juga implemented/local-verified.
 Session, rate limits, Content-Type/field policy, audit durability dan API/security baseline lain
-tetap pekerjaan M02 lanjutan. Prasyarat M03/M04 adalah guard baseline dan kontrak identitas
+tetap release controls yang terbuka. [Evaluasi baseline](m02-baseline-assessment.md)
+menetapkan guard minimum siap lokal setelah [M02e staff JWT](m02e-verification.md);
+M03 dapat mulai SPEC/implementasi terisolasi dengan gate integrasi eksplisit.
+Prasyarat M03/M04 adalah guard baseline dan kontrak identitas
 yang dipakainya, bukan menunggu semua transaksi future diimplementasikan di M02.
 
 ## Cara menyelesaikan satu milestone
@@ -118,6 +121,8 @@ M01 step 18/19 selesai sebagai [CI/local checks](ci-readiness.md) dan
 M02a dan M02b yang selesai implemented/local-verified; berikutnya slice M02
 untuk API security baseline lain. M02c audit redaction dan M02d JSON body limits
 sudah implemented/local-verified; historical cleanup tetap operator gate.
-Berikutnya evaluasi baseline M02 dan SPEC kontrol yang masih terbuka sebelum M03. Hosted execution,
+Evaluasi baseline dan M02e selesai secara scoped/local-verified. Berikutnya
+inspeksi repo React Native yang diotorisasi dan SPEC M03 installation/binding.
+M02 release controls belum dinyatakan selesai. Hosted execution,
 production adapter/pipeline, real provider/device dan production infrastructure
 belum dibuktikan oleh penyelesaian fondasi ini.

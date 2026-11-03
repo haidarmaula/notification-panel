@@ -1,6 +1,6 @@
 # Notification Panel Backend — Code Review Findings
 
-**Version:** 1.6
+**Version:** 1.7
 
 **Last Updated:** 2026-11-03
 
@@ -43,13 +43,13 @@ Crashes, security bypasses, data corruption, or issues that affect every user of
 | # | Location | Issue | Impact |
 |---|----------|-------|--------|
 | C1 | `internal/middleware/api_key.go` | API key compared with `!=` rather than `crypto/subtle.ConstantTimeCompare` | Timing side-channel — an attacker with network access can recover the shared key byte-by-byte |
-| C2 | `internal/features/auth/service.go` — `RefreshToken` | Passes `staff.ID` instead of `staff.RoleID` to `roleRepo.FindByID` | Minted access token carries a `role_name` claim that does not reflect the staff user's role, breaking downstream authorisation |
+| C2 | `internal/features/auth/service.go` — `RefreshToken` | **Original finding superseded by existing correct code:** role lookup uses staff.RoleID and ignores the stale token role | M02e real-DB regression with staff ID 700001/current ADMIN/stale VIEWER refresh claim returns ADMIN access. This slice verifies the existing fix; it does not introduce session rotation. |
 | C3 | `internal/features/users/device_tokens_handler.go` — `Register` | `user_id` taken from request body; only the shared API key gates the endpoint | Any caller with the API key can register a device for any user |
 | C4 | `internal/features/users/device_tokens_handler.go` — `Delete` | No ownership check — deletes any device token by ID | Any caller with the API key can remove any device registration |
 | C5 | `internal/middleware/audit.go` — `extractClientIP` | Trusts `X-Forwarded-For` without verifying a trusted proxy terminates the request | IP spoofing in audit trail if the service is ever exposed directly |
 | C6 | `internal/features/staff` — administrative authority | **Remediated in M02b, locally verified 2026-11-03:** all seven routes and public service methods require active current-DB SUPER_ADMIN via `staff.manage`; JWT role gate removed from server wiring | [Evidence](docs/analysis/m02b-verification.md): four-role/seven-route matrix, stale JWT/committed demotion, direct-service fail-closed checks. Statement snapshots, not transactional revocation; not deployed. |
 | C7 | `internal/features/staff/service.go` — `UpdatePassword` | **Original claim superseded:** actor password confirmation and 8–72-byte reset bounds already existed; M02b preserves them and adds shared current-authority checks plus fail-closed actor lookup | Reset success/rejection and actor lookup failures pass unit tests; real-DB reset and wrong-password tests pass. No claim of complete password/session policy: reset does not revoke sessions; create policy remains separate. |
-| C8 | `internal/middleware/jwt.go` — `JWTMiddleware` | Does not check staff active status | A deactivated staff user's existing tokens continue to work until expiry; no effective revocation |
+| C8 | `internal/middleware/jwt.go` — `JWTMiddleware` | **Original finding superseded:** middleware checks IsActive before the handler; inactive/deleted accounts are denied | M02a/b current-authority and committed lifecycle tests pass. This is active-status enforcement, not durable session/family revocation; M42 remains open. |
 | C21 | `internal/authz`; notification/segment/member routes and services | **Fixed in code, locally verified 2026-11-02 (M02a):** current DB authority guards cover all 14 routes, nine mutation services and non-null create/PATCH scheduling input; creators are principal-derived | [Verification](docs/analysis/m02a-verification.md): four-role real-DB/API matrix, direct service denials, stale claims/committed demotion and no-write/no-Kafka tests pass. Statement-time authorization is not a lock through mutation; staff administration/session/atomic audit remain follow-up. Not deployed. |
 
 ### Runtime Crashes (Panics)
@@ -86,7 +86,7 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 |---|----------|-------|
 | H1 | `internal/features/staff/handler.go` — `Update` | `ErrEmailAlreadyUsed` is not mapped — falls through to a 500 rather than the intended 409 |
 | H2 | `internal/features/auth/handler.go` — `RefreshToken` | `ErrInvalidCredentials` is not mapped — a deactivated account's refresh attempt returns 500 instead of 401 |
-| H3 | `internal/features/mobile/handler.go`, `internal/features/notifications/handler.go`, `internal/features/profile/handler.go`, `internal/features/segments/handler.go`, `internal/features/staff/handler.go`, `internal/features/users/handler.go` | Default 500 branch serves `err.Error()` verbatim — repository errors, wrapped driver messages, and future internal sentinels are all disclosed to clients. Only `auth` uses a generic string |
+| H3 | Feature-handler unknown 500 branches | **Original broad claim superseded:** reviewed current feature-handler 500 branches use literal internal server error; M02a/b authz error tests verify scoped failures | Source review is not complete redaction coverage for all mapped 4xx, DTOs, logs or future branches. See M02 assessment; production error/security review remains required. |
 | H4 | `internal/features/notifications/processor.go` | Status-update errors on the `FAILED` and `COMPLETED` paths are discarded with `_ =` |
 | H5 | `internal/features/profile/service.go` — `GetProfile`, `UpdateProfile` | Every repository failure is collapsed into `ErrProfileNotFound` — a database outage surfaces as 404 |
 | H6 | `internal/features/segments/service.go` — `GetByID`, `Create`, `Update` | Same collapse pattern for `ErrSegmentNotFound` |
@@ -236,7 +236,7 @@ Design inconsistencies, duplication, contract drift, and maintainability hazards
 
 | # | Location | Issue |
 |---|----------|-------|
-| M40 | `internal/token/jwt.go` — `ParseAccessToken` | Signing algorithm is not restricted to HS256 — HS384 or HS512 tokens signed with the same secret validate |
+| M40 | `internal/token/jwt.go` — both staff parsers | **Fixed locally in M02e:** pin HS256, require exp and positive user_id in addition to purpose/signature checks |
 | M41 | `internal/token/jwt.go` | No `iss`, `aud`, or `sub` enforcement |
 | M42 | `internal/token/jwt.go` | No revocation mechanism — logout is client-side only |
 | M43 | `internal/features/auth` | **Partially fixed in M02d:** login/refresh use the 64KiB full-body limit with safe 413/400; real-module rejection tests pass locally. Content-Type enforcement remains open for compatibility. |
@@ -373,7 +373,7 @@ The majority of the codebase uses `*time.Time` for nullable timestamps. The user
 Focus: crashes, security bypasses, data corruption.
 
 - [ ] C9, C10, C11 — eliminate the three panic paths in the token and mock-provider code
-- [ ] C2 — fix the `staff.RoleID` reference in the auth refresh path
+- [x] C2 — existing staff.RoleID refresh lookup reverified with a real-DB regression in M02e
 - [ ] C3, C4 — add ownership checks to the device-token register and delete endpoints
 - [ ] C12 — add the missing `QUEUED` transition and its guard in `NotificationService.Send`
 - [ ] C13 — wire the delivery-update producer or remove the field and the README claim
@@ -476,6 +476,7 @@ need reconciliation.
 | 1.0 | 2026-09-14 | Initial findings inventory compiled from the full-codebase Godoc pass |
 | 1.1 | 2026-11-02 | Add open Kafka findings H47/H48/M48 from source/dependency review and key-partition probe; see `docs/analysis/kafka-readiness.md`. No runtime fix applied. |
 | 1.2 | 2026-11-02 | Add open role-permission finding C21 from route/service/seed review and recalculate summary counts from distinct IDs; see `docs/analysis/api-data-security-readiness.md`. No runtime fix applied. |
+| 1.7 | 2026-11-03 | M02 baseline assessment and scoped staff JWT hardening; reconcile C2/C8/H3 against current code/evidence. Full issuer/session/mobile/abuse policy remains open. |
 | 1.6 | 2026-11-03 | Remediate M44 and the body-size portion of M43 with shared bounded JSON input; Content-Type and other abuse controls remain open. |
 | 1.5 | 2026-11-03 | Fix new staff audit credential snapshots (including Create/After); prepare and locally verify historical batch cleanup. Production history/backups remain an operator gate. |
 | 1.4 | 2026-11-03 | Reconcile C6/C7 and implement current-DB staff administration guards; retain session/transaction/audit redaction limitations. |

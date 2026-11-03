@@ -124,8 +124,8 @@ type RefreshClaims struct {
 	// was issued to. It is serialised as "user_id".
 	StaffID int64 `json:"user_id"`
 
-	// RoleName is the staff user's role as of token issuance. It is carried
-	// forward into the new access token when the refresh token is redeemed.
+	// RoleName records the role at issuance for compatibility. Refresh resolves
+	// the current role through the database; this claim grants no authority.
 	RoleName string `json:"role_name"`
 
 	// Type is the token-class discriminator. For refresh tokens minted by
@@ -312,24 +312,14 @@ func (t *TokenManager) GenerateRefreshToken(StaffID int64, roleName string) (str
 //
 // The token must be a well-formed JWT, be signed with a key derivable from
 // the access secret, and carry a `type` claim equal to "access". Expiry is
-// enforced by the underlying library via the `exp` claim. If any of these
-// checks fail, ErrInvalidToken is returned.
+// enforced via the required `exp` claim; HS256 and a positive user_id are
+// required. Any failure returns ErrInvalidToken.
 //
-// # What is *not* verified
+// # Policy and remaining limits
 //
-// The signing algorithm is not restricted to HS256. The key function returns
-// the access secret without inspecting the token header's `alg` field, so a
-// token signed with HS384 or HS512 using the same secret will also validate.
-// This does not enable the classic `alg: none` attack (the JWT v5 library
-// rejects unsigned tokens during key resolution by default), but it does
-// broaden the accepted surface beyond what this package ever mints. A
-// caller that wants to be strict should reconstruct the parse with
-// jwt.WithValidMethods; that is not done here to keep the parse path
-// aligned with the rest of the codebase.
-//
-// No `iss`, `aud`, or `sub` values are enforced. A token minted by any
-// system that shares the access secret and produces compatible claims is
-// accepted.
+// Only HS256 is accepted, exp is required, and user_id must be positive.
+// Role/email are informational; current-DB authority is checked separately.
+// No iss/aud/sub/session/key-ring policy is introduced by this parser baseline.
 //
 // # Failure behaviour
 //
@@ -344,7 +334,7 @@ func (t *TokenManager) GenerateRefreshToken(StaffID int64, roleName string) (str
 func (t *TokenManager) ParseAccessToken(tokenString string) (*AccessClaims, error) {
 	token, err := jwt.ParseWithClaims(tokenString, &AccessClaims{}, func(_ *jwt.Token) (any, error) {
 		return t.accessSecret, nil
-	})
+	}, jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired())
 	if err != nil {
 		return nil, ErrInvalidToken
 	}
@@ -354,7 +344,7 @@ func (t *TokenManager) ParseAccessToken(tokenString string) (*AccessClaims, erro
 		return nil, ErrInvalidToken
 	}
 	claims, ok := token.Claims.(*AccessClaims)
-	if !ok || claims == nil || claims.Type != "access" {
+	if !ok || claims == nil || claims.Type != "access" || claims.StaffID <= 0 {
 		return nil, ErrInvalidToken
 	}
 	return claims, nil
@@ -367,8 +357,8 @@ func (t *TokenManager) ParseAccessToken(tokenString string) (*AccessClaims, erro
 //
 // The token must be a well-formed JWT, be signed with a key derivable from
 // the refresh secret, and carry a `type` claim equal to "refresh". Expiry is
-// enforced by the underlying library via the `exp` claim. If any of these
-// checks fail, ErrInvalidToken is returned.
+// enforced via the required `exp` claim; HS256 and a positive user_id are
+// required. Any failure returns ErrInvalidToken.
 //
 // # Relationship to ParseAccessToken
 //
@@ -395,6 +385,7 @@ func (t *TokenManager) ParseRefreshToken(tokenString string) (*RefreshClaims, er
 		func(_ *jwt.Token) (any, error) {
 			return t.refreshSecret, nil
 		},
+		jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired(),
 	)
 	if err != nil {
 		return nil, ErrInvalidToken
@@ -405,7 +396,7 @@ func (t *TokenManager) ParseRefreshToken(tokenString string) (*RefreshClaims, er
 		return nil, ErrInvalidToken
 	}
 	claims, ok := parsedToken.Claims.(*RefreshClaims)
-	if !ok || claims == nil || claims.Type != "refresh" {
+	if !ok || claims == nil || claims.Type != "refresh" || claims.StaffID <= 0 {
 		return nil, ErrInvalidToken
 	}
 	return claims, nil

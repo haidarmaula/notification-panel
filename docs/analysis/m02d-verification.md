@@ -87,3 +87,7 @@ production readiness. Hosted CI, deployed behavior and external/mobile caller
 compatibility remain unverified. No new dependency scan ran (no dependency
 changes); earlier scans are historical evidence. Production audit cleanup from
 M02c remains a separate operator gate.
+
+Follow-up 2026-11-03: [M02 assessment](m02-baseline-assessment.md) and
+[M02e](m02e-verification.md) complete the scoped local development guard review.
+M03 isolated design/implementation may proceed; security release controls remain open.

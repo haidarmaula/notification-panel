@@ -109,6 +109,12 @@ trust silently. A role claim from a long-lived token is not current permission.
 
 ### Consequences
 
+M02e locally implements HS256-only staff access/refresh parsing with required exp
+and positive identity; see [SPEC](../specs/m02e-staff-jwt-parser.md). It preserves
+current token shape and does not implement issuer/audience/key/session/mobile
+requirements. [M02 assessment](../analysis/m02-baseline-assessment.md) assigns
+remaining gates.
+
 Required claim/key-ring config is NEW and per binary; fail startup on incomplete
 production policy. Emergency revocation overrides normal key overlap.
 

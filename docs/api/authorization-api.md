@@ -9,6 +9,8 @@ operation bypass is remediated; see [evidence and remaining limits](../analysis/
 All routes retain API key (`X-API-Key`) plus staff access Bearer JWT.
 Permission is checked against the active staff account/current DB role;
 the token's role claim and UI visibility are not authority.
+[M02e](../specs/m02e-staff-jwt-parser.md) additionally requires HS256, exp and a
+positive staff ID for access/refresh parsing. Full session/issuer policy remains open.
 
 | Role | Existing business reads | Draft/segment/member mutations | Send/schedule | Staff administration |
 | --- | --- | --- | --- | --- |

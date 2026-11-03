@@ -3,6 +3,14 @@
 JSON input limits and shared 413/400 behavior are documented in
 [request body contract](request-bodies-api.md) (M02d, locally verified; not deployed).
 
+Staff JWT parsing (M02e, locally verified): access/refresh tokens must use HS256,
+include a valid `exp` and positive integer `user_id`, and carry the exact token
+purpose. Invalid tokens return generic 401; normal repo-generated tokens keep
+their existing fields and TTLs. Older noncanonical tokens require re-login.
+Refresh derives the new role from the current database account, not its role
+claim. Full issuer/audience/session rotation and key policy remain pending; see
+[M02e evidence](../analysis/m02e-verification.md).
+
 **Version:** 1.0  
 **Base URL:** `/api/v1`  
 **Content-Type:** `application/json`
