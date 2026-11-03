@@ -187,6 +187,7 @@
         "UpdateRole"
       ]
     },
+    {"path": "db/queries/scoped_campaign_access.sql", "scope": "application-scoped", "names": ["CampaignHasProtectedChildren", "ClearScopedCampaignTargets", "DeleteScopedCampaignDraft", "GetScopedCampaign", "ListScopedCampaigns", "LockScopedCampaign", "ReplaceScopedCampaignDraft"]},
     {
       "path": "db/queries/scoped_campaign_create.sql",
       "scope": "application-scoped",
@@ -317,6 +318,10 @@
     }
   ],
   "routes": [
+    {"pattern": "GET /api/v1/apps/{app_id}/campaigns", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
+    {"pattern": "GET /api/v1/apps/{app_id}/campaigns/{campaign_id}", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
+    {"pattern": "PUT /api/v1/apps/{app_id}/campaigns/{campaign_id}", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
+    {"pattern": "DELETE /api/v1/apps/{app_id}/campaigns/{campaign_id}", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
     {"pattern": "POST /api/v1/apps/{app_id}/campaigns", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
     {"pattern": "POST /api/v1/apps/{app_id}/segments", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},
     {"pattern": "PUT /api/v1/apps/{app_id}/segments/{segment_id}", "source": "internal/features/applications/module.go", "scope": "application-scoped", "disposition": "retain-scoped"},

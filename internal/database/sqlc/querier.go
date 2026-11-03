@@ -11,6 +11,8 @@ import (
 )
 
 type Querier interface {
+	CampaignHasProtectedChildren(ctx context.Context, arg CampaignHasProtectedChildrenParams) (bool, error)
+	ClearScopedCampaignTargets(ctx context.Context, arg ClearScopedCampaignTargetsParams) error
 	// ==========================================
 	// COUNT
 	// ==========================================
@@ -159,6 +161,7 @@ type Querier interface {
 	// DELETE
 	// ==========================================
 	DeleteRole(ctx context.Context, id int64) error
+	DeleteScopedCampaignDraft(ctx context.Context, arg DeleteScopedCampaignDraftParams) (int64, error)
 	DeleteScopedSegment(ctx context.Context, arg DeleteScopedSegmentParams) error
 	DeleteScopedSegmentMember(ctx context.Context, arg DeleteScopedSegmentMemberParams) (int64, error)
 	// ==========================================
@@ -243,6 +246,7 @@ type Querier interface {
 	// ==========================================
 	GetRoleByID(ctx context.Context, id int64) (Role, error)
 	GetRoleByName(ctx context.Context, name string) (Role, error)
+	GetScopedCampaign(ctx context.Context, arg GetScopedCampaignParams) (GetScopedCampaignRow, error)
 	GetScopedSegment(ctx context.Context, arg GetScopedSegmentParams) (GetScopedSegmentRow, error)
 	GetScopedUser(ctx context.Context, arg GetScopedUserParams) (GetScopedUserRow, error)
 	// ==========================================
@@ -312,6 +316,7 @@ type Querier interface {
 	// ==========================================
 	ListRoles(ctx context.Context, arg ListRolesParams) ([]Role, error)
 	ListScheduledNotificationsDue(ctx context.Context, limit int32) ([]ListScheduledNotificationsDueRow, error)
+	ListScopedCampaigns(ctx context.Context, arg ListScopedCampaignsParams) ([]ListScopedCampaignsRow, error)
 	ListScopedSegmentMembers(ctx context.Context, arg ListScopedSegmentMembersParams) ([]ListScopedSegmentMembersRow, error)
 	ListScopedSegments(ctx context.Context, arg ListScopedSegmentsParams) ([]ListScopedSegmentsRow, error)
 	ListScopedUserDevices(ctx context.Context, arg ListScopedUserDevicesParams) ([]ListScopedUserDevicesRow, error)
@@ -360,6 +365,7 @@ type Querier interface {
 	ListUsersByStatus(ctx context.Context, arg ListUsersByStatusParams) ([]User, error)
 	ListUsersWithFilters(ctx context.Context, arg ListUsersWithFiltersParams) ([]User, error)
 	LockApplicationByPublicID(ctx context.Context, publicID pgtype.UUID) (Application, error)
+	LockScopedCampaign(ctx context.Context, arg LockScopedCampaignParams) (string, error)
 	LockScopedCampaignTemplate(ctx context.Context, arg LockScopedCampaignTemplateParams) (string, error)
 	LockScopedSegment(ctx context.Context, arg LockScopedSegmentParams) (LockScopedSegmentRow, error)
 	// ==========================================
@@ -371,6 +377,7 @@ type Querier interface {
 	MarkNotificationSent(ctx context.Context, id int64) error
 	// Caller holds application lock and handles matching no-op before this CAS.
 	RenameApplication(ctx context.Context, arg RenameApplicationParams) (Application, error)
+	ReplaceScopedCampaignDraft(ctx context.Context, arg ReplaceScopedCampaignDraftParams) (int64, error)
 	ReplaceScopedSegment(ctx context.Context, arg ReplaceScopedSegmentParams) (ReplaceScopedSegmentRow, error)
 	ScopedSegmentHasReferences(ctx context.Context, segmentID int64) (bool, error)
 	ScopedSegmentNameTaken(ctx context.Context, arg ScopedSegmentNameTakenParams) (bool, error)

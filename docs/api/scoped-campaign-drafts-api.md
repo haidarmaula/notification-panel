@@ -24,3 +24,22 @@ transaction, the service locks the project before rechecking staff authority,
 locks the optional template, inserts the draft, then validates and inserts
 each target. The scoped foreign keys enforce project ownership. A failure
 rolls back the draft and any targets already inserted.
+
+## Read, replace and delete
+
+GET on the collection uses the same cursor contract as project user reads.
+GET on /campaigns/{campaign_id} returns a campaign and its scoped targets.
+Both reads require notifications.read, an explicit grant and an ACTIVE
+project. The collection exposes id, title and status. The detail adds body,
+template_id, template_name and targets. IDs are decimal strings. Existing
+UPLOAD targets may appear in detail as stored references.
+
+PUT on /campaigns/{campaign_id} replaces title, body, template reference and
+the full target set using the same input as POST. It returns 200 with id
+and status. Omitted or null template_id clears the reference and snapshot.
+DELETE on that path requires an empty body and returns 204.
+
+Writes require the same authority as POST. Only DRAFT is writable. A draft
+with delivery/read records or unassigned targets returns 409 to preserve
+those records. Missing or foreign campaigns return 404. Replacement and
+deletion are atomic with their audit event.

@@ -17,7 +17,8 @@ audit records in the mutation transaction. Final NOT NULL and scoped keys follow
 replacement.
 
 M03b.4 starts with [scoped campaign draft creation](../api/scoped-campaign-drafts-api.md).
-Draft edits, deletes, reads and the remaining business projections follow.
+Scoped list, detail, draft replacement and deletion share the same contract.
+Template management and the remaining business projections follow.
 
 ## M03a — Registry and scope foundation
 

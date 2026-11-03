@@ -91,24 +91,16 @@ func (in campaignDraftInput) validate() (pgtype.Int8, []sqlc.CreateScopedCampaig
 func (s *Service) createCampaignDraft(ctx context.Context, id pgtype.UUID, input campaignDraftInput, templateID pgtype.Int8, targets []sqlc.CreateScopedCampaignTargetParams) (campaignDraftResult, error) {
 	var result campaignDraftResult
 	err := s.writeInProject(ctx, id, authz.NotificationsWrite, func(q *sqlc.Queries, app sqlc.Application, actor authz.Principal) error {
-		var templateName pgtype.Text
-		if templateID.Valid {
-			name, err := q.LockScopedCampaignTemplate(ctx, sqlc.LockScopedCampaignTemplateParams{ApplicationID: app.ID, TemplateID: templateID.Int64})
-			if err != nil {
-				return campaignReferenceError(err)
-			}
-			templateName = pgtype.Text{String: name, Valid: true}
+		templateName, err := scopedCampaignTemplate(ctx, q, app.ID, templateID)
+		if err != nil {
+			return err
 		}
 		draftID, err := q.CreateScopedCampaignDraft(ctx, sqlc.CreateScopedCampaignDraftParams{ApplicationID: app.ID, TemplateID: templateID, TemplateName: templateName, Title: input.Title, Body: input.Body, CreatedBy: actor.ID})
 		if err != nil {
 			return err
 		}
-		for _, target := range targets {
-			target.ApplicationID = app.ID
-			target.NotificationID = draftID
-			if _, err := q.CreateScopedCampaignTarget(ctx, target); err != nil {
-				return campaignReferenceError(err)
-			}
+		if err := insertCampaignTargets(ctx, q, app.ID, draftID, targets); err != nil {
+			return err
 		}
 		result = campaignDraftResult{ID: strconv.FormatInt(draftID, 10), Status: "DRAFT"}
 		snapshot := struct {
@@ -121,6 +113,25 @@ func (s *Service) createCampaignDraft(ctx context.Context, id pgtype.UUID, input
 		return campaignDraftResult{}, err
 	}
 	return result, nil
+}
+
+func scopedCampaignTemplate(ctx context.Context, q *sqlc.Queries, appID int64, templateID pgtype.Int8) (pgtype.Text, error) {
+	if !templateID.Valid {
+		return pgtype.Text{}, nil
+	}
+	name, err := q.LockScopedCampaignTemplate(ctx, sqlc.LockScopedCampaignTemplateParams{ApplicationID: appID, TemplateID: templateID.Int64})
+	return pgtype.Text{String: name, Valid: err == nil}, campaignReferenceError(err)
+}
+
+func insertCampaignTargets(ctx context.Context, q *sqlc.Queries, appID, campaignID int64, targets []sqlc.CreateScopedCampaignTargetParams) error {
+	for _, target := range targets {
+		target.ApplicationID = appID
+		target.NotificationID = campaignID
+		if _, err := q.CreateScopedCampaignTarget(ctx, target); err != nil {
+			return campaignReferenceError(err)
+		}
+	}
+	return nil
 }
 
 func campaignReferenceError(err error) error {
