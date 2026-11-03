@@ -131,6 +131,17 @@ ditulis; [M03a.1 persistence](m03a1-verification.md) implemented/local-verified.
 local-verified. [M03a.3 HTTP](m03a3-verification.md) juga implemented/local-verified:
 sepuluh endpoint registry/grants, PROVISIONING only. Berikutnya M03b scoped
 schema/query/API dan legacy worker/scheduler/fanout gate sebelum data app kedua.
+[M03b.1 inventory/design](m03b1-scope-inventory.md) selesai tanpa perubahan runtime;
+berikutnya M03b.2 schema/preflight/backfill. [SPEC transisi](../specs/m03b-application-data-isolation.md)
+merinci lima kelompok M03b; belum merupakan bukti isolasi.
 M02 release controls belum dinyatakan selesai. Hosted execution,
 production adapter/pipeline, real provider/device dan production infrastructure
 belum dibuktikan oleh penyelesaian fondasi ini.
+
+
+## Membaca nomor checklist dan urutan implementasi
+
+Nomor step bukan urutan coding yang sepenuhnya linear. Step 20 mencakup fondasi
+lintas M02/M03/M04; step 21 (provider execution) dipetakan ke M06 setelah M05
+admission. Urutan dependensi saat ini tetap M03 → M04 → M05 → M06. Menyelesaikan
+registry M03a tidak menutup step 20 atau langsung mengaktifkan FCM produksi.

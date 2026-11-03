@@ -1,0 +1,595 @@
+{
+  "version": 1,
+  "as_of": "2026-11-03",
+  "status": "source-inventory-not-runtime-isolation",
+  "spec": "../specs/m03b-application-data-isolation.md",
+  "tables": [
+    {
+      "name": "application_staff_grants",
+      "scope": "registry-control"
+    },
+    {
+      "name": "applications",
+      "scope": "registry-control"
+    },
+    {
+      "name": "audit_logs",
+      "scope": "mixed-audit"
+    },
+    {
+      "name": "device_tokens",
+      "scope": "application-legacy"
+    },
+    {
+      "name": "notification_deliveries",
+      "scope": "application-legacy"
+    },
+    {
+      "name": "notification_reads",
+      "scope": "application-legacy"
+    },
+    {
+      "name": "notification_targets",
+      "scope": "application-legacy"
+    },
+    {
+      "name": "notifications",
+      "scope": "application-legacy"
+    },
+    {
+      "name": "roles",
+      "scope": "global-control"
+    },
+    {
+      "name": "segment_members",
+      "scope": "application-legacy"
+    },
+    {
+      "name": "segments",
+      "scope": "application-legacy"
+    },
+    {
+      "name": "staff_users",
+      "scope": "global-control"
+    },
+    {
+      "name": "templates",
+      "scope": "application-legacy"
+    },
+    {
+      "name": "upload_batch_rows",
+      "scope": "application-legacy"
+    },
+    {
+      "name": "upload_batches",
+      "scope": "application-legacy"
+    },
+    {
+      "name": "users",
+      "scope": "application-legacy"
+    }
+  ],
+  "query_files": [
+    {
+      "path": "db/queries/applications.sql",
+      "scope": "registry-control",
+      "names": [
+        "CreateApplication",
+        "CreateApplicationStaffGrant",
+        "GetApplicationAuthority",
+        "GetApplicationByPublicID",
+        "GetApplicationStaffGrant",
+        "ListApplicationStaffGrants",
+        "ListGrantedApplications",
+        "ListManagedApplications",
+        "LockApplicationByPublicID",
+        "RenameApplication",
+        "SetApplicationStaffGrantActive"
+      ]
+    },
+    {
+      "path": "db/queries/audit_logs.sql",
+      "scope": "mixed-audit",
+      "names": [
+        "CountAuditLogs",
+        "CreateAuditLog",
+        "GetAuditLogByID",
+        "ListAuditLogs"
+      ]
+    },
+    {
+      "path": "db/queries/device_tokens.sql",
+      "scope": "application-legacy",
+      "names": [
+        "CountDeviceTokensByUser",
+        "CreateDeviceToken",
+        "DeleteDeviceToken",
+        "ExistsDeviceToken",
+        "GetDeviceTokenByID",
+        "GetDeviceTokenByPushToken",
+        "ListDeviceTokensByUser",
+        "ListDeviceTokensByUserIDs",
+        "UpdateDeviceToken",
+        "UpdateDeviceTokenFull",
+        "UpdateDeviceTokenStatus"
+      ]
+    },
+    {
+      "path": "db/queries/notification_deliveries.sql",
+      "scope": "application-legacy",
+      "names": [
+        "CountNotificationDeliveries",
+        "CountUserNotifications",
+        "CreateNotificationDelivery",
+        "GetNotificationDeliveryByID",
+        "ListNotificationDeliveries",
+        "ListUserNotifications",
+        "MarkNotificationDelivered",
+        "MarkNotificationFailed",
+        "MarkNotificationOpened"
+      ]
+    },
+    {
+      "path": "db/queries/notification_reads.sql",
+      "scope": "application-legacy",
+      "names": [
+        "CountNotificationReads",
+        "CreateNotificationRead",
+        "ExistsNotificationRead",
+        "ListNotificationReads"
+      ]
+    },
+    {
+      "path": "db/queries/notification_targets.sql",
+      "scope": "application-legacy",
+      "names": [
+        "CountNotificationTargets",
+        "CreateNotificationTarget",
+        "CreateNotificationTargetFull",
+        "DeleteNotificationTarget",
+        "DeleteNotificationTargetsByNotification",
+        "ListNotificationTargets"
+      ]
+    },
+    {
+      "path": "db/queries/notifications.sql",
+      "scope": "application-legacy",
+      "names": [
+        "CountNotifications",
+        "CountNotificationsWithFilters",
+        "CreateNotification",
+        "DeleteNotification",
+        "GetNotificationByID",
+        "GetNotificationStatistics",
+        "ListNotifications",
+        "ListNotificationsWithFilters",
+        "ListScheduledNotificationsDue",
+        "MarkNotificationSent",
+        "SearchNotifications",
+        "UpdateNotification",
+        "UpdateNotificationStatus",
+        "UpdateNotificationStatusIfDraft",
+        "UpdateNotificationStatusIfQueued",
+        "UpdateNotificationStatusIfScheduled"
+      ]
+    },
+    {
+      "path": "db/queries/roles.sql",
+      "scope": "global-control",
+      "names": [
+        "CountRoles",
+        "CreateRole",
+        "DeleteRole",
+        "ExistsRoleByName",
+        "GetRoleByID",
+        "GetRoleByName",
+        "ListRoles",
+        "UpdateRole"
+      ]
+    },
+    {
+      "path": "db/queries/segment_members.sql",
+      "scope": "application-legacy",
+      "names": [
+        "CountSegmentMembers",
+        "CountSegmentMembersBySegmentIDs",
+        "CountSegmentMembersByUser",
+        "CreateSegmentMember",
+        "DeleteSegmentMember",
+        "DeleteSegmentMemberBySegmentAndUser",
+        "ExistsSegmentMember",
+        "GetSegmentMemberByID",
+        "ListSegmentMembers",
+        "ListSegmentMembersByUser"
+      ]
+    },
+    {
+      "path": "db/queries/segments.sql",
+      "scope": "application-legacy",
+      "names": [
+        "CountSegments",
+        "CountSegmentsWithSearch",
+        "CreateSegment",
+        "DeleteSegment",
+        "ExistsSegmentByName",
+        "GetSegmentByID",
+        "GetSegmentByName",
+        "ListSegments",
+        "SearchSegments",
+        "UpdateSegment"
+      ]
+    },
+    {
+      "path": "db/queries/staff_users.sql",
+      "scope": "global-control",
+      "names": [
+        "CountStaffUsers",
+        "CreateStaffUser",
+        "DeleteStaffUser",
+        "ExistsStaffUserByEmail",
+        "GetStaffAuthority",
+        "GetStaffUserByEmail",
+        "GetStaffUserByID",
+        "ListStaffUsers",
+        "SearchStaffUsers",
+        "UpdateStaffPassword",
+        "UpdateStaffStatus",
+        "UpdateStaffUser"
+      ]
+    },
+    {
+      "path": "db/queries/templates.sql",
+      "scope": "application-legacy",
+      "names": [
+        "CountTemplates",
+        "CreateTemplate",
+        "DeleteTemplate",
+        "ExistsTemplateByName",
+        "GetTemplateByID",
+        "GetTemplateByName",
+        "ListTemplates",
+        "SearchTemplates",
+        "UpdateTemplate",
+        "UpdateTemplateStatus"
+      ]
+    },
+    {
+      "path": "db/queries/upload_batch_rows.sql",
+      "scope": "application-legacy",
+      "names": [
+        "CountUploadBatchRows",
+        "CreateUploadBatchRow",
+        "ListUploadBatchRows"
+      ]
+    },
+    {
+      "path": "db/queries/upload_batches.sql",
+      "scope": "application-legacy",
+      "names": [
+        "CountUploadBatches",
+        "CreateUploadBatch",
+        "GetUploadBatchByID",
+        "ListUploadBatches"
+      ]
+    },
+    {
+      "path": "db/queries/users.sql",
+      "scope": "application-legacy",
+      "names": [
+        "CountSearchUsers",
+        "CountUsers",
+        "CountUsersByStatus",
+        "CountUsersWithFilters",
+        "CreateUser",
+        "DeleteUser",
+        "ExistsUserByEmail",
+        "ExistsUserByExternalID",
+        "GetUserByEmail",
+        "GetUserByExternalID",
+        "GetUserByID",
+        "ListUsers",
+        "ListUsersByStatus",
+        "ListUsersWithFilters",
+        "SearchUsers",
+        "UpdateUser",
+        "UpdateUserStatus"
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "DELETE /api/v1/admin/apps/{app_id}/staff-grants/{staff_id}",
+      "source": "internal/features/applications/module.go",
+      "scope": "registry-control",
+      "disposition": "retain-provisioning-registry"
+    },
+    {
+      "pattern": "DELETE /api/v1/device-tokens/{id}",
+      "source": "internal/features/users/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "DELETE /api/v1/notifications/{id}",
+      "source": "internal/features/notifications/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "DELETE /api/v1/segments/{id}",
+      "source": "internal/features/segments/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "DELETE /api/v1/segments/{id}/members/{userId}",
+      "source": "internal/features/segments/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "DELETE /api/v1/staff/{id}",
+      "source": "internal/features/staff/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
+    },
+    {
+      "pattern": "GET /api/v1/admin/apps",
+      "source": "internal/features/applications/module.go",
+      "scope": "registry-control",
+      "disposition": "retain-provisioning-registry"
+    },
+    {
+      "pattern": "GET /api/v1/admin/apps/{app_id}",
+      "source": "internal/features/applications/module.go",
+      "scope": "registry-control",
+      "disposition": "retain-provisioning-registry"
+    },
+    {
+      "pattern": "GET /api/v1/admin/apps/{app_id}/staff-grants",
+      "source": "internal/features/applications/module.go",
+      "scope": "registry-control",
+      "disposition": "retain-provisioning-registry"
+    },
+    {
+      "pattern": "GET /api/v1/admin/apps/{app_id}/staff-grants/{staff_id}",
+      "source": "internal/features/applications/module.go",
+      "scope": "registry-control",
+      "disposition": "retain-provisioning-registry"
+    },
+    {
+      "pattern": "GET /api/v1/apps",
+      "source": "internal/features/applications/module.go",
+      "scope": "registry-control",
+      "disposition": "retain-provisioning-registry"
+    },
+    {
+      "pattern": "GET /api/v1/apps/{app_id}",
+      "source": "internal/features/applications/module.go",
+      "scope": "registry-control",
+      "disposition": "retain-provisioning-registry"
+    },
+    {
+      "pattern": "GET /api/v1/notifications",
+      "source": "internal/features/notifications/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "GET /api/v1/notifications/{id}",
+      "source": "internal/features/notifications/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "GET /api/v1/profile",
+      "source": "internal/features/profile/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
+    },
+    {
+      "pattern": "GET /api/v1/segments",
+      "source": "internal/features/segments/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "GET /api/v1/segments/{id}",
+      "source": "internal/features/segments/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "GET /api/v1/segments/{id}/members",
+      "source": "internal/features/segments/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "GET /api/v1/staff",
+      "source": "internal/features/staff/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
+    },
+    {
+      "pattern": "GET /api/v1/staff/{id}",
+      "source": "internal/features/staff/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
+    },
+    {
+      "pattern": "GET /api/v1/users",
+      "source": "internal/features/users/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "GET /api/v1/users/search",
+      "source": "internal/features/users/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "GET /api/v1/users/{id}",
+      "source": "internal/features/users/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "GET /api/v1/users/{id}/device-tokens",
+      "source": "internal/features/users/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "GET /api/v1/users/{id}/notifications",
+      "source": "internal/features/users/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "GET /api/v1/users/{id}/segments",
+      "source": "internal/features/users/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "PATCH /api/v1/admin/apps/{app_id}",
+      "source": "internal/features/applications/module.go",
+      "scope": "registry-control",
+      "disposition": "retain-provisioning-registry"
+    },
+    {
+      "pattern": "PATCH /api/v1/device-tokens/{id}",
+      "source": "internal/features/users/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "PATCH /api/v1/notifications/{id}",
+      "source": "internal/features/notifications/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "PATCH /api/v1/profile",
+      "source": "internal/features/profile/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
+    },
+    {
+      "pattern": "PATCH /api/v1/profile/password",
+      "source": "internal/features/profile/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
+    },
+    {
+      "pattern": "PATCH /api/v1/segments/{id}",
+      "source": "internal/features/segments/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "PATCH /api/v1/staff/{id}",
+      "source": "internal/features/staff/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
+    },
+    {
+      "pattern": "PATCH /api/v1/staff/{id}/password",
+      "source": "internal/features/staff/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
+    },
+    {
+      "pattern": "PATCH /api/v1/staff/{id}/status",
+      "source": "internal/features/staff/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
+    },
+    {
+      "pattern": "POST /api/v1/admin/apps",
+      "source": "internal/features/applications/module.go",
+      "scope": "registry-control",
+      "disposition": "retain-provisioning-registry"
+    },
+    {
+      "pattern": "POST /api/v1/auth/login",
+      "source": "internal/features/auth/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
+    },
+    {
+      "pattern": "POST /api/v1/auth/refresh",
+      "source": "internal/features/auth/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
+    },
+    {
+      "pattern": "POST /api/v1/device-tokens",
+      "source": "internal/features/users/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "POST /api/v1/mobile/sync",
+      "source": "internal/features/mobile/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "POST /api/v1/notifications",
+      "source": "internal/features/notifications/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "POST /api/v1/notifications/{id}/send",
+      "source": "internal/features/notifications/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "POST /api/v1/segments",
+      "source": "internal/features/segments/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "POST /api/v1/segments/{id}/members",
+      "source": "internal/features/segments/routes.go",
+      "scope": "application-legacy",
+      "disposition": "retire-before-multi-app-business-data"
+    },
+    {
+      "pattern": "POST /api/v1/staff",
+      "source": "internal/features/staff/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
+    },
+    {
+      "pattern": "PUT /api/v1/admin/apps/{app_id}/staff-grants/{staff_id}",
+      "source": "internal/features/applications/module.go",
+      "scope": "registry-control",
+      "disposition": "retain-provisioning-registry"
+    }
+  ],
+  "commands": [
+    {
+      "path": "cmd/bootstrap/main.go",
+      "disposition": "Keep global roles/staff bootstrap; never infer or seed a default business application."
+    },
+    {
+      "path": "cmd/scheduler/main.go",
+      "disposition": "Old global due query/direct Kafka publication must be drained/stopped or replaced; durable scoped handoff belongs to M04."
+    },
+    {
+      "path": "cmd/server/main.go",
+      "disposition": "Compose app-scoped business APIs; remove all 24 global business registrations before multi-app business data. Preserve global staff/auth/profile and registry."
+    },
+    {
+      "path": "cmd/worker/main.go",
+      "disposition": "Old unscoped OneSignal processor must be drained/stopped or replaced; no old worker can run against multi-app data."
+    }
+  ]
+}

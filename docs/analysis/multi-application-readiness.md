@@ -104,3 +104,13 @@ are locally verified. Real-DB tests cover cross-app metadata denial, audit inser
 fault rollback, concurrent writes, revoke/regrant, demotion recheck and target
 deletion after lookup. No new routes, active projects or business data; M03a.3
 HTTP and the subsequent M03b all-legacy-route/background-query gate remain open.
+
+
+## M03b.1 checkpoint (2026-11-03)
+
+The earlier sections are historical design evidence. M03a.1–3 registry is now
+implemented/local-verified; no business isolation is implied. The current
+[M03b inventory/evidence](m03b1-scope-inventory.md) and
+[transition SPEC](../specs/m03b-application-data-isolation.md) enumerate legacy
+sources, choose planned business-route retirement, and require explicit ownership
+mapping plus scoped or stopped old background processes. M03b.2–5 remain pending.

@@ -1,6 +1,6 @@
 # M03 application-scope implementation plan
 
-Date: 2026-11-03. Status: **M03a.1–3 registry locally implemented/verified; M03b–d not implemented**.
+Date: 2026-11-03. Status: **M03a.1–3 registry locally implemented/verified; M03b.1 inventory/design complete; M03b runtime and M03c/d not implemented**.
 Normative design: [ADR-12](../adr/adr-12-multi-application-isolation.md).
 Each implementation slice needs its exact transaction/API/migration SPEC.
 [M03a registry SPEC](m03a-application-registry.md) and its
@@ -8,7 +8,9 @@ Each implementation slice needs its exact transaction/API/migration SPEC.
 [M03a.1 schema/query/repository evidence](../analysis/m03a1-verification.md) is
 now available; [M03a.2 services](../analysis/m03a2-verification.md) also pass local
 checks. [M03a.3 HTTP](../analysis/m03a3-verification.md) is also local-verified.
-Next: M03b scoped data/query/API and legacy pipeline gate.
+[M03b.1 inventory/design](../analysis/m03b1-scope-inventory.md) now has an
+[exact transition SPEC](m03b-application-data-isolation.md). Next: M03b.2 schema/
+preflight/backfill contract and implementation; business isolation remains pending.
 
 ## M03a — Registry and scope foundation
 
