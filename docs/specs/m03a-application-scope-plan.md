@@ -78,6 +78,17 @@ an address from another app/owner.
 
 ## M03d — Generic mobile contract and consumer validation
 
+The [mobile lifecycle contract](../api/mobile-installations-api.md) is mounted
+through the configured server policy. Local acceptance uses separate Android
+and iOS HTTP clients against PostgreSQL. Their coincident subject stays scoped
+by project and namespace. Cross-project JWT, origin and installation proof fail,
+and shared-provider address collisions roll back enrollment. The passing suite
+is recorded in /tmp/hello-m03d2-integration-final.txt (2026-11-04).
+
+The kaiapps2 source checkpoint still shows OneSignal. Released-app integration,
+broker/platform evidence and deployment policies remain open. M03c additionally
+retains provider invalidation and recovery acceptance before full completion.
+
 Define enrollment, proof/version preconditions, same-owner refresh, logout,
 account switch, pending receipt reporting and payload identity independent of
 framework. The exact lifecycle path names and error/idempotency semantics belong

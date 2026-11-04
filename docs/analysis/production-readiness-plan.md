@@ -177,8 +177,10 @@ Step 20 berlanjut ke [M03c](../specs/m03c-installation-binding.md). Migrasi
 transaksi lifecycle tersedia. Verifier JWT per project dan mapping identitas
 000020 tersedia. Adapter origin bertanda tangan dan proteksi replay 000021
 tersedia. [API lifecycle mobile](../api/mobile-installations-api.md) dapat
-dipasang lewat policy server. Verifikasi consumer dan kebijakan deployment
-per project tetap terbuka.
+dipasang lewat policy server. Dua consumer HTTP sintetis Android/iOS telah
+diuji dengan PostgreSQL untuk isolasi JWT, origin, proof, konflik alamat dan
+logout lintas project. Inspeksi kaiapps2 masih menunjukkan OneSignal. Verifikasi
+consumer nyata dan kebijakan deployment per project tetap terbuka.
 Gate integrasi dan kontrol rilis M02 tetap terbuka.
 
 ## 5. Checklist pelaksanaan
@@ -213,7 +215,7 @@ pekerjaan pada baris yang belum dicentang sudah dimulai, sesuai catatan.
 - [x] 17. Regenerate mock segments; selaraskan actor/password/not-found fixtures staff dan filtered/batch count assertions; build dan seluruh unit test lulus pada 2026-11-02. Tidak ada perubahan perilaku service atau bukti integration/load test.
 - [x] 18. GitHub Actions + script lokal format/modules/build/test/vet/vulnerability; local checks/actionlint lulus, security dependencies diperbarui dan reachable scan nol. Main workflow tetap; hosted run/ruleset belum diverifikasi karena belum di-push.
 - [x] 19. Runner fixture terisolasi: 15 migration up/down/up, repository, kedua Kafka topic/producer round trip dan Firebase SDK HTTP simulation lulus lokal; guard/cleanup diverifikasi. Bukan test adapter/worker/new pipeline atau real FCM/APNs; hosted integration job belum tersedia.
-- [ ] 20. Berjalan per milestone: SPEC M02a dan implementasi/18-case evidence selesai secara scoped; 56 role/route API cases plus negative DB/Kafka tests lulus lokal. M02b staff administration juga selesai scoped dengan 28 role/route API cases dan lifecycle/demotion tests lokal; M02c audit redaction dan SQL cleanup fixture lulus lokal. M02d membatasi 16 input JSON; boundary/48 rejection route cases lulus lokal. M02e memperketat parser JWT staff dan evaluasi baseline menetapkan minimum development guard siap untuk M03 terisolasi. Historical cleanup produksi dan release controls belum selesai; bukan bukti seluruh security/produksi selesai. M03a.1–3 registry/grants juga lulus lokal; M03b.1–M03b.5 selesai di repo dan lulus lokal. Cutover tujuan masih terbuka. M03c dimulai dari kontrak instalasi dan binding. Step 20 tetap terbuka untuk sisa M03 dan fondasi durable acceptance M04.
+- [ ] 20. Berjalan per milestone: SPEC M02a dan implementasi/18-case evidence selesai secara scoped; 56 role/route API cases plus negative DB/Kafka tests lulus lokal. M02b staff administration juga selesai scoped dengan 28 role/route API cases dan lifecycle/demotion tests lokal; M02c audit redaction dan SQL cleanup fixture lulus lokal. M02d membatasi 16 input JSON; boundary/48 rejection route cases lulus lokal. M02e memperketat parser JWT staff dan evaluasi baseline menetapkan minimum development guard siap untuk M03 terisolasi. Historical cleanup produksi dan release controls belum selesai; bukan bukti seluruh security/produksi selesai. M03a.1–3 registry/grants juga lulus lokal; M03b.1–M03b.5 selesai di repo dan lulus lokal. Cutover tujuan masih terbuka. M03c memiliki schema, proteksi, transaksi lifecycle, verifier, origin dan HTTP. M03d memiliki kontrak serta dua consumer sintetis lintas project yang lulus lokal. Provider invalidation, verifikasi consumer nyata dan kebijakan deployment tetap terbuka. Step 20 juga mencakup fondasi durable acceptance M04.
 
 ### Tahap 4 — delivery pipeline
 
