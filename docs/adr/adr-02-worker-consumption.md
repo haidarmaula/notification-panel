@@ -196,7 +196,8 @@ unresolved evidence. Crash after publish before resolution may repeat the
 event; durable preparation absorbs it without budget reset or new audience.
 An already-terminal notification is an explicit no-op, not a resend action.
 Concurrent operators use a row claim/lock with bounded context. Resolution
-updates need idempotency; replay lease/schema details belong in SPEC.
+updates need idempotency; replay lease/schema details are proposed in the
+[operator reprocessing SPEC](../specs/m05-operator-reprocessing.md), not yet implemented.
 
 ### Alternatives rejected
 

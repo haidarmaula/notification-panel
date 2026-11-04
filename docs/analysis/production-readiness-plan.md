@@ -221,8 +221,10 @@ operator requeue, and process wiring are not complete.
 The [modern Go audit](modern-go-audit.md) reviewed installation and dispatch
 contracts on 2026-11-04. Two deadline defects were fixed and verified with unit/race
 and local PostgreSQL/Kafka integration tests. This does not complete step 20 or
-approve deployment. The next delivery slice is an authorized, audited operator
-reprocessing contract, followed by worker/scheduler wiring and M06 provider execution.
+approve deployment. The [operator reprocessing contract](../specs/m05-operator-reprocessing.md) is now
+written as a proposed implementation specification. Replay persistence, scoped
+operational authority and crash tests are next, followed by worker/scheduler
+wiring and M06 provider execution. Replay is not implemented or enabled.
 
 ## 5. Execution checklist
 

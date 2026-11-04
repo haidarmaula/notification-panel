@@ -31,3 +31,7 @@ may pass it. Unknown commit outcome is resolved by storing the same evidence.
 Down refuses evidence or active source registrations. This avoids silently
 destroying unresolved work. Registration, inactive source cleanup, replay
 authorization and retention remain explicit operator/recovery work.
+
+The proposed [operator reprocessing contract](m05-operator-reprocessing.md) refines
+replay eligibility, authority, claims and audit. It does not add a runtime replay
+path or change this evidence-storage contract.

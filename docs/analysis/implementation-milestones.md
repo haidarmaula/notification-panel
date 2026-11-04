@@ -166,7 +166,10 @@ the source and bind acknowledgments to assignments. [Coordinator SPEC](../specs/
 QUEUED recovery uses the same Preparer and passes local PostgreSQL tests for
 accepted work without an outbox/event, due holds, expiry, sealed restore, and lineage
 fencing. [Recovery SPEC](../specs/m05-queued-recovery.md). Recovery lease/execution
-remain in M06; requeue/wiring remain open.
+remain in M06; requeue/wiring remain open. The proposed
+[operator reprocessing contract](../specs/m05-operator-reprocessing.md) specifies
+scoped step-up authority, immutable evidence, fenced claims and broker/DB
+uncertainty. Its schema/service/CLI and credential integration are not implemented.
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,
 preparation cancellation during rebalance, redelivery, offset fencing, and durable
