@@ -640,3 +640,21 @@ including across apps that share a provider namespace.
 The application layer must supply the verifier, ciphertext, fingerprint and
 trusted route. Migration rollback requires empty tables. See the
 [installation and binding contract](specs/m03c-installation-binding.md).
+
+### Durable campaign acceptance (M04)
+
+Migration 000022 adds immutable acceptance timestamps/epochs to notifications,
+a singleton deployment control row, explicit per-project dispatch policy,
+actor-scoped send keys and the send outbox. Deployment starts sealed with a
+migration hold; policies require explicit TTL values and coverage approval.
+There are no production TTL defaults or public policy mutation endpoints.
+
+The API commits the DRAFT claim, key snapshot, deadline, outbox and audit in
+one transaction. UNIQUE(notification_id) permits one accepted generation while
+resubmission is out of scope. Scheduling persists its original deadline and
+creates the outbox only during atomic promotion. Expired schedules retain
+FAILED/ttl_expired lifecycle evidence, without invented audience results.
+Foreign keys retain campaign and staff attribution. Down refuses to remove
+accepted/scheduled timestamps, keys or pending outbox evidence. See the
+[M04 contract](specs/m04-durable-acceptance.md) and
+[acceptance API](api/campaign-acceptance-api.md).

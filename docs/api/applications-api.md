@@ -70,3 +70,6 @@ in [database documentation](../database.md). No activation or second-application
 business data is permitted until M03b scopes or retires the legacy APIs, worker,
 scheduler and fanout. Production deployment, provider/device delivery, performance
 and infrastructure resilience remain separate release gates.
+
+Scoped campaign send and scheduling use the separate
+[durable acceptance contract](campaign-acceptance-api.md).

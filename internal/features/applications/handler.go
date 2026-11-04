@@ -149,7 +149,7 @@ func writeError(w http.ResponseWriter, err error) {
 		err    error
 		status int
 	}{
-		{ErrInvalidID, 400}, {errInvalidSegmentID, 400}, {errSegmentNotFound, 404}, {errCampaignReference, 404}, {errCampaignNotFound, 404}, {errInvalidBatchID, 400}, {errUploadBatchNotFound, 404}, {errTemplateNotFound, 404}, {errInvalidTemplateID, 400}, {errInvalidCampaignID, 400}, {errCampaignNotDraft, 409}, {errCampaignProtected, 409}, {errSegmentMemberMissing, 404}, {errSegmentNameTaken, 409}, {errSegmentReferenced, 409}, {errSegmentMemberExists, 409}, {errInvalidUserID, 400}, {errUserNotFound, 404}, {ErrInvalidStaffID, 400}, {ErrInvalidKey, 400}, {ErrInvalidName, 400}, {ErrInvalidPagination, 400}, {ErrInvalidPrecondition, 400}, {errQuery, 400},
+		{ErrInvalidID, 400}, {errInvalidSegmentID, 400}, {errSegmentNotFound, 404}, {errCampaignReference, 404}, {errCampaignNotFound, 404}, {errAudienceNotReady, 409}, {errKeyConflict, 409}, {errInvalidSendKey, 400}, {errInvalidSchedule, 400}, {errInvalidBatchID, 400}, {errUploadBatchNotFound, 404}, {errTemplateNotFound, 404}, {errInvalidTemplateID, 400}, {errInvalidCampaignID, 400}, {errCampaignNotDraft, 409}, {errCampaignProtected, 409}, {errSegmentMemberMissing, 404}, {errSegmentNameTaken, 409}, {errSegmentReferenced, 409}, {errSegmentMemberExists, 409}, {errInvalidUserID, 400}, {errUserNotFound, 404}, {ErrInvalidStaffID, 400}, {ErrInvalidKey, 400}, {ErrInvalidName, 400}, {ErrInvalidPagination, 400}, {ErrInvalidPrecondition, 400}, {errQuery, 400},
 		{authz.ErrApplicationNotFound, 404}, {ErrStaffNotFound, 404}, {ErrGrantNotFound, 404},
 		{ErrKeyExists, 409}, {ErrStaffInactive, 409}, {authz.ErrApplicationNotActive, 409}, {ErrPreconditionFailed, 412}, {ErrPreconditionRequired, 428},
 	}

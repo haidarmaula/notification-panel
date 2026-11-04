@@ -19,6 +19,14 @@ type Application struct {
 	UpdatedAt pgtype.Timestamptz `db:"updated_at"`
 }
 
+type ApplicationDispatchPolicy struct {
+	ApplicationID    int64 `db:"application_id"`
+	HoldNew          bool  `db:"hold_new"`
+	CoverageApproved bool  `db:"coverage_approved"`
+	PushTtlSeconds   int32 `db:"push_ttl_seconds"`
+	KeyTtlSeconds    int32 `db:"key_ttl_seconds"`
+}
+
 type ApplicationStaffGrant struct {
 	ApplicationID int64              `db:"application_id"`
 	StaffID       int64              `db:"staff_id"`
@@ -106,21 +114,26 @@ type MobileOriginUse struct {
 }
 
 type Notification struct {
-	ID            int64              `db:"id"`
-	TemplateID    pgtype.Int8        `db:"template_id"`
-	TemplateName  pgtype.Text        `db:"template_name"`
-	Title         string             `db:"title"`
-	Body          string             `db:"body"`
-	Payload       []byte             `db:"payload"`
-	Priority      string             `db:"priority"`
-	Status        string             `db:"status"`
-	ScheduledAt   pgtype.Timestamptz `db:"scheduled_at"`
-	PublishedAt   pgtype.Timestamptz `db:"published_at"`
-	CompletedAt   pgtype.Timestamptz `db:"completed_at"`
-	CreatedBy     int64              `db:"created_by"`
-	CreatedAt     pgtype.Timestamptz `db:"created_at"`
-	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
-	ApplicationID pgtype.Int8        `db:"application_id"`
+	ID              int64              `db:"id"`
+	TemplateID      pgtype.Int8        `db:"template_id"`
+	TemplateName    pgtype.Text        `db:"template_name"`
+	Title           string             `db:"title"`
+	Body            string             `db:"body"`
+	Payload         []byte             `db:"payload"`
+	Priority        string             `db:"priority"`
+	Status          string             `db:"status"`
+	ScheduledAt     pgtype.Timestamptz `db:"scheduled_at"`
+	PublishedAt     pgtype.Timestamptz `db:"published_at"`
+	CompletedAt     pgtype.Timestamptz `db:"completed_at"`
+	CreatedBy       int64              `db:"created_by"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `db:"updated_at"`
+	ApplicationID   pgtype.Int8        `db:"application_id"`
+	QueuedAt        pgtype.Timestamptz `db:"queued_at"`
+	DeadlineAt      pgtype.Timestamptz `db:"deadline_at"`
+	OriginEpoch     pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch     pgtype.UUID        `db:"source_epoch"`
+	LifecycleReason pgtype.Text        `db:"lifecycle_reason"`
 }
 
 type NotificationDelivery struct {
@@ -147,6 +160,39 @@ type NotificationRead struct {
 	UserID         int64              `db:"user_id"`
 	ReadAt         pgtype.Timestamptz `db:"read_at"`
 	ApplicationID  pgtype.Int8        `db:"application_id"`
+}
+
+type NotificationRuntime struct {
+	Singleton     bool        `db:"singleton"`
+	OriginEpoch   pgtype.UUID `db:"origin_epoch"`
+	SourceEpoch   pgtype.UUID `db:"source_epoch"`
+	Sealed        bool        `db:"sealed"`
+	MigrationHold bool        `db:"migration_hold"`
+}
+
+type NotificationSendKey struct {
+	ApplicationID  int64              `db:"application_id"`
+	StaffUserID    int64              `db:"staff_user_id"`
+	KeySource      string             `db:"key_source"`
+	Key            string             `db:"key"`
+	NotificationID int64              `db:"notification_id"`
+	QueuedAt       pgtype.Timestamptz `db:"queued_at"`
+	DeadlineAt     pgtype.Timestamptz `db:"deadline_at"`
+	ExpiresAt      pgtype.Timestamptz `db:"expires_at"`
+}
+
+type NotificationSendOutbox struct {
+	ID              int64              `db:"id"`
+	ApplicationID   int64              `db:"application_id"`
+	NotificationID  int64              `db:"notification_id"`
+	RequestedAt     pgtype.Timestamptz `db:"requested_at"`
+	ScheduledFor    pgtype.Timestamptz `db:"scheduled_for"`
+	DeadlineAt      pgtype.Timestamptz `db:"deadline_at"`
+	OriginEpoch     pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch     pgtype.UUID        `db:"source_epoch"`
+	PublishAttempts int32              `db:"publish_attempts"`
+	NextPublishAt   pgtype.Timestamptz `db:"next_publish_at"`
+	LastError       pgtype.Text        `db:"last_error"`
 }
 
 type NotificationTarget struct {

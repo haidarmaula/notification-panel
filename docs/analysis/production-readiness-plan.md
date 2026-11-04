@@ -183,6 +183,13 @@ logout lintas project. Inspeksi kaiapps2 masih menunjukkan OneSignal. Verifikasi
 consumer nyata dan kebijakan deployment per project tetap terbuka.
 Gate integrasi dan kontrol rilis M02 tetap terbuka.
 
+M04 acceptance/scheduling tersedia dan lulus lokal melalui migration 000022,
+[kontrak transaksi](../specs/m04-durable-acceptance.md) dan
+[API](../api/campaign-acceptance-api.md). Uji PostgreSQL mencakup request
+serentak dengan key sama, replay saat hold, pencabutan grant, coverage legacy,
+rollback audit, promotion dan expiry. Outbox belum didrain; M04 belum selesai.
+Deployment tetap sealed/held dan tidak mengirim ke provider.
+
 ## 5. Checklist pelaksanaan
 
 `[x]` berarti selesai dan ada bukti; `[ ]` berarti belum selesai. Sebagian

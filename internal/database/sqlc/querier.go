@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	AdvanceMobileInstallation(ctx context.Context, arg AdvanceMobileInstallationParams) (MobileInstallation, error)
+	CampaignAcceptanceReady(ctx context.Context, arg CampaignAcceptanceReadyParams) (bool, error)
 	CampaignHasProtectedChildren(ctx context.Context, arg CampaignHasProtectedChildrenParams) (bool, error)
 	ClearScopedCampaignTargets(ctx context.Context, arg ClearScopedCampaignTargetsParams) error
 	ConsumeMobileOrigin(ctx context.Context, arg ConsumeMobileOriginParams) (int64, error)
@@ -177,6 +178,7 @@ type Querier interface {
 	// ==========================================
 	DeleteSegmentMember(ctx context.Context, id int64) error
 	DeleteSegmentMemberBySegmentAndUser(ctx context.Context, arg DeleteSegmentMemberBySegmentAndUserParams) error
+	DeleteSendKey(ctx context.Context, arg DeleteSendKeyParams) error
 	// ==========================================
 	// DELETE
 	// ==========================================
@@ -222,10 +224,12 @@ type Querier interface {
 	// EXISTS
 	// ==========================================
 	ExistsUserByExternalID(ctx context.Context, externalID string) (bool, error)
+	ExpireScopedSchedule(ctx context.Context, arg ExpireScopedScheduleParams) (int64, error)
 	// Keep staff row when app/grant is absent, for correct 401/404 distinctions.
 	// No authorization/permission/status decision is implied by this data lookup.
 	GetApplicationAuthority(ctx context.Context, arg GetApplicationAuthorityParams) (GetApplicationAuthorityRow, error)
 	GetApplicationByPublicID(ctx context.Context, publicID pgtype.UUID) (Application, error)
+	GetApplicationDispatchPolicy(ctx context.Context, applicationID int64) (ApplicationDispatchPolicy, error)
 	GetApplicationStaffGrant(ctx context.Context, arg GetApplicationStaffGrantParams) (ApplicationStaffGrant, error)
 	// ==========================================
 	// GET
@@ -265,6 +269,7 @@ type Querier interface {
 	// GET
 	// ==========================================
 	GetSegmentMemberByID(ctx context.Context, id int64) (SegmentMember, error)
+	GetSendKey(ctx context.Context, arg GetSendKeyParams) (GetSendKeyRow, error)
 	GetStaffAuthority(ctx context.Context, id int64) (GetStaffAuthorityRow, error)
 	GetStaffUserByEmail(ctx context.Context, email string) (StaffUser, error)
 	// ==========================================
@@ -287,6 +292,7 @@ type Querier interface {
 	// ==========================================
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	InsertInstallationBinding(ctx context.Context, arg InsertInstallationBindingParams) error
+	InsertSendOutbox(ctx context.Context, arg InsertSendOutboxParams) error
 	// Includes revoked grants; application identity validated by owning service.
 	ListApplicationStaffGrants(ctx context.Context, arg ListApplicationStaffGrantsParams) (ListApplicationStaffGrantsRow, error)
 	// ==========================================
@@ -298,6 +304,7 @@ type Querier interface {
 	// ==========================================
 	ListDeviceTokensByUser(ctx context.Context, arg ListDeviceTokensByUserParams) ([]DeviceToken, error)
 	ListDeviceTokensByUserIDs(ctx context.Context, userIds []int64) ([]DeviceToken, error)
+	ListDueScopedSchedules(ctx context.Context, pageSize int32) ([]ListDueScopedSchedulesRow, error)
 	// Does not authenticate the caller; service must check current authority first.
 	ListGrantedApplications(ctx context.Context, arg ListGrantedApplicationsParams) (ListGrantedApplicationsRow, error)
 	// One snapshot for both total and page, including an empty/out-of-range page.
@@ -378,11 +385,14 @@ type Querier interface {
 	// ==========================================
 	ListUsersByStatus(ctx context.Context, arg ListUsersByStatusParams) ([]User, error)
 	ListUsersWithFilters(ctx context.Context, arg ListUsersWithFiltersParams) ([]User, error)
+	LockAcceptanceStaff(ctx context.Context, staffID int64) (int64, error)
 	LockActiveInstallationBinding(ctx context.Context, arg LockActiveInstallationBindingParams) (InstallationBinding, error)
 	LockApplicationByPublicID(ctx context.Context, publicID pgtype.UUID) (Application, error)
+	LockCampaignAcceptance(ctx context.Context, arg LockCampaignAcceptanceParams) (LockCampaignAcceptanceRow, error)
 	LockInstallationProject(ctx context.Context, applicationID int64) (string, error)
 	LockInstallationUser(ctx context.Context, arg LockInstallationUserParams) (int64, error)
 	LockMobileInstallation(ctx context.Context, arg LockMobileInstallationParams) (MobileInstallation, error)
+	LockNotificationRuntime(ctx context.Context) (LockNotificationRuntimeRow, error)
 	LockScopedCampaign(ctx context.Context, arg LockScopedCampaignParams) (string, error)
 	LockScopedCampaignTemplate(ctx context.Context, arg LockScopedCampaignTemplateParams) (string, error)
 	LockScopedSegment(ctx context.Context, arg LockScopedSegmentParams) (LockScopedSegmentRow, error)
@@ -393,6 +403,8 @@ type Querier interface {
 	MarkNotificationFailed(ctx context.Context, arg MarkNotificationFailedParams) error
 	MarkNotificationOpened(ctx context.Context, id int64) error
 	MarkNotificationSent(ctx context.Context, id int64) error
+	PromoteScopedCampaign(ctx context.Context, arg PromoteScopedCampaignParams) (PromoteScopedCampaignRow, error)
+	QueueScopedCampaign(ctx context.Context, arg QueueScopedCampaignParams) (QueueScopedCampaignRow, error)
 	// Caller holds application lock and handles matching no-op before this CAS.
 	RenameApplication(ctx context.Context, arg RenameApplicationParams) (Application, error)
 	ReplaceScopedCampaignDraft(ctx context.Context, arg ReplaceScopedCampaignDraftParams) (int64, error)
@@ -401,6 +413,7 @@ type Querier interface {
 	ReserveInstallationBindingID(ctx context.Context) (int64, error)
 	ResolveMobileIdentity(ctx context.Context, arg ResolveMobileIdentityParams) (int64, error)
 	RetireInstallationBinding(ctx context.Context, arg RetireInstallationBindingParams) (int64, error)
+	ScheduleScopedCampaign(ctx context.Context, arg ScheduleScopedCampaignParams) (ScheduleScopedCampaignRow, error)
 	ScopedSegmentHasReferences(ctx context.Context, segmentID int64) (bool, error)
 	ScopedSegmentNameTaken(ctx context.Context, arg ScopedSegmentNameTakenParams) (bool, error)
 	// ==========================================
@@ -425,6 +438,7 @@ type Querier interface {
 	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]User, error)
 	// Caller holds app lock; no-op and conditional semantics belong to service.
 	SetApplicationStaffGrantActive(ctx context.Context, arg SetApplicationStaffGrantActiveParams) (ApplicationStaffGrant, error)
+	StoreSendKey(ctx context.Context, arg StoreSendKeyParams) error
 	TouchMobileInstallation(ctx context.Context, arg TouchMobileInstallationParams) error
 	// ==========================================
 	// UPDATE

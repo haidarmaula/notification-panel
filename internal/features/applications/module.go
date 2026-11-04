@@ -56,6 +56,8 @@ func (m *Module) RegisterRoutes(mux *http.ServeMux) {
 	register("GET /api/v1/apps/{app_id}/uploads", authz.NotificationsRead, m.handler.ListUploadBatches)
 	register("GET /api/v1/apps/{app_id}/uploads/{batch_id}/rows", authz.NotificationsRead, m.handler.ListUploadRows)
 	register("GET /api/v1/apps/{app_id}/audit-logs", authz.AuditRead, m.handler.ListProjectAudit)
+	register("POST /api/v1/apps/{app_id}/campaigns/{campaign_id}/send", authz.NotificationsSend, m.handler.SendCampaign)
+	register("POST /api/v1/apps/{app_id}/campaigns/{campaign_id}/schedule", authz.NotificationsSchedule, m.handler.ScheduleCampaign)
 	register("GET /api/v1/admin/apps", authz.ApplicationsManage, m.handler.ListManaged)
 	register("POST /api/v1/admin/apps", authz.ApplicationsManage, m.handler.Create)
 	register("GET /api/v1/admin/apps/{app_id}", authz.ApplicationsManage, m.handler.GetManaged)
