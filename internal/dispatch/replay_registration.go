@@ -10,7 +10,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"hello/internal/audit"
-	"hello/internal/authz"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 	"hello/internal/middleware"
@@ -76,63 +75,12 @@ func (s *ReplayRequests) Register(ctx context.Context, request ReplayRequest, cr
 		_ = tx.Rollback(cleanup)
 	}()
 	q := sqlc.New(tx)
-	// Runtime -> source -> app -> staff -> operational grant. App locks serialize
-	// explicit application-grant mutation; staff locks serialize role/status changes.
-	runtime, err := q.LockNotificationRuntime(ctx)
+	scope, err := s.lockAuthority(ctx, q, verified)
 	if err != nil {
 		return none, err
 	}
-	if runtime.Sealed {
-		return none, ErrReplayHeld
-	}
-	source, err := q.LockSendLogSource(ctx, s.sourceID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return none, ErrReplayDenied
-	}
-	if err != nil {
-		return none, err
-	}
-	if !source.Active {
-		return none, ErrReplayHeld
-	}
-	app, err := repository.NewApplicationRepository(q).LockByPublicID(ctx, verified.request.ApplicationID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return none, ErrReplayDenied
-	}
-	if err != nil {
-		return none, err
-	}
-	if _, err = q.LockAcceptanceStaff(ctx, verified.staffID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return none, ErrReplayDenied
-		}
-		return none, err
-	}
-	// This identity comes only from the pinned operational assertion, not a
-	// caller-supplied staff ID or JWT role. Current role/grant still comes from DB.
+	app := scope.app
 	ctx = context.WithValue(ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: verified.staffID})
-	if _, err = authz.NewApplicationAuthorizer(q).RequireApplication(ctx, verified.request.ApplicationID, authz.NotificationsSend); err != nil {
-		if errors.Is(err, authz.ErrUnauthenticated) || errors.Is(err, authz.ErrForbidden) ||
-			errors.Is(err, authz.ErrApplicationNotFound) || errors.Is(err, authz.ErrApplicationNotActive) {
-			return none, ErrReplayDenied
-		}
-		return none, err
-	}
-	grant, err := q.LockReplayOperationalGrant(ctx, sqlc.LockReplayOperationalGrantParams{
-		ID: verified.grantID, ApplicationID: app.ID, StaffUserID: verified.staffID, RequestID: verified.request.ID,
-		Issuer: verified.issuer, Deployment: verified.deployment, SelectionHash: verified.fingerprint[:],
-		CredentialExpiresAt: pgtype.Timestamptz{Time: verified.expiresAt, Valid: true},
-		AuthenticatedAt:     pgtype.Timestamptz{Time: verified.authenticatedAt, Valid: true},
-	})
-	if errors.Is(err, pgx.ErrNoRows) {
-		return none, ErrReplayDenied
-	}
-	if err != nil {
-		return none, err
-	}
-	if !grant.Usable {
-		return none, ErrReplayDenied
-	}
 	n, err := q.InsertReplayRequest(ctx, sqlc.InsertReplayRequestParams{
 		ApplicationID: app.ID, ID: verified.request.ID, StaffUserID: verified.staffID, OperationalGrantID: verified.grantID,
 		SelectionHash: verified.fingerprint[:], ChangeReference: verified.request.ChangeReference,
@@ -144,8 +92,7 @@ func (s *ReplayRequests) Register(ctx context.Context, request ReplayRequest, cr
 	if err != nil {
 		return none, err
 	}
-	if stored.StaffUserID != verified.staffID || stored.OperationalGrantID != verified.grantID ||
-		!bytes.Equal(stored.SelectionHash, verified.fingerprint[:]) || stored.ChangeReference != verified.request.ChangeReference {
+	if !sameReplayHeader(stored, verified) {
 		return none, ErrReplayConflict
 	}
 	if n == 1 {
@@ -168,4 +115,9 @@ func (s *ReplayRequests) Register(ctx context.Context, request ReplayRequest, cr
 		return none, err
 	}
 	return ReplayRegistration{RequestID: stored.ID, AlreadyRegistered: n == 0}, nil
+}
+
+func sameReplayHeader(stored sqlc.NotificationReplayRequest, verified VerifiedReplay) bool {
+	return stored.StaffUserID == verified.staffID && stored.OperationalGrantID == verified.grantID &&
+		bytes.Equal(stored.SelectionHash, verified.fingerprint[:]) && stored.ChangeReference == verified.request.ChangeReference
 }

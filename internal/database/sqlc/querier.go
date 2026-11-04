@@ -439,6 +439,8 @@ type Querier interface {
 	ReplaceScopedCampaignDraft(ctx context.Context, arg ReplaceScopedCampaignDraftParams) (int64, error)
 	ReplaceScopedSegment(ctx context.Context, arg ReplaceScopedSegmentParams) (ReplaceScopedSegmentRow, error)
 	ReplaceScopedTemplate(ctx context.Context, arg ReplaceScopedTemplateParams) (ReplaceScopedTemplateRow, error)
+	ReplayPreparationRetryDue(ctx context.Context, arg ReplayPreparationRetryDueParams) (bool, error)
+	ReplayTargetsSupported(ctx context.Context, arg ReplayTargetsSupportedParams) (bool, error)
 	ReserveInstallationBindingID(ctx context.Context) (int64, error)
 	ResolveMobileIdentity(ctx context.Context, arg ResolveMobileIdentityParams) (int64, error)
 	ResolveReplayControl(ctx context.Context, arg ResolveReplayControlParams) (int64, error)

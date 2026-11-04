@@ -111,7 +111,6 @@ func TestReplayRegistrationRechecksCurrentAuthority(t *testing.T) {
 		"operator cannot replay":      "UPDATE staff_users SET role_id=(SELECT id FROM roles WHERE name='OPERATOR')",
 		"revoked app grant":           "UPDATE application_staff_grants SET is_active=false",
 		"super admin has no wildcard": "UPDATE staff_users SET role_id=(SELECT id FROM roles WHERE name='SUPER_ADMIN'); DELETE FROM application_staff_grants",
-		"inactive app":                "UPDATE applications SET status='HELD'",
 		"revoked replay grant":        "UPDATE notification_replay_grants SET revoked_at=clock_timestamp()",
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -272,4 +271,22 @@ func TestReplayRegistrationCancellationReleasesConnection(t *testing.T) {
 	result, err = f.service.Register(ctx, request, credential)
 	require.NoError(t, err)
 	require.False(t, result.AlreadyRegistered, "canceled registration left no partial header")
+}
+
+func TestReplayRegistrationHeldAppGrantsNoExecution(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	f := newReplayRegistrationFixture(t, ctx)
+	request := f.input(t, ctx)
+	credential, _ := f.credential(t, ctx, request)
+	_, err := f.pool.Exec(ctx, "UPDATE applications SET status='HELD'")
+	require.NoError(t, err)
+	result, err := f.service.Register(ctx, request, credential)
+	require.NoError(t, err, "metadata registration must permit later no-op reconciliation during app holds")
+	require.False(t, result.AlreadyRegistered)
+	for _, table := range []string{"notification_replay_attempts", "notification_replay_controls", "notification_delivery_intents"} {
+		var n int
+		require.NoError(t, f.pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n))
+		require.Zero(t, n, "a held app registration granted no execution")
+	}
 }

@@ -226,7 +226,9 @@ written, and [persistence slice 1](m05-replay-persistence-verification.md) adds
 request/attempt/control schema and conditional SQLC primitives.
 [Request registration](m05-replay-registration-verification.md) now adds pinned
 step-up verification, revocable DB grants and atomic request audit, tested locally.
-Per-position eligibility/claim/result, broker I/O and stale-claim cleanup are next,
+[Dry-run inspection](m05-replay-inspection-verification.md) also checks exact
+acceptance/state/holds without writes. Per-position claim/result, broker I/O and
+stale-claim cleanup are next,
 followed by worker/scheduler wiring and M06 provider execution. Replay is not enabled.
 
 ## 5. Execution checklist

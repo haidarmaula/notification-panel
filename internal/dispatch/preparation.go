@@ -119,11 +119,7 @@ func (p *Preparer) prepareOnce(ctx context.Context, event kafka.ScopedSendReques
 	if err != nil {
 		return PreparationResult{}, err
 	}
-	if !campaign.OriginEpoch.Valid || !campaign.SourceEpoch.Valid || !campaign.QueuedAt.Valid || !campaign.DeadlineAt.Valid ||
-		campaign.OriginEpoch.String() != event.OriginEpoch || campaign.SourceEpoch.String() != event.SourceEpoch ||
-		!campaign.QueuedAt.Time.Equal(event.RequestedAt) || !campaign.DeadlineAt.Time.Equal(event.DeadlineAt) ||
-		campaign.ScheduledAt.Valid != (event.ScheduledFor != nil) ||
-		(event.ScheduledFor != nil && !campaign.ScheduledAt.Time.Equal(*event.ScheduledFor)) {
+	if !acceptedSendMatches(campaign, event) {
 		return PreparationResult{}, ErrAdmissionEnvelope
 	}
 	complete, err := q.GetCompletePreparation(ctx, sqlc.GetCompletePreparationParams{ApplicationID: app.ID, NotificationID: campaign.ID})
@@ -190,4 +186,17 @@ func (p *Preparer) prepareOnce(ctx context.Context, event kafka.ScopedSendReques
 		return PreparationResult{}, err
 	}
 	return preparationResult(complete), nil
+}
+
+// acceptedSendMatches is shared by admission and operator inspection so neither
+// can repair a stale envelope or extend immutable acceptance evidence.
+func acceptedSendMatches(campaign sqlc.LockPreparationCampaignRow, event kafka.ScopedSendRequested) bool {
+	if !campaign.OriginEpoch.Valid || !campaign.SourceEpoch.Valid || !campaign.QueuedAt.Valid || !campaign.DeadlineAt.Valid ||
+		campaign.OriginEpoch.String() != event.OriginEpoch || campaign.SourceEpoch.String() != event.SourceEpoch ||
+		!campaign.QueuedAt.Time.Equal(event.RequestedAt) || !campaign.DeadlineAt.Time.Equal(event.DeadlineAt) ||
+		campaign.ScheduledAt.Valid != (event.ScheduledFor != nil) ||
+		(event.ScheduledFor != nil && !campaign.ScheduledAt.Time.Equal(*event.ScheduledFor)) {
+		return false
+	}
+	return true
 }

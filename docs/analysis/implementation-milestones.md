@@ -172,7 +172,9 @@ scoped step-up authority, immutable evidence, fenced claims and broker/DB
 uncertainty. [Replay persistence](m05-replay-persistence-verification.md) adds migration 000025
 and generated conditional queries. [Request registration](m05-replay-registration-verification.md)
 adds purpose-bound credentials, current DB authority/revocable grants and atomic
-request audit, locally tested. Per-position claim/result/broker transactions,
+request audit, locally tested. [Dry-run eligibility](m05-replay-inspection-verification.md)
+checks exact acceptance, marker/state, holds and existing source controls without
+writes. Per-position claim/result/broker transactions,
 stale cleanup and CLI remain unwired and unverified.
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,

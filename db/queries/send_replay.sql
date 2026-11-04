@@ -112,3 +112,18 @@ WHERE id=sqlc.arg(id)::uuid AND application_id=sqlc.arg(application_id)::bigint
     AND staff_user_id=sqlc.arg(staff_user_id)::bigint AND request_id=sqlc.arg(request_id)::uuid
     AND issuer=sqlc.arg(issuer)::text AND deployment=sqlc.arg(deployment)::text
     AND selection_hash=sqlc.arg(selection_hash)::bytea FOR SHARE;
+
+-- name: ReplayPreparationRetryDue :one
+SELECT coalesce(preparation_next_attempt_at<=clock_timestamp(),true)::boolean AS due
+FROM notifications WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(notification_id)::bigint;
+
+-- name: ReplayTargetsSupported :one
+WITH targets AS (
+    SELECT * FROM notification_targets WHERE notification_id=sqlc.arg(notification_id)::bigint
+)
+SELECT (EXISTS(SELECT 1 FROM targets)
+    AND NOT EXISTS(SELECT 1 FROM targets WHERE application_id IS DISTINCT FROM sqlc.arg(application_id)::bigint
+        OR NOT ((target_type='BROADCAST' AND user_id IS NULL AND segment_id IS NULL AND upload_batch_id IS NULL)
+            OR (target_type='SEGMENT' AND user_id IS NULL AND segment_id IS NOT NULL AND upload_batch_id IS NULL)
+            OR (target_type='INDIVIDUAL' AND user_id IS NOT NULL AND segment_id IS NULL AND upload_batch_id IS NULL)))
+)::boolean AS supported;

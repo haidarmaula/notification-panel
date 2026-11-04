@@ -497,6 +497,47 @@ func (q *Queries) LockReplayRequest(ctx context.Context, arg LockReplayRequestPa
 	return i, err
 }
 
+const replayPreparationRetryDue = `-- name: ReplayPreparationRetryDue :one
+SELECT coalesce(preparation_next_attempt_at<=clock_timestamp(),true)::boolean AS due
+FROM notifications WHERE application_id=$1::bigint AND id=$2::bigint
+`
+
+type ReplayPreparationRetryDueParams struct {
+	ApplicationID  int64 `db:"application_id"`
+	NotificationID int64 `db:"notification_id"`
+}
+
+func (q *Queries) ReplayPreparationRetryDue(ctx context.Context, arg ReplayPreparationRetryDueParams) (bool, error) {
+	row := q.db.QueryRow(ctx, replayPreparationRetryDue, arg.ApplicationID, arg.NotificationID)
+	var due bool
+	err := row.Scan(&due)
+	return due, err
+}
+
+const replayTargetsSupported = `-- name: ReplayTargetsSupported :one
+WITH targets AS (
+    SELECT id, notification_id, target_type, segment_id, user_id, upload_batch_id, created_at, application_id FROM notification_targets WHERE notification_id=$2::bigint
+)
+SELECT (EXISTS(SELECT 1 FROM targets)
+    AND NOT EXISTS(SELECT 1 FROM targets WHERE application_id IS DISTINCT FROM $1::bigint
+        OR NOT ((target_type='BROADCAST' AND user_id IS NULL AND segment_id IS NULL AND upload_batch_id IS NULL)
+            OR (target_type='SEGMENT' AND user_id IS NULL AND segment_id IS NOT NULL AND upload_batch_id IS NULL)
+            OR (target_type='INDIVIDUAL' AND user_id IS NOT NULL AND segment_id IS NULL AND upload_batch_id IS NULL)))
+)::boolean AS supported
+`
+
+type ReplayTargetsSupportedParams struct {
+	ApplicationID  int64 `db:"application_id"`
+	NotificationID int64 `db:"notification_id"`
+}
+
+func (q *Queries) ReplayTargetsSupported(ctx context.Context, arg ReplayTargetsSupportedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, replayTargetsSupported, arg.ApplicationID, arg.NotificationID)
+	var supported bool
+	err := row.Scan(&supported)
+	return supported, err
+}
+
 const resolveReplayControl = `-- name: ResolveReplayControl :execrows
 UPDATE notification_replay_controls SET active_application_id=NULL,active_request_id=NULL,active_claim_token=NULL,
     resolved_application_id=$1,resolved_request_id=$2,resolved_outcome=$3

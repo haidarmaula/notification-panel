@@ -16,8 +16,9 @@ per-position replay, claim evidence or publish messages.
   SUPER_ADMIN has no wildcard. App locks serialize app-grant changes and staff
   locks serialize role/status changes.
 - The operational grant query checks revocation, scope and credential/grant/MFA
-  lifetime using database time. Header registration requires an ACTIVE app and
-  an unsealed deployment with active source. It does not inspect campaign
+  lifetime using database time. Header registration requires current scoped authority and
+  an unsealed deployment with active source. App holds permit bookkeeping for
+  historical no-op reconciliation; execution eligibility is a separate guard. It does not inspect campaign
   eligibility or imply that the source manifest has been verified against Kafka.
 - Header and `NOTIFICATION_REPLAY_REQUEST` audit commit atomically. Identical
   retries reauthorize, return the committed identity and add no audit. Changed
@@ -32,7 +33,7 @@ per-position replay, claim evidence or publish messages.
 Independent review found no concrete authority/lock/idempotency blocker in this
 slice. Tests observe the real PostgreSQL lock wait during grant revocation,
 then prove registration sees the committed revocation. Additional fixtures cover
-inactive staff/app, non-send roles, revoked app/replay grants, SUPER_ADMIN without
+inactive staff, non-send roles, revoked app/replay grants, SUPER_ADMIN without
 an app grant, atomic audit failure, two identical concurrent requests, and a real
 commit followed by lost acknowledgement. An idempotent retry still denies a
 subsequently revoked grant.
@@ -55,7 +56,9 @@ delivery and hosted CI are not verified by these fixtures.
 
 ## Next boundary
 
-Implement exact per-position acceptance/eligibility, atomic attempt+claim+audit,
+[Dry-run inspection](m05-replay-inspection-verification.md) now provides exact
+per-position acceptance/eligibility with no mutations and preserves held-app
+no-ops. Implement atomic attempt+claim+audit,
 revalidation through bounded broker publication/result commit, and stale-claim
 cleanup. Every mutation/publication transaction must repeat current authority;
 registration is not a durable authorization bypass. CLI/wiring remain disabled
