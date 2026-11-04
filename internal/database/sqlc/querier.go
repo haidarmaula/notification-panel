@@ -11,9 +11,12 @@ import (
 )
 
 type Querier interface {
+	AbandonExpiredReplayAttempt(ctx context.Context, arg AbandonExpiredReplayAttemptParams) (int64, error)
 	AdvanceMobileInstallation(ctx context.Context, arg AdvanceMobileInstallationParams) (MobileInstallation, error)
 	CampaignAcceptanceReady(ctx context.Context, arg CampaignAcceptanceReadyParams) (bool, error)
 	CampaignHasProtectedChildren(ctx context.Context, arg CampaignHasProtectedChildrenParams) (bool, error)
+	ClaimReplayControl(ctx context.Context, arg ClaimReplayControlParams) (int64, error)
+	ClearFinishedReplayClaim(ctx context.Context, arg ClearFinishedReplayClaimParams) (int64, error)
 	ClearScopedCampaignTargets(ctx context.Context, arg ClearScopedCampaignTargetsParams) error
 	CompleteCampaignPreparation(ctx context.Context, arg CompleteCampaignPreparationParams) (NotificationPreparation, error)
 	ConsumeMobileOrigin(ctx context.Context, arg ConsumeMobileOriginParams) (int64, error)
@@ -229,6 +232,7 @@ type Querier interface {
 	ExistsUserByExternalID(ctx context.Context, externalID string) (bool, error)
 	ExpireScopedSchedule(ctx context.Context, arg ExpireScopedScheduleParams) (int64, error)
 	ExpireUnpreparedCampaign(ctx context.Context, arg ExpireUnpreparedCampaignParams) error
+	FinishReplayAttempt(ctx context.Context, arg FinishReplayAttemptParams) (int64, error)
 	// Keep staff row when app/grant is absent, for correct 401/404 distinctions.
 	// No authorization/permission/status decision is implied by this data lookup.
 	GetApplicationAuthority(ctx context.Context, arg GetApplicationAuthorityParams) (GetApplicationAuthorityRow, error)
@@ -254,6 +258,7 @@ type Querier interface {
 	// ==========================================
 	GetNotificationDeliveryByID(ctx context.Context, id int64) (GetNotificationDeliveryByIDRow, error)
 	GetNotificationStatistics(ctx context.Context, notificationID int64) (GetNotificationStatisticsRow, error)
+	GetReplayAttempt(ctx context.Context, arg GetReplayAttemptParams) (NotificationReplayAttempt, error)
 	// ==========================================
 	// GET
 	// ==========================================
@@ -300,6 +305,11 @@ type Querier interface {
 	HoldCampaignPreparation(ctx context.Context, arg HoldCampaignPreparationParams) error
 	InsertInstallationBinding(ctx context.Context, arg InsertInstallationBindingParams) error
 	InsertPreparationIntents(ctx context.Context, arg InsertPreparationIntentsParams) (InsertPreparationIntentsRow, error)
+	InsertReplayAttempt(ctx context.Context, arg InsertReplayAttemptParams) (NotificationReplayAttempt, error)
+	InsertReplayControl(ctx context.Context, arg InsertReplayControlParams) error
+	// All mutation queries require the service's canonical control/authority locks.
+	// They are persistence primitives, not an authorization boundary.
+	InsertReplayRequest(ctx context.Context, arg InsertReplayRequestParams) (int64, error)
 	InsertSendOutbox(ctx context.Context, arg InsertSendOutboxParams) error
 	InsertSendQuarantine(ctx context.Context, arg InsertSendQuarantineParams) (int64, error)
 	// Includes revoked grants; application identity validated by owning service.
@@ -314,6 +324,7 @@ type Querier interface {
 	ListDeviceTokensByUser(ctx context.Context, arg ListDeviceTokensByUserParams) ([]DeviceToken, error)
 	ListDeviceTokensByUserIDs(ctx context.Context, userIds []int64) ([]DeviceToken, error)
 	ListDueScopedSchedules(ctx context.Context, pageSize int32) ([]ListDueScopedSchedulesRow, error)
+	ListExpiredReplayClaims(ctx context.Context, pageSize int32) ([]ListExpiredReplayClaimsRow, error)
 	// Does not authenticate the caller; service must check current authority first.
 	ListGrantedApplications(ctx context.Context, arg ListGrantedApplicationsParams) (ListGrantedApplicationsRow, error)
 	// One snapshot for both total and page, including an empty/out-of-range page.
@@ -405,6 +416,9 @@ type Querier interface {
 	LockNextScopedSendOutbox(ctx context.Context, arg LockNextScopedSendOutboxParams) (LockNextScopedSendOutboxRow, error)
 	LockNotificationRuntime(ctx context.Context) (LockNotificationRuntimeRow, error)
 	LockPreparationCampaign(ctx context.Context, arg LockPreparationCampaignParams) (LockPreparationCampaignRow, error)
+	LockReplayControl(ctx context.Context, arg LockReplayControlParams) (NotificationReplayControl, error)
+	LockReplayEvidence(ctx context.Context, arg LockReplayEvidenceParams) (NotificationSendDeadLetter, error)
+	LockReplayRequest(ctx context.Context, arg LockReplayRequestParams) (NotificationReplayRequest, error)
 	LockScopedCampaign(ctx context.Context, arg LockScopedCampaignParams) (string, error)
 	LockScopedCampaignTemplate(ctx context.Context, arg LockScopedCampaignTemplateParams) (string, error)
 	LockScopedSegment(ctx context.Context, arg LockScopedSegmentParams) (LockScopedSegmentRow, error)
@@ -426,6 +440,7 @@ type Querier interface {
 	ReplaceScopedTemplate(ctx context.Context, arg ReplaceScopedTemplateParams) (ReplaceScopedTemplateRow, error)
 	ReserveInstallationBindingID(ctx context.Context) (int64, error)
 	ResolveMobileIdentity(ctx context.Context, arg ResolveMobileIdentityParams) (int64, error)
+	ResolveReplayControl(ctx context.Context, arg ResolveReplayControlParams) (int64, error)
 	RetireInstallationBinding(ctx context.Context, arg RetireInstallationBindingParams) (int64, error)
 	ScheduleScopedCampaign(ctx context.Context, arg ScheduleScopedCampaignParams) (ScheduleScopedCampaignRow, error)
 	ScopedSegmentHasReferences(ctx context.Context, segmentID int64) (bool, error)

@@ -1,8 +1,9 @@
 # M05 operator reprocessing
 
-Status: proposed implementation contract, 2026-11-04. No replay service, schema,
-CLI, operational credential issuer or production activation is implemented by
-this document. It refines [ADR-02 A-4](../adr/adr-02-worker-consumption.md#a-4-operator-replay-and-retention),
+Status: implementation in progress, 2026-11-04. Migration 000025 and generated
+persistence primitives implement slice 1; see the
+[verification record](../analysis/m05-replay-persistence-verification.md). No replay
+service, CLI, operational credential issuer or production activation is implemented. It refines [ADR-02 A-4](../adr/adr-02-worker-consumption.md#a-4-operator-replay-and-retention),
 [ADR-11](../adr/adr-11-security-baseline.md) and
 [ADR-12](../adr/adr-12-multi-application-isolation.md).
 

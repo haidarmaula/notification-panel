@@ -689,3 +689,25 @@ Reasons are allowlisted codes and no public endpoint exposes raw input.
 Down refuses active sources or evidence. Source provisioning/verification,
 restricted operator access, encryption at rest, replay and retention remain
 production gates. See [quarantine contract](specs/m05-source-quarantine.md).
+
+### Operator replay persistence (M05)
+
+Migration 000025 adds three unwired replay tables. Request headers are immutable
+and unique per application/request UUID; their 32-byte fingerprint binds the
+complete normalized selection, actor/grant and change reference. An operational
+grant UUID records provenance only: it is not an authorization check.
+
+Attempts reference the existing physical quarantine position and optionally a
+campaign through its application-scoped composite foreign key. Initial inserts
+cannot claim publication or abandoned-cleanup success. Claim token, lease,
+acceptance identity and finalized outcomes cannot be rewritten. One control row
+per physical position serializes competing requests; it references its active
+attempt or an immutable published/prepared/terminal resolution. Time-based lease
+checks use database time rather than a time-dependent unique index.
+
+The generated SQL exposes conditional claim, finish, expired-abandon and
+resolution primitives. They require the replay service's authority, canonical
+lock order and atomic audit transactions; SQLC calls alone do not establish that
+protocol. Down refuses retained requests, attempts or control rows. No CLI,
+service, operational grant verifier or publisher is enabled by this migration.
+See the [reprocessing contract](specs/m05-operator-reprocessing.md).

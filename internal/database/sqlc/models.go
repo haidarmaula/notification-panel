@@ -199,6 +199,44 @@ type NotificationRead struct {
 	ApplicationID  pgtype.Int8        `db:"application_id"`
 }
 
+type NotificationReplayAttempt struct {
+	ApplicationID     int64              `db:"application_id"`
+	RequestID         pgtype.UUID        `db:"request_id"`
+	LogSourceID       pgtype.UUID        `db:"log_source_id"`
+	OriginalPartition int32              `db:"original_partition"`
+	OriginalOffset    int64              `db:"original_offset"`
+	NotificationID    pgtype.Int8        `db:"notification_id"`
+	OriginEpoch       pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch       pgtype.UUID        `db:"source_epoch"`
+	ClaimToken        pgtype.UUID        `db:"claim_token"`
+	LeaseExpiresAt    pgtype.Timestamptz `db:"lease_expires_at"`
+	Outcome           string             `db:"outcome"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at"`
+	FinishedAt        pgtype.Timestamptz `db:"finished_at"`
+}
+
+type NotificationReplayControl struct {
+	LogSourceID           pgtype.UUID `db:"log_source_id"`
+	OriginalPartition     int32       `db:"original_partition"`
+	OriginalOffset        int64       `db:"original_offset"`
+	ActiveApplicationID   pgtype.Int8 `db:"active_application_id"`
+	ActiveRequestID       pgtype.UUID `db:"active_request_id"`
+	ActiveClaimToken      pgtype.UUID `db:"active_claim_token"`
+	ResolvedApplicationID pgtype.Int8 `db:"resolved_application_id"`
+	ResolvedRequestID     pgtype.UUID `db:"resolved_request_id"`
+	ResolvedOutcome       pgtype.Text `db:"resolved_outcome"`
+}
+
+type NotificationReplayRequest struct {
+	ApplicationID      int64              `db:"application_id"`
+	ID                 pgtype.UUID        `db:"id"`
+	StaffUserID        int64              `db:"staff_user_id"`
+	OperationalGrantID pgtype.UUID        `db:"operational_grant_id"`
+	SelectionHash      []byte             `db:"selection_hash"`
+	ChangeReference    string             `db:"change_reference"`
+	CreatedAt          pgtype.Timestamptz `db:"created_at"`
+}
+
 type NotificationRuntime struct {
 	Singleton     bool        `db:"singleton"`
 	OriginEpoch   pgtype.UUID `db:"origin_epoch"`

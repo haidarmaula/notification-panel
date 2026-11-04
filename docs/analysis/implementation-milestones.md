@@ -169,7 +169,9 @@ fencing. [Recovery SPEC](../specs/m05-queued-recovery.md). Recovery lease/execut
 remain in M06; requeue/wiring remain open. The proposed
 [operator reprocessing contract](../specs/m05-operator-reprocessing.md) specifies
 scoped step-up authority, immutable evidence, fenced claims and broker/DB
-uncertainty. Its schema/service/CLI and credential integration are not implemented.
+uncertainty. [Replay persistence](m05-replay-persistence-verification.md) adds migration 000025
+and generated conditional queries. Service/CLI, authority and broker/audit
+transactions remain unwired and unverified.
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,
 preparation cancellation during rebalance, redelivery, offset fencing, and durable
