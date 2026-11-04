@@ -22,7 +22,7 @@ defaults:
 
 jobs:
   quality:
-    name: Format, build, unit tests and vet
+    name: Skill integrity, format, build, unit race tests and vet
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -37,6 +37,8 @@ jobs:
           cache: true
       - name: Check formatting
         run: bash scripts/ci.sh format
+      - name: Verify pinned Go skills
+        run: python3 scripts/check-go-skills.py
       - name: Verify modules
         run: bash scripts/ci.sh modules
       - name: Build all binaries

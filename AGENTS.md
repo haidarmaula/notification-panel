@@ -1,3 +1,9 @@
+**Go quality and documentation policy:** Read `docs/go-standards.md` before Go
+changes and apply the relevant pinned skills under `.agents/skills/` on demand.
+The project profile explicitly supersedes conflicting community defaults.
+Maintained documentation and explanatory code comments must be in English.
+Skill provenance and update rules are in `docs/tooling/go-skills.md`.
+
 # AGENTS.md
 
 Go notification-delivery backend (API server + Kafka worker + scheduler). Read this before editing code.

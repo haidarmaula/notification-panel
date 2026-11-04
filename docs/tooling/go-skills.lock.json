@@ -1,0 +1,133 @@
+{
+  "version": 1,
+  "repository": "https://github.com/samber/cc-skills-golang",
+  "commit": "bb1d43d98a3f8ab639a0042f90d0ec524e39a477",
+  "license": "MIT",
+  "license_sha256": "a6735e3815503be2fc1ae4813758cb3d0c24a5309df508309ce180cf5a4ead58",
+  "skills": [
+    {
+      "name": "golang-benchmark",
+      "sha256": "c6cf7a2862d9703c27b636e5cd7c0109164d70a3c99991a9caa7389150a3dcec"
+    },
+    {
+      "name": "golang-cli",
+      "sha256": "1abae41b4efe942946c328884670d4fcace4bd563663cd4893080829b59baccb"
+    },
+    {
+      "name": "golang-code-style",
+      "sha256": "5beae1d7a27e5f526529ea4f568784504d91f9b765379afccf6e582188a899ae"
+    },
+    {
+      "name": "golang-concurrency",
+      "sha256": "ce99367942573458e101f893d3dd4aae6a760a849eb3ba6f19b4d39f5654b8c3"
+    },
+    {
+      "name": "golang-context",
+      "sha256": "c1b317f5062fe121e8f074af1832baa43ea0ccb87f14e8e0381f71f2a4e703af"
+    },
+    {
+      "name": "golang-continuous-integration",
+      "sha256": "910480039d62f9ae76e0175ea21e7d0f75d236178e04179a6433c559e097ef13"
+    },
+    {
+      "name": "golang-data-structures",
+      "sha256": "ae64ed83f4e735ef2e3f285433d9aca00c69577ea9015f335e7356554599220d"
+    },
+    {
+      "name": "golang-database",
+      "sha256": "b657910c3315b73c74ae4deb759143d6d4c5e173acf4255634443ccde9d6b2ba"
+    },
+    {
+      "name": "golang-dependency-injection",
+      "sha256": "1a84e8fbf215f3b857aa5d39946a87ca215d5ba2e5141667fcc112220f2c925e"
+    },
+    {
+      "name": "golang-dependency-management",
+      "sha256": "89be55655f553baa1b7c2aafdfc91122ecf36703304aec92ff5ca787b8f203d9"
+    },
+    {
+      "name": "golang-design-patterns",
+      "sha256": "ee227624421b319b70a8fd602b03139cbf44173709c7c89c930873ed2b3b4fe3"
+    },
+    {
+      "name": "golang-documentation",
+      "sha256": "737cac5a296726d36fd1a0c988e35ad45a0784db6114f56680e5ce93713823a7"
+    },
+    {
+      "name": "golang-error-handling",
+      "sha256": "16ae3634298ce2e6f610ed4c062519fe44350472fba2f806de53a5f8d37b5074"
+    },
+    {
+      "name": "golang-gopls",
+      "sha256": "674be7a2ec89fa1dcece05dc63e7d7ab7d6165925f670f05fd602a96e2776102"
+    },
+    {
+      "name": "golang-how-to",
+      "sha256": "726a03a271e9b2f27a121dc4a9fa144c1cfdee2abe999c46d5eb3c05c9540428"
+    },
+    {
+      "name": "golang-lint",
+      "sha256": "b1d6a4a3cdc8954165721b930e94f1997e63cefb83d2bfff9feda9411fb2909f"
+    },
+    {
+      "name": "golang-modernize",
+      "sha256": "2dd9c4354f2619920dbb2c1273aac3dfe2c40cacc61d71e0160e2d39683fd4d4"
+    },
+    {
+      "name": "golang-naming",
+      "sha256": "36cf5f184522616a75531abb39bdb6ba2cba7c3036c796f43a7fe558c55c7f33"
+    },
+    {
+      "name": "golang-observability",
+      "sha256": "8545d4be7c658b665f1b8c6a27e99511a27e31da88870e9a3542b675ffe6d5c9"
+    },
+    {
+      "name": "golang-performance",
+      "sha256": "1592000d36d8133f37e83cb80a1d0bf21d88de65cd05fc8f07998f815f859734"
+    },
+    {
+      "name": "golang-pkg-go-dev",
+      "sha256": "d4a452ba4c1cfbc2dc44e6589816055fb86983fd13014c364b09f6b440961863"
+    },
+    {
+      "name": "golang-popular-libraries",
+      "sha256": "10470e648ccee516faae2ab1f35114d8cb6b4ac39f156c87bfc504a42b2ab10e"
+    },
+    {
+      "name": "golang-project-layout",
+      "sha256": "75a699b10b0f98b4a8b4020dfc4afaa300e292561b8fafc40805352eb8d6a78f"
+    },
+    {
+      "name": "golang-refactoring",
+      "sha256": "77e882edd13aa4a9f86c70d055ebb613d5b7a516661bd0db99506c47c3c28842"
+    },
+    {
+      "name": "golang-safety",
+      "sha256": "9ec1861df75c285e33a1ecb1cf5baf674c7beb0fea68bf16fcff9aedd5857a31"
+    },
+    {
+      "name": "golang-security",
+      "sha256": "50cfd0535a4c2e08a76085c2ed358c0bd34f842afd64fece4c7b9d18e549155e"
+    },
+    {
+      "name": "golang-stay-updated",
+      "sha256": "4a245960da93b46c89ca72ee1b8a520ed78414f8ee8e294c5d2254475b9cfd75"
+    },
+    {
+      "name": "golang-stretchr-testify",
+      "sha256": "dd22432c6a6c2a122e70566f8eef67b16665ac4b0833b71da4f14cbd7a91966d"
+    },
+    {
+      "name": "golang-structs-interfaces",
+      "sha256": "8ac986626970388492dc4621270bc83b3518deb0cd77cde1c910366ee326c2e0"
+    },
+    {
+      "name": "golang-testing",
+      "sha256": "6e43171612d7abd03eb52289da2fbcfcf655940f2d7f0d946277b4ee98a6cb79"
+    },
+    {
+      "name": "golang-troubleshooting",
+      "sha256": "a49ae86f059dd51a26f8ba5fd407eac97ba9ed8d38ea6ede0be6864ef3e7f870"
+    }
+  ]
+}

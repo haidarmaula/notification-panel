@@ -4,6 +4,13 @@
 **Last Updated:** 2026-09-10  
 **Language:** Go 1.26.10
 
+Engineering guidance: [Go standards](docs/go-standards.md) and
+[pinned Go skills](docs/tooling/go-skills.md).
+For current implementation status and release gates, use the
+[production readiness plan](docs/analysis/production-readiness-plan.md).
+The architecture overview below describes the earlier pipeline; its modern
+replacement is still under implementation and is not production-ready.
+
 ---
 
 ## Overview
