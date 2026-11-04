@@ -54,3 +54,12 @@ in src/notification/OneSignalService.ts. Its migration still needs secure proof
 storage, direct provider address acquisition, project-specific JWT/origin
 integration and lifecycle calls. Released-device behavior and broker/platform
 verification remain per-project acceptance items.
+
+## Reconcile a lost lifecycle response
+
+POST /{installation_id}/state under the installation collection accepts only
+proof and the project mobile Bearer JWT. A valid proof with the current owner
+returns installation_id, version, owner_epoch and has_active_binding. After
+logout clears ownership, a valid project user holding proof can reconcile the
+unbound state. A different current owner returns 404. Proof is never reissued.
+Use this state before retrying a mutation whose commit outcome is uncertain.

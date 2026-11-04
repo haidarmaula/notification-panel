@@ -86,8 +86,9 @@ and shared-provider address collisions roll back enrollment. The passing suite
 is recorded in /tmp/hello-m03d2-integration-final.txt (2026-11-04).
 
 The kaiapps2 source checkpoint still shows OneSignal. Released-app integration,
-broker/platform evidence and deployment policies remain open. M03c additionally
-retains provider invalidation and recovery acceptance before full completion.
+broker/platform evidence and deployment policies remain open. [State reconciliation and provider invalidation](m03c-reconciliation.md) are
+locally verified, including rollback and stale-generation tests. Provider result
+wiring and deployment acceptance remain downstream gates.
 
 Define enrollment, proof/version preconditions, same-owner refresh, logout,
 account switch, pending receipt reporting and payload identity independent of

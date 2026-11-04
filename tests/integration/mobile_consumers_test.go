@@ -132,6 +132,32 @@ func TestMobileConsumersAcrossProjects(t *testing.T) {
 	request(b, b.project, "/"+stateA["installation_id"]+"/refresh", refresh, 404)
 	request(a, b.project, "/"+stateA["installation_id"]+"/refresh", refresh, 401)
 	request(a, a.project, "/"+stateA["installation_id"]+"/logout", map[string]string{"proof": stateA["proof"], "version": "1"}, 200)
+
+	proofA := map[string]string{"proof": stateA["proof"]}
+	request(b, b.project, "/"+stateA["installation_id"]+"/state", proofA, 404)
+	request(a, a.project, "/"+stateA["installation_id"]+"/state", map[string]string{"proof": "wrong"}, 404)
+	// State has a boolean in addition to the string state fields.
+	payload, err := json.Marshal(proofA)
+	require.NoError(t, err)
+	r, err := http.NewRequestWithContext(ctx, http.MethodPost, server.URL+"/api/v1/apps/"+a.project+"/mobile/installations/"+stateA["installation_id"]+"/state", bytes.NewReader(payload))
+	require.NoError(t, err)
+	r.Header.Set("Content-Type", "application/json")
+	r.Header.Set("Authorization", "Bearer "+a.token)
+	response, err := a.client.Do(r)
+	require.NoError(t, err)
+	var snapshot struct {
+		Data struct {
+			Version          string  `json:"version"`
+			HasActiveBinding bool    `json:"has_active_binding"`
+			Proof            *string `json:"proof"`
+		} `json:"data"`
+	}
+	require.Equal(t, 200, response.StatusCode)
+	require.NoError(t, json.NewDecoder(response.Body).Decode(&snapshot))
+	require.NoError(t, response.Body.Close())
+	require.Equal(t, "2", snapshot.Data.Version)
+	require.False(t, snapshot.Data.HasActiveBinding)
+	require.Nil(t, snapshot.Data.Proof)
 	refresh["proof"] = stateB["proof"]
 	stateB = request(b, b.project, "/"+stateB["installation_id"]+"/refresh", refresh, 200)
 	require.Equal(t, "1", stateB["version"])

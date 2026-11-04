@@ -171,6 +171,54 @@ func TestInstallationBindingSchema(t *testing.T) {
 	require.EqualValues(t, 3, id(`SELECT count(*) FROM installation_bindings b JOIN mobile_installations i ON i.id=b.installation_id
 		WHERE i.public_id=$1 AND b.retired_at IS NOT NULL`, enrolled.State.PublicID))
 
+	// A lost logout response can be reconciled without exposing or reissuing proof.
+	snapshot, err := lifecycle.ReadState(ctx, destination, enrolled.State.PublicID, enrolled.Proof)
+	require.NoError(t, err)
+	require.EqualValues(t, 4, snapshot.Version)
+	require.False(t, snapshot.HasActiveBinding)
+	_, err = lifecycle.ReadState(ctx, destination, enrolled.State.PublicID, "wrong-proof")
+	require.ErrorIs(t, err, installation.ErrNotFound)
+
+	recovery, err := lifecycle.Enroll(ctx, actor, route, "invalidation-original")
+	require.NoError(t, err)
+	originalBinding := id(`SELECT b.id FROM installation_bindings b JOIN mobile_installations i ON i.id=b.installation_id
+		WHERE i.public_id=$1 AND b.retired_at IS NULL`, recovery.State.PublicID)
+	refresh := installation.Change{InstallationID: recovery.State.PublicID, Proof: recovery.Proof, ExpectedVersion: 1,
+		Operation: installation.Refresh, Route: route, Address: "invalidation-replacement"}
+	updated, err := lifecycle.Apply(ctx, actor, refresh)
+	require.NoError(t, err)
+	require.EqualValues(t, 2, updated.Version)
+	changed, err := lifecycle.Invalidate(ctx, a, recovery.State.PublicID, originalBinding, 1)
+	require.NoError(t, err)
+	require.False(t, changed)
+	currentBinding := id(`SELECT b.id FROM installation_bindings b JOIN mobile_installations i ON i.id=b.installation_id
+		WHERE i.public_id=$1 AND b.retired_at IS NULL`, recovery.State.PublicID)
+	_, err = lifecycle.ReadState(ctx, installation.Principal{ApplicationID: a, UserID: nextOwner}, recovery.State.PublicID, recovery.Proof)
+	require.ErrorIs(t, err, installation.ErrNotFound)
+	exec("ALTER TABLE mobile_installations ADD CONSTRAINT fixture_reject_invalidation CHECK (version <> 3) NOT VALID")
+	changed, err = lifecycle.Invalidate(ctx, a, recovery.State.PublicID, currentBinding, 1)
+	require.Error(t, err)
+	require.False(t, changed)
+	snapshot, err = lifecycle.ReadState(ctx, actor, recovery.State.PublicID, recovery.Proof)
+	require.NoError(t, err)
+	require.EqualValues(t, 2, snapshot.Version)
+	require.True(t, snapshot.HasActiveBinding)
+	exec("ALTER TABLE mobile_installations DROP CONSTRAINT fixture_reject_invalidation")
+	// Provider revocation remains allowed while dispatch is held.
+	exec("UPDATE applications SET status='HELD' WHERE id=$1", a)
+	changed, err = lifecycle.Invalidate(ctx, a, recovery.State.PublicID, currentBinding, 1)
+	require.NoError(t, err)
+	require.True(t, changed)
+	changed, err = lifecycle.Invalidate(ctx, a, recovery.State.PublicID, currentBinding, 1)
+	require.NoError(t, err)
+	require.False(t, changed)
+	exec("UPDATE applications SET status='ACTIVE' WHERE id=$1", a)
+	snapshot, err = lifecycle.ReadState(ctx, actor, recovery.State.PublicID, recovery.Proof)
+	require.NoError(t, err)
+	require.EqualValues(t, 3, snapshot.Version)
+	require.EqualValues(t, 1, snapshot.OwnerEpoch)
+	require.False(t, snapshot.HasActiveBinding)
+
 	testMobileLifecycleHTTP(t, tx, publicA)
 
 }

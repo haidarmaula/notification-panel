@@ -20,6 +20,7 @@ func RegisterMobileLifecycle(mux *http.ServeMux, runtime *installation.Runtime) 
 	mux.HandleFunc("POST /api/v1/apps/{app_id}/mobile/installations/{installation_id}/refresh", h.serve)
 	mux.HandleFunc("POST /api/v1/apps/{app_id}/mobile/installations/{installation_id}/logout", h.serve)
 	mux.HandleFunc("POST /api/v1/apps/{app_id}/mobile/installations/{installation_id}/switch", h.serve)
+	mux.HandleFunc("POST /api/v1/apps/{app_id}/mobile/installations/{installation_id}/state", h.serve)
 }
 
 type mobileLifecycleInput struct {
@@ -93,11 +94,14 @@ func (h mobileLifecycle) serve(w http.ResponseWriter, r *http.Request) {
 		badBody(w)
 		return
 	}
+	stateRead := strings.HasSuffix(r.Pattern, "/state")
 	operation := installation.Refresh
 	fields := []string{"proof", "version", "platform", "address_type", "address"}
 	switch {
 	case enroll:
 		fields = []string{"platform", "address_type", "address", "origin"}
+	case stateRead:
+		fields = []string{"proof"}
 	case strings.HasSuffix(r.Pattern, "/logout"):
 		operation = installation.Logout
 		fields = []string{"proof", "version"}
@@ -109,7 +113,7 @@ func (h mobileLifecycle) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var route installation.Route
-	if operation != installation.Logout {
+	if !stateRead && operation != installation.Logout {
 		var ok bool
 		route, ok = h.runtime.Route(id, input.Platform, input.AddressType)
 		if !ok || !installation.ValidAddress(input.Address) {
@@ -129,6 +133,23 @@ func (h mobileLifecycle) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		response.JSON(w, http.StatusCreated, mobileState(result.State, result.Proof), "success")
+		return
+	}
+	if stateRead {
+		actor, err := h.runtime.Authority.Authenticate(r.Context(), id, credential)
+		if err != nil {
+			mobileError(w, err)
+			return
+		}
+		snapshot, err := h.runtime.Lifecycle.ReadState(r.Context(), actor, installationID, input.Proof)
+		if err != nil {
+			mobileError(w, err)
+			return
+		}
+		response.JSON(w, http.StatusOK, struct {
+			mobileLifecycleView
+			HasActiveBinding bool `json:"has_active_binding"`
+		}{mobileState(snapshot.State, ""), snapshot.HasActiveBinding}, "success")
 		return
 	}
 	version, ok := campaignReferenceID(input.Version)
