@@ -34,6 +34,20 @@ The dependency scan does not close runtime findings; C21 is separately remediate
 
 ---
 
+## Modern Go audit — 2026-11-04
+
+This scoped review covers `internal/dispatch`, `internal/installation` and their
+related SQL/callers/tests against the adopted Go standards. It does not reconcile
+all historical findings or establish production readiness.
+
+| ID | Severity | Finding and remediation |
+| --- | --- | --- |
+| GA1 | P2 | Mobile identity/origin database calls and lifecycle transactions inherited caller contexts without an internal deadline; lifecycle rollback used unbounded Background. A held project row or stalled pool could retain connections indefinitely. Fixed with five-second operation budgets, context propagation through transaction callbacks/retries, and independent one-second cleanup. Earlier caller deadlines and ownership checks are preserved. |
+| GA2 | P2 | Kafka source approval during Fetch could wait on PostgreSQL for the entire generation lifetime. Fixed with a five-second database-check budget; idle Kafka waiting still follows generation cancellation. |
+
+Regression evidence and the remaining review boundary are recorded in
+[the modern Go audit](docs/analysis/modern-go-audit.md).
+
 ## Critical Findings
 
 Crashes, security bypasses, data corruption, or issues that affect every user of a given endpoint.

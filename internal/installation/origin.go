@@ -45,6 +45,8 @@ type originClaims struct {
 }
 
 func (v *SignedOrigin) VerifyOrigin(ctx context.Context, binding OriginContext, evidence string) error {
+	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
 	if !binding.ProjectID.Valid || len(evidence) == 0 || len(evidence) > 16384 {
 		return ErrMobileOrigin
 	}

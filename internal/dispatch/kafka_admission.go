@@ -103,6 +103,8 @@ type generationAdmissionReader struct {
 }
 
 func (r *generationAdmissionReader) approved(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	runtime, err := r.q.LockNotificationRuntime(ctx)
 	if err != nil {
 		return err

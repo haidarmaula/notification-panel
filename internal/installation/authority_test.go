@@ -16,17 +16,24 @@ import (
 )
 
 type identityFixture struct {
-	app  sqlc.Application
-	last sqlc.ResolveMobileIdentityParams
+	app          sqlc.Application
+	last         sqlc.ResolveMobileIdentityParams
+	checkContext func(context.Context)
 }
 
-func (f *identityFixture) GetApplicationByPublicID(_ context.Context, id pgtype.UUID) (sqlc.Application, error) {
+func (f *identityFixture) GetApplicationByPublicID(ctx context.Context, id pgtype.UUID) (sqlc.Application, error) {
+	if f.checkContext != nil {
+		f.checkContext(ctx)
+	}
 	app := f.app
 	app.PublicID = id
 	return app, nil
 }
 
-func (f *identityFixture) ResolveMobileIdentity(_ context.Context, p sqlc.ResolveMobileIdentityParams) (int64, error) {
+func (f *identityFixture) ResolveMobileIdentity(ctx context.Context, p sqlc.ResolveMobileIdentityParams) (int64, error) {
+	if f.checkContext != nil {
+		f.checkContext(ctx)
+	}
 	f.last = p
 	if p.Subject != "known" {
 		return 0, pgx.ErrNoRows
@@ -35,15 +42,66 @@ func (f *identityFixture) ResolveMobileIdentity(_ context.Context, p sqlc.Resolv
 }
 
 type originFixture struct {
-	context OriginContext
+	context      OriginContext
+	checkContext func(context.Context)
 }
 
-func (f *originFixture) VerifyOrigin(_ context.Context, c OriginContext, evidence string) error {
+func (f *originFixture) VerifyOrigin(ctx context.Context, c OriginContext, evidence string) error {
+	if f.checkContext != nil {
+		f.checkContext(ctx)
+	}
 	f.context = c
 	if evidence != "fixture-evidence" {
 		return ErrMobileOrigin
 	}
 	return nil
+}
+
+func TestMobileAuthorityBoundsIdentityAndOriginCalls(t *testing.T) {
+	key, signer, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	project := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
+	credential, err := jwt.NewWithClaims(jwt.SigningMethodEdDSA, mobileClaims{
+		Purpose: "mobile",
+		RegisteredClaims: jwt.RegisteredClaims{
+			Issuer: "issuer", Subject: "known", Audience: jwt.ClaimStrings{"app"},
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Minute)),
+		},
+	}).SignedString(signer)
+	require.NoError(t, err)
+	for _, name := range []string{"default deadline", "earlier caller deadline"} {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			var callerDeadline time.Time
+			if name == "earlier caller deadline" {
+				var cancel context.CancelFunc
+				ctx, cancel = context.WithTimeout(ctx, time.Second)
+				defer cancel()
+				callerDeadline, _ = ctx.Deadline()
+			}
+			var deadlines []time.Time
+			check := func(ctx context.Context) {
+				deadline, ok := ctx.Deadline()
+				require.True(t, ok, "identity and origin calls need a server-side deadline")
+				require.LessOrEqual(t, time.Until(deadline), 5*time.Second)
+				if !callerDeadline.IsZero() {
+					require.Equal(t, callerDeadline, deadline)
+				}
+				deadlines = append(deadlines, deadline)
+			}
+			store := &identityFixture{app: sqlc.Application{ID: 9, Status: "ACTIVE"}, checkContext: check}
+			origin := &originFixture{checkContext: check}
+			authority, err := NewMobileAuthority(store, map[pgtype.UUID]MobilePolicy{
+				project: {Issuer: "issuer", Audience: "app", Purpose: "mobile", Namespace: "users", VerificationKey: key, Origin: origin},
+			})
+			require.NoError(t, err)
+			_, err = authority.AuthenticateEnrollment(ctx, project, credential, "fixture-evidence")
+			require.NoError(t, err)
+			require.Len(t, deadlines, 3)
+			require.Equal(t, deadlines[0], deadlines[1], "identity resolution must share the original budget")
+			require.Equal(t, deadlines[0], deadlines[2], "origin verification must share the original budget")
+		})
+	}
 }
 
 func TestMobileAuthorityPinsProjectAndEnrollmentOrigin(t *testing.T) {

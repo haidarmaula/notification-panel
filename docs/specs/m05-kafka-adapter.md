@@ -29,6 +29,11 @@ the deployment unsealed. Startup/assignment verification matches the immutable
 database source and broker cluster/topic/assigned partitions. Current source
 approval is rechecked before handing a message to admission.
 
+Each database source-approval check has a five-second budget independent of the
+generation's potentially long lifetime, while preserving any earlier caller
+deadline. Idle message waiting still follows generation/caller cancellation;
+this database limit is not an idle-reader timeout.
+
 Pinned kafka-go v0.4.51 exposes Metadata v0–8 and does not return Kafka's topic
 UUID. Therefore the incarnation generation is an operator-verified manifest,
 not automatic detection of topic recreation. Production requires provisioning

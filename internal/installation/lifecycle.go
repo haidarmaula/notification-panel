@@ -105,7 +105,7 @@ func requireLifecycleActor(ctx context.Context, q *sqlc.Queries, actor Principal
 
 func (s *Lifecycle) Enroll(ctx context.Context, actor Principal, route Route, address string) (Enrollment, error) {
 	var result Enrollment
-	err := s.write(ctx, func(q *sqlc.Queries) error {
+	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		if err := requireLifecycleActor(ctx, q, actor); err != nil {
 			return err
 		}
@@ -136,7 +136,7 @@ func (s *Lifecycle) Apply(ctx context.Context, actor Principal, change Change) (
 		return State{}, ErrTransition
 	}
 	var result State
-	err := s.write(ctx, func(q *sqlc.Queries) error {
+	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		if err := requireLifecycleActor(ctx, q, actor); err != nil {
 			return err
 		}
@@ -243,7 +243,9 @@ func (s *Lifecycle) insertBinding(ctx context.Context, q *sqlc.Queries, row sqlc
 	return err
 }
 
-func (s *Lifecycle) write(ctx context.Context, fn func(*sqlc.Queries) error) error {
+func (s *Lifecycle) write(ctx context.Context, fn func(context.Context, *sqlc.Queries) error) error {
+	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
 	for attempt := 0; attempt < 3; attempt++ {
 		err := s.attempt(ctx, fn)
 		var pgErr *pgconn.PgError
@@ -254,13 +256,18 @@ func (s *Lifecycle) write(ctx context.Context, fn func(*sqlc.Queries) error) err
 	panic("unreachable")
 }
 
-func (s *Lifecycle) attempt(ctx context.Context, fn func(*sqlc.Queries) error) error {
+func (s *Lifecycle) attempt(ctx context.Context, fn func(context.Context, *sqlc.Queries) error) error {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(context.Background())
-	if err := fn(sqlc.New(tx)); err != nil {
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), rollbackTimeout)
+		defer cancel()
+		// Cleanup needs an uncanceled budget even after the operation expires.
+		_ = tx.Rollback(cleanup)
+	}()
+	if err := fn(ctx, sqlc.New(tx)); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)

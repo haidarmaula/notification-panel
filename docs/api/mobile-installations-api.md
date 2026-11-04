@@ -19,6 +19,14 @@ one-time enrollment proof securely. An invalid JWT or origin assertion returns
 conflict and non-ACTIVE project return 409. Invalid input returns 400.
 Responses use the existing envelope and Cache-Control: no-store.
 
+Authentication (including origin verification) and each lifecycle operation have
+separate five-second server budgets. Lifecycle retries share the same operation
+deadline, covering pool acquisition, locking, SQL and commit. A shorter caller
+deadline remains authoritative. Rollback gets an independent one-second cleanup
+budget so caller cancellation does not strand a transaction. These are local
+resource bounds, not a production latency SLO. Unknown timeout/commit errors keep
+the generic 500 response; reconcile uncertain mutation outcomes before retrying.
+
 The config file has current_key_version, fingerprint_key, encryption_keys
 (entries with version and key), and projects. Each project has app_id, issuer,
 audience, purpose, namespace, verification_key, origin_issuer, origin_audience,

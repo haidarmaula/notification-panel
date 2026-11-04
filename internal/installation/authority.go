@@ -90,6 +90,8 @@ func (a *MobileAuthority) AuthenticateEnrollment(ctx context.Context, project pg
 }
 
 func (a *MobileAuthority) authenticate(ctx context.Context, project pgtype.UUID, credential string, evidence *string) (Principal, error) {
+	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
+	defer cancel()
 	policy, ok := a.policies[project]
 	if !ok || len(credential) == 0 || len(credential) > 8192 {
 		return Principal{}, ErrMobileCredential

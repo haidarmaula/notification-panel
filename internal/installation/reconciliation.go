@@ -18,7 +18,7 @@ type StateSnapshot struct {
 // owner belonging to another account remains hidden from the authenticated user.
 func (s *Lifecycle) ReadState(ctx context.Context, actor Principal, id pgtype.UUID, proof string) (StateSnapshot, error) {
 	var result StateSnapshot
-	err := s.write(ctx, func(q *sqlc.Queries) error {
+	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		if err := requireLifecycleActor(ctx, q, actor); err != nil {
 			return err
 		}
@@ -52,7 +52,7 @@ func (s *Lifecycle) Invalidate(ctx context.Context, applicationID int64, id pgty
 		return false, ErrTransition
 	}
 	changed := false
-	err := s.write(ctx, func(q *sqlc.Queries) error {
+	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		changed = false
 		if _, err := q.LockInstallationProject(ctx, applicationID); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {

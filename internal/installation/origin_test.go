@@ -16,11 +16,15 @@ import (
 )
 
 type originUseFixture struct {
-	calls  int
-	result int64
+	calls        int
+	result       int64
+	checkContext func(context.Context)
 }
 
-func (f *originUseFixture) ConsumeMobileOrigin(_ context.Context, p sqlc.ConsumeMobileOriginParams) (int64, error) {
+func (f *originUseFixture) ConsumeMobileOrigin(ctx context.Context, p sqlc.ConsumeMobileOriginParams) (int64, error) {
+	if f.checkContext != nil {
+		f.checkContext(ctx)
+	}
 	f.calls++
 	return f.result, nil
 }
@@ -64,6 +68,11 @@ func TestSignedOriginBindsEvidenceBeforeConsuming(t *testing.T) {
 	expired.ExpiresAt = jwt.NewNumericDate(now.Add(-time.Second))
 	require.ErrorIs(t, verifier.VerifyOrigin(ctx, binding, mint(expired)), ErrMobileOrigin)
 	require.Zero(t, store.calls)
+	store.checkContext = func(ctx context.Context) {
+		deadline, ok := ctx.Deadline()
+		require.True(t, ok, "replay consumption needs a server-side deadline")
+		require.LessOrEqual(t, time.Until(deadline), 5*time.Second)
+	}
 	require.NoError(t, verifier.VerifyOrigin(ctx, binding, raw))
 	store.result = 0
 	require.ErrorIs(t, verifier.VerifyOrigin(ctx, binding, raw), ErrMobileOrigin)
