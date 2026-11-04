@@ -149,6 +149,7 @@ type Querier interface {
 	// CREATE
 	// ==========================================
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeferSendOutbox(ctx context.Context, arg DeferSendOutboxParams) error
 	// ==========================================
 	// DELETE
 	// ==========================================
@@ -162,6 +163,7 @@ type Querier interface {
 	// ==========================================
 	DeleteNotificationTarget(ctx context.Context, id int64) error
 	DeleteNotificationTargetsByNotification(ctx context.Context, notificationID int64) error
+	DeletePublishedSendOutbox(ctx context.Context, id int64) (int64, error)
 	// ==========================================
 	// DELETE
 	// ==========================================
@@ -392,6 +394,7 @@ type Querier interface {
 	LockInstallationProject(ctx context.Context, applicationID int64) (string, error)
 	LockInstallationUser(ctx context.Context, arg LockInstallationUserParams) (int64, error)
 	LockMobileInstallation(ctx context.Context, arg LockMobileInstallationParams) (MobileInstallation, error)
+	LockNextScopedSendOutbox(ctx context.Context, arg LockNextScopedSendOutboxParams) (LockNextScopedSendOutboxRow, error)
 	LockNotificationRuntime(ctx context.Context) (LockNotificationRuntimeRow, error)
 	LockScopedCampaign(ctx context.Context, arg LockScopedCampaignParams) (string, error)
 	LockScopedCampaignTemplate(ctx context.Context, arg LockScopedCampaignTemplateParams) (string, error)

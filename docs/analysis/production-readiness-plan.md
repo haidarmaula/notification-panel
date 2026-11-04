@@ -187,8 +187,11 @@ M04 acceptance/scheduling tersedia dan lulus lokal melalui migration 000022,
 [kontrak transaksi](../specs/m04-durable-acceptance.md) dan
 [API](../api/campaign-acceptance-api.md). Uji PostgreSQL mencakup request
 serentak dengan key sama, replay saat hold, pencabutan grant, coverage legacy,
-rollback audit, promotion dan expiry. Outbox belum didrain; M04 belum selesai.
-Deployment tetap sealed/held dan tidak mengirim ke provider.
+rollback audit, promotion dan expiry. Library dispatcher outbox juga lulus uji
+Kafka lokal, broker tidak tersedia, dua dispatcher, seal/epoch fence dan
+ack-sebelum-commit gagal. Dispatcher belum dipasang ke binary; M04 masih menunggu
+admission M05 dan aktivasi scheduler yang aman. Deployment tetap sealed/held
+dan tidak mengirim ke provider.
 
 ## 5. Checklist pelaksanaan
 

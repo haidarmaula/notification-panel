@@ -146,3 +146,9 @@ Nomor step bukan urutan coding yang sepenuhnya linear. Step 20 mencakup fondasi
 lintas M02/M03/M04; step 21 (provider execution) dipetakan ke M06 setelah M05
 admission. Urutan dependensi saat ini tetap M03 → M04 → M05 → M06. Menyelesaikan
 registry M03a tidak menutup step 20 atau langsung mengaktifkan FCM produksi.
+
+M04 acceptance/scheduling dan library dispatcher telah lulus pengujian lokal.
+Dispatcher tetap unwired sampai admission M05 mendukung envelope modern dan
+aktivasi scheduler direview; hasil ini belum menutup milestone M04 atau gate
+produksi. Kontrak dan batas crash tersedia di
+[SPEC outbox](../specs/m04-outbox-dispatch.md).

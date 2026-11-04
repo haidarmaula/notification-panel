@@ -78,6 +78,7 @@
     }
   ],
   "query_files": [
+    {"path": "db/queries/send_outbox.sql", "scope": "application-scoped", "names": ["DeferSendOutbox", "DeletePublishedSendOutbox", "LockNextScopedSendOutbox"]},
     {"path": "db/queries/durable_acceptance.sql", "scope": "application-scoped", "names": ["CampaignAcceptanceReady", "DeleteSendKey", "ExpireScopedSchedule", "GetApplicationDispatchPolicy", "GetSendKey", "InsertSendOutbox", "ListDueScopedSchedules", "LockAcceptanceStaff", "LockCampaignAcceptance", "LockNotificationRuntime", "PromoteScopedCampaign", "QueueScopedCampaign", "ScheduleScopedCampaign", "StoreSendKey"]},
     {"path": "db/queries/mobile_origin.sql", "scope": "application-scoped", "names": ["ConsumeMobileOrigin"]},
     {"path": "db/queries/mobile_identity.sql", "scope": "application-scoped", "names": ["ResolveMobileIdentity"]},
