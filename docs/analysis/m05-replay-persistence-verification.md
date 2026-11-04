@@ -31,7 +31,9 @@ full PostgreSQL/Kafka integration runner pass. All 25 migrations pass up/down/up
 The runner includes its existing local Firebase SDK HTTP simulation; no real
 provider, device or operational credential issuer is involved.
 
-The operational grant UUID is opaque provenance at this layer. Authority,
-selection hashing and full request conflict checks, acceptance eligibility,
+The [request/credential verifier](../specs/m05-replay-credential.md) now supplies
+stable selection hashing and authenticated provenance, with unit/race evidence.
+The operational grant UUID is opaque provenance at this layer. DB authority,
+full request conflict checks, acceptance eligibility,
 atomic audit, broker I/O/result reconciliation, service-owned stale cleanup and
 CLI remain subsequent slices. No public or executable replay path is wired.

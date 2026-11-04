@@ -43,7 +43,10 @@ binds the verified operational credential to the app and source selection.
 Grant issuance/revocation uses a restricted operational channel, separate from
 ordinary staff CRUD. The credential must remain valid through the bounded
 publication attempt. Issuance integration and step-up verification are release
-gates, not supplied by a `--actor` option.
+gates, not supplied by a `--actor` option. The
+[credential contract](m05-replay-credential.md) defines the local pinned Ed25519
+verifier and complete request fingerprint. Database authority and revocation
+checks remain separate mandatory transaction work.
 
 Unauthorized and out-of-scope positions return the same redacted classification.
 Do not expose a decoded application or campaign identity before authority and
