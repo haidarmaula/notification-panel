@@ -19,11 +19,13 @@ var (
 	ErrMobileOrigin     = errors.New("mobile origin verification required")
 )
 
+// MobileIdentityStore resolves projects and trusted subject mappings to active users.
 type MobileIdentityStore interface {
 	GetApplicationByPublicID(context.Context, pgtype.UUID) (sqlc.Application, error)
 	ResolveMobileIdentity(context.Context, sqlc.ResolveMobileIdentityParams) (int64, error)
 }
 
+// OriginContext binds enrollment evidence to a project, identity and exact mobile JWT.
 type OriginContext struct {
 	ProjectID        pgtype.UUID
 	Namespace        string
@@ -37,6 +39,7 @@ type OriginVerifier interface {
 	VerifyOrigin(context.Context, OriginContext, string) error
 }
 
+// MobilePolicy pins a project's JWT trust, identity namespace and enrollment origin verifier.
 type MobilePolicy struct {
 	Issuer          string
 	Audience        string
@@ -46,6 +49,7 @@ type MobilePolicy struct {
 	Origin          OriginVerifier
 }
 
+// MobileAuthority authenticates project-scoped mobile identities against current database state.
 type MobileAuthority struct {
 	store    MobileIdentityStore
 	policies map[pgtype.UUID]MobilePolicy
@@ -55,6 +59,8 @@ func validIdentityText(value string) bool {
 	return value != "" && len(value) <= 255 && utf8.ValidString(value) && !strings.ContainsRune(value, 0)
 }
 
+// NewMobileAuthority validates policies and copies the policy map and verification keys.
+// Each configured project must have a distinct issuer/audience pair and an origin verifier.
 func NewMobileAuthority(store MobileIdentityStore, policies map[pgtype.UUID]MobilePolicy) (*MobileAuthority, error) {
 	if store == nil {
 		return nil, ErrConfiguration
@@ -81,10 +87,15 @@ type mobileClaims struct {
 	jwt.RegisteredClaims
 }
 
+// Authenticate verifies the project JWT and resolves its subject to an active user.
+// It does not verify app origin and cannot establish enrollment authority by itself.
 func (a *MobileAuthority) Authenticate(ctx context.Context, project pgtype.UUID, credential string) (Principal, error) {
 	return a.authenticate(ctx, project, credential, nil)
 }
 
+// AuthenticateEnrollment also verifies origin evidence bound to the authenticated JWT.
+// The configured verifier owns replay protection; consumed evidence may need replacement
+// if the subsequent enrollment fails.
 func (a *MobileAuthority) AuthenticateEnrollment(ctx context.Context, project pgtype.UUID, credential, evidence string) (Principal, error) {
 	return a.authenticate(ctx, project, credential, &evidence)
 }

@@ -29,8 +29,10 @@ type PreparationResult struct {
 	EligibleDevices  int64
 }
 
+// Preparer owns atomic audience snapshots and intent creation for accepted sends.
 type Preparer struct{ db Transactor }
 
+// NewPreparer requires a database; preparation performs no broker or provider I/O.
 func NewPreparer(db Transactor) (*Preparer, error) {
 	if db == nil {
 		return nil, errors.New("preparation requires database")
@@ -39,7 +41,12 @@ func NewPreparer(db Transactor) (*Preparer, error) {
 }
 
 func preparationResult(row sqlc.NotificationPreparation) PreparationResult {
-	return PreparationResult{true, row.ResolvedUserCount, row.EligibleUserCount, row.EligibleDeviceCount}
+	return PreparationResult{
+		SnapshotComplete: true,
+		ResolvedUsers:    row.ResolvedUserCount,
+		EligibleUsers:    row.EligibleUserCount,
+		EligibleDevices:  row.EligibleDeviceCount,
+	}
 }
 
 // Prepare atomically persists the complete audience and intents without network

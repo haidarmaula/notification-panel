@@ -9,6 +9,7 @@ import (
 	"hello/internal/database/sqlc"
 )
 
+// StateSnapshot reports installation state and whether a current binding remains active.
 type StateSnapshot struct {
 	State
 	HasActiveBinding bool

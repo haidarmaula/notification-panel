@@ -1,4 +1,4 @@
-// Package installation protects mobile installation proofs and provider addresses.
+// Package installation verifies mobile identities and manages protected installation bindings.
 package installation
 
 import (
@@ -26,7 +26,8 @@ var (
 	ErrCiphertext    = errors.New("invalid protected provider address")
 )
 
-// NewProof returns a one-time credential and the verifier to persist.
+// NewProof returns a new installation credential and the verifier to persist.
+// Disclose the credential only in the successful enrollment response.
 func NewProof() (string, [sha256.Size]byte, error) {
 	var secret [secretSize]byte
 	if _, err := rand.Read(secret[:]); err != nil {
@@ -39,6 +40,8 @@ func proofDigest(secret []byte) [sha256.Size]byte {
 	return sha256.Sum256(append([]byte("hello:installation-proof:v1\x00"), secret...))
 }
 
+// VerifyProof checks a canonical installation credential against its stored verifier
+// using a constant-time digest comparison. Malformed inputs fail verification.
 func VerifyProof(credential string, verifier []byte) bool {
 	if len(credential) != base64.RawURLEncoding.EncodedLen(secretSize) || len(verifier) != sha256.Size {
 		return false
@@ -58,6 +61,8 @@ type BindingIdentity struct {
 	BindingID      int64
 }
 
+// ProtectedAddress contains the encrypted address and its stable conflict-detection fingerprint.
+// These values are internal storage material and are excluded from JSON.
 type ProtectedAddress struct {
 	Ciphertext  []byte            `json:"-"`
 	Fingerprint [sha256.Size]byte `json:"-"`
@@ -72,6 +77,8 @@ type Protector struct {
 	fingerprintKey [secretSize]byte
 }
 
+// NewProtector validates and copies encryption and fingerprint key material.
+// The current encryption version must exist; retained versions remain available for reads.
 func NewProtector(current int32, encryptionKeys map[int32][]byte, fingerprintKey []byte) (*Protector, error) {
 	if current <= 0 || len(fingerprintKey) != secretSize {
 		return nil, ErrConfiguration
@@ -109,6 +116,8 @@ func bindingAAD(id BindingIdentity, version int32) ([]byte, bool) {
 	return binary.BigEndian.AppendUint32(aad, uint32(version)), true
 }
 
+// Protect seals exact address bytes under the current key and immutable binding identity.
+// Its fingerprint detects equal addresses within the same provider namespace and address type.
 func (p *Protector) Protect(id BindingIdentity, namespace, addressType, address string) (ProtectedAddress, error) {
 	aad, ok := bindingAAD(id, p.current)
 	if !ok || len(namespace) == 0 || len(namespace) > 255 || len(address) == 0 || len(address) > maxAddressBytes ||
@@ -126,6 +135,8 @@ func (p *Protector) Protect(id BindingIdentity, namespace, addressType, address 
 	return out, nil
 }
 
+// Open decrypts an address only for the original binding identity and key version.
+// The caller owns the returned plaintext and should clear it after use.
 func (p *Protector) Open(id BindingIdentity, version int32, ciphertext []byte) ([]byte, error) {
 	aad, ok := bindingAAD(id, version)
 	aead := p.keys[version]

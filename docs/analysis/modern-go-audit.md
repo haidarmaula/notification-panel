@@ -41,6 +41,15 @@ Additional coverage opportunities include concurrent quarantine sealing/source
 deactivation, explicit preparation retry exhaustion and partial recovery reports.
 Those are test gaps, not evidence that the current contracts are broken.
 
+## Readability pass
+
+A separate behavior-preserving pass documents exported installation and dispatch
+contracts: authority, secret handling, transaction ownership, acknowledgement and
+recovery boundaries. Nontrivial positional literals use named fields. No public
+signatures, schema, wire identifiers or runtime policy were changed by that pass.
+Focused and full unit/race, build and vet checks remain the verification boundary;
+the integration evidence above belongs to the preceding deadline fixes.
+
 ## Remaining work
 
 The modern worker/scheduler libraries remain unwired. Operator reprocessing,

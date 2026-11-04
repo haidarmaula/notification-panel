@@ -16,6 +16,7 @@ var (
 	ErrQuarantineInput  = errors.New("invalid send quarantine evidence")
 )
 
+// QuarantineReason is an allowlisted admission failure class, never raw error text.
 type QuarantineReason string
 
 const (
@@ -38,8 +39,10 @@ type SourceMessage struct {
 	Payload     []byte
 }
 
+// Quarantine persists source-position evidence independently of campaign outcomes.
 type Quarantine struct{ db Transactor }
 
+// NewQuarantine requires a database; source registration and approval are external.
 func NewQuarantine(db Transactor) (*Quarantine, error) {
 	if db == nil {
 		return nil, errors.New("quarantine requires database")

@@ -22,21 +22,27 @@ type AdmissionMessage struct {
 
 // AdmissionReader performs no auto-commit. VerifySource checks deployment source
 // approval plus physical cluster/topic incarnation; Fetch rechecks on assignment
-// changes. The caller owns
-// reader shutdown and must not share a reader across coordinator instances.
+// changes. The caller owns reader shutdown and must not share a reader across
+// coordinator instances.
 type AdmissionReader interface {
 	VerifySource(context.Context) error
 	Fetch(context.Context) (AdmissionMessage, error)
 }
 
+// AdmissionPreparer persists a complete snapshot or confirms a terminal no-op before success.
+// Holds and incomplete preparation must return an error.
 type AdmissionPreparer interface {
 	Prepare(context.Context, kafka.ScopedSendRequested) (PreparationResult, error)
 }
 
+// AdmissionQuarantine makes source evidence durable before acknowledgement.
+// Storage failure must leave the message unsafe to acknowledge.
 type AdmissionQuarantine interface {
 	Store(context.Context, SourceMessage, QuarantineReason, int32) error
 }
 
+// SerialConsumer admits one source message at a time, preserving offset order
+// until preparation or quarantine is durable. The caller owns reader shutdown.
 type SerialConsumer struct {
 	reader     AdmissionReader
 	preparer   AdmissionPreparer
@@ -44,6 +50,8 @@ type SerialConsumer struct {
 	wait       func(context.Context, time.Duration) error
 }
 
+// NewSerialConsumer requires a source-verifying reader, preparer and durable quarantine.
+// It starts no goroutines and takes no ownership of reader shutdown.
 func NewSerialConsumer(reader AdmissionReader, preparer AdmissionPreparer, quarantine AdmissionQuarantine) (*SerialConsumer, error) {
 	if reader == nil || preparer == nil || quarantine == nil {
 		return nil, errors.New("serial admission requires verified reader, preparer and quarantine")

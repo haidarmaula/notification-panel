@@ -9,6 +9,8 @@ import (
 	"hello/internal/kafka"
 )
 
+// RecoveryReport counts attempted candidates, retaining progress on partial failure.
+// Prepared means a known snapshot; Terminal means no snapshot was established.
 type RecoveryReport struct {
 	Visited  int
 	Prepared int
@@ -17,11 +19,14 @@ type RecoveryReport struct {
 	Rejected int
 }
 
+// QueuedRecovery discovers current-lineage QUEUED campaigns for bounded preparation.
+// It does not publish messages or recover PROCESSING provider work.
 type QueuedRecovery struct {
 	q        *sqlc.Queries
 	preparer *Preparer
 }
 
+// NewQueuedRecovery requires discovery queries and the canonical campaign preparer.
 func NewQueuedRecovery(q *sqlc.Queries, preparer *Preparer) (*QueuedRecovery, error) {
 	if q == nil || preparer == nil {
 		return nil, errors.New("queued recovery requires queries and preparer")

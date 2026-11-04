@@ -19,15 +19,18 @@ var (
 	ErrTransition      = errors.New("invalid installation transition")
 )
 
+// Transactor begins database transactions owned and closed by the lifecycle service.
 type Transactor interface {
 	BeginTx(context.Context, pgx.TxOptions) (pgx.Tx, error)
 }
 
+// Lifecycle applies atomic installation transitions and rechecks authority for mobile operations.
 type Lifecycle struct {
 	db        Transactor
 	protector *Protector
 }
 
+// NewLifecycle requires a transaction source and configured address protector.
 func NewLifecycle(db Transactor, protector *Protector) (*Lifecycle, error) {
 	if db == nil || protector == nil {
 		return nil, ErrConfiguration
@@ -42,7 +45,7 @@ type Principal struct {
 	UserID        int64
 }
 
-// Route is resolved by server policy. The address is opaque client input.
+// Route is trusted server policy for the provider namespace, route and address format.
 type Route struct {
 	Namespace   string
 	Key         string
@@ -50,17 +53,21 @@ type Route struct {
 	AddressType string
 }
 
+// State identifies the installation and the version and owner epoch used to fence changes.
 type State struct {
 	PublicID   pgtype.UUID
 	Version    int64
 	OwnerEpoch int64
 }
 
+// Enrollment returns committed installation state and the newly issued secret proof.
+// Callers must keep Proof out of logs and subsequent state responses.
 type Enrollment struct {
 	State State
 	Proof string
 }
 
+// Transition names a refresh, logout or account switch guarded by proof and version.
 type Transition string
 
 const (
@@ -69,6 +76,8 @@ const (
 	SwitchOwner Transition = "switch_owner"
 )
 
+// Change supplies an installation proof and expected version for a lifecycle transition.
+// Route must come from trusted server policy; logout ignores Route and Address.
 type Change struct {
 	InstallationID  pgtype.UUID
 	Proof           string
@@ -103,6 +112,9 @@ func requireLifecycleActor(ctx context.Context, q *sqlc.Queries, actor Principal
 	return err
 }
 
+// Enroll atomically creates an installation and its first active binding.
+// The actor must already have verified enrollment origin and the route must be server-selected.
+// Proof is returned only after commit; an active address collision rolls back creation.
 func (s *Lifecycle) Enroll(ctx context.Context, actor Principal, route Route, address string) (Enrollment, error) {
 	var result Enrollment
 	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
@@ -129,6 +141,9 @@ func (s *Lifecycle) Enroll(ctx context.Context, actor Principal, route Route, ad
 	return result, nil
 }
 
+// Apply checks current authority, proof and version before changing an installation.
+// Refresh and logout require the current owner; switching uses the verified destination user.
+// An unchanged refresh touches last-seen time without advancing the version.
 func (s *Lifecycle) Apply(ctx context.Context, actor Principal, change Change) (State, error) {
 	switch change.Operation {
 	case Refresh, Logout, SwitchOwner:
@@ -163,7 +178,10 @@ func (s *Lifecycle) Apply(ctx context.Context, actor Principal, change Change) (
 		}
 		if err == nil {
 			if change.Operation == Refresh && matchesRoute(binding, change.Route) {
-				address, err := s.protector.Open(BindingIdentity{row.ApplicationID, row.ID, binding.ID}, binding.EncryptionKeyVersion, binding.AddressCiphertext)
+				identity := BindingIdentity{
+					ApplicationID: row.ApplicationID, InstallationID: row.ID, BindingID: binding.ID,
+				}
+				address, err := s.protector.Open(identity, binding.EncryptionKeyVersion, binding.AddressCiphertext)
 				if err != nil {
 					return err
 				}
@@ -226,7 +244,8 @@ func (s *Lifecycle) insertBinding(ctx context.Context, q *sqlc.Queries, row sqlc
 	if err != nil {
 		return err
 	}
-	protected, err := s.protector.Protect(BindingIdentity{row.ApplicationID, row.ID, id}, route.Namespace, route.AddressType, address)
+	identity := BindingIdentity{ApplicationID: row.ApplicationID, InstallationID: row.ID, BindingID: id}
+	protected, err := s.protector.Protect(identity, route.Namespace, route.AddressType, address)
 	if err != nil {
 		return err
 	}

@@ -16,6 +16,7 @@ import (
 const originPurpose = "mobile_installation_enrollment"
 const maxOriginLifetime = 2 * time.Minute
 
+// OriginUseStore atomically consumes an unexpired assertion nonce once per project and issuer.
 type OriginUseStore interface {
 	ConsumeMobileOrigin(context.Context, sqlc.ConsumeMobileOriginParams) (int64, error)
 }
@@ -29,6 +30,7 @@ type SignedOrigin struct {
 	key      ed25519.PublicKey
 }
 
+// NewSignedOrigin pins the broker issuer, audience and a copied Ed25519 public key.
 func NewSignedOrigin(store OriginUseStore, issuer, audience string, key ed25519.PublicKey) (*SignedOrigin, error) {
 	if store == nil || !validIdentityText(issuer) || !validIdentityText(audience) || len(key) != ed25519.PublicKeySize {
 		return nil, ErrConfiguration
@@ -44,6 +46,8 @@ type originClaims struct {
 	jwt.RegisteredClaims
 }
 
+// VerifyOrigin validates the broker assertion and consumes its nonce before returning.
+// Consumption is independent of enrollment and is not undone if enrollment later fails.
 func (v *SignedOrigin) VerifyOrigin(ctx context.Context, binding OriginContext, evidence string) error {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()

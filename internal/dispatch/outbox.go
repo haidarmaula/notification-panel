@@ -1,4 +1,5 @@
-// Package dispatch implements the modern durable send outbox protocol.
+// Package dispatch implements durable send publication, audience preparation,
+// source-aware quarantine and serial Kafka admission.
 package dispatch
 
 import (
@@ -12,14 +13,18 @@ import (
 	"hello/internal/kafka"
 )
 
+// Transactor supplies transactions owned and completed by dispatch operations.
 type Transactor interface {
 	BeginTx(context.Context, pgx.TxOptions) (pgx.Tx, error)
 }
 
+// Publisher synchronously acknowledges broker acceptance of a scoped send.
+// An error may still leave the message accepted, so callers must tolerate replay.
 type Publisher interface {
 	PublishScopedSend(context.Context, kafka.ScopedSendRequested) error
 }
 
+// Outcome distinguishes idle or held polls from published or deferred outbox work.
 type Outcome string
 
 const (
@@ -36,6 +41,7 @@ type Outbox struct {
 	publisher Publisher
 }
 
+// NewOutbox requires a database and synchronous publisher; it starts no workers.
 func NewOutbox(db Transactor, publisher Publisher) (*Outbox, error) {
 	if db == nil || publisher == nil {
 		return nil, errors.New("outbox requires database and publisher")

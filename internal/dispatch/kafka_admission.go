@@ -25,6 +25,8 @@ type KafkaAdmissionConfig struct {
 	Incarnation string
 }
 
+// KafkaAdmission owns group generations and their readers while Run is active.
+// Each generation uses serial admission and assignment-bound acknowledgements.
 type KafkaAdmission struct {
 	q          *sqlc.Queries
 	config     KafkaAdmissionConfig
@@ -32,6 +34,8 @@ type KafkaAdmission struct {
 	quarantine AdmissionQuarantine
 }
 
+// NewKafkaAdmission validates dependencies and source configuration without
+// connecting to Kafka. Run verifies the registered source and cluster metadata.
 func NewKafkaAdmission(q *sqlc.Queries, cfg KafkaAdmissionConfig, preparer AdmissionPreparer, quarantine AdmissionQuarantine) (*KafkaAdmission, error) {
 	if q == nil || preparer == nil || quarantine == nil || len(cfg.Brokers) == 0 || cfg.GroupID == "" ||
 		!cfg.SourceID.Valid || cfg.SourceID.Bytes == [16]byte{} || cfg.ClusterID == "" || cfg.Topic == "" || cfg.Incarnation == "" {
@@ -125,6 +129,8 @@ func (r *generationAdmissionReader) approved(ctx context.Context) error {
 	return nil
 }
 
+// VerifySource checks source approval and cluster metadata before starting
+// fetchers whose lifetime is bounded by the current group generation.
 func (r *generationAdmissionReader) VerifySource(ctx context.Context) error {
 	if err := r.approved(ctx); err != nil {
 		return err
@@ -175,7 +181,7 @@ func (r *generationAdmissionReader) VerifySource(ctx context.Context) error {
 			for {
 				message, err := reader.FetchMessage(fetchCtx)
 				select {
-				case r.fetches <- generationFetch{message, err}:
+				case r.fetches <- generationFetch{message: message, err: err}:
 				case <-fetchCtx.Done():
 					return
 				}
@@ -188,6 +194,8 @@ func (r *generationAdmissionReader) VerifySource(ctx context.Context) error {
 	return nil
 }
 
+// Fetch rechecks database source approval, then returns a message with an
+// acknowledgement bound to its current group generation.
 func (r *generationAdmissionReader) Fetch(ctx context.Context) (AdmissionMessage, error) {
 	if err := r.approved(ctx); err != nil {
 		return AdmissionMessage{}, err
@@ -233,6 +241,7 @@ func (r *generationAdmissionReader) Fetch(ctx context.Context) (AdmissionMessage
 	}
 }
 
+// Close cancels fetching, closes partition readers and joins owned fetchers.
 func (r *generationAdmissionReader) Close() {
 	if r.cancel != nil {
 		r.cancel()

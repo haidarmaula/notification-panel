@@ -8,11 +8,13 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+// RuntimeStore supplies current mobile identities and persistent origin replay protection.
 type RuntimeStore interface {
 	MobileIdentityStore
 	OriginUseStore
 }
 
+// Runtime holds installation services and immutable server-selected provider routes.
 type Runtime struct {
 	Authority *MobileAuthority
 	Lifecycle *Lifecycle
@@ -45,6 +47,9 @@ type policyFile struct {
 	} `json:"projects"`
 }
 
+// LoadRuntime validates a bounded JSON policy file and constructs the installation services.
+// It rejects unknown fields and duplicate projects, encryption-key versions or routes.
+// The caller owns source.
 func LoadRuntime(source io.Reader, store RuntimeStore, db Transactor) (*Runtime, error) {
 	const limit = 1 << 20
 	data, err := io.ReadAll(io.LimitReader(source, limit+1))
@@ -107,6 +112,7 @@ func LoadRuntime(source io.Reader, store RuntimeStore, db Transactor) (*Runtime,
 	return &Runtime{Authority: authority, Lifecycle: lifecycle, routes: routes}, nil
 }
 
+// Route resolves an exact project, platform and address type to server-owned provider policy.
 func (r *Runtime) Route(project pgtype.UUID, platform, addressType string) (Route, bool) {
 	route, ok := r.routes[project][[2]string{platform, addressType}]
 	return route, ok
