@@ -88,7 +88,23 @@ func TestKafkaAdmissionGenerationHandoff(t *testing.T) {
 	// A brand-new broker creates/loads __consumer_offsets on first lookup.
 	require.Eventually(t, func() bool {
 		coordinator, err := client.FindCoordinator(ctx, &broker.FindCoordinatorRequest{Key: config.GroupID, KeyType: broker.CoordinatorKeyTypeConsumer})
-		return err == nil && coordinator.Error == nil && coordinator.Coordinator != nil && coordinator.Coordinator.Host != ""
+		if err != nil || coordinator.Error != nil || coordinator.Coordinator == nil || coordinator.Coordinator.Host == "" {
+			return false
+		}
+		// Discovery can succeed before the new coordinator serves group offsets.
+		// Exercise the required RPC; do not retry or hide failures of Run itself.
+		offsets, err := client.OffsetFetch(ctx, &broker.OffsetFetchRequest{
+			GroupID: config.GroupID, Topics: map[string][]int{topic: {0, 1}},
+		})
+		if err != nil || offsets.Error != nil || len(offsets.Topics[topic]) != 2 {
+			return false
+		}
+		for _, partition := range offsets.Topics[topic] {
+			if partition.Error != nil {
+				return false
+			}
+		}
+		return true
 	}, 10*time.Second, 100*time.Millisecond)
 	// Choose one key per partition using exactly the production hash balancer.
 	ids := map[int]int64{}
@@ -183,6 +199,7 @@ func TestKafkaAdmissionGenerationHandoff(t *testing.T) {
 	offsets, err := client.OffsetFetch(ctx, &broker.OffsetFetchRequest{GroupID: config.GroupID, Topics: map[string][]int{topic: {0, 1}}})
 	require.NoError(t, err)
 	require.NoError(t, offsets.Error)
+	require.Len(t, offsets.Topics[topic], 2)
 	for partition, id := range ids {
 		if id == blocked {
 			for _, entry := range offsets.Topics[topic] {
