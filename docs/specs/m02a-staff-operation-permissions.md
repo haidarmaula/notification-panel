@@ -1,183 +1,183 @@
 # SPEC M02a — Staff operation permissions
 
-Tanggal: 2026-11-02. Status: implemented and locally verified for M02a;
-[acceptance evidence](../analysis/m02a-verification.md). Belum di-deploy.
-Role matrix dikonfirmasi pengguna; ADR-11 keseluruhan tetap proposed dan
-session/enrollment/recovery/security gates lain tidak otomatis diterima.
+Date: 2026-11-02. Status: implemented and locally verified for M02a;
+[acceptance evidence](../analysis/m02a-verification.md). Not deployed.
+Role matrix confirmed by the user; ADR-11 as a whole remains proposed and
+other session/enrollment/recovery/security gates are not automatically accepted.
 
 Sources: [ADR-11 A-4](../adr/adr-11-security-baseline.md),
 [ADR-09](../adr/adr-09-api-consistency.md),
 [CR1–CR9](../analysis/adr-01-11-consistency-review.md),
 [machine-readable policy](../contracts/staff-permissions.json).
 
-## 1. Scope dan evidence existing
+## 1. Scope and existing evidence
 
-M02a menutup operation permission bypass C21 pada notification, segment dan
-segment-member routes/services. Ia juga memeriksa identity/active status untuk
-read paths tersebut. Policy JSON adalah sumber matrix/route map untuk review
-dan test fixtures; bukan runtime configuration yang dapat diubah client.
-HTTP auth tetap API key + staff access JWT. Success DTO/status/state guards
-existing tidak diganti oleh slice ini. Tidak ada endpoint baru, migration
-schema, permission-management UI atau automatic provider send.
+M02a closes operation permission bypass C21 in notification, segment, and
+segment-member routes/services. It also checks identity/active status for
+those read paths. The policy JSON is the matrix/route-map source for review
+and test fixtures; it is not runtime configuration clients can change.
+HTTP auth remains API key + staff access JWT. Existing success DTOs/status/state guards
+are not replaced by this slice. There are no new endpoints, schema
+migrations, permission-management UI, or automatic provider sends.
 
-| Evidence sebelum implementasi | Historical condition |
+| Pre-implementation evidence | Historical condition |
 | --- | --- |
-| `cmd/server/main.go`, kedua `routes.go` | API-key/JWT/audit chain tanpa operation-role gate untuk 14 routes |
-| `notifications/service.go`: Create/Update/Delete/Send | Membaca actor row tanpa pemeriksaan role atau IsActive eksplisit; JWT middleware memeriksa active di HTTP, tidak melindungi direct service callers |
-| `segments/service.go`: Create/Update/Delete | Pola actor lookup serupa; interface mocks tersedia |
-| `segments/members_service.go`: AddMember/RemoveMember | Tidak memeriksa staff actor/permission; memakai repository concrete |
-| `db/queries/staff_users.sql`: GetStaffUserByID | Tidak memfilter is_active; menemukan row bukan bukti account aktif |
-| `middleware/super_admin.go` | Legacy gate memakai RoleName JWT; bukan current-authority gate untuk feature ini |
-| Notification CreateParams dan segment CreateParams | CreatedBy dapat berbeda dari actor bila service dipanggil langsung |
-| `members_handler.go` | Tiga unknown-500 branches masih mengirim err.Error(); harus aman ketika authorization error ditambahkan |
-| `notifications.Update` dan UpdateNotification SQL | PATCH scheduled_at mengganti timestamp, tetapi tidak mengubah status DRAFT menjadi SCHEDULED |
+| `cmd/server/main.go`, both `routes.go` files | API-key/JWT/audit chain without operation-role gates for 14 routes |
+| `notifications/service.go`: Create/Update/Delete/Send | Reads actor row without explicit role or IsActive checks; JWT middleware checks active status in HTTP, does not protect direct service callers |
+| `segments/service.go`: Create/Update/Delete | Similar actor lookup pattern; interface mocks available |
+| `segments/members_service.go`: AddMember/RemoveMember | Does not check staff actor/permission; uses concrete repository |
+| `db/queries/staff_users.sql`: GetStaffUserByID | Does not filter is_active; finding a row does not prove an active account |
+| `middleware/super_admin.go` | Legacy gate uses JWT RoleName; not a current-authority gate for this feature |
+| Notification CreateParams and segment CreateParams | CreatedBy can differ from actor on direct service calls |
+| `members_handler.go` | Three unknown-500 branches still send err.Error(); must be safe when authorization errors are added |
+| `notifications.Update` and UpdateNotification SQL | PATCH scheduled_at changes timestamp, but does not change DRAFT status to SCHEDULED |
 
-Tabel di atas adalah snapshot pre-implementation. C21 kini diremediasi oleh
-code/tests, bukan oleh penulisan SPEC; lihat evidence. NEW di bawah menandai
-artifact yang ditambahkan slice ini.
+The table above is a pre-implementation snapshot. C21 is now remediated by
+code/tests, not by writing the SPEC; see evidence. NEW below marks
+artifacts added by this slice.
 
-## 2. Policy yang dikonfirmasi dan route map
+## 2. Confirmed policy and route map
 
-| Operasi | VIEWER | OPERATOR | ADMIN | SUPER_ADMIN |
+| Operation | VIEWER | OPERATOR | ADMIN | SUPER_ADMIN |
 | --- | --- | --- | --- | --- |
 | Existing permitted notification/segment/member reads | Yes | Yes | Yes | Yes |
 | Notification draft create/edit/delete | No | Yes | Yes | Yes |
-| Segment dan membership create/edit/delete | No | Yes | Yes | Yes |
-| Send dan persist non-null scheduling input | No | No | Yes | Yes |
+| Segment and membership create/edit/delete | No | Yes | Yes | Yes |
+| Send and persist non-null scheduling input | No | No | Yes | Yes |
 | Staff/role administration (target policy, outside first slice) | No | No | No | Yes |
 
-Matrix berlaku pada existing shared admin resource scope. CreatedBy adalah
-provenance actor, bukan penambahan ACL owner-only atau tenancy. Slice tidak
-memperluas business reads atau mengubah data-redaction policy. Jika dibutuhkan
-team/tenant/creator-specific visibility, itu memerlukan kontrak object scope
-dan query filter tersendiri sebelum scope tersebut diaktifkan.
+The matrix applies to the existing shared admin resource scope. CreatedBy is
+actor provenance, not an added owner-only ACL or tenancy. The slice does not
+expand business reads or change data-redaction policy. If team/tenant/creator-specific
+visibility is needed, it requires a separate object-scope contract
+and query filters before that scope is enabled.
 
-Map seluruh 14 method/path ada di policy JSON. Required permission endpoint
-dan field permission bersifat **AND**: notification create/update dengan
-ScheduledAt non-nil membutuhkan draft.write **dan** schedule. Role/operation
-baru, nama yang tidak dikenal, casing berbeda, role row kosong atau lookup
-yang gagal tidak pernah memberi izin. Jangan menganggap role ID 1 selalu
-SUPER_ADMIN atau mempercayai RoleName yang masih tersimpan di JWT.
-HEAD mewarisi GET/read permission melalui ServeMux existing; method yang tidak
-didukung tetap menggunakan 404/405 existing, bukan mendapat izin baru.
+The full 14-method/path map is in the policy JSON. Required endpoint permissions
+and field permissions are **AND**: notification create/update with
+non-nil ScheduledAt requires draft.write **and** schedule. New roles/operations,
+unknown names, different casing, empty role rows, or failed
+lookups never grant permission. Do not assume role ID 1 is always
+SUPER_ADMIN or trust the RoleName still stored in the JWT.
+HEAD inherits GET/read permission through the existing ServeMux; unsupported
+methods retain existing 404/405 behavior rather than gaining new permission.
 
 ## 3. Current-authority contract
 
-NEW internal authorization component menerima verified staff identity dari
-context dan operation identifier yang ditetapkan kode server. Ia membaca
-actor ID, IsActive dan current role name melalui satu SQL statement snapshot,
-bukan memakai claim role atau melakukan dua lookup yang dapat mencampur versi.
-Query NEW berada di `db/queries/staff_users.sql`, lalu sqlc diregenerasi; tidak
-ada kolom baru sehingga tidak memerlukan migration schema.
+The NEW internal authorization component accepts verified staff identity from
+context and an operation identifier set by server code. It reads
+actor ID, IsActive, and current role name through one SQL statement snapshot,
+rather than using role claims or two lookups that could mix versions.
+The NEW query is in `db/queries/staff_users.sql`, followed by sqlc regeneration; there
+are no new columns, so no schema migration is required.
 
-Return principal hanya memuat ID dan current role yang diperlukan; jangan
-menambahkan hash password/email ke DTO/cache/log authorization. Missing actor,
-ID nonpositive, wrong context type/typed-nil claims, actor tidak ada atau inactive menghasilkan
-unauthenticated denial. Existing unknown role menghasilkan forbidden denial.
-DB/role integrity failure menghasilkan error internal terbungkus, tidak
-disamarkan sebagai invalid credential atau 404. Cancellation/deadline tidak
-menghasilkan successful authorization atau background mutation.
+The returned principal contains only the ID and current role needed; do not
+add password hashes/email to authorization DTOs/caches/logs. Missing actor,
+nonpositive ID, wrong context type/typed-nil claims, nonexistent or inactive actor produce
+an unauthenticated denial. An existing unknown role produces a forbidden denial.
+DB/role integrity failures produce wrapped internal errors, not
+errors disguised as invalid credentials or 404s. Cancellation/deadline does not
+produce successful authorization or background mutation.
 
-Komponen konkret adalah internal/authz.Authorizer, Checker.Require dan
-AuthorityRepository.GetStaffAuthority. Semua service bergantung pada interface
-Checker untuk menguji decision tanpa PostgreSQL.
-Implementasi production memakai repository/sqlc existing conventions; module
-constructor wajib memasang checker nyata, tanpa nil/allow-all fallback.
+The concrete components are internal/authz.Authorizer, Checker.Require, and
+AuthorityRepository.GetStaffAuthority. All services depend on the
+Checker interface to test decisions without PostgreSQL.
+Production implementation follows existing repository/sqlc conventions; module
+constructors must wire a real checker, without a nil/allow-all fallback.
 
-Route guard menolak operasi dasar sebelum handler business I/O. Service tetap
-mengecek current authority saat entry, termasuk pemanggilan tanpa HTTP. Route
-decision/context cache bukan otorisasi yang boleh melewati service check.
-Demotion/offboarding yang committed sebelum service statement terlihat pada
-statement itu, walau token masih memuat role lama. Promotion juga memakai role
-DB terbaru, tidak memerlukan pembaruan claim role agar gate feature ini lolos.
+The route guard denies base operations before handler business I/O. Services still
+check current authority on entry, including calls without HTTP. A route
+decision/context cache is not authorization to bypass the service check.
+Demotion/offboarding committed before the service statement is visible to
+that statement, even if the token still carries the old role. Promotion also uses the latest
+DB role, without requiring a role claim refresh to pass this feature's gate.
 
-**Batas race:** statement-time check belum menahan principal/policy lock sampai
-commit mutation. Slice ini tidak menjanjikan pembatalan operasi yang sudah
-diotorisasi ketika revocation berikutnya commit. Atomic current-authority check,
-mutation/audit dan concurrency tests mengikuti transaksi pemilik data M03/M04
-dan protokol CR1; acceptance ADR-11/production tetap menunggu itu. Checker harus
-dapat dipakai dengan transaction-bound query, tanpa mutasi shared pool/global
-state per request. Jangan memperkenalkan service↔outbox dependency cycle hanya
-untuk memasang permission gate pertama.
+**Race boundary:** a statement-time check does not yet hold a principal/policy lock until
+the mutation commits. This slice does not promise cancellation of an already-authorized
+operation when a subsequent revocation commits. Atomic current-authority checks,
+mutation/audit, and concurrency tests follow the data-owning M03/M04 transactions
+and CR1 protocol; ADR-11/production acceptance still awaits those. The checker must
+support transaction-bound queries, without per-request mutation of shared pool/global
+state. Do not introduce a service↔outbox dependency cycle merely
+to wire the first permission gate.
 
-## 4. Privileged inputs dan write boundaries
+## 4. Privileged inputs and write boundaries
 
-- **Create notification:** ScheduledAt nil menghasilkan draft path; non-nil
-  timestamp memerlukan schedule permission sebelum target/template lookup dan
-  insert. Masa lampau tetap validation error untuk actor yang authorized.
-- **PATCH notification:** non-nil ScheduledAt juga memerlukan schedule, walau
-  service saat ini hanya menyimpan timestamp. Jangan memperbaiki state transition
-  secara diam-diam di permission slice. Durable scheduling/deadline semantics
-  adalah M04. Existing DRAFT-only edit/delete/send guards tetap wajib.
-- **Null/omission compatibility:** v1 pointers memperlakukan absent/null sebagai
-  nil. Create null tetap draft; PATCH null tetap no-op untuk field tersebut,
-  bukan clear/cancel schedule. Null tidak menjadi bypass untuk menyimpan
-  timestamp. Presence-aware merge PATCH/clear behavior milik SPEC berbeda.
-- **Creator provenance:** notification/segment create memakai ID principal
-  yang diotorisasi. Handler/client/internal CreateParams.CreatedBy tidak boleh
-  memalsukan actor; field lama dapat dipertahankan untuk source compatibility,
-  tetapi bukan authority. Audit actor dan stored creator harus konsisten.
-- **Member service:** AddMember/RemoveMember wajib melalui guard yang sama;
-  permission tidak hanya dipasang di SegmentService. Reads juga memeriksa
-  corresponding read permission sebelum resource lookup.
-- **Denial:** tidak ada target/domain lookup yang membocorkan existence setelah
-  operation denial, tidak ada business write, publish, status change atau success
-  audit. Redacted denial telemetry diperbolehkan; jangan mencatat JWT/API key.
+- **Create notification:** nil ScheduledAt takes the draft path; a non-nil
+  timestamp requires schedule permission before target/template lookup and
+  insert. Past timestamps remain validation errors for authorized actors.
+- **PATCH notification:** non-nil ScheduledAt also requires schedule, even though
+  the current service only stores the timestamp. Do not silently fix the state transition
+  in the permission slice. Durable scheduling/deadline semantics
+  belong to M04. Existing DRAFT-only edit/delete/send guards remain required.
+- **Null/omission compatibility:** v1 pointers treat absent/null as
+  nil. Create null remains a draft; PATCH null remains a no-op for that field,
+  rather than clearing/cancelling the schedule. Null is not a bypass for storing
+  timestamps. Presence-aware merge PATCH/clear behavior belongs to another SPEC.
+- **Creator provenance:** notification/segment create uses the authorized
+  principal's ID. Handler/client/internal CreateParams.CreatedBy must not
+  forge the actor; the old field may be retained for source compatibility,
+  but is not authority. Audit actor and stored creator must be consistent.
+- **Member service:** AddMember/RemoveMember must pass the same guard;
+  permissions are not wired only in SegmentService. Reads also check
+  the corresponding read permission before resource lookup.
+- **Denial:** no target/domain lookup revealing existence after
+  operation denial, no business write, publish, status change, or success
+  audit. Redacted denial telemetry is allowed; do not log JWT/API keys.
 
-HTTP input parsing yang tidak menyentuh business state dapat menghasilkan
-400 sebelum content-dependent schedule decision. Route-level denial untuk
-operasi dasar tidak perlu memproses JSON. Tests policy memakai valid paths/
-bodies; tidak mengandalkan perbedaan malformed input untuk memberi izin.
+HTTP input parsing that does not touch business state can produce
+400 before a content-dependent schedule decision. Route-level denial for
+base operations need not process JSON. Policy tests use valid paths/
+bodies; they do not rely on malformed-input differences to grant permission.
 
 ## 5. HTTP/error/compatibility contract
 
-API key dan Bearer JWT tetap keduanya diperlukan. Role permission bukan
-pengganti autentikasi. Untuk M02a gunakan envelope existing, tanpa tambahan
-error-code field, ETag, 428, atau perubahan response success:
+API key and Bearer JWT both remain required. Role permission is not
+a replacement for authentication. For M02a, use the existing envelope, without an added
+error-code field, ETag, 428, or successful-response changes:
 
-| Kondisi baru | Status / message |
+| New condition | Status / message |
 | --- | --- |
-| Missing/invalid staff identity atau inactive | 401; `authentication required` pada new permission gate; existing API-key/JWT messages tetap safe |
-| Active known identity tidak punya operation/field permission | 403; `insufficient permissions` |
-| Current-authority DB/integrity error atau unknown internal error | 500; literal `internal server error` |
-| Authorized request gagal domain validation/state/resource rule | Existing mapped 400/404/409; tidak diubah menjadi permission success |
+| Missing/invalid staff identity or inactive | 401; `authentication required` at new permission gate; existing API-key/JWT messages remain safe |
+| Active known identity lacks operation/field permission | 403; `insufficient permissions` |
+| Current-authority DB/integrity error or unknown internal error | 500; literal `internal server error` |
+| Authorized request fails domain validation/state/resource rule | Existing mapped 400/404/409; not changed to permission success |
 
-Contoh denial: `{"success":false,"message":"insufficient permissions"}`.
-Tidak ada `data`, role database, stack, SQL/DSN atau arbitrary err.Error() pada
-new denial/500 response. Wrapped authorization sentinels tetap dimapping dengan
-errors.Is. List/detail/member handlers harus memetakan error baru juga; tidak
-cukup menambah switch pada Create/Send. Perbaiki tiga hold-out unknown-500
-branches members agar guard DB failure tidak bocor.
+Example denial: `{"success":false,"message":"insufficient permissions"}`.
+No `data`, database role, stack, SQL/DSN, or arbitrary err.Error() in
+new denial/500 responses. Wrapped authorization sentinels remain mapped with
+errors.Is. List/detail/member handlers must map new errors too; adding
+a switch only to Create/Send is insufficient. Fix the three remaining unknown-500
+member branches so guard DB failures cannot leak.
 
-Ini security tightening pada existing v1 routes; jangan menambahkan toggle
-yang mengembalikan VIEWER mutation access. Frontend harus mengandalkan response
-status dan current permission, tidak menyembunyikan tombol sebagai satu-satunya
-kontrol. UI dan backend mobile tidak diimplementasikan di repo ini. Existing
-legacy send 202 bukan bukti durable outbox; durability contract berubah di M04.
+This tightens security on existing v1 routes; do not add a toggle
+restoring VIEWER mutation access. The frontend must rely on response
+status and current permissions, rather than hiding buttons as its only
+control. UI and mobile backend are not implemented in this repository. The existing
+legacy send 202 is not evidence of a durable outbox; the durability contract changes in M04.
 
-## 6. Delivery slices dan verification
+## 6. Delivery slices and verification
 
-1. Shared checker + SQL query/repository + matrix unit tests, termasuk unknown
-   operations dan shuffled role IDs. Contract tests mencocokkan seluruh role
-   set dan operation/route map JSON dengan Go policy; tidak self-assert allow-all.
-2. Wire notification/segment/member route dan service guards; adapt constructors,
-   fixtures dan mocks bila interface berubah. Preserve service errors/state
-   rules. Document HTTP behavior dengan target/runtime status yang jelas.
-3. Tambahkan tagged real-DB/API tests ke dependency harness: semua empat role,
-   stale claim/live role, direct service calls, scheduling bypass dan no-side-
-   effect denials. Jangan menjalankan real worker/provider. Periksa row counts,
-   creator/audit IDs dan Kafka absence, bukan status HTTP saja.
+1. Shared checker + SQL query/repository + matrix unit tests, including unknown
+   operations and shuffled role IDs. Contract tests match the entire role
+   set and operation/route map JSON against Go policy; they do not self-assert allow-all.
+2. Wire notification/segment/member route and service guards; adapt constructors,
+   fixtures, and mocks if interfaces change. Preserve service errors/state
+   rules. Document HTTP behavior with clear target/runtime status.
+3. Add tagged real-DB/API tests to the dependency harness: all four roles,
+   stale claim/live role, direct service calls, scheduling bypass, and no-side-
+   effect denials. Do not run a real worker/provider. Check row counts,
+   creator/audit IDs, and Kafka absence, not HTTP status alone.
 
-M02a selesai hanya jika matrix dan seluruh acceptance cases relevan lulus,
-build/default tests/tagged tests/vet/format lulus, API docs updated, constructor
-wiring fail closed, dan code-review C21 diperbarui dengan evidence/remaining
-race limitations. SPEC ditulis bukan bukti semuanya sudah berjalan.
+M02a is complete only if the matrix and all relevant acceptance cases pass,
+build/default tests/tagged tests/vet/format pass, API docs are updated, constructor
+wiring fails closed, and code-review C21 is updated with evidence/remaining
+race limitations. A written SPEC is not evidence that everything is already running.
 
 Staff administration service checks, session/JWT revocation, BFF/gateway
 perimeter, DTO/redaction, broad body/rate limits, full API OpenAPI contract,
-resource-error correctness dan atomic success audit tetap pekerjaan M02 lanjutan
-atau transaksi milestone pemiliknya. USER/mobile authorization, enrollment dan
-operational step-up tidak otomatis mendapat izin dari role matrix ini.
+resource-error correctness, and atomic success audit remain subsequent M02 work
+or belong to the owning milestone's transactions. USER/mobile authorization, enrollment, and
+operational step-up do not automatically gain permission from this role matrix.
 
 ## Acceptance cases
 

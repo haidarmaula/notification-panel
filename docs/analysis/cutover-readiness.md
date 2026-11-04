@@ -1,52 +1,52 @@
 # OneSignal → FCM cutover readiness
 
-Tanggal: 2026-11-02. Status: checklist rancangan, **belum izin cutover**.
-Rancangan: [ADR-06](../adr/adr-06-onesignal-fcm-cutover.md).
+Date: 2026-11-02. Status: design checklist, **not cutover authorization**.
+Design: [ADR-06](../adr/adr-06-onesignal-fcm-cutover.md).
 
-React Native, Android+iOS, OneSignal saat ini dan tujuan FCM telah dikonfirmasi.
-Project Firebase kemungkinan sudah ada menurut pengguna, tetapi identity,
-akses, app/environment dan readiness belum diverifikasi. Checklist kosong
-berarti belum ada bukti, bukan otomatis ada masalah pada sistem pengguna.
+React Native, Android+iOS, current OneSignal use and the FCM destination have been confirmed.
+The user believes a Firebase project probably already exists, but its identity,
+access, apps/environments and readiness have not been verified. An empty checklist
+means evidence is missing, not that the user's system necessarily has a problem.
 
 ## Evidence register
 
-| Gate | Bukti yang harus dicatat | Pemilik peran | Status |
+| Gate | Evidence to record | Role owner | Status |
 | --- | --- | --- | --- |
-| C01 Firebase inventory | Project/app/package/bundle/environment IDs, IAM owner, quota dan APNs setup; lokasi bukti tanpa secret | Mobile + ops | Belum diverifikasi |
-| C02 React Native compatibility | RN/package/native versions, address type didukung dan enrollment callbacks | Mobile | Framework dikonfirmasi; versi belum |
-| C03 Legacy behavior | Apakah ada pengiriman produksi/scheduled automation, operator dan cohort exclusion/pause | Produk + ops | Belum diverifikasi |
-| C04 Registry/consent census | User/device/installation counts, owner/epoch, unknown legacy, permissions/opt-out dan aktivitas | Backend + mobile | Skala perkiraan tersedia; census belum |
-| C05 Modern enrollment | Auth, binding proof/version, refresh/logout/transfer, typed identity dan recovery | Backend + mobile + security | Proposed ADR-04; belum diimplementasikan |
-| C06 Delivery reliability | Atomic intent/outbox, budget/TTL, lease, safe offset, fault/replay evidence | Backend | Proposed ADR-01–03; belum diuji |
-| C07 Receipt/events | Device capability, early/late receipt, stats units, event v2 and consumer compatibility | Backend + mobile + consumer owner | Proposed ADR-05; belum diuji |
-| C08 Isolation | Tidak ada business campaign sama ke cohort yang tumpang tindih lintas provider | Produk + ops | Belum dibuktikan |
-| C09 Real devices | Android/iOS release builds: permissions, foreground/background/terminated behavior, tap/deep-link, offline and upgrade | Mobile + QA | Belum diuji |
-| C10 Capacity/observability | Agreed numeric SLO, rate/quota, load/soak, dashboards, tested alerts and unknown-outcome accounting | Backend + ops | Belum ditetapkan/diuji |
-| C11 Security/retention | Auth/ownership, key/installation secret lifecycle, logs, limits, deletion and backup/restore | Security + ops | ADR-10/11 belum ditulis |
-| C12 Stage rollback | Hold/drain/reconcile/compatible-backend rollback, client capability and restore drill | Backend + mobile + ops | Belum diuji |
-| C13 Ramp decision | Cohort, count, dwell time, stop threshold, sign-off record and observation window | Produk + mobile + ops | Belum ditetapkan |
-| C14 Full coverage | Full eligible-audience gate or explicit accepted re-scope/straggler policy | Produk | Belum diputuskan |
-| C15 Retirement | Legacy jobs disabled, SDK-free release verified, dependencies audited and credential/data cleanup sequenced | Mobile + ops | Belum dijalankan |
+| C01 Firebase inventory | Project/app/package/bundle/environment IDs, IAM owner, quota and APNs setup; evidence location without secrets | Mobile + ops | Not verified |
+| C02 React Native compatibility | RN/package/native versions, supported address types and enrollment callbacks | Mobile | Framework confirmed; versions not yet confirmed |
+| C03 Legacy behavior | Whether production sends/scheduled automation exist, operators and cohort exclusion/pause | Product + ops | Not verified |
+| C04 Registry/consent census | User/device/installation counts, owner/epoch, unknown legacy, permissions/opt-out and activity | Backend + mobile | Approximate scale available; census not yet available |
+| C05 Modern enrollment | Auth, binding proof/version, refresh/logout/transfer, typed identity and recovery | Backend + mobile + security | Proposed ADR-04; not implemented |
+| C06 Delivery reliability | Atomic intent/outbox, budget/TTL, lease, safe offset, fault/replay evidence | Backend | Proposed ADR-01–03; not tested |
+| C07 Receipt/events | Device capability, early/late receipt, stats units, event v2 and consumer compatibility | Backend + mobile + consumer owner | Proposed ADR-05; not tested |
+| C08 Isolation | No identical business campaign reaches overlapping cohorts across providers | Product + ops | Not demonstrated |
+| C09 Real devices | Android/iOS release builds: permissions, foreground/background/terminated behavior, tap/deep-link, offline and upgrade | Mobile + QA | Not tested |
+| C10 Capacity/observability | Agreed numeric SLO, rate/quota, load/soak, dashboards, tested alerts and unknown-outcome accounting | Backend + ops | Not defined/tested |
+| C11 Security/retention | Auth/ownership, key/installation secret lifecycle, logs, limits, deletion and backup/restore | Security + ops | ADR-10/11 not yet written |
+| C12 Stage rollback | Hold/drain/reconcile/compatible-backend rollback, client capability and restore drill | Backend + mobile + ops | Not tested |
+| C13 Ramp decision | Cohort, count, dwell time, stop threshold, sign-off record and observation window | Product + mobile + ops | Not defined |
+| C14 Full coverage | Full eligible-audience gate or explicit accepted re-scope/straggler policy | Product | Not decided |
+| C15 Retirement | Legacy jobs disabled, SDK-free release verified, dependencies audited and credential/data cleanup sequenced | Mobile + ops | Not performed |
 
-Actual nama pemilik, tanggal, artifact/report link dan hasil ditambahkan ketika
-tersedia. Secret/key/file credential tidak boleh menjadi isi register.
+Actual owner names, dates, artifact/report links and results are added when
+available. Secrets/keys/credential files must not be included in the register.
 
-## Urutan eksekusi setelah implementasi dan staging siap
+## Execution sequence after implementation and staging are ready
 
-- [ ] Inventory Firebase/RN/legacy dan tetapkan target/stop thresholds.
-- [ ] Implementasikan dan verifikasi ADR-01–05 serta kontrol eligibility/hold.
-- [ ] Verifikasi schema consumer/read API sebelum event v2 diaktifkan.
-- [ ] Rilis/test modern enrollment tanpa mengaktifkan pengiriman FCM produksi.
-- [ ] Buktikan coexistence atau pilih transisi maintenance terkontrol.
-- [ ] Jalankan test-device campaign dengan izin penerima dan cohort yang jelas.
-- [ ] Latih hold/recovery/rollback dengan hasil provider yang belum pasti.
-- [ ] Aktifkan pilot FCM-only dan cek isolasi terhadap sender legacy.
-- [ ] Evaluasi report berdasarkan denominator, app version, rate dan coverage.
-- [ ] Naikkan cohort bertahap setelah threshold dan dwell time terpenuhi.
-- [ ] Buka full broadcast hanya setelah coverage/re-scope disepakati.
-- [ ] Observasi sesuai window, lalu retire OneSignal dengan dependency audit.
+- [ ] Inventory Firebase/RN/legacy and define target/stop thresholds.
+- [ ] Implement and verify ADR-01–05 and eligibility/hold controls.
+- [ ] Verify consumer/read API schemas before enabling event v2.
+- [ ] Release/test modern enrollment without enabling production FCM delivery.
+- [ ] Demonstrate coexistence or choose a controlled maintenance transition.
+- [ ] Run a test-device campaign with recipient authorization and a clear cohort.
+- [ ] Rehearse hold/recovery/rollback with uncertain provider outcomes.
+- [ ] Enable an FCM-only pilot and check isolation from legacy senders.
+- [ ] Evaluate reports by denominator, app version, rate and coverage.
+- [ ] Increase the cohort gradually after thresholds and dwell time are met.
+- [ ] Open full broadcast only after coverage/re-scope is agreed.
+- [ ] Observe for the agreed window, then retire OneSignal with a dependency audit.
 
-Tidak ada live send atau perubahan account/provider pada sesi penulisan ini.
-Backend send gate tidak dapat membatalkan push yang sudah diterima provider.
-Rollback aplikasi yang sudah menghapus SDK lama membutuhkan jalur FCM yang
-kompatibel atau rilis mobile baru; bukan sekadar mengganti environment variable.
+No live sends or account/provider changes occurred during this writing session.
+A backend send gate cannot cancel push notifications already accepted by the provider.
+Rolling back an app that has removed the old SDK requires a compatible FCM path
+or a new mobile release; merely changing an environment variable is insufficient.

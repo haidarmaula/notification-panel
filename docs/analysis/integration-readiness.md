@@ -1,84 +1,84 @@
 # Dependency integration evidence
 
-Tanggal: 2026-11-02. Step 19/M01 dependency foundation, diuji lokal pada
+Date: 2026-11-02. Step 19/M01 dependency foundation, tested locally on
 darwin/arm64 + Docker Desktop. [SPEC](../specs/integration-environment.md),
 [runner](../../scripts/integration.sh), [Compose](../../compose.integration.yml),
 [tests](../../tests/integration/dependencies_test.go).
 
-## Menjalankan ulang
+## Rerunning
 
-Prasyarat yang diuji: Go 1.26.10, Docker 28.1.1 dengan daemon aktif, Compose
-2.35.1, golang-migrate CLI v4.19.1, Postman CLI 1.75.0 dan Python 3. Image
-PostgreSQL/Kafka dipin dengan registry digest; pull memerlukan network bila
-image belum tersedia. Tidak perlu login/workspace/key Postman untuk local run.
+Tested prerequisites: Go 1.26.10, Docker 28.1.1 with a running daemon, Compose
+2.35.1, golang-migrate CLI v4.19.1, Postman CLI 1.75.0 and Python 3.
+PostgreSQL/Kafka images are pinned by registry digest; pulling requires network access if
+the images are not already available. Local runs require no Postman login/workspace/key.
 
 ```bash
 bash scripts/integration.sh
 ```
 
-Di sandbox sesi ini, Go memakai GOCACHE=/tmp/hello-go-review-cache dan
-GOMODCACHE=/tmp/hello-ci-modcache. Docker socket/localhost membutuhkan izin
-runtime di luar sandbox. Ini tidak mengubah kebutuhan credential aplikasi.
+In this session's sandbox, Go used GOCACHE=/tmp/hello-go-review-cache and
+GOMODCACHE=/tmp/hello-ci-modcache. Docker socket/localhost required runtime
+permission outside the sandbox. This does not change application credential requirements.
 
-Runner memakai project `hello-integration`, port loopback 15432/19092/14010,
-fixture DB/user/password publik, temporary PostgreSQL/Kafka storage, dan
-temporary simulation logs. `.env` development tidak dimuat oleh Compose
-(`--env-file /dev/null`) maupun application config loaders. Tidak ada server,
-worker atau scheduler aplikasi yang dijalankan. File compose development dan
-Makefile tidak diubah. Bridge terpisah bukan outbound firewall; Firebase test
-transport membatasi setiap request ke simulation loopback dan menolak redirect.
+The runner uses project `hello-integration`, loopback ports 15432/19092/14010,
+public fixture DB/user/password values, temporary PostgreSQL/Kafka storage, and
+temporary simulation logs. The development `.env` is loaded by neither Compose
+(`--env-file /dev/null`) nor application config loaders. No application server,
+worker or scheduler is run. The development compose file and
+Makefile are unchanged. A separate bridge is not an outbound firewall; the Firebase test
+transport restricts every request to simulation loopback and rejects redirects.
 
-Lock mencegah run paralel. Jika project/port sudah dipakai, runner menolak;
-tidak mengambil alih atau menghapus resource yang sudah ada. Cleanup hanya
-project yang baru dibuat runner dan PID simulasi miliknya, tanpa Docker prune
-atau menghentikan Docker Desktop. Setelah hard crash, inspect project/process
-dan lock yang dilaporkan sebelum membersihkan fixture secara manual.
+A lock prevents parallel runs. If the project/ports are already in use, the runner refuses;
+it does not take over or remove existing resources. Cleanup covers only
+the project newly created by the runner and its own simulation PID, without Docker prune
+or stopping Docker Desktop. After a hard crash, inspect the reported project/process
+and lock before manually cleaning up fixtures.
 
-## Hasil yang sudah diamati
+## Observed results
 
-| Pemeriksaan | Hasil / batas bukti |
+| Check | Result / evidence limit |
 | --- | --- |
-| Image aktual | PostgreSQL 17.10 dan Kafka 4.3.1; digest ada di Compose; RF1/1 partition, bukan HA |
-| Migrations | Seluruh 15 migration up → down-all → up lulus pada fixture DB baru |
-| Repository aktual | database.New + generated sqlc + UserRepository Create/FindByExternalID dan empat seed roles lulus |
-| Producer aktual | Kedua topic diprovisikan eksplisit; NewProducer menerbitkan event dan reader memperoleh key serta JSON yang sama |
-| Firebase SDK aktual | Send terhadap fixture accepted, UNREGISTERED, quota 429, unavailable 503 menghasilkan response/error classification yang diharapkan |
-| Deadline | Caller berhenti sekitar 100 ms, tidak menunggu response tertunda 2 detik |
-| Egress test | Request URL provider nyata ditolak local transport sebelum network I/O; tidak ada credential/real device digunakan |
-| Simulation log | 9 actual SDK POST requests; status 200×2, 404×1, 429×1, 503×5; termasuk delayed response setelah caller timeout |
-| Guard | Port sibuk ditolak; existing project container dipertahankan setelah refusal; unknown argument exit 2; tag tanpa explicit opt-in gagal, tidak skip |
-| Cleanup | Success dan test-failure paths menghapus fixture containers/network; pre-existing-container case tidak menghapus container tersebut |
-| Checks | Ordinary go test ./... tetap lulus, tagged go vet lulus; Bash/JS syntax dan Compose config divalidasi |
+| Actual images | PostgreSQL 17.10 and Kafka 4.3.1; digests are in Compose; RF1/1 partition, not HA |
+| Migrations | All 15 migrations passed up → down-all → up on a fresh fixture DB |
+| Actual repository | database.New + generated sqlc + UserRepository Create/FindByExternalID and four seed roles passed |
+| Actual producer | Both topics were explicitly provisioned; NewProducer published an event and the reader received the same key and JSON |
+| Actual Firebase SDK | Send against accepted, UNREGISTERED, quota 429, unavailable 503 fixtures produced the expected response/error classifications |
+| Deadline | The caller stopped at about 100 ms rather than waiting for the 2-second delayed response |
+| Egress test | A real provider request URL was rejected by the local transport before network I/O; no credentials/real devices were used |
+| Simulation log | 9 actual SDK POST requests; statuses 200×2, 404×1, 429×1, 503×5; including a delayed response after caller timeout |
+| Guard | Busy ports were rejected; an existing project container was preserved after refusal; unknown arguments exited 2; the tag without explicit opt-in failed rather than skipping |
+| Cleanup | Success and test-failure paths removed fixture containers/network; the pre-existing-container case did not remove that container |
+| Checks | Ordinary go test ./... still passed, tagged go vet passed; Bash/JS syntax and Compose config were validated |
 
-SDK menghasilkan lima physical HTTP requests untuk satu logical Send saat 503
-karena retry internal. Ini bukti skenario fixture, bukan janji timing provider
-nyata. Executor/rate/attempt design M06 harus memperhitungkannya; step ini tidak
-mengubah SDK retry policy atau adapter production.
+The SDK generated five physical HTTP requests for one logical Send on 503
+because of internal retries. This is fixture-scenario evidence, not a real-provider timing
+promise. The M06 executor/rate/attempt design must account for it; this step does not
+change SDK retry policy or the production adapter.
 
-Smoke suite lengkap lulus dengan exit 0. Log runtime mentah ditempatkan di
-temporary directory dan dihapus, tidak di-commit; runner memeriksa request
-events agar sukses tidak hanya membuktikan mock berhasil startup. Context
-simulation menyimpan provenance dan ketidakpastian untuk run berikutnya.
+The complete smoke suite passed with exit 0. Raw runtime logs were placed in a
+temporary directory and deleted, not committed; the runner checks request
+events so success establishes more than a mock starting successfully. Simulation
+context retains provenance and uncertainty for subsequent runs.
 
-## Batas integrasi dan tindak lanjut
+## Integration limits and follow-up
 
-Owner mock lookup tidak tersedia karena Postman CLI signed out; tidak ada klaim
-mock provider tidak ada. Stand-in lokal dibuat dari Firebase REST send/error
-documentation dan pinned Go SDK, lalu diperketat untuk fixture requests.
-CLI 1.75 membutuhkan `path` manifest file, bukan directory. Mock/simulation
-tidak dipush, dideploy atau dipublikasikan ke workspace.
+Owner mock lookup was unavailable because the Postman CLI was signed out; this does not claim
+that no provider mock exists. The local stand-in was built from Firebase REST send/error
+documentation and the pinned Go SDK, then tightened for fixture requests.
+CLI 1.75 requires a manifest file `path`, rather than a directory. The mock/simulation
+was not pushed, deployed or published to a workspace.
 
-FCMProvider sekarang memakai SendAll, worker masih OneSignal. Harness memakai
-Firebase SDK Send langsung, **bukan** adapter/worker aplikasi. Belum dibuktikan:
+FCMProvider currently uses SendAll; the worker still uses OneSignal. The harness calls
+Firebase SDK Send directly, **not** the application adapter/worker. Not yet demonstrated:
 admission/outbox/leases, rebalance/offset safety, multi-partition affinity,
-provider selection/credential, token enrollment/receipt, real FCM/APNs/device,
-20k throughput, multi-host failure atau restore. Linux/GitHub-hosted execution
-dan automatic integration job belum dijalankan oleh step ini.
+provider selection/credentials, token enrollment/receipts, real FCM/APNs/devices,
+20k throughput, multi-host failure or restore. Linux/GitHub-hosted execution
+and an automatic integration job were not run by this step.
 
-M01 selesai sebagai checks + lingkungan lokal yang dapat diulang. Berikutnya
-step 20: SPEC slice M02 permission/API baseline; G5 perlu settled untuk policy
-yang diimplementasikan. Tambahkan integration/failure cases setiap milestone,
-bukan menganggap dependency smoke sudah membuktikan seluruh backend reliable.
+M01 is complete as checks + a repeatable local environment. Next is
+step 20: SPEC slice M02 permission/API baseline; G5 needs to be settled for the policy
+being implemented. Add integration/failure cases at every milestone,
+rather than treating dependency smoke tests as proof of reliability for the entire backend.
 
 M03a.1 update 2026-11-03: the runner now exercises 16 migrations, including
 registry/grant/audit-scope constraints and real-DB CAS/locking/round-trip tests.

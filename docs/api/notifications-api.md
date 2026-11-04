@@ -80,7 +80,7 @@ Retrieves a paginated list of notifications with optional filters.
   "data": [
     {
       "id": 15,
-      "title": "Promo Juli",
+      "title": "July Promotion",
       "type": "SEGMENT",
       "status": "COMPLETED",
       "created_by": "Greg",
@@ -118,11 +118,11 @@ Retrieves full notification details including delivery statistics.
 ```json
 {
   "id": 15,
-  "title": "Promo Juli",
-  "body": "Diskon sampai 50%",
+  "title": "July Promotion",
+  "body": "Discounts up to 50%",
   "template": {
     "id": 3,
-    "name": "Promo Template"
+    "name": "Promotion Template"
   },
   "type": "SEGMENT",
   "status": "COMPLETED",
@@ -161,8 +161,8 @@ Creates a new notification draft. The notification is always created with status
 #### Request Body
 ```json
 {
-  "title": "Promo Spesial",
-  "body": "Diskon 50% untuk semua produk!",
+  "title": "Special Promotion",
+  "body": "50% off all products!",
   "template_id": 3,
   "type": "BROADCAST",
   "segment_id": 5,
@@ -218,8 +218,8 @@ Updates a draft notification. **Allowed only if status is `DRAFT`**.
 #### Request Body (all fields optional)
 ```json
 {
-  "title": "Promo Baru",
-  "body": "Diskon 60%",
+  "title": "New Promotion",
+  "body": "60% off",
   "template_id": 4,
   "scheduled_at": "2025-07-06T10:00:00Z"
 }

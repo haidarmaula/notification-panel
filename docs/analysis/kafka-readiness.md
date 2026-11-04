@@ -1,44 +1,44 @@
 # Kafka review and self-hosted readiness
 
-Tanggal: 2026-11-02. Status: design evidence, bukan hasil provisioning/HA test.
-Rancangan: [ADR-07](../adr/adr-07-kafka-topology.md).
+Date: 2026-11-02. Status: design evidence, not provisioning/HA test results.
+Design: [ADR-07](../adr/adr-07-kafka-topology.md).
 
-## Konfirmasi pengguna
+## User confirmation
 
-Kafka direncanakan di server perusahaan sendiri (self-hosted). Jumlah host,
-failure domain/storage, resource dan operator belum diketahui. Tiga container
-pada satu server tidak memenuhi toleransi kehilangan satu server.
+Kafka is planned for the company's own servers (self-hosted). The number of hosts,
+failure domains/storage, resources and operators are not yet known. Three containers
+on one server do not provide tolerance for losing one server.
 
-## Temuan aktual pada source/dependency
+## Actual source/dependency findings
 
 | Finding | Evidence | Status |
 | --- | --- | --- |
-| H47: keyed partition affinity tidak berjalan | NewProducer memakai LeastBytes; dependency balancer.go tidak hash key | Open; ADR-07 mengusulkan Hash dan mapping rollout |
-| H48: default batch wait berisiko mendominasi serial publish | NewProducer tidak mengatur BatchSize/BatchTimeout; writer.go default 100/1s; processor menunggu publish setiap delivery | Open; low-latency config dan benchmark diperlukan |
-| M48: seed CSV bukan list endpoint | kafka.TCP(broker) dan Reader.Brokers berisi satu string; dependency TCP bersifat variadic, tidak split CSV | Open; explicit validated slice diperlukan |
+| H47: keyed partition affinity does not work | NewProducer uses LeastBytes; dependency balancer.go does not hash keys | Open; ADR-07 proposes Hash and a mapping rollout |
+| H48: default batch wait risks dominating serial publishing | NewProducer does not set BatchSize/BatchTimeout; writer.go defaults to 100/1s; the processor waits for publish on every delivery | Open; low-latency config and benchmarks needed |
+| M48: seed CSV is not an endpoint list | kafka.TCP(broker) and Reader.Brokers contain one string; dependency TCP is variadic and does not split CSV | Open; explicit validated slice needed |
 
-Probe lokal (bukan broker integration test), 2026-11-02:
+Local probe (not a broker integration test), 2026-11-02:
 
 ```text
 same key, partitions 0/1/2; LeastBytes: [0 1 2 0 1 2]
 same key, partitions 0/1/2; Hash: [2 2 2 2 2 2]
 ```
 
-Probe memakai Message.Key=notification_42, payload tetap dan enam pemanggilan
-Balance pada github.com/segmentio/kafka-go v0.4.51. Command yang dijalankan:
+The probe used Message.Key=notification_42, a fixed payload and six calls to
+Balance in github.com/segmentio/kafka-go v0.4.51. Command executed:
 GOCACHE=/tmp/hello-go-review-cache go run /tmp/hello-kafka-partition-probe.go.
-File probe hanya sementara; SPEC harus membuat regression test permanen ketika
-producer diperbaiki. Tidak ada request jaringan/provider/broker dari probe.
+The probe file was temporary; the SPEC must add a permanent regression test when
+the producer is fixed. The probe made no network/provider/broker requests.
 
-H48 adalah inferensi source/defaults, bukan pengukuran broker. Jika tiap publish
-serial menunggu flush 1s, 20.000 publish dapat menambah sekitar 5,6 jam waktu
-tunggu batching pada satu loop; itu ilustrasi kondisi, bukan hasil benchmark
-atau estimasi pasti produksi. Provider submission dan analytics event latency
-harus diukur terpisah. M48 juga belum diuji terhadap cluster multi-seed nyata.
+H48 is inferred from source/defaults, not broker measurements. If each serial publish
+waits 1s for a flush, 20,000 publishes could add around 5.6 hours of batching
+wait time in one loop; this illustrates a condition, not a benchmark result
+or a definitive production estimate. Provider submission and analytics event latency
+must be measured separately. M48 has also not been tested against a real multi-seed cluster.
 
 ## Production evidence checklist
 
-| Gate | Bukti yang diperlukan | Status |
+| Gate | Required evidence | Status |
 | --- | --- | --- |
 | K01 host topology | Independent host/storage/network domains, broker/controller placement, resource budget | Self-hosted confirmed; footprint unknown |
 | K02 versions/features | Pinned broker/client, KRaft quorum, feature/ELR and patch review | Compose version known; production unreviewed |
@@ -59,7 +59,7 @@ data forever until every consumer acknowledges it.
 
 ## Boundary of this increment
 
-Step 12 selesai sebagai draft ADR dan checklist. AGENTS.md dikoreksi agar tidak
-mengajarkan LeastBytes sebagai hash routing; code-review.md mendapat temuan
-baru berstatus open. Kode Go, compose, Makefile, topic/group/offset dan credential
-tidak diubah. Tidak ada live Kafka test, deployment, migration atau FCM send.
+Step 12 is complete as a draft ADR and checklist. AGENTS.md was corrected so it no longer
+presents LeastBytes as hash routing; code-review.md received new
+open findings. Go code, compose, Makefile, topics/groups/offsets and credentials
+were not changed. There was no live Kafka test, deployment, migration or FCM send.

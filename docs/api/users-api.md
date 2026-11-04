@@ -244,7 +244,7 @@ Retrieves the notification delivery history for a specific user. Shows all notif
   "data": [
     {
       "notification_id": 15,
-      "title": "Promo Juli",
+      "title": "July Promotion",
       "status": "OPENED",
       "opened_at": "2025-07-14T10:30:00Z"
     },

@@ -1,19 +1,19 @@
 # Observability readiness and operator evidence
 
-Tanggal: 2026-11-02. Status: checklist rancangan; belum ada monitoring yang
-diimplementasikan/dipasang/diuji oleh sesi ini.
-Rancangan: [ADR-08](../adr/adr-08-observability.md).
+Date: 2026-11-02. Status: design checklist; no monitoring has been
+implemented/installed/tested by this session.
+Design: [ADR-08](../adr/adr-08-observability.md).
 
 ## Existing evidence
 
-- HTTP logger hanya method/path; status/duration/correlation belum tersedia.
-- Database ping hanya startup; server belum mempunyai readiness/graceful drain.
-- Worker/scheduler memakai log.Printf; belum ditemukan metrics/health/tracing.
-- Pinned kafka-go reader: Lag=-1 dan ReadLag tidak tersedia dengan GroupID;
-  Stats adalah delta sejak pemanggilan terakhir, bukan cumulative counter.
-- Campaign sekitar lima kali/bulan; idle tidak otomatis berarti worker mati.
-- Perusahaan akan self-host Kafka, tetapi monitoring stack dan operator belum
-  diinventarisasi. Jangan mengasumsikan Prometheus/Grafana/receiver sudah ada.
+- The HTTP logger records only method/path; status/duration/correlation are not yet available.
+- Database ping occurs only at startup; the server does not yet have readiness/graceful drain.
+- Worker/scheduler use log.Printf; no metrics/health/tracing were found.
+- Pinned kafka-go reader: Lag=-1 and ReadLag are unavailable with GroupID;
+  Stats is the delta since the last call, not a cumulative counter.
+- Campaigns occur about five times/month; idle does not automatically mean the worker is dead.
+- The company will self-host Kafka, but the monitoring stack and operators have not
+  been inventoried. Do not assume Prometheus/Grafana/receivers already exist.
 
 ## Proposed evidence gates
 

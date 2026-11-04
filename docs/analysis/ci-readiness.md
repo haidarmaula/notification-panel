@@ -1,83 +1,83 @@
 # CI readiness
 
-Tanggal: 2026-11-02. Scope: step 18, static/unit/dependency checks.
+Date: 2026-11-02. Scope: step 18, static/unit/dependency checks.
 Workflow: [Backend CI](../../.github/workflows/ci.yml).
 Local runner: [scripts/ci.sh](../../scripts/ci.sh).
 
 ## Execution boundary
 
-GitHub Actions dipilih karena origin repo berada di GitHub. Workflow berjalan
-untuk push `main`, pull request menuju `main` (opsional; tidak memaksa workflow
-PR), manual dispatch dan jadwal mingguan. GitHub execution belum diamati karena
-perubahan belum di-push. Repo Actions/ruleset/required checks belum diperiksa
-atau diubah; membuat YAML tidak otomatis menegakkan branch protection.
+GitHub Actions was selected because the repo origin is on GitHub. The workflow runs
+on pushes to `main`, pull requests targeting `main` (optional; this does not mandate a
+PR workflow), manual dispatch and a weekly schedule. GitHub execution has not been observed because
+the changes have not been pushed. Repo Actions/rulesets/required checks have not been inspected
+or changed; creating YAML does not automatically enforce branch protection.
 
-Quality dan vulnerability adalah job independen dengan timeout 20 menit.
-Checkout memakai `persist-credentials: false`, permission token `contents: read`,
-dan action resmi terpin ke SHA; versi Go mengikuti `go.mod`. Tidak ada deploy,
-database/Kafka service, pengiriman push, secret produksi atau pembacaan `.env`.
-Makefile tetap memiliki `include .env`; checks memanggil script langsung.
+Quality and vulnerability are independent jobs with 20-minute timeouts.
+Checkout uses `persist-credentials: false`, token permissions are `contents: read`,
+and official actions are pinned to SHAs; the Go version follows `go.mod`. There is no deployment,
+database/Kafka service, push delivery, production secret use or `.env` reading.
+The Makefile retains `include .env`; checks invoke the script directly.
 
-## Gates dan batas bukti
+## Gates and evidence limits
 
-| Gate | Command | Yang dibuktikan |
+| Gate | Command | What it establishes |
 | --- | --- | --- |
-| Format | `bash scripts/ci.sh format` | Seluruh tracked Go files termasuk generated code sesuai gofmt toolchain terpilih; tidak menulis file |
-| Modules | `bash scripts/ci.sh modules` | Download/checksum dependency valid dan go.mod/go.sum tidak berubah terhadap commit |
-| Build | `bash scripts/ci.sh build` | Seluruh packages/binaries compile dengan module mode readonly |
-| Unit tests | `bash scripts/ci.sh test` | Unit tests existing lulus; belum integration/race/load/device tests |
-| Vet | `bash scripts/ci.sh vet` | Analisis default go vet lulus; bukan semua bug/security findings tertutup |
-| Vulnerability | `bash scripts/ci.sh vuln` | govulncheck v1.9.0 menganalisis default-build code + unit tests terhadap database Go saat scan; custom integration tag tidak diaktifkan; reachable finding atau kegagalan scanner memberi exit nonzero |
+| Format | `bash scripts/ci.sh format` | All tracked Go files, including generated code, conform to gofmt in the selected toolchain; no files are written |
+| Modules | `bash scripts/ci.sh modules` | Dependency downloads/checksums are valid and go.mod/go.sum are unchanged from the commit |
+| Build | `bash scripts/ci.sh build` | All packages/binaries compile in readonly module mode |
+| Unit tests | `bash scripts/ci.sh test` | Existing unit tests pass; integration/race/load/device tests are not covered |
+| Vet | `bash scripts/ci.sh vet` | Default go vet analysis passes; this does not close every bug/security finding |
+| Vulnerability | `bash scripts/ci.sh vuln` | govulncheck v1.9.0 analyzes default-build code + unit tests against the Go database at scan time; custom integration tags are not enabled; reachable findings or scanner failures produce a nonzero exit |
 
-Scanner dipasang ke temporary directory lalu dibersihkan; versi scanner tetap,
-database advisory tetap diperbarui. Temuan imported/required tetapi tidak
-reachable dapat dilaporkan sebagai informasi; exit sukses bukan klaim semua
-dependency bebas vulnerability. Jika database/network tidak tersedia, scan
-gagal, tidak diganti hasil sukses. Tidak ada suppression/continue-on-error.
+The scanner is installed in a temporary directory and then cleaned up; its version is fixed,
+while the advisory database continues to update. Imported/required but
+unreachable findings may be reported as information; a successful exit does not claim all
+dependencies are vulnerability-free. If the database/network is unavailable, the scan
+fails rather than returning a substitute success. There are no suppressions/continue-on-error.
 
-## Baseline vulnerability dan remediation
+## Baseline vulnerabilities and remediation
 
-Scan awal dengan Go 1.26.4 memberi exit 3: **24 reachable findings** pada standard
-library dan tiga module (`x/net`, `x/text`, gRPC). Ini hasil static reachability,
-bukan bukti exploit di production. Contoh advisory dan perbaikan:
+The initial scan with Go 1.26.4 returned exit 3: **24 reachable findings** in the standard
+library and three modules (`x/net`, `x/text`, gRPC). This is static reachability,
+not evidence of production exploitation. Example advisories and fixes:
 
-| Komponen | Sebelum | Sesudah yang diuji | Sumber primer contoh |
+| Component | Before | Tested after | Example primary source |
 | --- | --- | --- | --- |
 | Go | 1.26.4 | 1.26.10 | [GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809) |
 | golang.org/x/net | v0.57.0 | v0.60.0 | [GO-2026-6617](https://pkg.go.dev/vuln/GO-2026-6617) |
-| golang.org/x/text | v0.40.0 | v0.42.0 | [GO-2026-6629](https://pkg.go.dev/vuln/GO-2026-6629); versi v0.42.0 diperlukan x/net v0.60.0 |
+| golang.org/x/text | v0.40.0 | v0.42.0 | [GO-2026-6629](https://pkg.go.dev/vuln/GO-2026-6629); x/net v0.60.0 requires v0.42.0 |
 | google.golang.org/grpc | v1.82.0 | v1.83.1 | [GO-2026-6061](https://pkg.go.dev/vuln/GO-2026-6061), [GO-2026-6348](https://pkg.go.dev/vuln/GO-2026-6348) |
 | go.opentelemetry.io/otel/sdk | v1.44.0 | v1.45.0 | [GO-2026-6505](https://pkg.go.dev/vuln/GO-2026-6505) |
 
-Go module resolution juga memperbarui crypto/mod/sync/sys/term/tools sesuai
-dependency requirements; OpenTelemetry core/metric/trace mengikuti SDK family.
-Scan antara masih memberi dua reachable findings pada SDK/gRPC, sehingga versi
-final di tabel memakai fixed versions untuk kedua advisory tersebut juga.
-`go.sum` disimpan bersama `go.mod`; README dan dev
-image minimum Go diselaraskan. Tidak ada major-version migration atau perubahan
-API aplikasi. Image Docker belum dibangun/diverifikasi oleh langkah ini.
+Go module resolution also updated crypto/mod/sync/sys/term/tools according to
+dependency requirements; OpenTelemetry core/metric/trace follow the SDK family.
+An intermediate scan still returned two reachable findings in SDK/gRPC, so the
+final versions in the table also include fixes for those two advisories.
+`go.sum` is retained alongside `go.mod`; the README and minimum Go version in the dev
+image were aligned. There is no major-version migration or application
+API change. The Docker image was not built/verified by this step.
 
 ## Verification status
 
-Validasi lokal setelah remediation memakai Go 1.26.10, govulncheck v1.9.0,
-`GOCACHE=/tmp/hello-go-review-cache` dan
-`GOMODCACHE=/tmp/hello-ci-modcache` pada darwin/arm64:
+Local validation after remediation used Go 1.26.10, govulncheck v1.9.0,
+`GOCACHE=/tmp/hello-go-review-cache` and
+`GOMODCACHE=/tmp/hello-ci-modcache` on darwin/arm64:
 
-- Format, module verification, build, seluruh unit tests dan vet lulus.
-- Scan akhir exit 0: **0 reachable vulnerabilities**; masih ada 1 advisory pada
-  imported package dan 3 pada required modules yang tidak terjangkau menurut
-  scanner. Ini bukan hasil nol seluruh advisory atau security sign-off.
-- `bash -n scripts/ci.sh` dan actionlint v1.7.12 terhadap workflow lulus.
-- `git diff --check` lulus. Tidak ada hosted GitHub run, Linux runner, Docker
-  image build, integration/provider/load/device/restore test yang telah dibuktikan.
+- Format, module verification, build, all unit tests and vet passed.
+- The final scan returned exit 0: **0 reachable vulnerabilities**; 1 advisory remains in
+  an imported package and 3 in required modules that the scanner considers unreachable.
+  This is not a zero-advisory result or security sign-off.
+- `bash -n scripts/ci.sh` and actionlint v1.7.12 against the workflow passed.
+- `git diff --check` passed. No hosted GitHub run, Linux runner, Docker
+  image build, integration/provider/load/device/restore test has been demonstrated.
 
-Step 18 selesai sebagai konfigurasi dan verifikasi lokal; hosted run dan aturan
-repository tetap perlu diperiksa setelah push yang diotorisasi pengguna.
+Step 18 is complete as configuration and local verification; hosted runs and
+repository rules still need inspection after a user-authorized push.
 
-Referensi konfigurasi: [checkout](https://github.com/actions/checkout),
+Configuration references: [checkout](https://github.com/actions/checkout),
 [setup-go](https://github.com/actions/setup-go),
 [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck).
-Pin action dan versi scanner diverifikasi terhadap metadata resmi GitHub/Go.
-API contract lint dan Postman collection runs ditambahkan ketika artifact dan
-isolated integration target tersedia; tidak ada Postman workspace yang dibuat
-atau dipublikasikan oleh step ini.
+Action pins and the scanner version were verified against official GitHub/Go metadata.
+API contract lint and Postman collection runs will be added when artifacts and
+an isolated integration target are available; no Postman workspace was created
+or published by this step.

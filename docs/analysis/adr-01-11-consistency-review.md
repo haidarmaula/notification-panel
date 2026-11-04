@@ -1,167 +1,167 @@
 # ADR-01–11 consistency review
 
-Tanggal: 2026-11-02. Status: review rancangan; ADR tetap **proposed**.
-Tidak ada perubahan runtime, migration, provisioning, atau bukti produksi.
-Indeks kebutuhan: [production plan](production-readiness-plan.md).
+Date: 2026-11-02. Status: design review; ADRs remain **proposed**.
+No runtime changes, migrations, provisioning, or production evidence.
+Requirements index: [production plan](production-readiness-plan.md).
 
-## 1. Scope dan batas penerimaan
+## 1. Scope and acceptance boundaries
 
-Pengguna mengonfirmasi v1 fokus broadcast/segment/individual, scheduling,
-recovery, receipt/statistik, keamanan dan operasi. UPLOAD, cancel/resubmit,
-rich media dan preferences/quiet hours ditunda. Emergency hold, idempotency,
-token/logout lifecycle, pembatasan traffic dan audit adalah kontrol inti.
-Localisation bukan janji fitur v1; kontrak harus menjelaskan input yang didukung.
+The user confirmed that v1 focuses on broadcast/segment/individual, scheduling,
+recovery, receipts/statistics, security, and operations. UPLOAD, cancel/resubmit,
+rich media, and preferences/quiet hours are deferred. Emergency hold, idempotency,
+token/logout lifecycle, traffic limits, and audit are core controls.
+Localisation is not a promised v1 feature; the contract must describe supported inputs.
 
-Kafka self-hosted dikonfirmasi; jumlah host independen **belum diketahui**.
-Repo React Native kaiapps2 tersedia di path yang diotorisasi dan branch
-feat/notifications; hanya referensi consumer pertama, bukan batas platform. Repo Laravel
-tidak tersedia; aplikasinya berjalan langsung di server. Verifikasi auth dapat
-memakai kontrak/config teredaksi serta token uji melalui pemilik sistem;
-tidak membutuhkan penyalinan credential produksi atau akses server otomatis.
+Self-hosted Kafka is confirmed; the number of independent hosts is **unknown**.
+The React Native kaiapps2 repository is available at the authorized path and branch
+feat/notifications; it is only the first consumer reference, not a platform boundary. The Laravel repository
+is unavailable; its application runs directly on the server. Auth verification can
+use redacted contracts/configuration and test tokens through the system owner;
+it does not require copying production credentials or automatic server access.
 
-Review ini memisahkan koreksi teknis yang dapat dirancang sekarang dari pilihan
-produk/operasional yang memerlukan pemilik keputusan. Tidak semua gate release
-harus selesai sebelum memperbaiki baseline test; penerimaan SPEC suatu milestone
-memerlukan keputusan yang benar-benar dipakai milestone itu.
+This review separates technical corrections that can be designed now from
+product/operational choices requiring a decision owner. Not all release gates
+must be complete before repairing baseline tests; acceptance of a milestone's SPEC
+requires the decisions actually used by that milestone.
 
-## 2. Temuan lintas ADR dan resolusi proposed
+## 2. Cross-ADR findings and proposed resolutions
 
-| ID | Konflik / risiko | Resolusi rancangan | ADR terkait |
+| ID | Conflict / risk | Design resolution | Related ADRs |
 | --- | --- | --- | --- |
-| CR1 | Urutan lock idempotency, receipt, registration dan revocation belum satu protokol | Urutan bersama di bagian 3; uji race dan implicit FK locks dalam SPEC | 01,03,04,05,09,10,11 |
-| CR2 | “Consistent snapshot” tidak menentukan isolation; coverage/count/intent bisa berbeda | Preparation REPEATABLE READ, satu predicate/snapshot, whole-transaction retry terbatas | 01,05,06 |
-| CR3 | Reservasi satu page menghabiskan budget sebelum breaker/rate permit tersedia | Page kandidat tanpa charge; reserve satu perangkat setelah permit, attempt ID dan fencing | 01,04 |
-| CR4 | Breaker menghitung batch, executor FCM menghitung perangkat | Satu outcome logical submission perangkat; retry internal SDK bukan outcome tambahan | 01,04,08 |
-| CR5 | Deadline dari actual promotion menghidupkan campaign basi setelah outage | Scheduled deadline = scheduled_for + TTL; expired schedule FAILED tanpa outbox/fanout palsu | 01,03,06,08 |
-| CR6 | Late observation pada FAILED bisa disalahartikan sukses saat agregasi campaign | FAILED tetap submission failure; observation axis terpisah meskipun campaign masih PROCESSING | 01,05,08 |
-| CR7 | Topic name/partition/offset bisa dipakai ulang setelah topic recreation | Quarantine unik berdasarkan physical log source incarnation + partition + offset | 02,07,10 |
-| CR8 | source_epoch mencampur identitas acceptance, recovery dan Kafka source | Pisahkan origin_epoch, source_epoch dan log_source_id; bagian 4 | 02,03,05,07,10 |
-| CR9 | Expiry capability dari waktu schedule diterima bisa habis sebelum pengiriman | Receipt capability expiry = persisted deadline_at + proposed 7d | 01,05,10,11 |
-| CR10 | Multi-aplikasi dikonfirmasi setelah review awal; data/permission/event saat ini global | [ADR-12](../adr/adr-12-multi-application-isolation.md) mewajibkan app scope end-to-end, no default-app fallback dan legacy query gate sebelum app kedua. Rencana [M03a–d](../specs/m03a-application-scope-plan.md); belum ada implementasi/test A/B | 01–12 |
+| CR1 | Idempotency, receipt, registration, and revocation lock order lacks a single protocol | Shared order in section 3; test races and implicit FK locks in the SPEC | 01,03,04,05,09,10,11 |
+| CR2 | “Consistent snapshot” does not specify isolation; coverage/count/intent can differ | REPEATABLE READ preparation, one predicate/snapshot, bounded whole-transaction retry | 01,05,06 |
+| CR3 | Reserving a whole page consumes budget before breaker/rate permits are available | Candidate page without charge; reserve one device after permit, with attempt ID and fencing | 01,04 |
+| CR4 | Breaker counts batches, FCM executor counts devices | One outcome per logical device submission; internal SDK retries are not additional outcomes | 01,04,08 |
+| CR5 | Deadline based on actual promotion revives stale campaigns after an outage | Scheduled deadline = scheduled_for + TTL; expired schedule FAILED without false outbox/fanout | 01,03,06,08 |
+| CR6 | Late observation on FAILED can be misread as success during campaign aggregation | FAILED remains a submission failure; separate observation axis even while campaign is PROCESSING | 01,05,08 |
+| CR7 | Topic name/partition/offset can be reused after topic recreation | Quarantine uniqueness by physical log source incarnation + partition + offset | 02,07,10 |
+| CR8 | source_epoch conflates acceptance, recovery, and Kafka source identities | Separate origin_epoch, source_epoch, and log_source_id; section 4 | 02,03,05,07,10 |
+| CR9 | Capability expiry based on schedule acceptance can precede sending | Receipt capability expiry = persisted deadline_at + proposed 7d | 01,05,10,11 |
+| CR10 | Multiple applications confirmed after initial review; current data/permissions/events are global | [ADR-12](../adr/adr-12-multi-application-isolation.md) requires end-to-end app scope, no default-app fallback, and a legacy query gate before a second app. [M03a–d](../specs/m03a-application-scope-plan.md) plan; no A/B implementation/tests yet | 01–12 |
 
-Resolusi tersebut sudah dimasukkan ke ADR terkait atau protokol bersama di sini.
-Status “resolved in design” tidak menutup finding runtime `code-review.md`.
-Nilai timeout, TTL, breaker, rate/concurrency dan retention tetap proposed.
+These resolutions have been incorporated into the related ADRs or the shared protocol here.
+“Resolved in design” status does not close runtime findings in `code-review.md`.
+Timeout, TTL, breaker, rate/concurrency, and retention values remain proposed.
 
-## 3. Protokol transaksi dan lock bersama
+## 3. Shared transaction and lock protocol
 
-Jika operasi perlu mengambil beberapa kelompok row locks, urutannya:
+If an operation needs to acquire several groups of row locks, the order is:
 
-1. Control/policy rows yang memang harus dikunci, lalu principal staff/user,
-   kemudian session/revocation rows. Urutkan tabel dan ID secara stabil;
-   actor/target staff memakai urutan ID yang sama, bukan actor selalu dahulu.
-2. Idempotency key, kemudian notification/campaign rows, diurutkan ID.
-3. Installation rows, immutable registration/binding rows, lalu delivery rows;
-   masing-masing diurutkan ID. Attempt/result/finalization mengambil campaign
-   sebelum delivery; receipt juga mengambil installation/binding sebelum delivery.
-4. Evidence/read/projection, audit dan outbox writes di transaksi yang sama.
+1. Control/policy rows that actually need locking, then staff/user principals,
+   then session/revocation rows. Use stable table and ID ordering;
+   actor/target staff use the same ID order, rather than always actor first.
+2. Idempotency key, then notification/campaign rows, ordered by ID.
+3. Installation rows, immutable registration/binding rows, then delivery rows;
+   each ordered by ID. Attempt/result/finalization acquires campaign
+   before delivery; receipts also acquire installation/binding before delivery.
+4. Evidence/read/projection, audit, and outbox writes in the same transaction.
 
-Operasi hanya mengunci row yang dibutuhkan; aturan ini bukan perintah mengunci
-seluruh audience/principal atau satu global mutex untuk setiap submission.
-Cryptographic verification dan network I/O berada di luar transaksi; current
-authority/owner/version yang menentukan mutasi direcheck di transaksi.
-Renewal campaign tidak mengambil lock installation lalu kembali ke campaign.
+Operations lock only the rows they need; this rule does not instruct locking
+the entire audience/principal set or one global mutex for every submission.
+Cryptographic verification and network I/O are outside transactions; the current
+authority/owner/version governing a mutation is rechecked in the transaction.
+Campaign renewal does not acquire an installation lock and then return to the campaign.
 
-Registration/logout dapat memakai principal → installation → binding tanpa
-campaign. Jika perlu maintenance campaign, commit revocation dulu lalu lakukan
-fase campaign secara terpisah dengan recheck; jangan sambil menahan installation
-baru mencari campaign. Discovery maintenance memakai ID tanpa child row lock,
-kemudian membuka transaksi dengan urutan di atas dan mengecek ulang kondisi.
-Read snapshot tidak memberikan kewenangan mengirim ke owner yang sudah berubah;
-executor tetap memeriksa current registration sebelum setiap claim.
+Registration/logout can use principal → installation → binding without a
+campaign. If campaign maintenance is needed, commit revocation first, then perform
+the campaign phase separately with a recheck; do not hold an installation
+while looking up a campaign. Maintenance discovery uses IDs without child row locks,
+then opens a transaction in the order above and rechecks conditions.
+A read snapshot does not authorize sending to an owner who has changed;
+the executor still checks current registration before every claim.
 
-Outbox dispatcher mengunci satu outbox row dan tidak berbalik mengambil parent
-campaign/principal. Bila operasi memerlukan audit FK/principal lock, ambil yang
-diperlukan sebelum child locks. SPEC harus memeriksa implicit FK locks, unique
-conflicts dan trigger, bukan hanya SELECT FOR UPDATE yang tertulis. Lock/statement
-timeouts dan whole-transaction retry 40001/40P01 dibatasi; tidak ada klaim bebas
-deadlock berdasarkan diagram saja. Network provider tidak berjalan sambil
-menahan campaign lock; bounded Kafka outbox publication adalah pengecualian
-yang eksplisit milik ADR-03/05, bukan izin network I/O di transaksi lain.
+The outbox dispatcher locks one outbox row and does not go back to acquire its parent
+campaign/principal. If an operation requires audit FK/principal locks, acquire the
+necessary ones before child locks. The SPEC must check implicit FK locks, unique
+conflicts, and triggers, not just written SELECT FOR UPDATE statements. Lock/statement
+timeouts and whole-transaction retries for 40001/40P01 are bounded; a diagram alone
+does not establish freedom from deadlocks. Provider network calls do not run while
+holding a campaign lock; bounded Kafka outbox publication is an explicit
+ADR-03/05 exception, not permission for network I/O in other transactions.
 
-Preparation memakai REPEATABLE READ untuk coverage, audience count dan set-wise
-intent insert pada snapshot yang sama. Snapshot bukan seluruh database yang
-dibekukan selamanya: perubahan eligibility berikutnya dicek executor. Complete
-marker/counts hanya terlihat setelah commit. Expiry sebelum preparation boleh
-FAILED dengan snapshot unknown; hanya complete snapshot boleh menghasilkan
-COMPLETED atau agregasi outcome perangkat. Empty snapshot bukan unknown.
+Preparation uses REPEATABLE READ for coverage, audience count, and set-wise
+intent insertion in the same snapshot. A snapshot is not the entire database
+frozen forever: the executor checks later eligibility changes. Completion
+markers/counts become visible only after commit. Expiry before preparation may
+produce FAILED with an unknown snapshot; only a complete snapshot may produce
+COMPLETED or aggregate device outcomes. An empty snapshot is not unknown.
 
-Pemilihan isolation dan retry didasarkan pada dokumentasi primer PostgreSQL:
+Isolation and retry choices are based on primary PostgreSQL documentation:
 [transaction isolation](https://www.postgresql.org/docs/17/transaction-iso.html)
-dan [explicit locking](https://www.postgresql.org/docs/17/explicit-locking.html).
-Ini dasar rancangan, bukan hasil integration test pada database project.
+and [explicit locking](https://www.postgresql.org/docs/17/explicit-locking.html).
+This is a design basis, not an integration test result on the project's database.
 
-## 4. Identitas, versi dan recovery
+## 4. Identities, versions, and recovery
 
-| Identitas | Arti dan invariant |
+| Identity | Meaning and invariant |
 | --- | --- |
-| origin_epoch + notification_id | Business acceptance yang immutable; existing intent tidak mendapat identitas bisnis baru saat restore |
-| source_epoch | Lineage publikasi/projection yang diaktifkan lewat recovery manifest; stabil antar restart biasa |
-| log_source_id + partition + offset | Lokasi fisik source Kafka; cluster dan topic incarnation wajib diketahui |
-| delivery_id | Identitas opaque per-device intent; tidak berubah antar retry |
-| lease_generation + attempt_id | Fence DB result terhadap lease takeover dan reservasi perangkat ganda |
-| owner_epoch | Versi otorisasi owner installation, berubah logout/account switch |
-| route_epoch | Versi policy/cohort cutover; bukan otorisasi mengubah audience lama |
-| event_id / delivery_version | Dedup event global / monotonic projection version dalam source lineage yang disetujui |
+| origin_epoch + notification_id | Immutable business acceptance; existing intents do not gain a new business identity on restore |
+| source_epoch | Publication/projection lineage activated through the recovery manifest; stable across ordinary restarts |
+| log_source_id + partition + offset | Physical Kafka source location; cluster and topic incarnation must be known |
+| delivery_id | Opaque per-device intent identity; unchanged across retries |
+| lease_generation + attempt_id | Fence DB results against lease takeover and duplicate device reservations |
+| owner_epoch | Installation owner authorization version, changes on logout/account switch |
+| route_epoch | Policy/cohort cutover version; not authorization to change an old audience |
+| event_id / delivery_version | Global event dedup / monotonic projection version within the approved source lineage |
 
-Send dan update envelopes membawa origin_epoch serta source_epoch. Admission
-mengecek lineage yang diizinkan sebelum mencocokkan identitas business row.
-Requeue biasa mempertahankan kedua epoch asli, tidak menambahkan current epoch
-agar lolos validasi. Manifest recovery secara eksplisit menentukan lineage mana
-yang boleh direkonsiliasi; old payload/event ID tidak dilabel ulang.
+Send and update envelopes carry origin_epoch and source_epoch. Admission
+checks allowed lineage before matching business row identity.
+Ordinary requeue retains both original epochs, without adding the current epoch
+to pass validation. The recovery manifest explicitly defines which lineages
+may be reconciled; old payloads/event IDs are not relabeled.
 
-Recovery snapshots memakai event ID dan source lineage baru yang disetujui,
-mempertahankan origin business identity. Consumer mengaktifkan replacement
-projection secara eksplisit, tidak menjumlahkan snapshot recovery sebagai
-delivery baru. Consumer checkpoints memakai (source_epoch, delivery_id),
-global event-ID dedup, dan monotonic version di lineage aktif. Epoch lama/asing
-tidak boleh menghidupkan data yang sudah dihapus/direvoke. Consumer inventory
-dan persetujuan schema rollout tetap terbuka sebelum event v2 diaktifkan.
+Recovery snapshots use new approved event IDs and source lineage,
+preserving the origin business identity. Consumers explicitly activate a replacement
+projection rather than counting a recovery snapshot as a new
+delivery. Consumer checkpoints use (source_epoch, delivery_id),
+global event-ID dedup, and monotonic versions in the active lineage. Old/foreign epochs
+must not revive deleted/revoked data. Consumer inventory
+and schema rollout approval remain open before event v2 is enabled.
 
-Setiap executor hanya reserve perangkat setelah concurrency/rate/breaker permit.
-Satu unresolved claim tidak dapat diambil dua executor pada lease generation
-yang sama. Hasil cocok dengan attempt ID serta generation; crash sesudah commit
-claim mempertahankan charge, bukan refund spekulatif. Lease takeover dan unknown
-external outcome tetap dapat menyebabkan duplicate physical push: exactly-once
-provider delivery tidak dijanjikan.
+Each executor reserves a device only after concurrency/rate/breaker permits.
+One unresolved claim cannot be taken by two executors in the same lease
+generation. Results match the attempt ID and generation; a crash after the claim
+commits preserves the charge, rather than speculatively refunding it. Lease takeover and unknown
+external outcomes can still cause duplicate physical pushes: exactly-once
+provider delivery is not promised.
 
-## 5. Keputusan luar repo dan milestone yang dibatasi
+## 5. Decisions outside the repository and bounded milestones
 
-| Gate | Kondisi / pemilik yang perlu ditentukan | Memblokir |
+| Gate | Condition / owner still to be determined | Blocks |
 | --- | --- | --- |
-| G1 Scope | Core dikonfirmasi; input yang tidak didukung harus eksplisit | Batas contract SPEC, bukan baseline tests |
-| G2 Freshness/performance | TTL, numeric SLO, acceptance target dan quota aggregate belum disepakati | Final scheduling/retry config, benchmark acceptance dan release |
-| G3 Mobile/auth | kaiapps2 path/branch ditemukan sebagai consumer pertama; SDK/native behavior belum dibaca. Trusted issuer/audience/proof/revocation wajib per aplikasi, bukan Laravel global | Enrollment/receipt auth SPEC acceptance dan cutover |
-| G4 Infrastructure | Kafka host/failure domains, DB/staging/TLS dan operator belum diketahui | Production deployment/HA claim |
-| G5 Security policy | Multi-app requirement dikonfirmasi; detail app grants/control-plane ADR-12 masih proposed. Business role matrix dikonfirmasi pengguna; M02a scoped SPEC dan operation guards locally verified. Enrollment proof/recovery, gateway/BFF/operational policy tetap terbuka | Enabling modern enrollment/identity/perimeter dan remaining security SPEC; bukan penghalang M02a role enforcement. C21 remediated dalam scope M02a; remaining security gates tetap terbuka |
-| G6 Data/recovery | Retention, erasure, RPO/RTO, backup ownership dan consumer inventory belum ditentukan | Maintenance/recovery SPEC acceptance dan release |
-| G7 Firebase/cutover | Project/app/APNs config, credentials access, legacy automation/exclusive cohort belum diverifikasi | Real provider/device pilot dan OneSignal retirement |
+| G1 Scope | Core confirmed; unsupported inputs must be explicit | SPEC contract boundaries, not baseline tests |
+| G2 Freshness/performance | TTL, numeric SLO, acceptance target, and aggregate quota not yet agreed | Final scheduling/retry configuration, benchmark acceptance, and release |
+| G3 Mobile/auth | kaiapps2 path/branch found as first consumer; SDK/native behavior not yet read. Trusted issuer/audience/proof/revocation required per application, not global Laravel | Enrollment/receipt auth SPEC acceptance and cutover |
+| G4 Infrastructure | Kafka hosts/failure domains, DB/staging/TLS, and operators unknown | Production deployment/HA claims |
+| G5 Security policy | Multi-app requirement confirmed; ADR-12 app grant/control-plane details remain proposed. Business role matrix confirmed by user; M02a scoped SPEC and operation guards locally verified. Enrollment proof/recovery, gateway/BFF/operational policy remain open | Enabling modern enrollment/identity/perimeter and remaining security SPECs; does not block M02a role enforcement. C21 remediated within M02a scope; remaining security gates stay open |
+| G6 Data/recovery | Retention, erasure, RPO/RTO, backup ownership, and consumer inventory undetermined | Maintenance/recovery SPEC acceptance and release |
+| G7 Firebase/cutover | Project/app/APNs configuration, credential access, legacy automation/exclusive cohort unverified | Real provider/device pilot and OneSignal retirement |
 
-Baseline test repair dan review staged processor dapat dimulai tanpa akses
-Firebase/server Laravel atau angka SLO final. Implementasi sensitif mengikuti
-SPEC milestone yang mencatat gate terkait; tidak menerima semua ADR secara
-massal hanya untuk memulai coding. Step 15 tetap conditional sampai keputusan
-yang diperlukan ditutup dan penerimaan ADR dicatat per dokumen.
+Baseline test repair and staged processor review can start without
+Firebase/Laravel server access or final SLO numbers. Sensitive implementation follows
+a milestone SPEC recording the relevant gates; do not accept all ADRs
+in bulk merely to start coding. Step 15 remains conditional until required
+decisions are closed and ADR acceptance is recorded per document.
 
-## 6. Kasus verifikasi wajib dalam SPEC berikutnya
+## 6. Required verification cases in subsequent SPECs
 
-| Kasus | Bukti yang harus dihasilkan, belum dijalankan |
+| Case | Evidence required, not yet executed |
 | --- | --- |
-| Send/revocation/receipt/registration bersamaan | Bounded completion, tidak reverse-lock atau mengubah owner lain |
-| Audience berubah antara count dan insert | Satu committed snapshot/count; aborted transaction tidak meninggalkan partial intents |
-| Dua executor memilih perangkat yang sama | Satu committed attempt ID/charge pada lease generation itu |
-| Breaker terbuka di tengah page | Kandidat tanpa permit belum charged; admitted in-flight work terukur |
-| Scheduler down melewati deadline | FAILED/ttl_expired, tidak fresh TTL atau provider request |
-| Expiry sebelum fanout | Unknown denominators, tidak COMPLETED/zero-device palsu |
-| Receipt OPENED pada FAILED saat PROCESSING | Late observation/read tersimpan, campaign tidak mendapat submission success palsu |
-| Topic dihapus/dibuat ulang dengan offset sama | Source incarnation berbeda; DLQ lama tidak menimpa yang baru |
-| Restore dan old Kafka numeric ID sama | Origin/lineage mismatch ditahan; tidak mengirim ulang karena ID collision |
-| Recovery snapshot setelah newer external projection | Explicit lineage activation/replacement; tidak double-count atau resurrect erased data |
-| Campaign dijadwalkan jauh di depan | Capability berlaku untuk send window, tidak expired dari waktu draft/schedule creation |
+| Concurrent send/revocation/receipt/registration | Bounded completion, no reverse locking or changes to another owner |
+| Audience changes between count and insert | One committed snapshot/count; aborted transactions leave no partial intents |
+| Two executors select the same device | One committed attempt ID/charge in that lease generation |
+| Breaker opens midway through a page | Candidates without permits not yet charged; admitted in-flight work measured |
+| Scheduler down past deadline | FAILED/ttl_expired, no fresh TTL or provider request |
+| Expiry before fanout | Unknown denominators, no false COMPLETED/zero-device result |
+| OPENED receipt on FAILED while PROCESSING | Late observation/read stored, campaign gains no false submission success |
+| Topic deleted/recreated with same offset | Different source incarnation; old DLQ does not overwrite new |
+| Restore and old Kafka numeric ID match | Origin/lineage mismatch held; no resend due to ID collision |
+| Recovery snapshot after newer external projection | Explicit lineage activation/replacement; no double counting or resurrection of erased data |
+| Campaign scheduled far in the future | Capability valid for send window, not expired from draft/schedule creation time |
 
-Pemeriksaan dokumen meliputi link lokal, struktur ADR, whitespace dan konsistensi
-teks. Semua kasus concurrency/failure di tabel ini membutuhkan integration test;
-belum ada hasil runtime, load, mobile atau restore yang dibuktikan review ini.
+Document checks cover local links, ADR structure, whitespace, and text
+consistency. All concurrency/failure cases in this table require integration tests;
+this review establishes no runtime, load, mobile, or restore results.
 
 ## Multi-application amendment (2026-11-03)
 

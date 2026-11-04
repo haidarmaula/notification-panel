@@ -1,311 +1,311 @@
 # Backend production readiness plan
 
-Tanggal: 2026-11-02 (Asia/Jakarta). Status: perancangan aktif, belum siap produksi.
+Date: 2026-11-02 (Asia/Jakarta). Status: active design, not yet production-ready.
 
-Dokumen ini adalah indeks pekerjaan dan kebutuhan terbaru. ADR tetap berstatus
-`proposed` sampai keputusan dan review selesai. Checklist implementasi tidak
-boleh dianggap selesai hanya karena rancangan atau file kode tersedia.
+This document indexes the latest work and requirements. ADRs remain
+`proposed` until decisions and reviews are complete. Implementation checklist items
+must not be considered complete merely because a design or code file exists.
 
-## 1. Kebutuhan yang sudah dikonfirmasi
+## 1. Confirmed requirements
 
-| ID | Kebutuhan | Status / konsekuensi |
+| ID | Requirement | Status / consequences |
 | --- | --- | --- |
-| R1 | Repository ini hanya backend; portal admin di repository lain | Dikonfirmasi pengguna. Kontrak API termasuk scope, implementasi UI tidak. |
-| R2 | Sekitar 20.000 perangkat aktif untuk konteks awal | Dikonfirmasi pengguna; ini bukan kapasitas per aplikasi atau kapasitas total multi-aplikasi yang sudah divalidasi. Jumlah aplikasi/aggregate peak belum ditentukan. |
-| R3 | Sekitar 5 campaign per bulan | Dikonfirmasi pengguna; bukan 100 campaign/detik. |
-| R4 | Broadcast terbesar menjangkau seluruh user aktif pada aplikasi yang dipilih | Dengan kebutuhan multi-aplikasi, broadcast tidak boleh melintasi batas aplikasi; fan-out menghitung perangkat eligible dalam scope tersebut. |
-| R5 | OneSignal akan diganti dengan FCM | Dikonfirmasi pengguna; fallback OneSignal permanen tidak menjadi kebutuhan. |
-| R6 | Android dan iOS didukung | Dikonfirmasi pengguna. |
-| R7 | Backend mengirim melalui FCM untuk kedua platform; iOS melalui APNs di sisi Firebase | Dikonfirmasi pengguna. Provider APNs langsung di backend tidak dibutuhkan untuk versi pertama. |
-| R8 | Broadcast diinginkan sangat cepat | Dikonfirmasi sebagai arah kebutuhan; belum ada batas waktu numerik yang disepakati. |
-| R9 | Aplikasi mobile memakai React Native | Dikonfirmasi pengguna; versi framework/native/library belum diverifikasi. |
-| R10 | Kafka akan di-deploy di server perusahaan sendiri (self-hosted) | Dikonfirmasi pengguna; jumlah host/failure domain/resource dan operator belum diketahui. |
-| R11 | V1 fokus broadcast/segment/individual, scheduling, recovery, receipt/statistik, keamanan dan operasi | Dikonfirmasi pengguna; UPLOAD, cancel/resubmit, rich media serta preferences/quiet hours ditunda. |
-| R12 | VIEWER read-only; OPERATOR draft/segment; send/schedule hanya ADMIN/SUPER_ADMIN; administrasi staff/role hanya SUPER_ADMIN | Dikonfirmasi pengguna 2026-11-02. SPEC M02a siap untuk subset notification/segment/member; guard M02a sudah diterapkan/diuji lokal; staff administration M02b juga implemented/local-verified; security lain tetap pending. |
-| R13 | Backend generik untuk banyak aplikasi mobile, bukan khusus kaiapps2 | Dikonfirmasi pengguna 2026-11-03. [ADR-12](../adr/adr-12-multi-application-isolation.md) dan [rencana M03](../specs/m03a-application-scope-plan.md) proposed; runtime/schema saat ini belum mengisolasi aplikasi. |
+| R1 | This repository contains only the backend; the admin portal is in another repository | Confirmed by the user. API contracts are in scope; UI implementation is not. |
+| R2 | Approximately 20,000 active devices in the initial context | Confirmed by the user; this is not validated per-application capacity or total multi-application capacity. The number of applications/aggregate peak is undetermined. |
+| R3 | Approximately 5 campaigns per month | Confirmed by the user; not 100 campaigns/second. |
+| R4 | The largest broadcast reaches all active users in the selected application | With the multi-application requirement, broadcasts must not cross application boundaries; fan-out counts eligible devices within that scope. |
+| R5 | OneSignal will be replaced by FCM | Confirmed by the user; a permanent OneSignal fallback is not required. |
+| R6 | Android and iOS are supported | Confirmed by the user. |
+| R7 | The backend sends through FCM for both platforms; iOS uses APNs on the Firebase side | Confirmed by the user. A direct backend APNs provider is not required for the first version. |
+| R8 | Broadcasts should be very fast | Confirmed as a requirement direction; no numeric time limit has been agreed. |
+| R9 | The mobile application uses React Native | Confirmed by the user; framework/native/library versions have not been verified. |
+| R10 | Kafka will be deployed on the company's own servers (self-hosted) | Confirmed by the user; host/failure-domain/resource counts and operators are unknown. |
+| R11 | V1 focuses on broadcast/segment/individual, scheduling, recovery, receipts/statistics, security, and operations | Confirmed by the user; UPLOAD, cancel/resubmit, rich media, and preferences/quiet hours are deferred. |
+| R12 | VIEWER is read-only; OPERATOR handles drafts/segments; only ADMIN/SUPER_ADMIN may send/schedule; only SUPER_ADMIN may administer staff/roles | Confirmed by the user on 2026-11-02. SPEC M02a is ready for the notification/segment/member subset; M02a guards are implemented/locally tested; M02b staff administration is also implemented/locally verified; other security work remains pending. |
+| R13 | A generic backend for multiple mobile applications, not specific to kaiapps2 | Confirmed by the user on 2026-11-03. [ADR-12](../adr/adr-12-multi-application-isolation.md) and the [M03 plan](../specs/m03a-application-scope-plan.md) are proposed; the current runtime/schema does not yet isolate applications. |
 
-Pengguna memperkirakan project Firebase sudah ada karena dipakai pada integrasi
-OneSignal. Itu menjadi titik awal inventory, **bukan** konfirmasi project ID,
-akses, app Android/iOS, APNs atau izin pengiriman backend sudah siap.
+The user expects a Firebase project already exists because it is used by the
+OneSignal integration. This is a starting point for inventory, **not** confirmation that the project ID,
+access, Android/iOS apps, APNs, or backend sending permissions are ready.
 
-Dokumen lama tetap berguna sebagai riwayat, tetapi asumsi 100 campaign/detik,
-burst 1.000/detik, pool 32, dan estimasi 8,6 juta idempotency key/hari bukan
-requirement terbaru. Konfigurasi harus dikalibrasi terhadap fan-out perangkat
-dan kuota provider, bukan disalin dari asumsi tersebut.
+Older documents remain useful as history, but assumptions of 100 campaigns/second,
+bursts of 1,000/second, a pool of 32, and an estimated 8.6 million idempotency keys/day are not
+current requirements. Configuration must be calibrated against device fan-out
+and provider quotas, rather than copied from those assumptions.
 
-Jika kelima campaign masing-masing menjangkau 20.000 perangkat, estimasi
-dasarnya sekitar 100.000 pengiriman perangkat/bulan sebelum retry. Ini
-perhitungan skenario, bukan hasil pengukuran traffic produksi.
+If each of the five campaigns reaches 20,000 devices, the baseline
+estimate is approximately 100,000 device deliveries/month before retries. This is
+a scenario calculation, not a measurement of production traffic.
 
-## 2. Scope awal dan target yang masih diusulkan
+## 2. Initial scope and targets still under proposal
 
-Scope v1 yang dikonfirmasi: auth/staff/profile, user/device lifecycle, segment, campaign
-broadcast/segment/individual, scheduling, delivery ledger, idempotency,
-retry/recovery, receipt, statistik, keamanan, dan operasi produksi.
+Confirmed v1 scope: auth/staff/profile, user/device lifecycle, segments, campaigns
+with broadcast/segment/individual targeting, scheduling, delivery ledger, idempotency,
+retry/recovery, receipts, statistics, security, and production operations.
 
-UPLOAD audience, cancel/resubmit campaign, rich media, quiet hours, dan
-preferences ditunda dari v1. Localisation belum diputuskan; jangan menjanjikan
-parity OneSignal. Kontrak harus menolak input fitur yang belum didukung secara
-eksplisit. Emergency dispatch hold, dedup/idempotency, token/logout lifecycle,
-rate control dan audit tetap bagian reliability/security inti, bukan fitur
-parity tambahan. Hold menghentikan klaim baru; tidak menarik kembali push yang
-sudah diajukan ke provider.
+UPLOAD audiences, campaign cancel/resubmit, rich media, quiet hours, and
+preferences are deferred from v1. Localisation is undecided; do not promise
+OneSignal parity. Contracts must explicitly reject inputs for unsupported
+features. Emergency dispatch hold, dedup/idempotency, token/logout lifecycle,
+rate control, and audit remain core reliability/security requirements, rather than extra
+parity features. A hold stops new claims; it does not recall pushes
+already submitted to the provider.
 
-Pengguna menyatakan repo React Native tersedia (lokasi belum diberikan).
-Laravel berjalan langsung di server dan repository-nya tidak tersedia.
-Verifikasi kontrak auth tetap terbuka; jangan menganggap inspeksi/deployment
-server Laravel telah diizinkan atau menjadikan akses server sebagai syarat
-memulai perbaikan baseline backend.
+The user states that the React Native repository is available (location not yet provided).
+Laravel runs directly on the server and its repository is unavailable.
+Auth contract verification remains open; do not assume Laravel server
+inspection/deployment has been authorized or make server access a prerequisite
+for starting backend baseline fixes.
 
-Usulan benchmark awal (belum SLA dan belum disetujui): fan-out 20.000 perangkat
-eligible dalam <=60 detik dari durable queue acceptance sampai seluruh hasil
-submission provider tercatat, saat sistem dan provider sehat. Kegagalan token
-permanen dihitung sebagai hasil eksplisit; retry gangguan provider diukur
-terpisah. Ini memerlukan rata-rata sekitar 334 hasil perangkat/detik.
+Initial benchmark proposal (not an SLA and not approved): fan out to 20,000
+eligible devices within <=60 seconds from durable queue acceptance until all provider
+submission results are recorded, while the system and provider are healthy. Permanent token
+failures count as explicit results; retries for provider disruptions are measured
+separately. This requires an average of approximately 334 device results/second.
 
-Angka tersebut hanya kandidat eksperimen. Load test lokal mengukur pipeline
-terhadap provider simulasi; uji provider nyata hanya ke perangkat uji dengan
-kuota dan pengaturan traffic yang sesuai. Hasil simulasi tidak membuktikan
-kapasitas provider atau waktu tiba di ponsel. Tetapkan target final setelah
-baseline benchmark dan pilot; hindari traffic spike yang tidak terkendali.
+These numbers are only experimental candidates. Local load tests measure the pipeline
+against a simulated provider; real-provider tests use only test devices with
+appropriate quotas and traffic controls. Simulation results do not establish
+provider capacity or arrival times on phones. Set final targets after
+baseline benchmarks and the pilot; avoid uncontrolled traffic spikes.
 
-| Keputusan terbuka | Yang perlu ditentukan | Menghalangi |
+| Open decision | What must be determined | Blocks |
 | --- | --- | --- |
-| SLO API, scheduling, fan-out, availability | Nilai p95/p99, jendela ukur, kondisi dan error budget | Sizing final dan go/no-go produksi |
-| Infrastructure | Kafka self-hosted dikonfirmasi; host/failure domain, PostgreSQL, resource budget, staging dan TLS belum ditentukan | ADR-07/08/11 dan deployment |
-| Recovery | RPO/RTO, backup, restore, operator dan alert escalation | Release gate |
-| Mobile | React Native dikonfirmasi; versi/library, akses repo, jadwal update, rollout adoption dan identifier aktual belum diverifikasi | ADR-06 dan cutover |
-| Lifecycle token | Login/logout/account switch, multi-device, refresh dan invalidation | Kontrak mobile dan pengujian keamanan |
-| Retention | Delivery, audit, dead-letter, key, outbox, PII deletion | ADR-10 dan maintenance produksi |
-| Scope tambahan | UPLOAD, cancel/resubmit, rich media, preferences/quiet hours ditunda; localisation belum diputuskan | Penolakan input dan batas kontrak API |
+| API, scheduling, fan-out, availability SLOs | p95/p99 values, measurement windows, conditions, and error budgets | Final sizing and production go/no-go |
+| Infrastructure | Self-hosted Kafka is confirmed; hosts/failure domains, PostgreSQL, resource budget, staging, and TLS are undetermined | ADR-07/08/11 and deployment |
+| Recovery | RPO/RTO, backups, restore, operators, and alert escalation | Release gate |
+| Mobile | React Native is confirmed; versions/libraries, repository access, update schedule, rollout adoption, and actual identifiers are unverified | ADR-06 and cutover |
+| Token lifecycle | Login/logout/account switch, multi-device, refresh, and invalidation | Mobile contract and security tests |
+| Retention | Delivery, audit, dead-letter, keys, outbox, PII deletion | ADR-10 and production maintenance |
+| Additional scope | UPLOAD, cancel/resubmit, rich media, preferences/quiet hours are deferred; localisation is undecided | Input rejection and API contract boundaries |
 
-## 3. Inventaris working tree sebelum pekerjaan ini
+## 3. Working tree inventory before this work
 
-Tidak ada perubahan lama yang dibuang, di-unstage, atau diklaim sebagai hasil
-sesi ini. Index Git sudah berisi staged changes sebelum pekerjaan dimulai.
-Perubahan processor lama sudah direkam dalam commit `bcb178c`, konfigurasi
-agent lama (OpenCode, sudah tidak digunakan) dalam `51e682c`. Build lulus; test notifications/middleware/token lulus,
-sedangkan test staff/segments masih gagal compile seperti baseline. Commit
-preservasi ini tidak berarti kode telah memenuhi rancangan reliability baru.
+No existing changes were discarded, unstaged, or claimed as results of
+this session. The Git index already contained staged changes before work began.
+Existing processor changes were recorded in commit `bcb178c`, and the old
+agent configuration (OpenCode, no longer used) in `51e682c`. The build passed; notifications/middleware/token tests passed,
+while staff/segments tests still failed to compile as in the baseline. These
+preservation commits do not mean the code meets the new reliability design.
 
-| Kelompok | File | Kondisi awal dan tindak lanjut |
+| Group | Files | Initial state and follow-up |
 | --- | --- | --- |
-| Kode runtime | `internal/features/notifications/processor.go` | Staged; ada perubahan perilaku guard PROCESSING, atribusi token, dan warning truncation. Perlu review tersendiri; tidak sama dengan implementasi ADR-01 lengkap. |
-| Draft lama | `docs/adr/bigpickle-retry.md`, `docs/specs/bigpickle-retry.md` | Staged dan memiliki perubahan unstaged. Simpan sebagai input historis; SPEC lama bukan pasangan canonical ADR-01 terbaru. |
-| Assessment | `docs/analysis/qwen38-assessment.md` | Staged; beberapa asumsi kapasitas dan klaim safety perlu direkonsiliasi. |
-| ADR canonical | `docs/adr/adr-01-provider-retry.md` sampai `adr-05-receipt-ingestion.md` | Untracked, semua proposed. Pasangan SPEC canonical belum tersedia. |
-| Tooling | `.opencode/agents/{architect,reviewer,tester}.md`, `opencode.json` | Staged; konfigurasi workflow, bukan fitur backend. |
+| Runtime code | `internal/features/notifications/processor.go` | Staged; changes to PROCESSING guard behavior, token attribution, and warning truncation. Requires a separate review; not equivalent to full ADR-01 implementation. |
+| Old drafts | `docs/adr/bigpickle-retry.md`, `docs/specs/bigpickle-retry.md` | Staged with unstaged changes. Retain as historical input; the old SPEC is not the canonical companion to the latest ADR-01. |
+| Assessment | `docs/analysis/qwen38-assessment.md` | Staged; several capacity assumptions and safety claims need reconciliation. |
+| Canonical ADRs | `docs/adr/adr-01-provider-retry.md` through `adr-05-receipt-ingestion.md` | Untracked, all proposed. Canonical companion SPECs are not yet available. |
+| Tooling | `.opencode/agents/{architect,reviewer,tester}.md`, `opencode.json` | Staged; workflow configuration, not backend features. |
 
-Baseline verifikasi dilakukan pada turn assessment sebelumnya dalam chat ini:
-`go build ./...` lulus; `go test ./...` gagal compile pada staff (signature
-UpdatePassword lama) dan segments (mock CountSearch/CountBySegmentIDs belum
-tersedia). Notifications, middleware, dan token lulus. Cache memakai
-`GOCACHE=/tmp/hello-go-review-cache`. Ini hasil working tree saat assessment,
-bukan bukti seluruh pipeline atau clean HEAD lulus. Catatan ini adalah baseline
-historis sebelum implementasi test infrastructure: step 17 kemudian membuat
-unit suite hijau, dan step 19 menjalankan dependency smoke nyata PostgreSQL/Kafka
-serta SDK terhadap HTTP simulation. Provider/perangkat nyata belum diuji.
+Baseline verification was performed during the previous assessment turn in this chat:
+`go build ./...` passed; `go test ./...` failed to compile in staff (old
+UpdatePassword signature) and segments (CountSearch/CountBySegmentIDs mocks not yet
+available). Notifications, middleware, and token passed. The cache used
+`GOCACHE=/tmp/hello-go-review-cache`. These are results for the working tree at assessment time,
+not evidence that the entire pipeline or clean HEAD passed. This is the historical
+baseline before test infrastructure implementation: step 17 later made
+the unit suite green, and step 19 ran real PostgreSQL/Kafka dependency smoke tests
+and the SDK against an HTTP simulation. Real providers/devices have not been tested.
 
-## 4. Indeks ADR / SPEC
+## 4. ADR / SPEC index
 
-Path pada tabel relatif terhadap `docs/adr/`; pasangan canonical SPEC akan
-memakai basename yang sama di `docs/specs/` dan belum dibuat.
+Table paths are relative to `docs/adr/`; canonical companion SPECs will
+use the same basenames in `docs/specs/` and have not yet been created.
 
-| ADR | Dokumen | Status dan pekerjaan berikutnya |
+| ADR | Document | Status and next work |
 | --- | --- | --- |
-| 01 | [Provider retry](../adr/adr-01-provider-retry.md) | Proposed, direvisi: atomic fan-out, per-device budget, lease/generation, recovery dan acceptance idempotency. Belum diuji. |
-| 02 | [Worker consumption](../adr/adr-02-worker-consumption.md) | Proposed, direvisi: serial durable admission, fail-closed commit/DLQ, replay audit. Belum diuji. |
-| 03 | [Transactional outbox](../adr/adr-03-transactional-outbox.md) | Proposed, direvisi: satu acceptance transaction dan scheduler-only publisher, satu row per bounded transaction. Belum diuji. |
-| 04 | [Provider selection](../adr/adr-04-provider-selection.md) | Proposed, direvisi: explicit FCM, credential modes, typed registration, immutable binding/owner_epoch dan SDK limits. Belum diuji. |
-| 05 | [Receipt ingestion](../adr/adr-05-receipt-ingestion.md) | Proposed, direvisi: device-scoped capability receipts, early/late observation, snapshot stats dan versioned event outbox. Belum diuji. |
-| 06 | [Cutover/token migration](../adr/adr-06-onesignal-fcm-cutover.md) | Proposed: React Native enrollment, exclusive routing/cohorts, full-coverage gate, pilot, stage-specific rollback dan retirement; belum dieksekusi. |
-| 07 | [Kafka topology](../adr/adr-07-kafka-topology.md) | Proposed: self-hosted profiles, RF/ISR, explicit hash routing, retention/groups, seed/batch config, provisioning dan ACL; belum diterapkan. |
-| 08 | [Observability](../adr/adr-08-observability.md) | Proposed: private health/readiness, structured logs, metric catalog/freshness, sparse-work alerts, dashboards/runbooks dan verification; belum diterapkan. |
-| 09 | [API conventions](../adr/adr-09-api-consistency.md) | Proposed: safe envelope/errors, state vocabulary, presence-aware PATCH/CAS, pagination/filter, audit/DTO dan compatibility; belum diterapkan. |
-| 10 | [Retention/recovery](../adr/adr-10-retention-recovery.md) | Proposed: safety floors, controlled erasure/archive, backup/PITR, sealed restore dan source epoch; policy/RPO/RTO belum ditetapkan. |
-| 11 | [Security baseline](../adr/adr-11-security-baseline.md) | Proposed keseluruhan; business role matrix dikonfirmasi dan scoped SPEC M02a ditulis. M02a operation enforcement diimplementasikan/diuji lokal; session/abuse/key/enrollment dan security lain tetap pending. |
-| 12 | [Multi-application isolation](../adr/adr-12-multi-application-isolation.md) | NEW proposed: aplikasi sebagai batas identity/data/permission/provider/event/receipt; belum diimplementasikan. Optional product parity tetap backlog tanpa nomor ADR yang ditetapkan. |
+| 01 | [Provider retry](../adr/adr-01-provider-retry.md) | Proposed, revised: atomic fan-out, per-device budget, lease/generation, recovery, and acceptance idempotency. Not yet tested. |
+| 02 | [Worker consumption](../adr/adr-02-worker-consumption.md) | Proposed, revised: serial durable admission, fail-closed commit/DLQ, replay audit. Not yet tested. |
+| 03 | [Transactional outbox](../adr/adr-03-transactional-outbox.md) | Proposed, revised: one acceptance transaction and a scheduler-only publisher, one row per bounded transaction. Not yet tested. |
+| 04 | [Provider selection](../adr/adr-04-provider-selection.md) | Proposed, revised: explicit FCM, credential modes, typed registration, immutable binding/owner_epoch, and SDK limits. Not yet tested. |
+| 05 | [Receipt ingestion](../adr/adr-05-receipt-ingestion.md) | Proposed, revised: device-scoped capability receipts, early/late observations, snapshot stats, and versioned event outbox. Not yet tested. |
+| 06 | [Cutover/token migration](../adr/adr-06-onesignal-fcm-cutover.md) | Proposed: React Native enrollment, exclusive routing/cohorts, full-coverage gate, pilot, stage-specific rollback, and retirement; not yet executed. |
+| 07 | [Kafka topology](../adr/adr-07-kafka-topology.md) | Proposed: self-hosted profiles, RF/ISR, explicit hash routing, retention/groups, seed/batch config, provisioning, and ACL; not yet applied. |
+| 08 | [Observability](../adr/adr-08-observability.md) | Proposed: private health/readiness, structured logs, metric catalog/freshness, sparse-work alerts, dashboards/runbooks, and verification; not yet applied. |
+| 09 | [API conventions](../adr/adr-09-api-consistency.md) | Proposed: safe envelope/errors, state vocabulary, presence-aware PATCH/CAS, pagination/filter, audit/DTO, and compatibility; not yet applied. |
+| 10 | [Retention/recovery](../adr/adr-10-retention-recovery.md) | Proposed: safety floors, controlled erasure/archive, backup/PITR, sealed restore, and source epoch; policy/RPO/RTO not yet set. |
+| 11 | [Security baseline](../adr/adr-11-security-baseline.md) | Proposed overall; business role matrix confirmed and scoped SPEC M02a written. M02a operation enforcement is implemented/locally tested; session/abuse/key/enrollment and other security work remain pending. |
+| 12 | [Multi-application isolation](../adr/adr-12-multi-application-isolation.md) | NEW proposed: applications as identity/data/permission/provider/event/receipt boundaries; not yet implemented. Optional product parity remains in the backlog without an assigned ADR number. |
 
-Review pertama: [ADR-01/02 review](adr-01-02-review.md). Status proposed berarti
-belum diterima; nama migration yang disebut ADR hanya reservasi rancangan.
-Nomor aktual mengikuti urutan implementasi, selalu dengan up/down dan sqlc
-regeneration. Draft lama tidak boleh menjadi instruksi implementasi paralel.
+First review: [ADR-01/02 review](adr-01-02-review.md). Proposed status means
+not yet accepted; migration names mentioned in ADRs are design reservations only.
+Actual numbers follow implementation order, always with up/down and sqlc
+regeneration. Old drafts must not become parallel implementation instructions.
 
-Review berikutnya: [ADR-04/05 review](adr-04-05-review.md), termasuk pertanyaan
-integrasi, perubahan kontrak dan acceptance tests yang belum dijalankan.
+Next review: [ADR-04/05 review](adr-04-05-review.md), including integration
+questions, contract changes, and acceptance tests that have not been run.
 
-Gate migrasi: [cutover readiness](cutover-readiness.md). Project Firebase,
-versi/library React Native dan konfigurasi provider tetap perlu inventory.
+Migration gate: [cutover readiness](cutover-readiness.md). The Firebase project,
+React Native versions/libraries, and provider configuration still need inventory.
 
-Gate Kafka: [Kafka readiness](kafka-readiness.md). H47/H48/M48 adalah temuan
-runtime open, bukan perbaikan yang selesai hanya karena ADR-07 tersedia.
+Kafka gate: [Kafka readiness](kafka-readiness.md). H47/H48/M48 are open
+runtime findings, not fixes completed merely because ADR-07 exists.
 
-Gate monitoring: [observability readiness](observability-readiness.md).
-Tidak ada live endpoint, scrape, dashboard atau notifikasi alert yang sudah
-dipasang hanya karena ADR-08/checklist tersedia.
+Monitoring gate: [observability readiness](observability-readiness.md).
+No live endpoints, scrapes, dashboards, or alert notifications have been
+installed merely because ADR-08/a checklist exists.
 
-Gate API/data/security: [readiness register](api-data-security-readiness.md).
-C21 operation bypass sudah diremediasi dan diverifikasi lokal di [M02a](m02a-verification.md). Retention/RPO/RTO,
-identity policy dan perubahan kontrak masih perlu keputusan/verifikasi.
+API/data/security gate: [readiness register](api-data-security-readiness.md).
+The C21 operation bypass has been remediated and locally verified in [M02a](m02a-verification.md). Retention/RPO/RTO,
+identity policy, and contract changes still require decisions/verification.
 
-Hasil review lintas ADR: [CR1–CR9 dan gate G1–G7](adr-01-11-consistency-review.md).
-Koreksi teknis sudah ditulis sebagai proposed; scope inti dikonfirmasi, tetapi
-SLO/TTL, integrasi, host, policy keamanan/data dan bukti cutover masih terbuka.
-Urutan dependency/milestone tersedia di [M00–M10](implementation-milestones.md).
-Step 16 selesai sebagai pemetaan; step 17/M00 memulihkan baseline unit test.
-Step 18 menyediakan [CI checks dan bukti lokal](ci-readiness.md); hosted run
-belum diamati. Step 19 menyediakan [dependency environment dan bukti lokal](integration-readiness.md).
-Step 20 dimulai dengan [SPEC M02a](../specs/m02a-staff-operation-permissions.md),
-[policy JSON](../contracts/staff-permissions.json) dan
-[API authorization](../api/authorization-api.md). M02a implemented/local-verified;
-[M02b staff administration](m02b-verification.md) juga implemented/local-verified.
-[M02c audit redaction](m02c-verification.md) juga implemented/local-verified;
-historical cleanup produksi tetap operator gate. [M02d request limits](m02d-verification.md)
-juga implemented/local-verified. [Evaluasi baseline](m02-baseline-assessment.md)
-dan [M02e staff JWT](m02e-verification.md) selesai scoped; berikutnya inspeksi
-rancangan generic multi-aplikasi dan M03a registry/scope sebelum instalasi;
-kaiapps2 hanya consumer uji pertama. [SPEC M03a](../specs/m03a-application-registry.md)
-dan registry OpenAPI sudah ditulis. [M03a.1 persistence](m03a1-verification.md)
-diimplementasikan/diuji lokal. [M03a.2 services](m03a2-verification.md) juga
-local-verified. [M03a.3 HTTP](m03a3-verification.md) juga implemented/local-verified;
-sepuluh endpoint registry/grants tersedia dengan PROVISIONING only. Berikutnya
-M03b scope schema/query/API dan legacy pipeline sebelum data bisnis app kedua.
-M03b.1–M03b.5 selesai di repo dan teruji lokal sampai commit `1b02f1f`.
-[Cutover M03b](../specs/m03b-cutover.md) di lingkungan tujuan masih terbuka.
-Step 20 berlanjut ke [M03c](../specs/m03c-installation-binding.md). Migrasi
-000018–000019 menambahkan schema instalasi dan binding. Proteksi alamat dan
-transaksi lifecycle tersedia. Verifier JWT per project dan mapping identitas
-000020 tersedia. Adapter origin bertanda tangan dan proteksi replay 000021
-tersedia. [API lifecycle mobile](../api/mobile-installations-api.md) dapat
-dipasang lewat policy server. Dua consumer HTTP sintetis Android/iOS telah
-diuji dengan PostgreSQL untuk isolasi JWT, origin, proof, konflik alamat dan
-logout lintas project. Inspeksi kaiapps2 masih menunjukkan OneSignal. Verifikasi
-consumer nyata dan kebijakan deployment per project tetap terbuka.
-Gate integrasi dan kontrol rilis M02 tetap terbuka.
+Cross-ADR review results: [CR1–CR9 and gates G1–G7](adr-01-11-consistency-review.md).
+Technical corrections have been written as proposed; core scope is confirmed, but
+SLO/TTL, integrations, hosts, security/data policies, and cutover evidence remain open.
+Dependency/milestone order is available in [M00–M10](implementation-milestones.md).
+Step 16 is complete as a mapping exercise; step 17/M00 restored the unit test baseline.
+Step 18 provides [CI checks and local evidence](ci-readiness.md); a hosted run
+has not been observed. Step 19 provides a [dependency environment and local evidence](integration-readiness.md).
+Step 20 began with [SPEC M02a](../specs/m02a-staff-operation-permissions.md),
+[policy JSON](../contracts/staff-permissions.json), and
+[API authorization](../api/authorization-api.md). M02a is implemented/locally verified;
+[M02b staff administration](m02b-verification.md) is also implemented/locally verified.
+[M02c audit redaction](m02c-verification.md) is also implemented/locally verified;
+historical production cleanup remains an operator gate. [M02d request limits](m02d-verification.md)
+is also implemented/locally verified. The [baseline assessment](m02-baseline-assessment.md)
+and [M02e staff JWT](m02e-verification.md) are complete within scope; next is inspection
+of the generic multi-application design and M03a registry/scope before installations;
+kaiapps2 is only the first test consumer. [SPEC M03a](../specs/m03a-application-registry.md)
+and registry OpenAPI have been written. [M03a.1 persistence](m03a1-verification.md)
+is implemented/locally tested. [M03a.2 services](m03a2-verification.md) is also
+locally verified. [M03a.3 HTTP](m03a3-verification.md) is also implemented/locally verified;
+ten registry/grant endpoints are available, PROVISIONING only. Next is
+M03b schema/query/API scope and the legacy pipeline before the second app's business data.
+M03b.1–M03b.5 are complete in the repository and locally tested through commit `1b02f1f`.
+[M03b cutover](../specs/m03b-cutover.md) in the target environment remains open.
+Step 20 continues with [M03c](../specs/m03c-installation-binding.md). Migrations
+000018–000019 add installation and binding schemas. Address protections and
+lifecycle transactions are available. The per-project JWT verifier and identity mapping
+000020 are available. The signed origin adapter and replay protections 000021
+are available. The [mobile lifecycle API](../api/mobile-installations-api.md) can be
+mounted through server policy. Two synthetic Android/iOS HTTP consumers have
+been tested with PostgreSQL for JWT, origin, and proof isolation, address conflicts, and
+cross-project logout. Inspection of kaiapps2 still shows OneSignal. Real-consumer
+verification and per-project deployment policies remain open.
+Integration gates and M02 release controls remain open.
 
-M04 acceptance/scheduling tersedia dan lulus lokal melalui migration 000022,
-[kontrak transaksi](../specs/m04-durable-acceptance.md) dan
-[API](../api/campaign-acceptance-api.md). Uji PostgreSQL mencakup request
-serentak dengan key sama, replay saat hold, pencabutan grant, coverage legacy,
-rollback audit, promotion dan expiry. Library dispatcher outbox juga lulus uji
-Kafka lokal, broker tidak tersedia, dua dispatcher, seal/epoch fence dan
-ack-sebelum-commit gagal. Dispatcher belum dipasang ke binary; M04 masih menunggu
-aktivasi scheduler yang aman. Deployment tetap sealed/held
-dan tidak mengirim ke provider.
+M04 acceptance/scheduling is available and passes locally through migration 000022,
+the [transaction contract](../specs/m04-durable-acceptance.md), and the
+[API](../api/campaign-acceptance-api.md). PostgreSQL tests cover concurrent
+requests with the same key, replay during holds, grant revocation, legacy coverage,
+audit rollback, promotion, and expiry. The outbox dispatcher library also passes local
+Kafka tests, broker unavailability, two dispatchers, seal/epoch fencing, and
+ack-before-commit failure. The dispatcher is not yet wired into a binary; M04 still awaits
+safe scheduler activation. Deployment remains sealed/held
+and does not send to providers.
 
-M05 atomic preparation juga tersedia sebagai library dan lulus lokal:
-snapshot/count/intent lengkap dalam satu transaksi REPEATABLE READ, dedup event,
-rollback utuh, hold coverage dan expiry tanpa audience palsu. Fixture 20.000
-user/perangkat selesai sekitar 4 detik untuk transaksi preparation saja;
-ini bukan SLA produksi atau waktu kirim FCM. Status consumer, quarantine dan
-recovery dijelaskan di bawah; pemasangan binary tetap terbuka. Lihat
+M05 atomic preparation is also available as a library and passes locally:
+a complete snapshot/count/intent in one REPEATABLE READ transaction, event dedup,
+full rollback, coverage holds, and expiry without a false audience. A fixture with 20,000
+users/devices completes in approximately 4 seconds for the preparation transaction alone;
+this is not a production SLA or FCM delivery time. Consumer, quarantine, and
+recovery status is described below; binary wiring remains open. See
 [SPEC M05](../specs/m05-durable-preparation.md).
 
-Decoder envelope ketat dan storage quarantine source-aware juga lulus unit serta
-PostgreSQL lokal: redelivery identik, konflik bytes pada offset sama, topic
-incarnation berbeda, seal/inactive source, kegagalan commit/insert dan batas
-ukuran. Koordinator consumer serial tersedia sebagai library dan lulus unit/race:
-tidak fetch pesan berikut sebelum ack, tidak ack saat evidence gagal, retry
-bounded, sanitasi panic, shutdown dan assignment-loss. Adapter generation-bound
-juga lulus Kafka lokal dengan dua partition/consumer dan PostgreSQL Preparer asli,
-termasuk race detector: revocation saat preparation tertahan, redelivery tanpa
-duplikasi intent, dan quarantine sebelum offset commit. Verifikasi incarnation memakai
-manifest operator karena SDK belum mengekspos topic UUID. Wiring/deployment tetap
-terbuka; tidak ada source produksi yang diaktifkan.
+Strict envelope decoding and source-aware quarantine storage also pass unit and
+local PostgreSQL tests: identical redelivery, conflicting bytes at the same offset, different topic
+incarnations, sealed/inactive sources, commit/insert failures, and size
+limits. The serial consumer coordinator is available as a library and passes unit/race tests:
+no fetching the next message before ack, no ack when evidence fails, bounded
+retries, panic sanitization, shutdown, and assignment loss. The generation-bound adapter
+also passes local Kafka tests with two partitions/consumers and the real PostgreSQL Preparer,
+including the race detector: revocation while preparation is blocked, redelivery without
+duplicate intents, and quarantine before offset commit. Incarnation verification uses
+an operator manifest because the SDK does not yet expose the topic UUID. Wiring/deployment remain
+open; no production sources have been enabled.
 
-Recovery QUEUED dari database juga lulus lokal tanpa outbox/event Kafka: bounded
-scan memakai Preparer yang sama, menyelesaikan snapshot/expiry, menghormati due
-hold serta seal/epoch, dan mempertahankan deadline. Recovery PROCESSING/lease,
-requeue operator dan wiring proses belum selesai.
+Database QUEUED recovery also passes locally without an outbox/Kafka event: a bounded
+scan uses the same Preparer, completes snapshots/expiry, respects due
+holds and seal/epoch, and preserves deadlines. PROCESSING/lease recovery,
+operator requeue, and process wiring are not complete.
 
-## 5. Checklist pelaksanaan
+## 5. Execution checklist
 
-`[x]` berarti selesai dan ada bukti; `[ ]` berarti belum selesai. Sebagian
-pekerjaan pada baris yang belum dicentang sudah dimulai, sesuai catatan.
+`[x]` means complete with evidence; `[ ]` means incomplete. Some
+work on unchecked rows has started, as noted.
 
-### Tahap 1 — konteks dan target
+### Phase 1 — context and targets
 
-- [ ] 01. Review/adopsi perubahan lama dan simpan dalam commit terpisah. Inventaris dan commit preservasi selesai; audit/adopsi terhadap rancangan reliability baru belum.
-- [x] 02. Buat indeks status ADR, SPEC, backlog, dan dependensi awal (dokumen ini).
-- [x] 03. Kunci scope inti v1; fitur tambahan yang disebut pengguna ditunda. Localisation bukan janji v1; batas input harus eksplisit dalam SPEC.
-- [x] 04. Catat kebutuhan skala pengguna: sekitar 20.000 perangkat, 5 campaign/bulan, full broadcast. Sizing akhir menunggu benchmark.
-- [ ] 05. Tetapkan SLO, RPO/RTO, dan acceptance threshold. Benchmark 60 detik baru usulan.
-- [ ] 06. Verifikasi integrasi mobile/Laravel/token. Android+iOS dan transport dikonfirmasi, inspeksi mobile belum.
+- [ ] 01. Review/adopt existing changes and preserve them in separate commits. Inventory and preservation commits are complete; audit/adoption against the new reliability design are not.
+- [x] 02. Create an initial index of ADR, SPEC, backlog, and dependency status (this document).
+- [x] 03. Lock core v1 scope; additional features mentioned by the user are deferred. Localisation is not a v1 promise; input boundaries must be explicit in SPECs.
+- [x] 04. Record user scale requirements: approximately 20,000 devices, 5 campaigns/month, full broadcast. Final sizing awaits benchmarks.
+- [ ] 05. Set SLOs, RPO/RTO, and acceptance thresholds. The 60-second benchmark is only a proposal.
+- [ ] 06. Verify mobile/Laravel/token integrations. Android+iOS and transport are confirmed; mobile inspection is not.
 
-### Tahap 2 — rancangan
+### Phase 2 — design
 
-- [x] 07. Review dan revisi ADR-01/02 pada tingkat rancangan. D1-D7 dipetakan ke keputusan dan kasus verifikasi; penerimaan lintas ADR/runtime belum.
-- [x] 08. Review/revisi ADR-03 dan transaksi idempotency + outbox pada tingkat rancangan; masih proposed, belum diimplementasikan.
-- [x] 09. Review/revisi ADR-04 terhadap FCM untuk Android+iOS, credential, SDK dan lifecycle token pada tingkat rancangan; integrasi mobile/security belum divalidasi.
-- [x] 10. Review/revisi ADR-05 terhadap device receipt, snapshot statistik dan versioned event ordering pada tingkat rancangan; belum diuji/diterima.
-- [x] 11. Tulis ADR-06 cutover dan checklist evidence: enrollment React Native, exclusive cohort, coverage, pilot, rollback per stage dan retirement; masih proposed, belum dieksekusi.
-- [x] 12. Tulis ADR-07 self-hosted Kafka topology/provisioning dan checklist evidence; masih proposed, tanpa perubahan infrastruktur/runtime.
-- [x] 13. Tulis ADR-08 observability, katalog sinyal/alert dan checklist evidence; masih proposed, belum ada instrumentation/monitoring yang dipasang atau diuji.
-- [x] 14. Tulis keputusan minimum ADR-09/10/11 dan readiness register API/data/security; masih proposed, policy/identity/RPO/RTO belum disetujui, tanpa perubahan runtime.
-- [ ] 15. Review lintas ADR: pemeriksaan dan revisi teknis CR1–CR9 selesai pada tingkat rancangan; acceptance tetap conditional pada G2–G7. Tidak ada ADR yang otomatis accepted.
+- [x] 07. Review and revise ADR-01/02 at the design level. D1-D7 are mapped to decisions and verification cases; cross-ADR/runtime acceptance is pending.
+- [x] 08. Review/revise ADR-03 and idempotency + outbox transactions at the design level; still proposed, not yet implemented.
+- [x] 09. Review/revise ADR-04 for Android+iOS FCM, credentials, SDK, and token lifecycle at the design level; mobile/security integration is not yet validated.
+- [x] 10. Review/revise ADR-05 for device receipts, statistics snapshots, and versioned event ordering at the design level; not yet tested/accepted.
+- [x] 11. Write ADR-06 cutover and its evidence checklist: React Native enrollment, exclusive cohorts, coverage, pilot, per-stage rollback, and retirement; still proposed, not executed.
+- [x] 12. Write ADR-07 self-hosted Kafka topology/provisioning and its evidence checklist; still proposed, without infrastructure/runtime changes.
+- [x] 13. Write ADR-08 observability, signal/alert catalog, and evidence checklist; still proposed, no instrumentation/monitoring installed or tested.
+- [x] 14. Write minimum ADR-09/10/11 decisions and the API/data/security readiness register; still proposed, policy/identity/RPO/RTO not approved, without runtime changes.
+- [ ] 15. Cross-ADR review: technical CR1–CR9 checks and revisions are complete at the design level; acceptance remains conditional on G2–G7. No ADR is automatically accepted.
 
-### Tahap 3 — fondasi implementasi
+### Phase 3 — implementation foundations
 
-- [x] 16. Susun M00–M10 dengan dependency graph, output, gate dan kriteria selesai; implementasi milestone belum otomatis selesai.
-- [x] 17. Regenerate mock segments; selaraskan actor/password/not-found fixtures staff dan filtered/batch count assertions; build dan seluruh unit test lulus pada 2026-11-02. Tidak ada perubahan perilaku service atau bukti integration/load test.
-- [x] 18. GitHub Actions + script lokal format/modules/build/test/vet/vulnerability; local checks/actionlint lulus, security dependencies diperbarui dan reachable scan nol. Main workflow tetap; hosted run/ruleset belum diverifikasi karena belum di-push.
-- [x] 19. Runner fixture terisolasi: 15 migration up/down/up, repository, kedua Kafka topic/producer round trip dan Firebase SDK HTTP simulation lulus lokal; guard/cleanup diverifikasi. Bukan test adapter/worker/new pipeline atau real FCM/APNs; hosted integration job belum tersedia.
-- [ ] 20. Berjalan per milestone: SPEC M02a dan implementasi/18-case evidence selesai secara scoped; 56 role/route API cases plus negative DB/Kafka tests lulus lokal. M02b staff administration juga selesai scoped dengan 28 role/route API cases dan lifecycle/demotion tests lokal; M02c audit redaction dan SQL cleanup fixture lulus lokal. M02d membatasi 16 input JSON; boundary/48 rejection route cases lulus lokal. M02e memperketat parser JWT staff dan evaluasi baseline menetapkan minimum development guard siap untuk M03 terisolasi. Historical cleanup produksi dan release controls belum selesai; bukan bukti seluruh security/produksi selesai. M03a.1–3 registry/grants juga lulus lokal; M03b.1–M03b.5 selesai di repo dan lulus lokal. Cutover tujuan masih terbuka. M03c memiliki schema, proteksi, transaksi lifecycle, verifier, origin dan HTTP. M03d memiliki kontrak serta dua consumer sintetis lintas project yang lulus lokal. Pemulihan state dan invalidasi binding asli lulus lokal. Hook hasil provider M06, verifikasi consumer nyata dan kebijakan deployment tetap terbuka. Step 20 juga mencakup fondasi durable acceptance M04.
+- [x] 16. Organize M00–M10 with a dependency graph, outputs, gates, and completion criteria; milestone implementation is not automatically complete.
+- [x] 17. Regenerate segment mocks; align staff actor/password/not-found fixtures and filtered/batch count assertions; build and all unit tests passed on 2026-11-02. No service behavior changes or integration/load-test evidence.
+- [x] 18. GitHub Actions + local format/modules/build/test/vet/vulnerability scripts; local checks/actionlint pass, security dependencies updated and reachable scan reports zero findings. Main workflow remains; hosted run/ruleset unverified because changes have not been pushed.
+- [x] 19. Isolated fixture runner: 15 migrations up/down/up, repositories, both Kafka topics/producer round trips, and Firebase SDK HTTP simulation pass locally; guards/cleanup verified. Not an adapter/worker/new-pipeline test or real FCM/APNs; no hosted integration job yet.
+- [ ] 20. Progresses by milestone: SPEC M02a and implementation/18-case evidence are complete within scope; 56 role/route API cases plus negative DB/Kafka tests pass locally. M02b staff administration is also complete within scope with 28 role/route API cases and local lifecycle/demotion tests; M02c audit redaction and SQL cleanup fixtures pass locally. M02d limits 16 JSON inputs; boundary/48 rejection route cases pass locally. M02e tightens staff JWT parsing and the baseline assessment establishes minimum development guards as ready for isolated M03. Historical production cleanup and release controls are incomplete; this is not evidence of complete security/production readiness. M03a.1–3 registry/grants also pass locally; M03b.1–M03b.5 are complete in the repository and pass locally. Target-environment cutover remains open. M03c has schemas, protections, lifecycle transactions, a verifier, origin, and HTTP. M03d has a contract and two synthetic cross-project consumers that pass locally. State recovery and real binding invalidation pass locally. M06 provider-result hooks, real-consumer verification, and deployment policies remain open. Step 20 also covers M04 durable acceptance foundations.
 
-### Tahap 4 — delivery pipeline
+### Phase 4 — delivery pipeline
 
-- [ ] 21. Provider selection/credential, error contract, chunking dan invalid-token handling.
-- [ ] 22. Atomic fan-out intent, device snapshot/identity dan unique constraints M05 lulus lokal, termasuk 20k intent; exclusive provider claim M06 belum.
+- [ ] 21. Provider selection/credentials, error contract, chunking, and invalid-token handling.
+- [ ] 22. M05 atomic fan-out intents, device snapshots/identity, and unique constraints pass locally, including 20k intents; M06 exclusive provider claims do not yet.
 - [ ] 23. Bounded retry/backoff, lease expiry, recovery, TTL/budget terminalization.
-- [ ] 24. Decoder, source-aware dead-letter, koordinator serial dan adapter generation-bound lulus lokal termasuk rebalance Kafka dua partition/consumer; manifest/deployment dan operator reprocess belum.
-- [ ] 25. Atomic send idempotency + claim + outbox, promotion/expiry dan bounded dispatcher M04 lulus lokal; scheduler binary belum memakai durable handoff.
-- [ ] 26. Delivery update outbox dan consumer dedup/ordering contract.
-- [ ] 27. Bounded concurrency, page/chunk memory limits, provider rate limit dan backpressure.
-- [ ] 28. Acceptance/audit rollback, ack-before-commit, preparation/quarantine commit failure, coordinator unsafe-offset dan broker rebalance lulus lokal; provider dan failure windows/deployment lain belum.
+- [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; manifest/deployment and operator reprocessing are pending.
+- [ ] 25. M04 atomic send idempotency + claim + outbox, promotion/expiry, and bounded dispatcher pass locally; the scheduler binary does not yet use durable handoff.
+- [ ] 26. Delivery update outbox and consumer dedup/ordering contract.
+- [ ] 27. Bounded concurrency, page/chunk memory limits, provider rate limits, and backpressure.
+- [ ] 28. Acceptance/audit rollback, ack-before-commit, preparation/quarantine commit failure, coordinator unsafe-offset, and broker rebalance pass locally; provider and other failure windows/deployment are pending.
 
-### Tahap 5 — kontrak dan keamanan
+### Phase 5 — contracts and security
 
-- [ ] 29. Receipt dan statistik dengan arti status yang eksplisit.
-- [ ] 30. Mobile token refresh, login/logout/account switch, multi-device dan migration tests.
-- [ ] 31. Tutup correctness findings dalam scope; jangan anggap checklist code-review lama akurat tanpa verifikasi.
-- [ ] 32. Authorization/ownership, JWT claim validation, rate/body limits, trusted proxy dan secrets.
-- [ ] 33. Kontrak API/event dan contoh/error/compatibility tests untuk frontend serta mobile.
+- [ ] 29. Receipts and statistics with explicit status semantics.
+- [ ] 30. Mobile token refresh, login/logout/account switch, multi-device, and migration tests.
+- [ ] 31. Close in-scope correctness findings; do not assume the old code-review checklist is accurate without verification.
+- [ ] 32. Authorization/ownership, JWT claim validation, rate/body limits, trusted proxies, and secrets.
+- [ ] 33. API/event contracts and example/error/compatibility tests for frontend and mobile.
 
-### Tahap 6 — operasi
+### Phase 6 — operations
 
-- [ ] 34. Production images, resource sizing, config validation, deployment/migration procedure.
-- [ ] 35. Graceful shutdown/drain dan connection lifecycle seluruh proses.
-- [ ] 36. Health/readiness, logs, metrics, dashboard dan alert yang diuji.
-- [ ] 37. Retention/purge untuk delivery/audit/key/outbox/dead-letter dan PII deletion.
-- [ ] 38. Backup/restore serta runbook outage/requeue/credential rotation.
-- [ ] 39. Owner layanan, alert escalation dan akses operator.
+- [ ] 34. Production images, resource sizing, config validation, deployment/migration procedures.
+- [ ] 35. Graceful shutdown/drain and connection lifecycle for all processes.
+- [ ] 36. Tested health/readiness, logs, metrics, dashboards, and alerts.
+- [ ] 37. Retention/purge for delivery/audit/key/outbox/dead-letter and PII deletion.
+- [ ] 38. Backup/restore and outage/requeue/credential-rotation runbooks.
+- [ ] 39. Service owners, alert escalation, and operator access.
 
-### Tahap 7 — bukti produksi
+### Phase 7 — production evidence
 
-- [ ] 40. Staging end-to-end dengan perangkat Android/iOS nyata dan kondisi aplikasi relevan.
-- [ ] 41. Load/burst/soak: 20.000 perangkat dan skenario headroom yang disepakati; catat environment, kuota dan hasil.
+- [ ] 40. Staging end-to-end tests with real Android/iOS devices and relevant application states.
+- [ ] 41. Load/burst/soak: 20,000 devices and agreed headroom scenarios; record environment, quotas, and results.
 - [ ] 42. Failure injection: restart/rebalance, DB/Kafka outage, provider timeout/429/5xx, duplicate/replay.
-- [ ] 43. Restore, deploy, rollback dan migration compatibility drill.
-- [ ] 44. Security/operational readiness review; seluruh release blocker ditutup.
-- [ ] 45. Pilot bertahap dengan traffic/perangkat uji yang terkontrol dan metrik keberhasilan.
-- [ ] 46. Go/no-go berdasarkan bukti, cutover bertahap, dan pengamatan setelah rilis.
+- [ ] 43. Restore, deploy, rollback, and migration compatibility drills.
+- [ ] 44. Security/operational readiness review; all release blockers closed.
+- [ ] 45. Gradual pilot with controlled test traffic/devices and success metrics.
+- [ ] 46. Evidence-based go/no-go, gradual cutover, and post-release observation.
 
 ## 6. Release gates
 
-Produksi hanya dinyatakan siap jika scope dan target numeriknya sudah ditetapkan,
-seluruh acceptance tests relevan lulus, kapasitas terukur memenuhi target dengan
-headroom, failure recovery tidak meninggalkan pekerjaan tanpa jalur pemulihan,
-security blocker tertutup, restore/rollback terbukti, dan operator siap.
+Production readiness is declared only when scope and numeric targets are set,
+all relevant acceptance tests pass, measured capacity meets targets with
+headroom, failure recovery leaves no work without a recovery path,
+security blockers are closed, restore/rollback are proven, and operators are ready.
 
-Receipt aplikasi mengukur laporan aplikasi, bukan bukti semua perangkat pasti
-menerima push. Tidak ada klaim exactly-once end-to-end atau jaminan tiba di
-perangkat dalam batas waktu tertentu. Catat duplicate window dan mitigasinya.
+Application receipts measure application reports, not proof that all devices
+received a push. There is no end-to-end exactly-once claim or guaranteed arrival
+at devices within a particular time. Record duplicate windows and their mitigations.
 
-## 7. Sumber primer untuk keputusan provider
+## 7. Primary sources for provider decisions
 
-- [Firebase Apple setup](https://firebase.google.com/docs/cloud-messaging/ios/get-started): integrasi iOS dan konfigurasi APNs.
-- [Firebase scaling guidance](https://firebase.google.com/docs/cloud-messaging/scale-fcm): retry/backoff, traffic shaping dan rollout bertahap.
-- [Firebase token management](https://firebase.google.com/docs/cloud-messaging/manage-tokens): lifecycle dan invalid-token handling.
+- [Firebase Apple setup](https://firebase.google.com/docs/cloud-messaging/ios/get-started): iOS integration and APNs configuration.
+- [Firebase scaling guidance](https://firebase.google.com/docs/cloud-messaging/scale-fcm): retry/backoff, traffic shaping, and gradual rollout.
+- [Firebase token management](https://firebase.google.com/docs/cloud-messaging/manage-tokens): lifecycle and invalid-token handling.
 
-Sumber diperiksa pada 2026-11-02. Tidak ada credential atau isi `.env` yang
-dibaca. Integrasi vendor dan mobile belum diuji; dokumen ini bukan hasil benchmark.
+Sources checked on 2026-11-02. No credentials or `.env` contents were
+read. Vendor and mobile integrations have not been tested; this document is not a benchmark result.

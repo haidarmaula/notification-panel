@@ -1,176 +1,176 @@
 # Backend implementation milestones
 
-Tanggal: 2026-11-02. Status: urutan kerja, bukan bukti implementasi/produksi.
-Indeks: [production plan](production-readiness-plan.md).
-Aturan bersama: [CR1–CR9 dan gate G1–G7](adr-01-11-consistency-review.md).
+Date: 2026-11-02. Status: work sequence, not evidence of implementation/production readiness.
+Index: [production plan](production-readiness-plan.md).
+Shared rules: [CR1–CR9 and gates G1–G7](adr-01-11-consistency-review.md).
 
-## Urutan dan dependensi
+## Sequence and dependencies
 
-Nomor step 01–46 tetap mengikuti production plan; milestone di sini mengelompokkan
-pekerjaan menurut dependensi, bukan mengharuskan semua keamanan menunggu pipeline.
-M00 selesai pada 2026-11-02: mock diregenerasi, tests diselaraskan, seluruh unit
-test dan build lulus. M01 step 18 selesai sebagai CI configuration/local checks;
-hosted run belum diamati. Step 19 dependency environment/smoke juga selesai
-lokal; M01 selesai pada batas bukti tersebut, bukan hosted integration atau
-pipeline acceptance. M02–M10 belum
-selesai. Pekerjaan yang memakai
-keputusan belum settled harus mencatat proposed/test-only boundary dalam SPEC;
-tidak boleh diaktifkan ke production dengan asumsi tersembunyi.
+Step numbers 01–46 still follow the production plan; these milestones group
+work by dependency and do not require all security work to wait for the pipeline.
+M00 was completed on 2026-11-02: mocks were regenerated, tests were aligned, and all unit
+tests and the build passed. M01 step 18 is complete as CI configuration/local checks;
+a hosted run has not been observed. Step 19 dependency environment/smoke is also complete
+locally; M01 is complete within that evidence boundary, not as hosted integration or
+pipeline acceptance. M02–M10 are not yet
+complete. Work that uses
+unsettled decisions must record the proposed/test-only boundary in its SPEC;
+it must not be enabled in production with hidden assumptions.
 
-| Milestone | Dependensi | Potongan kerja berurutan dan output | Kriteria selesai | Step terkait |
+| Milestone | Dependencies | Sequential work slices and outputs | Completion criteria | Related steps |
 | --- | --- | --- | --- | --- |
-| M00 Baseline tests | Tidak ada gate eksternal | Regenerate mock dari interface; perbaiki fixture/assertion staff sesuai actor/password guards; perbaiki segment search/batch count assertions | Build dan seluruh unit test lulus tanpa skip/pelemahan guard; failure-path tests mencerminkan kontrak sekarang | 17 |
-| M01 Checks dan test environment | M00 | Pisahkan commit CI format/build/test/vet/vulnerability; kemudian test PostgreSQL/migrations, Kafka topics dan provider simulasi yang terisolasi | Check dapat diulang dari clean checkout; readiness/cleanup deterministik; tak mengirim ke perangkat nyata atau membaca credential produksi | 18,19 |
-| M02 API permission dan contract baseline | M01; keputusan G5 yang dipakai | SPEC permission matrix dan compatibility dahulu; deny-by-default mutation termasuk scheduling; safe errors/body limits/audit; dokumentasi API yang berubah | VIEWER tidak bisa mutate/send/schedule dari handler maupun service; actor inactive/forged access ditolak; public DTO/error tidak bocor | 20,31–33 |
-| M03 Application scope dan immutable installation/binding | M02 baseline; ADR-12; G3/G5 untuk enrollment | M03a registry/principal/grants; M03b scoped schema/query/API dan legacy bridge gate; M03c installation/proof/JWT/binding; M03d generic mobile lifecycle/receipt contract. Lihat [rencana](../specs/m03a-application-scope-plan.md). | A/B isolation dan legacy route gate sebelum app kedua; race refresh/transfer/revocation menjaga immutable app/owner; generic client contract dan gate per-app | 20,22,30,32,33 |
-| M04 Durable acceptance | M01,M02; shared schema/event contract M03 | SPEC gabungan acceptance/admission menetapkan deadline, epochs dan lock order; atomic key+claim+audit+send outbox; scheduler expiry/promotion; bounded publisher | Crash sebelum/sesudah commit atau broker ack tidak menghilangkan accepted work; same-key replay konsisten; expired schedule tidak dipublikasikan | 20,25,28 |
-| M05 Durable admission | M03,M04 | Atomic snapshot/count/intent/fanout marker; serial consumer/commit; source-aware DLQ; requeue dan recovery QUEUED | Duplicate event tidak menambah audience/intent; partial transaction rollback utuh; DLQ DB failure memblokir advance offset; unsupported target/coverage hold eksplisit | 22,24,28 |
-| M06 FCM execution dan delivery updates | M05; G2/G7 untuk konfigurasi/pengiriman nyata | SPEC provider/error mapping + attempt claim/lease/generation; bounded per-device executor, rate/breaker/retry/recovery; signer capability; result + versioned update outbox atomik | Failed/unknown attempt pulih dalam budget/deadline; stale generation/attempt tidak menulis; no orphan terminal work; simulated provider acceptance dan outbox crash windows teruji | 21,23,26–28 |
-| M07 Receipt dan statistics | M03,M06; G3/G5 dan consumer contract G6 | Bearer + per-delivery capability; semantic dedup; early/late observations, read projection; snapshot denominator dan consumer version/epoch behavior | Cross-owner/forged receipt ditolak; early receipt tidak diregress worker; FAILED late observation tetap failure disposition; duplicated/reordered events tidak double-count | 26,29,30,33 |
-| M08 Production runtime dan observability | M01–M07; G4 dan operator | Image/config validation, Kafka provisioning/ACL/hash mapping, resource bounds; drain/lifecycle; private health, logs/metrics, dashboards dan exercised alerts | Config drift fail closed; shutdown/rebalance aman; dependency outage tidak restart storm; deployment evidence membedakan single-host smoke dan multi-host failure | 34–36,39 |
-| M09 Retention dan coordinated recovery | M07,M08; G6 | SPEC retention/erasure/FK/archive; bounded maintenance; off-host backup/WAL dan sealed restore; epoch/revocation/consumer reconciliation serta runbooks | Restore drill memenuhi agreed RPO/RTO; tidak otomatis resend uncertain work atau resurrect revoked identity; purge tidak menghapus pending/replay evidence | 37–39,43 |
-| M10 Staging evidence dan cutover | M00–M09; G2–G7 settled untuk release | Android/iOS nyata; load/burst/soak 20k + headroom; dependency fault/security/restore review; pilot exclusive cohort; rollout dan OneSignal retirement | Numeric acceptance dan release gates lulus dengan evidence; operator/rollback jelas; tidak ada dual-send cohort; go/no-go eksplisit | 40–46 |
+| M00 Baseline tests | No external gate | Regenerate mocks from interfaces; fix staff fixtures/assertions for actor/password guards; fix segment search/batch count assertions | Build and all unit tests pass without skips/weakened guards; failure-path tests reflect the current contract | 17 |
+| M01 Checks and test environment | M00 | Separate CI format/build/test/vet/vulnerability commits; then test PostgreSQL/migrations, Kafka topics, and an isolated simulated provider | Checks are repeatable from a clean checkout; deterministic readiness/cleanup; no sends to real devices or reads of production credentials | 18,19 |
+| M02 API permissions and contract baseline | M01; G5 decisions used by this milestone | SPEC for the permission matrix and compatibility first; deny-by-default mutations including scheduling; safe errors/body limits/audit; documentation for changed APIs | VIEWER cannot mutate/send/schedule through either handlers or services; inactive actors/forged access are rejected; public DTOs/errors do not leak information | 20,31–33 |
+| M03 Application scope and immutable installation/binding | M02 baseline; ADR-12; G3/G5 for enrollment | M03a registry/principals/grants; M03b scoped schema/queries/APIs and legacy bridge gate; M03c installation/proof/JWT/binding; M03d generic mobile lifecycle/receipt contract. See the [plan](../specs/m03a-application-scope-plan.md). | A/B isolation and legacy route gate before the second app; refresh/transfer/revocation races preserve immutable app/owner; generic client contract and per-app gates | 20,22,30,32,33 |
+| M04 Durable acceptance | M01,M02; shared M03 schema/event contract | Combined acceptance/admission SPEC defines deadlines, epochs, and lock order; atomic key+claim+audit+send outbox; scheduler expiry/promotion; bounded publisher | Crashes before/after commit or broker ack do not lose accepted work; consistent same-key replay; expired schedules are not published | 20,25,28 |
+| M05 Durable admission | M03,M04 | Atomic snapshot/count/intent/fanout marker; serial consumer/commit; source-aware DLQ; requeue and QUEUED recovery | Duplicate events do not add audience/intents; complete rollback of partial transactions; DLQ DB failure blocks offset advancement; explicit holds for unsupported targets/coverage | 22,24,28 |
+| M06 FCM execution and delivery updates | M05; G2/G7 for real configuration/delivery | SPEC for provider/error mapping + attempt claim/lease/generation; bounded per-device executor, rate/breaker/retry/recovery; signer capability; atomic result + versioned update outbox | Failed/unknown attempts recover within budget/deadline; stale generations/attempts cannot write; no orphaned terminal work; simulated provider acceptance and outbox crash windows are tested | 21,23,26–28 |
+| M07 Receipts and statistics | M03,M06; G3/G5 and G6 consumer contract | Bearer + per-delivery capability; semantic dedup; early/late observations, read projection; snapshot denominator and consumer version/epoch behavior | Cross-owner/forged receipts are rejected; worker does not regress early receipts; FAILED late observations retain failure disposition; duplicated/reordered events do not double-count | 26,29,30,33 |
+| M08 Production runtime and observability | M01–M07; G4 and operator | Image/config validation, Kafka provisioning/ACL/hash mapping, resource bounds; drain/lifecycle; private health, logs/metrics, dashboards, and exercised alerts | Config drift fails closed; safe shutdown/rebalance; dependency outages do not cause restart storms; deployment evidence distinguishes single-host smoke from multi-host failure | 34–36,39 |
+| M09 Retention and coordinated recovery | M07,M08; G6 | SPEC for retention/erasure/FK/archive; bounded maintenance; off-host backup/WAL and sealed restore; epoch/revocation/consumer reconciliation and runbooks | Restore drill meets agreed RPO/RTO; no automatic resend of uncertain work or resurrection of revoked identities; purge does not delete pending/replay evidence | 37–39,43 |
+| M10 Staging evidence and cutover | M00–M09; G2–G7 settled for release | Real Android/iOS devices; load/burst/soak at 20k + headroom; dependency fault/security/restore review; pilot with an exclusive cohort; rollout and OneSignal retirement | Numeric acceptance criteria and release gates pass with evidence; clear operator/rollback responsibilities; no dual-send cohort; explicit go/no-go | 40–46 |
 
-M06 dan M07 adalah acceptance gate bersama sebelum pilot: signer, verifier,
-payload schema, update projection dan consumer compatibility tidak boleh
-dikembangkan dengan kontrak yang saling berbeda. Implementasi M06 dapat diuji
-terhadap provider simulasi ketika akses Firebase belum tersedia; itu bukan
-bukti integrasi Firebase/APNs nyata. Pipeline baru tetap disabled/isolated
-sampai milestone downstream yang dibutuhkan aman untuk aktivasi.
+M06 and M07 form a shared acceptance gate before the pilot: signer, verifier,
+payload schema, update projection, and consumer compatibility must not
+be developed against conflicting contracts. M06 implementation can be tested
+against a simulated provider when Firebase access is unavailable; this is not
+evidence of real Firebase/APNs integration. The new pipeline remains disabled/isolated
+until the required downstream milestones are safe to activate.
 
 ## Dependency graph
 
 ```mermaid
 flowchart TD
-  M00["M00 Baseline tests"] --> M01["M01 Checks dan test environment"]
-  M01 --> M02["M02 Permission dan API contract"]
-  M02 --> M03["M03 Installation dan binding"]
+  M00["M00 Baseline tests"] --> M01["M01 Checks and test environment"]
+  M01 --> M02["M02 Permissions and API contract"]
+  M02 --> M03["M03 Installation and binding"]
   M02 --> M04["M04 Durable acceptance"]
   M03 --> M04
   M03 --> M05["M05 Durable admission"]
   M04 --> M05
-  M05 --> M06["M06 FCM executor dan update outbox"]
-  M03 --> M07["M07 Receipts dan statistics"]
+  M05 --> M06["M06 FCM executor and update outbox"]
+  M03 --> M07["M07 Receipts and statistics"]
   M06 --> M07
-  M07 --> M08["M08 Runtime dan observability"]
-  M08 --> M09["M09 Retention dan recovery"]
-  M09 --> M10["M10 Evidence dan cutover"]
+  M07 --> M08["M08 Runtime and observability"]
+  M08 --> M09["M09 Retention and recovery"]
+  M09 --> M10["M10 Evidence and cutover"]
 ```
 
-M04 bergantung pada kontrak identitas/schema M03; tidak perlu menunggu rollout
-mobile selesai untuk menulis atau menguji transaksi terhadap fixture. Coverage
-dan dispatch tetap held sampai enrollment/cutover evidence cukup. Instrumentasi
-dasar dan fault tests ditambahkan bersama masing-masing fitur; M08 merakit dan
-menguji operasi lengkap, bukan pertama kali menambahkan observability. M09
-menambahkan maintenance setelah policy disetujui; retained identity/FK floors
-sudah wajib di schema M03–M07 agar desain tidak menunggu recovery di akhir.
+M04 depends on M03 identity/schema contracts; writing or testing transactions
+against fixtures does not need to wait for the mobile rollout to finish. Coverage
+and dispatch remain held until enrollment/cutover evidence is sufficient. Basic
+instrumentation and fault tests are added with each feature; M08 assembles and
+tests full operations, rather than introducing observability for the first time. M09
+adds maintenance after policy approval; retained identity/FK floors
+are already required in M03–M07 schemas so the design does not defer recovery until the end.
 
-## SPEC M02a pertama
+## First M02a SPEC
 
-Role matrix dikonfirmasi pengguna pada 2026-11-02. [SPEC M02a](../specs/m02a-staff-operation-permissions.md)
-dan [policy contract](../contracts/staff-permissions.json) sudah diimplementasikan
-untuk notification/segment/member guards dan [diverifikasi lokal](m02a-verification.md). Ini menutup keputusan
-role bisnis dari G5, bukan enrollment/session/operational policy lainnya.
-Target API ada di [authorization contract](../api/authorization-api.md).
+The user confirmed the role matrix on 2026-11-02. [SPEC M02a](../specs/m02a-staff-operation-permissions.md)
+and the [policy contract](../contracts/staff-permissions.json) have been implemented
+for notification/segment/member guards and [verified locally](m02a-verification.md). This closes the
+business-role decision from G5, not other enrollment/session/operational policies.
+The target API is in the [authorization contract](../api/authorization-api.md).
 
-Shared current-authority checker/query, matrix tests, route/service wiring dan
-real-DB/API negative tests M02a selesai. [M02b staff administration](m02b-verification.md)
-juga implemented/local-verified pada 2026-11-03: tujuh route dan service memakai current DB authority. Atomic
-authority/mutation/audit tetap mengikuti transaksi pemilik data M03/M04;
-M02a tidak mengklaim revocation membatalkan operasi yang sudah diotorisasi.
-[M02c audit redaction](m02c-verification.md) implemented/local-verified; skrip
-historis dan runbook tersedia, tetapi cleanup produksi belum dijalankan.
-[M02d request limits](m02d-verification.md) juga implemented/local-verified.
-Session, rate limits, Content-Type/field policy, audit durability dan API/security baseline lain
-tetap release controls yang terbuka. [Evaluasi baseline](m02-baseline-assessment.md)
-menetapkan guard minimum siap lokal setelah [M02e staff JWT](m02e-verification.md);
-M03 dapat mulai SPEC/implementasi terisolasi dengan gate integrasi eksplisit.
-Prasyarat M03/M04 adalah guard baseline dan kontrak identitas
-yang dipakainya, bukan menunggu semua transaksi future diimplementasikan di M02.
+The shared current-authority checker/query, matrix tests, route/service wiring, and
+M02a real-DB/API negative tests are complete. [M02b staff administration](m02b-verification.md)
+was also implemented/locally verified on 2026-11-03: seven routes and services use current DB authority. Atomic
+authority/mutation/audit still follow M03/M04 data-owner transactions;
+M02a does not claim that revocation cancels operations already authorized.
+[M02c audit redaction](m02c-verification.md) is implemented/locally verified; historical
+scripts and a runbook are available, but production cleanup has not been run.
+[M02d request limits](m02d-verification.md) is also implemented/locally verified.
+Sessions, rate limits, Content-Type/field policy, audit durability, and other API/security baseline controls
+remain open release controls. The [baseline assessment](m02-baseline-assessment.md)
+establishes that minimum guards are locally ready after [M02e staff JWT](m02e-verification.md);
+M03 can begin its SPEC/isolated implementation with explicit integration gates.
+M03/M04 prerequisites are the guard baseline and identity contracts
+they use, rather than waiting for all future transactions to be implemented in M02.
 
-## Cara menyelesaikan satu milestone
+## How to complete a milestone
 
-1. Tulis satu SPEC kecil untuk slice berikutnya: input/output/error, migration
-   dan compatibility, invariants, open gates serta acceptance cases. NEW path
-   di `docs/specs/` ditentukan ketika slice dimulai; historical bigpickle bukan
-   SPEC canonical. M00 menyelaraskan tests ke kontrak kode existing, tanpa API
-   behavior baru atau companion SPEC fitur baru.
-2. Implementasi dan test slice tersebut, termasuk failure window yang relevan.
-   Simulasi tidak menggantikan real-device/multi-host/restore evidence.
-3. Catat command, hasil dan batas buktinya; update API docs jika kontrak berubah,
-   `code-review.md` jika finding ditutup, serta checklist production plan.
-4. Commit kecil di `main` dengan Conventional Commits berscope; jangan mengemas
-   tooling, rancangan dan perilaku runtime yang tidak terkait dalam satu commit.
-   Commit rutin menjadi bagian penutupan slice; push/deploy mengikuti instruksi
-   pengguna dan kesiapan lingkungan.
+1. Write one small SPEC for the next slice: inputs/outputs/errors, migrations
+   and compatibility, invariants, open gates, and acceptance cases. The NEW path
+   in `docs/specs/` is determined when the slice starts; historical bigpickle is not
+   the canonical SPEC. M00 aligns tests with existing code contracts, without new API
+   behavior or a companion SPEC for a new feature.
+2. Implement and test the slice, including relevant failure windows.
+   Simulation does not replace real-device/multi-host/restore evidence.
+3. Record commands, results, and evidence boundaries; update API docs if contracts change,
+   `code-review.md` if a finding is closed, and the production plan checklist.
+4. Make small commits on `main` using scoped Conventional Commits; do not bundle
+   unrelated tooling, design, and runtime behavior in one commit.
+   Routine commits are part of closing a slice; push/deploy follow user
+   instructions and environment readiness.
 
-Tidak ada estimasi tanggal yang dijanjikan sebelum akses/gate/sizing diketahui.
-Kriteria selesai milestone ini sengaja menjadi panduan untuk SPEC, bukan klaim
-acceptance case seluruh sistem sudah ditulis atau ADR sudah accepted.
+No dates are promised before access/gates/sizing are known.
+These milestone completion criteria deliberately guide SPECs; they do not claim
+that system-wide acceptance cases have all been written or ADRs accepted.
 
-## Titik mulai berikutnya
+## Next starting point
 
-M00/step 17 selesai dengan `go tool mockery`, `go test ./...` dan `go build ./...`
-(memakai GOCACHE=/tmp/hello-go-review-cache di sandbox). Signature password,
-auth fixtures, pgx not-found sentinel, filtered count dan batch membership count
-sudah diselaraskan; tests juga memeriksa denial dan kegagalan repository.
-Tidak ada perubahan perilaku service atau test yang di-skip.
+M00/step 17 is complete with `go tool mockery`, `go test ./...`, and `go build ./...`
+(using GOCACHE=/tmp/hello-go-review-cache in the sandbox). Password signatures,
+auth fixtures, pgx not-found sentinel, filtered count, and batch membership count
+have been aligned; tests also check denials and repository failures.
+No service behavior changed and no tests were skipped.
 
-M01 step 18/19 selesai sebagai [CI/local checks](ci-readiness.md) dan
-[dependency smoke](integration-readiness.md). Step 20/M02 dimulai dengan SPEC
-M02a dan M02b yang selesai implemented/local-verified; berikutnya slice M02
-untuk API security baseline lain. M02c audit redaction dan M02d JSON body limits
-sudah implemented/local-verified; historical cleanup tetap operator gate.
-Evaluasi baseline dan M02e selesai secara scoped/local-verified. Berikutnya
-[ADR-12 multi-aplikasi](../adr/adr-12-multi-application-isolation.md) dan
-[rencana M03a–d](../specs/m03a-application-scope-plan.md): registry/scope dahulu,
-baru identity/binding generik; kaiapps2 consumer pertama, bukan batas platform.
-[Exact SPEC M03a](../specs/m03a-application-registry.md) dan registry OpenAPI sudah
-ditulis; [M03a.1 persistence](m03a1-verification.md) implemented/local-verified.
-[M03a.2 resolver/services/atomic audit](m03a2-verification.md) juga implemented/
-local-verified. [M03a.3 HTTP](m03a3-verification.md) juga implemented/local-verified:
-sepuluh endpoint registry/grants, PROVISIONING only. Berikutnya M03b scoped
-schema/query/API dan legacy worker/scheduler/fanout gate sebelum data app kedua.
-[M03b.1 inventory/design](m03b1-scope-inventory.md) selesai tanpa perubahan runtime;
-[M03b.2a expansion/preflight/backfill](m03b2a-verification.md) kini lulus lokal;
-berikutnya scoped callers M03b.3, kemudian finalisasi constraint bersama cutover. [SPEC transisi](../specs/m03b-application-data-isolation.md)
-merinci lima kelompok M03b; belum merupakan bukti isolasi.
-M02 release controls belum dinyatakan selesai. Hosted execution,
-production adapter/pipeline, real provider/device dan production infrastructure
-belum dibuktikan oleh penyelesaian fondasi ini.
+M01 steps 18/19 are complete as [CI/local checks](ci-readiness.md) and
+[dependency smoke](integration-readiness.md). Step 20/M02 started with SPECs
+M02a and M02b, which are implemented/locally verified; next are M02 slices
+for the remaining API security baseline. M02c audit redaction and M02d JSON body limits
+are implemented/locally verified; historical cleanup remains an operator gate.
+The baseline assessment and M02e are complete within their scoped/local-verification boundaries. Next are
+[ADR-12 multi-application isolation](../adr/adr-12-multi-application-isolation.md) and the
+[M03a–d plan](../specs/m03a-application-scope-plan.md): registry/scope first,
+then generic identity/binding; kaiapps2 is the first consumer, not the platform boundary.
+The [exact M03a SPEC](../specs/m03a-application-registry.md) and registry OpenAPI have
+been written; [M03a.1 persistence](m03a1-verification.md) is implemented/locally verified.
+[M03a.2 resolver/services/atomic audit](m03a2-verification.md) is also implemented/
+locally verified. [M03a.3 HTTP](m03a3-verification.md) is also implemented/locally verified:
+ten registry/grant endpoints, PROVISIONING only. Next are M03b scoped
+schema/queries/APIs and the legacy worker/scheduler/fanout gate before a second app's data.
+[M03b.1 inventory/design](m03b1-scope-inventory.md) is complete without runtime changes;
+[M03b.2a expansion/preflight/backfill](m03b2a-verification.md) now passes locally;
+next are M03b.3 scoped callers, then constraint finalization with cutover. The [transition SPEC](../specs/m03b-application-data-isolation.md)
+details five M03b groups; it is not yet evidence of isolation.
+M02 release controls have not been declared complete. Hosted execution,
+production adapters/pipeline, real providers/devices, and production infrastructure
+have not been proven by completion of these foundations.
 
 
-## Membaca nomor checklist dan urutan implementasi
+## Reading checklist numbers and implementation order
 
-Nomor step bukan urutan coding yang sepenuhnya linear. Step 20 mencakup fondasi
-lintas M02/M03/M04; step 21 (provider execution) dipetakan ke M06 setelah M05
-admission. Urutan dependensi saat ini tetap M03 → M04 → M05 → M06. Menyelesaikan
-registry M03a tidak menutup step 20 atau langsung mengaktifkan FCM produksi.
+Step numbers are not a fully linear coding sequence. Step 20 spans foundations
+across M02/M03/M04; step 21 (provider execution) maps to M06 after M05
+admission. The current dependency order remains M03 → M04 → M05 → M06. Completing
+the M03a registry does not close step 20 or immediately enable production FCM.
 
-M04 acceptance/scheduling dan library dispatcher telah lulus pengujian lokal.
-Dispatcher tetap unwired sampai aktivasi scheduler direview; admission modern
-sudah tersedia. Hasil ini belum menutup milestone M04 atau gate
-produksi. Kontrak dan batas crash tersedia di
-[SPEC outbox](../specs/m04-outbox-dispatch.md).
+M04 acceptance/scheduling and the dispatcher library have passed local tests.
+The dispatcher remains unwired until scheduler activation is reviewed; modern admission
+is available. These results do not yet close milestone M04 or production
+gates. Contracts and crash boundaries are in the
+[outbox SPEC](../specs/m04-outbox-dispatch.md).
 
-M05 atomic preparation tersedia dan diuji lokal, termasuk dua admission serentak,
-rollback sebelum complete marker, immutable attribution/counts, coverage hold,
-expiry unknown versus empty snapshot, dan 20k intents set-wise. Serial consumer,
-source-aware DLQ/requeue, recovery dan binary wiring dilanjutkan di bawah; milestone M05
-belum ditutup. [SPEC preparation](../specs/m05-durable-preparation.md).
+M05 atomic preparation is available and locally tested, including two concurrent admissions,
+rollback before the complete marker, immutable attribution/counts, coverage holds,
+expiry with an unknown versus empty snapshot, and 20k intents processed set-wise. The serial consumer,
+source-aware DLQ/requeue, recovery, and binary wiring continue below; milestone M05
+is not yet closed. [Preparation SPEC](../specs/m05-durable-preparation.md).
 
-Storage source-aware quarantine, decoder modern dan koordinator serial juga
-tersedia/teruji lokal. Koordinator memakai kontrak reader yang harus memverifikasi
-source dan mengikat ack ke assignment. [SPEC coordinator](../specs/m05-serial-admission.md).
+Source-aware quarantine storage, the modern decoder, and the serial coordinator are also
+available/locally tested. The coordinator uses a reader contract that must verify
+the source and bind acknowledgments to assignments. [Coordinator SPEC](../specs/m05-serial-admission.md).
 
-QUEUED recovery memakai Preparer yang sama dan lulus PostgreSQL lokal untuk
-accepted work tanpa outbox/event, due holds, expiry, sealed restore dan lineage
-fencing. [SPEC recovery](../specs/m05-queued-recovery.md). Recovery lease/execution
-tetap M06; requeue/wiring masih terbuka.
+QUEUED recovery uses the same Preparer and passes local PostgreSQL tests for
+accepted work without an outbox/event, due holds, expiry, sealed restore, and lineage
+fencing. [Recovery SPEC](../specs/m05-queued-recovery.md). Recovery lease/execution
+remain in M06; requeue/wiring remain open.
 
-Adapter generation-bound lulus Kafka lokal dengan dua partition/consumer,
-preparation cancellation saat rebalance, redelivery, offset fencing dan durable
-poison evidence, termasuk race detector dan Preparer PostgreSQL asli. Pinned SDK
-tidak mengekspos topic UUID; manifest incarnation
-operator dan deployment/TLS/SASL tetap gate. Tidak ada source/binary produksi
-diaktifkan. [SPEC adapter](../specs/m05-kafka-adapter.md).
+The generation-bound adapter passes local Kafka tests with two partitions/consumers,
+preparation cancellation during rebalance, redelivery, offset fencing, and durable
+poison evidence, including the race detector and the real PostgreSQL Preparer. The pinned SDK
+does not expose the topic UUID; the operator incarnation
+manifest and deployment/TLS/SASL remain gates. No production source/binary has
+been enabled. [Adapter SPEC](../specs/m05-kafka-adapter.md).
