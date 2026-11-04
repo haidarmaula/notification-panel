@@ -13,6 +13,15 @@ Missing epochs, DRAFT/SCHEDULED state and mismatched envelopes fail closed.
 Sealed restore prevents preparation. Current lineage is required even for
 duplicate events; normal restart does not rotate it.
 
+Kafka ingress uses DecodeScopedSend before preparation. Version 1 accepts only
+the documented fields and one JSON object, at most 64 KiB. Duplicate fields,
+unknown fields, trailing JSON, missing epochs, noncanonical/zero UUIDs, invalid
+timestamps and nonpositive notification IDs are rejected. The raw key must be
+exactly notification_<decimal notification_id>, without padding. Decode errors
+contain no raw input. Missing modern fields are never inferred for legacy
+events. These errors require durable quarantine before an offset may advance;
+the decoder itself neither stores evidence nor commits offsets.
+
 An existing complete preparation returns the same immutable counts without
 re-resolving users or creating new intents. A valid terminal acceptance is a
 no-op. PROCESSING without a modern complete marker is an explicit reconciliation

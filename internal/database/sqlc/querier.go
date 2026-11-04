@@ -275,6 +275,7 @@ type Querier interface {
 	// ==========================================
 	GetSegmentMemberByID(ctx context.Context, id int64) (SegmentMember, error)
 	GetSendKey(ctx context.Context, arg GetSendKeyParams) (GetSendKeyRow, error)
+	GetSendQuarantine(ctx context.Context, arg GetSendQuarantineParams) (NotificationSendDeadLetter, error)
 	GetStaffAuthority(ctx context.Context, id int64) (GetStaffAuthorityRow, error)
 	GetStaffUserByEmail(ctx context.Context, email string) (StaffUser, error)
 	// ==========================================
@@ -300,6 +301,7 @@ type Querier interface {
 	InsertInstallationBinding(ctx context.Context, arg InsertInstallationBindingParams) error
 	InsertPreparationIntents(ctx context.Context, arg InsertPreparationIntentsParams) (InsertPreparationIntentsRow, error)
 	InsertSendOutbox(ctx context.Context, arg InsertSendOutboxParams) error
+	InsertSendQuarantine(ctx context.Context, arg InsertSendQuarantineParams) (int64, error)
 	// Includes revoked grants; application identity validated by owning service.
 	ListApplicationStaffGrants(ctx context.Context, arg ListApplicationStaffGrantsParams) (ListApplicationStaffGrantsRow, error)
 	// ==========================================
@@ -405,6 +407,7 @@ type Querier interface {
 	LockScopedCampaign(ctx context.Context, arg LockScopedCampaignParams) (string, error)
 	LockScopedCampaignTemplate(ctx context.Context, arg LockScopedCampaignTemplateParams) (string, error)
 	LockScopedSegment(ctx context.Context, arg LockScopedSegmentParams) (LockScopedSegmentRow, error)
+	LockSendLogSource(ctx context.Context, id pgtype.UUID) (NotificationLogSource, error)
 	MarkCampaignPrepared(ctx context.Context, arg MarkCampaignPreparedParams) error
 	// ==========================================
 	// UPDATE STATUS

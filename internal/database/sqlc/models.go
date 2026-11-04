@@ -171,6 +171,15 @@ type NotificationDeliveryIntent struct {
 	CreatedAt       pgtype.Timestamptz `db:"created_at"`
 }
 
+type NotificationLogSource struct {
+	ID               pgtype.UUID        `db:"id"`
+	Topic            string             `db:"topic"`
+	ClusterIdentity  string             `db:"cluster_identity"`
+	TopicIncarnation string             `db:"topic_incarnation"`
+	Active           bool               `db:"active"`
+	CreatedAt        pgtype.Timestamptz `db:"created_at"`
+}
+
 type NotificationPreparation struct {
 	NotificationID      int64              `db:"notification_id"`
 	ApplicationID       int64              `db:"application_id"`
@@ -196,6 +205,17 @@ type NotificationRuntime struct {
 	SourceEpoch   pgtype.UUID `db:"source_epoch"`
 	Sealed        bool        `db:"sealed"`
 	MigrationHold bool        `db:"migration_hold"`
+}
+
+type NotificationSendDeadLetter struct {
+	LogSourceID       pgtype.UUID        `db:"log_source_id"`
+	OriginalPartition int32              `db:"original_partition"`
+	OriginalOffset    int64              `db:"original_offset"`
+	OriginalKey       []byte             `db:"original_key"`
+	OriginalPayload   []byte             `db:"original_payload"`
+	Reason            string             `db:"reason"`
+	Attempts          int32              `db:"attempts"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at"`
 }
 
 type NotificationSendKey struct {

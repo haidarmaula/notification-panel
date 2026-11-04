@@ -4,6 +4,8 @@
   "status": "source-inventory-not-runtime-isolation",
   "spec": "../specs/m03b-application-data-isolation.md",
   "tables": [
+    {"name": "notification_log_sources", "scope": "global-control"},
+    {"name": "notification_send_dead_letters", "scope": "global-control"},
     {"name": "notification_preparations", "scope": "application-scoped"},
     {"name": "notification_delivery_intents", "scope": "application-scoped"},
     {"name": "notification_runtime", "scope": "global-control"},
@@ -80,6 +82,7 @@
     }
   ],
   "query_files": [
+    {"path": "db/queries/send_quarantine.sql", "scope": "global-control", "names": ["GetSendQuarantine", "InsertSendQuarantine", "LockSendLogSource"]},
     {"path": "db/queries/preparation.sql", "scope": "application-scoped", "names": ["CompleteCampaignPreparation", "ExpireUnpreparedCampaign", "GetCompletePreparation", "HoldCampaignPreparation", "InsertPreparationIntents", "LockPreparationCampaign", "MarkCampaignPrepared"]},
     {"path": "db/queries/send_outbox.sql", "scope": "application-scoped", "names": ["DeferSendOutbox", "DeletePublishedSendOutbox", "LockNextScopedSendOutbox"]},
     {"path": "db/queries/durable_acceptance.sql", "scope": "application-scoped", "names": ["CampaignAcceptanceReady", "DeleteSendKey", "ExpireScopedSchedule", "GetApplicationDispatchPolicy", "GetSendKey", "InsertSendOutbox", "ListDueScopedSchedules", "LockAcceptanceStaff", "LockCampaignAcceptance", "LockNotificationRuntime", "PromoteScopedCampaign", "QueueScopedCampaign", "ScheduleScopedCampaign", "StoreSendKey"]},

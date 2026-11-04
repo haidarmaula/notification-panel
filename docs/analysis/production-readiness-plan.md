@@ -201,6 +201,12 @@ ini bukan SLA produksi atau waktu kirim FCM. Kafka serial consumer, quarantine,
 recovery dan pemasangan binary tetap pekerjaan berikutnya. Lihat
 [SPEC M05](../specs/m05-durable-preparation.md).
 
+Decoder envelope ketat dan storage quarantine source-aware juga lulus unit serta
+PostgreSQL lokal: redelivery identik, konflik bytes pada offset sama, topic
+incarnation berbeda, seal/inactive source, kegagalan commit/insert dan batas
+ukuran. Belum ada consumer serial yang memanggil storage tersebut atau commit
+offset; tidak ada source produksi yang diaktifkan.
+
 ## 5. Checklist pelaksanaan
 
 `[x]` berarti selesai dan ada bukti; `[ ]` berarti belum selesai. Sebagian

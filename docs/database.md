@@ -677,3 +677,15 @@ modern intent, snapshot or hold evidence. See the
 [preparation specification](specs/m05-durable-preparation.md). Provider claims,
 receipt capabilities, Kafka quarantine/offset handling and retention are later
 slices; these tables alone do not implement them.
+
+### Source-aware send quarantine (M05)
+
+Migration 000024 adds immutable physical log identities and bounded raw
+quarantine evidence keyed by source/partition/offset. Sources start inactive;
+topic name alone cannot identify an incarnation. Publication source_epoch stays
+separate. Raw keys are BYTEA so malformed non-UTF-8 keys remain intact. Exact
+redelivery is idempotent; conflicting bytes cannot overwrite existing evidence.
+Reasons are allowlisted codes and no public endpoint exposes raw input.
+Down refuses active sources or evidence. Source provisioning/verification,
+restricted operator access, encryption at rest, replay and retention remain
+production gates. See [quarantine contract](specs/m05-source-quarantine.md).

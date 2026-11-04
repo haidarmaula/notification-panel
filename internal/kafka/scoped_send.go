@@ -1,9 +1,11 @@
 package kafka
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"strconv"
 	"time"
 
@@ -39,6 +41,49 @@ func (e ScopedSendRequested) Validate() error {
 		}
 	}
 	return nil
+}
+
+// DecodeScopedSend rejects legacy/malformed envelopes and ambiguous JSON. A
+// version-1 schema change requires coordinated versioning, not silent defaults.
+// Errors never contain raw keys, payloads or decoder values.
+func DecodeScopedSend(key, value []byte) (ScopedSendRequested, error) {
+	invalid := func() (ScopedSendRequested, error) { return ScopedSendRequested{}, ErrScopedSendEnvelope }
+	if len(value) == 0 || len(value) > 64*1024 || len(key) > 64 {
+		return invalid()
+	}
+	d := json.NewDecoder(bytes.NewReader(value))
+	start, err := d.Token()
+	if err != nil || start != json.Delim('{') {
+		return invalid()
+	}
+	seen := make(map[string]bool)
+	for d.More() {
+		token, err := d.Token()
+		name, ok := token.(string)
+		if err != nil || !ok || seen[name] {
+			return invalid()
+		}
+		seen[name] = true
+		var raw json.RawMessage
+		if err := d.Decode(&raw); err != nil {
+			return invalid()
+		}
+	}
+	if end, err := d.Token(); err != nil || end != json.Delim('}') {
+		return invalid()
+	}
+	var extra json.RawMessage
+	if err := d.Decode(&extra); err != io.EOF {
+		return invalid()
+	}
+	d = json.NewDecoder(bytes.NewReader(value))
+	d.DisallowUnknownFields()
+	var event ScopedSendRequested
+	if err := d.Decode(&event); err != nil || event.Validate() != nil ||
+		string(key) != "notification_"+strconv.FormatInt(event.NotificationID, 10) {
+		return invalid()
+	}
+	return event, nil
 }
 
 // ScopedProducer is reserved for the modern pipeline. It uses true hash routing
