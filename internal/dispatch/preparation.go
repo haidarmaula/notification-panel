@@ -142,33 +142,33 @@ func (p *Preparer) prepareOnce(ctx context.Context, event kafka.ScopedSendReques
 		}
 		return PreparationResult{}, tx.Commit(ctx)
 	}
-	hold := func(reason string) (PreparationResult, error) {
+	hold := func(reason string, cause error) (PreparationResult, error) {
 		if err := q.HoldCampaignPreparation(ctx, sqlc.HoldCampaignPreparationParams{ApplicationID: app.ID, NotificationID: campaign.ID, Reason: pgtype.Text{String: reason, Valid: true}}); err != nil {
 			return PreparationResult{}, err
 		}
 		if err := tx.Commit(ctx); err != nil {
 			return PreparationResult{}, err
 		}
-		return PreparationResult{}, ErrAdmissionHeld
+		return PreparationResult{}, cause
 	}
 	if runtime.MigrationHold {
-		return hold("migration_hold")
+		return hold("migration_hold", ErrAdmissionHeld)
 	}
 	if app.Status != "ACTIVE" || policyErr != nil || policy.HoldNew {
-		return hold("project_hold")
+		return hold("project_hold", ErrAdmissionHeld)
 	}
 	if !policy.CoverageApproved {
-		return hold("audience_not_ready")
+		return hold("audience_not_ready", ErrAdmissionHeld)
 	}
 	counts, err := q.InsertPreparationIntents(ctx, sqlc.InsertPreparationIntentsParams{ApplicationID: app.ID, NotificationID: campaign.ID})
 	if err != nil {
 		return PreparationResult{}, err
 	}
 	if !counts.Supported {
-		return PreparationResult{}, ErrAdmissionTarget
+		return hold("unsupported_targets", ErrAdmissionTarget)
 	}
 	if !counts.Covered {
-		return hold("audience_not_ready")
+		return hold("audience_not_ready", ErrAdmissionHeld)
 	}
 	complete, err = q.CompleteCampaignPreparation(ctx, sqlc.CompleteCampaignPreparationParams{ApplicationID: app.ID, NotificationID: campaign.ID,
 		OriginEpoch: campaign.OriginEpoch, SourceEpoch: campaign.SourceEpoch, ResolvedUsers: counts.ResolvedUsers,

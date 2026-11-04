@@ -210,6 +210,11 @@ bounded, sanitasi panic, shutdown dan assignment-loss. Adapter Kafka nyata yang
 memverifikasi source/generation serta recovery/wiring belum selesai; tidak ada
 source produksi yang diaktifkan.
 
+Recovery QUEUED dari database juga lulus lokal tanpa outbox/event Kafka: bounded
+scan memakai Preparer yang sama, menyelesaikan snapshot/expiry, menghormati due
+hold serta seal/epoch, dan mempertahankan deadline. Recovery PROCESSING/lease,
+adapter Kafka nyata, requeue operator dan wiring proses belum selesai.
+
 ## 5. Checklist pelaksanaan
 
 `[x]` berarti selesai dan ada bukti; `[ ]` berarti belum selesai. Sebagian
@@ -247,13 +252,13 @@ pekerjaan pada baris yang belum dicentang sudah dimulai, sesuai catatan.
 ### Tahap 4 — delivery pipeline
 
 - [ ] 21. Provider selection/credential, error contract, chunking dan invalid-token handling.
-- [ ] 22. Atomic fan-out intent, device snapshot/identity, unique constraints dan exclusive claim.
+- [ ] 22. Atomic fan-out intent, device snapshot/identity dan unique constraints M05 lulus lokal, termasuk 20k intent; exclusive provider claim M06 belum.
 - [ ] 23. Bounded retry/backoff, lease expiry, recovery, TTL/budget terminalization.
-- [ ] 24. Kafka processing/rebalance/commit safety, durable dead-letter dan operator reprocess.
-- [ ] 25. Atomic send idempotency + claim + outbox; scheduler memakai durable handoff.
+- [ ] 24. Decoder, source-aware dead-letter dan koordinator serial M05 lulus lokal; adapter Kafka/rebalance nyata dan operator reprocess belum.
+- [ ] 25. Atomic send idempotency + claim + outbox, promotion/expiry dan bounded dispatcher M04 lulus lokal; scheduler binary belum memakai durable handoff.
 - [ ] 26. Delivery update outbox dan consumer dedup/ordering contract.
 - [ ] 27. Bounded concurrency, page/chunk memory limits, provider rate limit dan backpressure.
-- [ ] 28. Failure-window tests untuk seluruh batas database/provider/Kafka/offset.
+- [ ] 28. Acceptance/audit rollback, ack-before-commit, preparation/quarantine commit failure dan coordinator unsafe-offset lulus lokal; provider/adapter Kafka nyata dan failure windows lain belum.
 
 ### Tahap 5 — kontrak dan keamanan
 

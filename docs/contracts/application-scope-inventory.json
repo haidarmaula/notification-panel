@@ -82,6 +82,7 @@
     }
   ],
   "query_files": [
+    {"path": "db/queries/preparation_recovery.sql", "scope": "application-scoped", "names": ["ListRecoverableQueuedCampaigns"]},
     {"path": "db/queries/send_quarantine.sql", "scope": "global-control", "names": ["GetSendQuarantine", "InsertSendQuarantine", "LockSendLogSource"]},
     {"path": "db/queries/preparation.sql", "scope": "application-scoped", "names": ["CompleteCampaignPreparation", "ExpireUnpreparedCampaign", "GetCompletePreparation", "HoldCampaignPreparation", "InsertPreparationIntents", "LockPreparationCampaign", "MarkCampaignPrepared"]},
     {"path": "db/queries/send_outbox.sql", "scope": "application-scoped", "names": ["DeferSendOutbox", "DeletePublishedSendOutbox", "LockNextScopedSendOutbox"]},

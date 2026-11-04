@@ -37,7 +37,8 @@ Resolve a set of project-scoped users from supported BROADCAST, SEGMENT and
 INDIVIDUAL targets. Record resolved users before status filtering, eligible
 ACTIVE users and eligible active binding generations separately. Overlapping
 targets and segment memberships cannot duplicate users or bindings. Unsupported,
-unassigned or empty target sets are errors. Eligibility uses the same transaction
+unassigned or empty target sets are errors with a visible bounded unsupported
+target hold, not successful empty snapshots. Eligibility uses the same transaction
 snapshot for coverage, counts and set-wise intent insertion. Every eligible
 user needs a current binding and no active legacy token; no partial snapshot
 is committed when coverage fails.

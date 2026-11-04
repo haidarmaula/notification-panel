@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
+	"hello/internal/database/sqlc"
 	"hello/internal/dispatch"
 	"hello/internal/installation"
 	"hello/internal/kafka"
@@ -165,6 +166,7 @@ func TestAtomicPreparation(t *testing.T) {
 	_, err = preparer.Prepare(ctx, bad)
 	require.ErrorIs(t, err, dispatch.ErrAdmissionTarget)
 	require.Zero(t, count("SELECT count(*) FROM notification_delivery_intents WHERE notification_id=$1", bad.NotificationID))
+	require.EqualValues(t, 1, count("SELECT count(*) FROM notifications WHERE id=$1 AND preparation_hold_reason='unsupported_targets' AND preparation_next_attempt_at>clock_timestamp()", bad.NotificationID))
 
 	expired := seed(active)
 	exec("UPDATE notifications SET deadline_at=clock_timestamp()-interval '1 second' WHERE id=$1", expired.NotificationID)
@@ -178,4 +180,39 @@ func TestAtomicPreparation(t *testing.T) {
 	exec("UPDATE notifications SET status='PROCESSING' WHERE id=$1", partial.NotificationID)
 	_, err = preparer.Prepare(ctx, partial)
 	require.ErrorIs(t, err, dispatch.ErrAdmissionState)
+
+	// Recovery needs no outbox row or Kafka message and uses the same preparation.
+	recovery, err := dispatch.NewQueuedRecovery(sqlc.New(pool), preparer)
+	require.NoError(t, err)
+	_, err = recovery.Tick(ctx, 0)
+	require.Error(t, err)
+	lostEvent := seed(active)
+	report, err := recovery.Tick(ctx, 1)
+	require.NoError(t, err)
+	require.Equal(t, dispatch.RecoveryReport{Visited: 1, Prepared: 1}, report)
+	require.EqualValues(t, 2, count("SELECT count(*) FROM notification_delivery_intents WHERE notification_id=$1", lostEvent.NotificationID))
+	report, err = recovery.Tick(ctx, 100)
+	require.NoError(t, err)
+	require.Zero(t, report.Visited, "successful work and future holds do not consume the next poll")
+	newUncovered := count("INSERT INTO users(application_id,external_id) VALUES($1,'recovery-uncovered') RETURNING id", appID)
+	seed(newUncovered)
+	report, err = recovery.Tick(ctx, 100)
+	require.NoError(t, err)
+	require.Equal(t, dispatch.RecoveryReport{Visited: 1, Held: 1}, report)
+	late := seed(active)
+	exec("UPDATE notifications SET deadline_at=clock_timestamp()-interval '1 second' WHERE id=$1", late.NotificationID)
+	report, err = recovery.Tick(ctx, 100)
+	require.NoError(t, err)
+	require.Equal(t, dispatch.RecoveryReport{Visited: 1, Terminal: 1}, report)
+	sealedWork := seed(active)
+	exec("UPDATE notification_runtime SET sealed=true")
+	report, err = recovery.Tick(ctx, 100)
+	require.NoError(t, err)
+	require.Zero(t, report.Visited)
+	exec("UPDATE notification_runtime SET sealed=false")
+	exec("UPDATE notifications SET source_epoch=$2 WHERE id=$1", sealedWork.NotificationID, otherProject)
+	report, err = recovery.Tick(ctx, 100)
+	require.NoError(t, err)
+	require.Zero(t, report.Visited, "old lineage is retained for explicit reconciliation")
+	require.Zero(t, count("SELECT count(*) FROM notification_send_outbox"))
 }

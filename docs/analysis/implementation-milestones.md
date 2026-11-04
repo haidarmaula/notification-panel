@@ -163,3 +163,8 @@ Storage source-aware quarantine, decoder modern dan koordinator serial juga
 tersedia/teruji lokal. Koordinator memakai kontrak reader yang harus memverifikasi
 source dan mengikat ack ke assignment; adapter Kafka nyata, requeue/recovery dan
 binary wiring tetap terbuka. [SPEC coordinator](../specs/m05-serial-admission.md).
+
+QUEUED recovery memakai Preparer yang sama dan lulus PostgreSQL lokal untuk
+accepted work tanpa outbox/event, due holds, expiry, sealed restore dan lineage
+fencing. [SPEC recovery](../specs/m05-queued-recovery.md). Recovery lease/execution
+tetap M06; adapter Kafka/requeue/wiring masih terbuka.
