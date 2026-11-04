@@ -49,8 +49,8 @@ issuer is exercised. Hosted CI and deployment are not verified.
 
 ## Next boundary
 
-Implement publication-time revalidation against the current credential, grant,
-source, acceptance, controls, token and remaining lease. Bound synchronous broker
-I/O and commit result/resolution/audit without automatic I/O transaction retry.
-Then implement service-owned expired-claim cleanup. The internal claim proof is
-not a substitute for those checks; no public execution/wiring exists yet.
+[Publication and expired-claim recovery](m05-replay-execution-verification.md)
+now implement current authority/acceptance/lease revalidation, atomic broker
+result/resolution/audit and service-owned cleanup. The internal claim proof is
+not a substitute for those checks. CLI, real issuer integration, producer drain
+and runtime/deployment wiring remain open.

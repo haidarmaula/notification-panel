@@ -734,4 +734,7 @@ request can record that prior evidence resolution already exists without claimin
 another broker publication. Down refuses retained rows using this disposition.
 Claim/control/attempt audit commit together; an uncertain commit returns no new
 execution proof. [Claim verification](analysis/m05-replay-claim-verification.md)
-describes the boundary; broker execution and stale cleanup are still unwired.
+describes the claim boundary. [Publication/recovery verification](analysis/m05-replay-execution-verification.md)
+now covers the unwired execution libraries: outcome/control/audit commit together,
+expired cleanup releases only the exact token, and no evidence is deleted.
+Runtime/CLI/source lifecycle gates remain open.

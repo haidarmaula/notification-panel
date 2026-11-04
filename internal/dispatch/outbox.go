@@ -19,7 +19,8 @@ type Transactor interface {
 }
 
 // Publisher synchronously acknowledges broker acceptance of a scoped send.
-// An error may still leave the message accepted, so callers must tolerate replay.
+// An error may still leave the message accepted or producer-owned I/O active.
+// Callers must tolerate replay and own shutdown/drain before source transitions.
 type Publisher interface {
 	PublishScopedSend(context.Context, kafka.ScopedSendRequested) error
 }

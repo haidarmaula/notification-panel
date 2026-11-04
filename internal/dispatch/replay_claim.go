@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"slices"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -30,9 +31,10 @@ type ReplayAttemptResult struct {
 }
 
 type replayClaim struct {
-	position   ReplayPosition
-	token      pgtype.UUID
-	provenance VerifiedReplay
+	publicationStarted atomic.Bool
+	position           ReplayPosition
+	token              pgtype.UUID
+	provenance         VerifiedReplay
 }
 
 func newReplayClaimToken() (pgtype.UUID, error) {
@@ -171,7 +173,11 @@ func logReplayAttempt(ctx context.Context, q *sqlc.Queries, app sqlc.Application
 		Partition int32  `json:"partition"`
 		Offset    int64  `json:"offset"`
 		Outcome   string `json:"outcome"`
+		Executor  string `json:"executor,omitempty"`
 	}{RequestID: attempt.RequestID.String(), SourceID: attempt.LogSourceID.String(), Partition: attempt.OriginalPartition, Offset: attempt.OriginalOffset, Outcome: attempt.Outcome}
+	if action == audit.ACTION_NOTIFICATION_REPLAY_ABANDONED {
+		metadata.Executor = "expired_claim_recovery"
+	}
 	return audit.NewAuditService(repository.NewAuditLogRepository(q)).Log(ctx, audit.LogParams{
 		ApplicationID: app.ID, Action: action, EntityType: audit.ENTITY_TYPE_APPLICATION, EntityID: app.ID, EntityName: app.Name, After: metadata,
 	})

@@ -127,3 +127,30 @@ SELECT (EXISTS(SELECT 1 FROM targets)
             OR (target_type='SEGMENT' AND user_id IS NULL AND segment_id IS NOT NULL AND upload_batch_id IS NULL)
             OR (target_type='INDIVIDUAL' AND user_id IS NOT NULL AND segment_id IS NULL AND upload_batch_id IS NULL)))
 )::boolean AS supported;
+
+-- name: ReplayClaimPublishable :one
+SELECT EXISTS(SELECT 1 FROM notification_replay_attempts a JOIN notification_replay_controls c
+    ON c.log_source_id=a.log_source_id AND c.original_partition=a.original_partition AND c.original_offset=a.original_offset
+    AND c.active_application_id=a.application_id AND c.active_request_id=a.request_id AND c.active_claim_token=a.claim_token
+    JOIN notification_replay_requests r ON r.application_id=a.application_id AND r.id=a.request_id
+    JOIN notification_replay_grants g ON g.id=r.operational_grant_id AND g.application_id=a.application_id
+        AND g.staff_user_id=r.staff_user_id AND g.request_id=a.request_id AND g.selection_hash=r.selection_hash
+    WHERE a.application_id=sqlc.arg(application_id)::bigint AND a.request_id=sqlc.arg(request_id)::uuid
+    AND a.log_source_id=sqlc.arg(log_source_id)::uuid AND a.original_partition=sqlc.arg(original_partition)::integer
+    AND a.original_offset=sqlc.arg(original_offset)::bigint AND a.claim_token=sqlc.arg(claim_token)::uuid
+    AND a.outcome='started' AND a.lease_expires_at>=clock_timestamp()+interval '5 seconds'
+    AND g.revoked_at IS NULL AND g.expires_at>=clock_timestamp()+interval '5 seconds'
+    AND sqlc.arg(credential_expires_at)::timestamptz>=clock_timestamp()+interval '5 seconds')::boolean;
+
+-- name: ReplayCleanupContext :one
+SELECT app.public_id AS application_public_id,r.staff_user_id,r.operational_grant_id,a.notification_id
+FROM notification_replay_attempts a JOIN notification_replay_requests r
+    ON r.application_id=a.application_id AND r.id=a.request_id
+JOIN applications app ON app.id=a.application_id
+WHERE a.application_id=sqlc.arg(application_id)::bigint AND a.request_id=sqlc.arg(request_id)::uuid
+    AND a.log_source_id=sqlc.arg(log_source_id)::uuid AND a.original_partition=sqlc.arg(original_partition)::integer
+    AND a.original_offset=sqlc.arg(original_offset)::bigint;
+
+-- name: LockReplayCleanupGrant :one
+SELECT id FROM notification_replay_grants WHERE id=sqlc.arg(id)::uuid
+    AND application_id=sqlc.arg(application_id)::bigint AND staff_user_id=sqlc.arg(staff_user_id)::bigint FOR SHARE;

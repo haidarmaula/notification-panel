@@ -176,7 +176,9 @@ request audit, locally tested. [Dry-run eligibility](m05-replay-inspection-verif
 checks exact acceptance, marker/state, holds and existing source controls without
 writes. [Claim transactions](m05-replay-claim-verification.md) commit per-position
 attempt/control/audit with exclusive leases and no proof on uncertain commit.
-Publication/result transactions, stale cleanup and CLI remain unwired and unverified.
+[Publication and expired-claim recovery](m05-replay-execution-verification.md)
+pass locally, including real Kafka/dedup and unknown commit windows. CLI/issuer
+integration, producer drain, source manifest and runtime/deployment wiring remain open.
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,
 preparation cancellation during rebalance, redelivery, offset fencing, and durable

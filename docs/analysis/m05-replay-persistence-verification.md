@@ -35,6 +35,8 @@ The [request/credential verifier](../specs/m05-replay-credential.md) now supplie
 stable selection hashing and authenticated provenance, with unit/race evidence.
 [Request registration](m05-replay-registration-verification.md) now adds current
 DB authority/revocable grant checks, complete request conflict comparison and
-atomic header audit. Per-position acceptance eligibility, attempt/result audit,
-broker I/O/result reconciliation, service-owned stale cleanup and CLI remain
-subsequent slices. No executable replay path is wired.
+atomic header audit. [Inspection](m05-replay-inspection-verification.md),
+[claims](m05-replay-claim-verification.md) and
+[execution/recovery](m05-replay-execution-verification.md) now add locally tested
+service transactions. CLI/configuration, real issuer integration and production
+source/runtime/drain gates remain open. No executable replay path is wired.

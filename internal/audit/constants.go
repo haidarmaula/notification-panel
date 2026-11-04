@@ -121,3 +121,11 @@ const ACTION_NOTIFICATION_REPLAY_REQUEST = "NOTIFICATION_REPLAY_REQUEST"
 // ACTION_NOTIFICATION_REPLAY_ATTEMPT records a committed claim or disposition.
 // A started claim is not evidence of broker or provider acceptance.
 const ACTION_NOTIFICATION_REPLAY_ATTEMPT = "NOTIFICATION_REPLAY_ATTEMPT"
+
+// ACTION_NOTIFICATION_REPLAY_RESULT records a durable final replay disposition.
+// Published indicates broker acknowledgement; it is not provider delivery.
+const ACTION_NOTIFICATION_REPLAY_RESULT = "NOTIFICATION_REPLAY_RESULT"
+
+// ACTION_NOTIFICATION_REPLAY_ABANDONED records service-owned expired-claim cleanup.
+// The actor remains original request provenance; executor metadata names recovery.
+const ACTION_NOTIFICATION_REPLAY_ABANDONED = "NOTIFICATION_REPLAY_ABANDONED"

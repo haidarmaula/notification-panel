@@ -350,6 +350,24 @@ func (q *Queries) ListExpiredReplayClaims(ctx context.Context, pageSize int32) (
 	return items, nil
 }
 
+const lockReplayCleanupGrant = `-- name: LockReplayCleanupGrant :one
+SELECT id FROM notification_replay_grants WHERE id=$1::uuid
+    AND application_id=$2::bigint AND staff_user_id=$3::bigint FOR SHARE
+`
+
+type LockReplayCleanupGrantParams struct {
+	ID            pgtype.UUID `db:"id"`
+	ApplicationID int64       `db:"application_id"`
+	StaffUserID   int64       `db:"staff_user_id"`
+}
+
+func (q *Queries) LockReplayCleanupGrant(ctx context.Context, arg LockReplayCleanupGrantParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, lockReplayCleanupGrant, arg.ID, arg.ApplicationID, arg.StaffUserID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const lockReplayControl = `-- name: LockReplayControl :one
 SELECT log_source_id, original_partition, original_offset, active_application_id, active_request_id, active_claim_token, resolved_application_id, resolved_request_id, resolved_outcome FROM notification_replay_controls WHERE log_source_id=$1::uuid
     AND original_partition=$2::integer AND original_offset=$3::bigint FOR UPDATE
@@ -493,6 +511,89 @@ func (q *Queries) LockReplayRequest(ctx context.Context, arg LockReplayRequestPa
 		&i.SelectionHash,
 		&i.ChangeReference,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const replayClaimPublishable = `-- name: ReplayClaimPublishable :one
+SELECT EXISTS(SELECT 1 FROM notification_replay_attempts a JOIN notification_replay_controls c
+    ON c.log_source_id=a.log_source_id AND c.original_partition=a.original_partition AND c.original_offset=a.original_offset
+    AND c.active_application_id=a.application_id AND c.active_request_id=a.request_id AND c.active_claim_token=a.claim_token
+    JOIN notification_replay_requests r ON r.application_id=a.application_id AND r.id=a.request_id
+    JOIN notification_replay_grants g ON g.id=r.operational_grant_id AND g.application_id=a.application_id
+        AND g.staff_user_id=r.staff_user_id AND g.request_id=a.request_id AND g.selection_hash=r.selection_hash
+    WHERE a.application_id=$1::bigint AND a.request_id=$2::uuid
+    AND a.log_source_id=$3::uuid AND a.original_partition=$4::integer
+    AND a.original_offset=$5::bigint AND a.claim_token=$6::uuid
+    AND a.outcome='started' AND a.lease_expires_at>=clock_timestamp()+interval '5 seconds'
+    AND g.revoked_at IS NULL AND g.expires_at>=clock_timestamp()+interval '5 seconds'
+    AND $7::timestamptz>=clock_timestamp()+interval '5 seconds')::boolean
+`
+
+type ReplayClaimPublishableParams struct {
+	ApplicationID       int64              `db:"application_id"`
+	RequestID           pgtype.UUID        `db:"request_id"`
+	LogSourceID         pgtype.UUID        `db:"log_source_id"`
+	OriginalPartition   int32              `db:"original_partition"`
+	OriginalOffset      int64              `db:"original_offset"`
+	ClaimToken          pgtype.UUID        `db:"claim_token"`
+	CredentialExpiresAt pgtype.Timestamptz `db:"credential_expires_at"`
+}
+
+func (q *Queries) ReplayClaimPublishable(ctx context.Context, arg ReplayClaimPublishableParams) (bool, error) {
+	row := q.db.QueryRow(ctx, replayClaimPublishable,
+		arg.ApplicationID,
+		arg.RequestID,
+		arg.LogSourceID,
+		arg.OriginalPartition,
+		arg.OriginalOffset,
+		arg.ClaimToken,
+		arg.CredentialExpiresAt,
+	)
+	var column_1 bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
+const replayCleanupContext = `-- name: ReplayCleanupContext :one
+SELECT app.public_id AS application_public_id,r.staff_user_id,r.operational_grant_id,a.notification_id
+FROM notification_replay_attempts a JOIN notification_replay_requests r
+    ON r.application_id=a.application_id AND r.id=a.request_id
+JOIN applications app ON app.id=a.application_id
+WHERE a.application_id=$1::bigint AND a.request_id=$2::uuid
+    AND a.log_source_id=$3::uuid AND a.original_partition=$4::integer
+    AND a.original_offset=$5::bigint
+`
+
+type ReplayCleanupContextParams struct {
+	ApplicationID     int64       `db:"application_id"`
+	RequestID         pgtype.UUID `db:"request_id"`
+	LogSourceID       pgtype.UUID `db:"log_source_id"`
+	OriginalPartition int32       `db:"original_partition"`
+	OriginalOffset    int64       `db:"original_offset"`
+}
+
+type ReplayCleanupContextRow struct {
+	ApplicationPublicID pgtype.UUID `db:"application_public_id"`
+	StaffUserID         int64       `db:"staff_user_id"`
+	OperationalGrantID  pgtype.UUID `db:"operational_grant_id"`
+	NotificationID      pgtype.Int8 `db:"notification_id"`
+}
+
+func (q *Queries) ReplayCleanupContext(ctx context.Context, arg ReplayCleanupContextParams) (ReplayCleanupContextRow, error) {
+	row := q.db.QueryRow(ctx, replayCleanupContext,
+		arg.ApplicationID,
+		arg.RequestID,
+		arg.LogSourceID,
+		arg.OriginalPartition,
+		arg.OriginalOffset,
+	)
+	var i ReplayCleanupContextRow
+	err := row.Scan(
+		&i.ApplicationPublicID,
+		&i.StaffUserID,
+		&i.OperationalGrantID,
+		&i.NotificationID,
 	)
 	return i, err
 }

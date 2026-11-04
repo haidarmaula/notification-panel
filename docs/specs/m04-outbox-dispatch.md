@@ -36,7 +36,9 @@ The separate modern producer uses synchronous RequireAll, BatchSize=1,
 MaxAttempts=1, hash routing, one-second dial/read/write bounds and no automatic
 topic creation. Each publish receives at most two seconds of the transaction
 budget. A cancelled kafka-go write can still complete later; immutable message
-buffers and durable consumer dedup are required. Existing legacy producer and
+buffers and durable consumer dedup are required. Stop new calls and drain the
+producer with Close before source/epoch handoff or restore; caller cancellation
+and a released transaction lock do not prove all producer-owned I/O has stopped. Existing legacy producer and
 its mapping are preserved. Production activation requires the reviewed
 hash-routing/epoch handoff, TLS/SASL configuration, ISR policy and M05 consumer.
 Single-broker integration does not establish Kafka HA.

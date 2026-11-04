@@ -62,8 +62,8 @@ delivery and hosted CI are not verified by these fixtures.
 [Dry-run inspection](m05-replay-inspection-verification.md) now provides exact
 per-position acceptance/eligibility with no mutations and preserves held-app
 no-ops. [Per-position claim transactions](m05-replay-claim-verification.md) now
-implement atomic attempt+claim+audit. Next implement
-revalidation through bounded broker publication/result commit, and stale-claim
-cleanup. Every mutation/publication transaction must repeat current authority;
-registration is not a durable authorization bypass. CLI/wiring remain disabled
-until those paths and their failure-window tests exist.
+implement atomic attempt+claim+audit. [Execution and recovery](m05-replay-execution-verification.md)
+now add publication-time revalidation, atomic result/resolution/audit and expired
+claim cleanup. Registration remains no substitute for current authority.
+CLI/configuration, real issuer integration and runtime/source-drain verification
+remain open.

@@ -59,9 +59,8 @@ real device is exercised.
 ## Next slice
 
 [Claim transactions](m05-replay-claim-verification.md) now implement per-position
-attempt/claim/audit while keeping the dry-run mode free of writes. Next implement
-publication-time
-revalidation, bounded synchronous broker I/O and atomic result/resolution/audit,
-then service-owned stale-claim cleanup. Preserve the defined lock order even when
-creating an absent control row; dry-run locking is not a claim protocol. The CLI
-remains disabled until execution and failure-window evidence exist.
+attempt/claim/audit while keeping the dry-run mode free of writes.
+[Execution and recovery](m05-replay-execution-verification.md) now provide
+publication revalidation, bounded publisher calls, atomic result/resolution/audit
+and service-owned expired-claim cleanup. Dry-run locking remains distinct from
+claim ownership. CLI/issuer/runtime/source-drain gates remain open.

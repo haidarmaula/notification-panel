@@ -229,8 +229,11 @@ step-up verification, revocable DB grants and atomic request audit, tested local
 [Dry-run inspection](m05-replay-inspection-verification.md) also checks exact
 acceptance/state/holds without writes. [Per-position claims](m05-replay-claim-verification.md)
 now commit classification/control/audit atomically and withhold execution proof
-on uncertain commit. Publication/result transactions and stale-claim cleanup are next,
-followed by worker/scheduler wiring and M06 provider execution. Replay is not enabled.
+on uncertain commit. [Publication/result transactions and expired-claim recovery](m05-replay-execution-verification.md)
+also pass locally, including real Kafka, unknown commit outcomes and lease expiry.
+Restricted CLI/configuration, issuer/manifest/drain verification and modern
+worker/scheduler wiring remain open before M06 provider execution. Replay is not
+enabled in a binary or production deployment.
 
 ## 5. Execution checklist
 
@@ -271,7 +274,7 @@ work on unchecked rows has started, as noted.
 - [ ] 21. Provider selection/credentials, error contract, chunking, and invalid-token handling.
 - [ ] 22. M05 atomic fan-out intents, device snapshots/identity, and unique constraints pass locally, including 20k intents; M06 exclusive provider claims do not yet.
 - [ ] 23. Bounded retry/backoff, lease expiry, recovery, TTL/budget terminalization.
-- [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; manifest/deployment and operator reprocessing are pending.
+- [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; replay registration/inspection/claim/publication and expired-claim cleanup libraries also pass locally. Replay CLI/configuration, source manifest/drain and runtime deployment remain pending.
 - [ ] 25. M04 atomic send idempotency + claim + outbox, promotion/expiry, and bounded dispatcher pass locally; the scheduler binary does not yet use durable handoff.
 - [ ] 26. Delivery update outbox and consumer dedup/ordering contract.
 - [ ] 27. Bounded concurrency, page/chunk memory limits, provider rate limits, and backpressure.

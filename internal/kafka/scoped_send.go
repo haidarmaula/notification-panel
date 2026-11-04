@@ -87,7 +87,8 @@ func DecodeScopedSend(key, value []byte) (ScopedSendRequested, error) {
 }
 
 // ScopedProducer is reserved for the modern pipeline. It uses true hash routing
-// and bounded synchronous writes. Activation requires the documented handoff;
+// and synchronous acknowledgements with per-attempt transport bounds. A canceled
+// call can retain producer-owned I/O; Close drains it. Activation requires handoff;
 // it does not change the legacy producer's partition mapping.
 type ScopedProducer struct {
 	writer    *broker.Writer

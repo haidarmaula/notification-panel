@@ -21,5 +21,6 @@ error/cancellation. Counts distinguish known prepared snapshots, terminal
 unknown audience, holds and rejected metadata. Transient database errors stop
 the tick; the polling caller must back off. The library owns no goroutines.
 
-This slice does not recover PROCESSING leases/provider claims, replay DLQ events,
-reconcile old epochs or activate the scheduler. Those remain separate steps.
+This slice does not recover PROCESSING leases/provider claims, reconcile old epochs or activate the scheduler. [Replay execution libraries](../analysis/m05-replay-execution-verification.md)
+now provide separately authorized DLQ publication and expired replay-claim cleanup;
+PROCESSING/provider lease recovery remains M06 work.

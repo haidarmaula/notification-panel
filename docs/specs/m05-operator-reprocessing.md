@@ -6,7 +6,8 @@ persistence primitives implement slice 1; see the
 CLI, operational credential issuer or production activation is implemented.
 [Scoped request registration](../analysis/m05-replay-registration-verification.md)
 is available as an unwired library through migration 000026; per-position replay
-broker execution remains unimplemented. [Per-position claims](../analysis/m05-replay-claim-verification.md)
+broker execution and expired-claim recovery are now available as unwired libraries;
+see [execution verification](../analysis/m05-replay-execution-verification.md). [Per-position claims](../analysis/m05-replay-claim-verification.md)
 now commit attempt/control/audit atomically through migration 000027. [Dry-run inspection](../analysis/m05-replay-inspection-verification.md)
 implements advisory eligibility without mutations. It refines [ADR-02 A-4](../adr/adr-02-worker-consumption.md#a-4-operator-replay-and-retention),
 [ADR-11](../adr/adr-11-security-baseline.md) and
@@ -138,8 +139,13 @@ these locks until publication/result commit so concurrent control changes
 serialize with the attempt. Require at least five seconds remaining on the
 credential and lease before the broker call; do not renew a lease inside a
 publication attempt. The broker call is synchronous, bounded to two seconds and
-made at most once by this transaction. A publisher must honor cancellation and
-must not return while a detached publication remains active.
+made at most once per in-memory claim proof, including after a rolled-back or
+uncertain result commit. A publisher must honor caller cancellation. The pinned
+Kafka writer can retain producer-owned I/O after a canceled call returns; buffers
+remain immutable and the result is publication-uncertain. Stop new calls and drain
+the producer with Close before source handoff, epoch activation or restore. A
+local call deadline or database lock release is not proof that broker I/O drained.
+Process lifecycle/drain verification remains a separate wiring gate.
 
 Do not automatically retry a transaction containing broker I/O. Successful broker
 ack commits a `published` attempt, resolution and audit atomically; this means

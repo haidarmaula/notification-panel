@@ -57,7 +57,10 @@ Regression evidence and the remaining review boundary are recorded in
 | RA3 | P2 | Claim registered the full request before decoding a foreign-app selected position, leaving an unauthorized UUID reservation on denial. Fixed by checking every selected immutable evidence row inside registration's authority-locked transaction before header/audit insertion. A mixed-scope batch regression proves no header, attempt, control or audit reservation. |
 
 The [registration verification](docs/analysis/m05-replay-registration-verification.md)
-records the review boundary. Per-position replay/publication is still pending.
+records the authority review boundary. [Execution verification](docs/analysis/m05-replay-execution-verification.md)
+now covers the unwired publication/recovery libraries, proof reuse and commit
+uncertainty. Pinned Kafka cancellation can retain producer-owned I/O; source
+handoff therefore requires producer drain. CLI/runtime/deployment gates remain open.
 
 ## Critical Findings
 

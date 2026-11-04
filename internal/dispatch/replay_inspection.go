@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"hello/internal/database/sqlc"
 	"hello/internal/kafka"
 )
@@ -89,6 +90,8 @@ func (s *ReplayRequests) Inspect(ctx context.Context, request ReplayRequest, cre
 
 type replayAssessmentOptions struct {
 	reserveControl bool
+	ownerRequestID pgtype.UUID
+	ownerToken     pgtype.UUID
 }
 
 func assessReplayPosition(ctx context.Context, q *sqlc.Queries, scope replayScope, position ReplayPosition, options replayAssessmentOptions) (ReplayAssessment, error) {
@@ -159,7 +162,9 @@ func assessReplayPosition(ctx context.Context, q *sqlc.Queries, scope replayScop
 			return none, ErrReplayDenied
 		}
 		result.Disposition = ReplayResolved
-	case controlErr == nil && control.ActiveClaimToken.Valid:
+	case controlErr == nil && control.ActiveClaimToken.Valid &&
+		!(control.ActiveApplicationID.Int64 == scope.app.ID && control.ActiveRequestID == options.ownerRequestID &&
+			control.ActiveClaimToken == options.ownerToken):
 		if control.ActiveApplicationID.Int64 != scope.app.ID {
 			return none, ErrReplayDenied
 		}
