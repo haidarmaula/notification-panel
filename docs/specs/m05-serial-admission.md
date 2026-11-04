@@ -3,8 +3,9 @@
 The coordinator owns one fetched message until PostgreSQL preparation or durable
 quarantine succeeds and its assignment-bound acknowledgement succeeds. It never
 calls a provider, launches a per-message goroutine or fetches a later message
-while evidence is unsafe. This is a library; the Kafka reader adapter, actual
-rebalance/generation verification and process wiring remain separate gates.
+while evidence is unsafe. This is a library. The
+[generation-bound Kafka adapter](m05-kafka-adapter.md) is implemented and tested
+locally; deployment verification and process wiring remain separate gates.
 
 Reader.VerifySource must validate deployment approval and the configured physical log identity before
 fetching. Every fetched delivery carries an acknowledgement bound to that exact

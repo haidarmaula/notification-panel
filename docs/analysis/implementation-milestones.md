@@ -148,23 +148,29 @@ admission. Urutan dependensi saat ini tetap M03 → M04 → M05 → M06. Menyele
 registry M03a tidak menutup step 20 atau langsung mengaktifkan FCM produksi.
 
 M04 acceptance/scheduling dan library dispatcher telah lulus pengujian lokal.
-Dispatcher tetap unwired sampai admission M05 mendukung envelope modern dan
-aktivasi scheduler direview; hasil ini belum menutup milestone M04 atau gate
+Dispatcher tetap unwired sampai aktivasi scheduler direview; admission modern
+sudah tersedia. Hasil ini belum menutup milestone M04 atau gate
 produksi. Kontrak dan batas crash tersedia di
 [SPEC outbox](../specs/m04-outbox-dispatch.md).
 
 M05 atomic preparation tersedia dan diuji lokal, termasuk dua admission serentak,
 rollback sebelum complete marker, immutable attribution/counts, coverage hold,
 expiry unknown versus empty snapshot, dan 20k intents set-wise. Serial consumer,
-source-aware DLQ/requeue, recovery dan binary wiring belum selesai; milestone M05
+source-aware DLQ/requeue, recovery dan binary wiring dilanjutkan di bawah; milestone M05
 belum ditutup. [SPEC preparation](../specs/m05-durable-preparation.md).
 
 Storage source-aware quarantine, decoder modern dan koordinator serial juga
 tersedia/teruji lokal. Koordinator memakai kontrak reader yang harus memverifikasi
-source dan mengikat ack ke assignment; adapter Kafka nyata, requeue/recovery dan
-binary wiring tetap terbuka. [SPEC coordinator](../specs/m05-serial-admission.md).
+source dan mengikat ack ke assignment. [SPEC coordinator](../specs/m05-serial-admission.md).
 
 QUEUED recovery memakai Preparer yang sama dan lulus PostgreSQL lokal untuk
 accepted work tanpa outbox/event, due holds, expiry, sealed restore dan lineage
 fencing. [SPEC recovery](../specs/m05-queued-recovery.md). Recovery lease/execution
-tetap M06; adapter Kafka/requeue/wiring masih terbuka.
+tetap M06; requeue/wiring masih terbuka.
+
+Adapter generation-bound lulus Kafka lokal dengan dua partition/consumer,
+preparation cancellation saat rebalance, redelivery, offset fencing dan durable
+poison evidence, termasuk race detector dan Preparer PostgreSQL asli. Pinned SDK
+tidak mengekspos topic UUID; manifest incarnation
+operator dan deployment/TLS/SASL tetap gate. Tidak ada source/binary produksi
+diaktifkan. [SPEC adapter](../specs/m05-kafka-adapter.md).

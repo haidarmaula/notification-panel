@@ -190,15 +190,15 @@ serentak dengan key sama, replay saat hold, pencabutan grant, coverage legacy,
 rollback audit, promotion dan expiry. Library dispatcher outbox juga lulus uji
 Kafka lokal, broker tidak tersedia, dua dispatcher, seal/epoch fence dan
 ack-sebelum-commit gagal. Dispatcher belum dipasang ke binary; M04 masih menunggu
-admission M05 dan aktivasi scheduler yang aman. Deployment tetap sealed/held
+aktivasi scheduler yang aman. Deployment tetap sealed/held
 dan tidak mengirim ke provider.
 
 M05 atomic preparation juga tersedia sebagai library dan lulus lokal:
 snapshot/count/intent lengkap dalam satu transaksi REPEATABLE READ, dedup event,
 rollback utuh, hold coverage dan expiry tanpa audience palsu. Fixture 20.000
 user/perangkat selesai sekitar 4 detik untuk transaksi preparation saja;
-ini bukan SLA produksi atau waktu kirim FCM. Kafka serial consumer, quarantine,
-recovery dan pemasangan binary tetap pekerjaan berikutnya. Lihat
+ini bukan SLA produksi atau waktu kirim FCM. Status consumer, quarantine dan
+recovery dijelaskan di bawah; pemasangan binary tetap terbuka. Lihat
 [SPEC M05](../specs/m05-durable-preparation.md).
 
 Decoder envelope ketat dan storage quarantine source-aware juga lulus unit serta
@@ -206,14 +206,17 @@ PostgreSQL lokal: redelivery identik, konflik bytes pada offset sama, topic
 incarnation berbeda, seal/inactive source, kegagalan commit/insert dan batas
 ukuran. Koordinator consumer serial tersedia sebagai library dan lulus unit/race:
 tidak fetch pesan berikut sebelum ack, tidak ack saat evidence gagal, retry
-bounded, sanitasi panic, shutdown dan assignment-loss. Adapter Kafka nyata yang
-memverifikasi source/generation serta recovery/wiring belum selesai; tidak ada
-source produksi yang diaktifkan.
+bounded, sanitasi panic, shutdown dan assignment-loss. Adapter generation-bound
+juga lulus Kafka lokal dengan dua partition/consumer dan PostgreSQL Preparer asli,
+termasuk race detector: revocation saat preparation tertahan, redelivery tanpa
+duplikasi intent, dan quarantine sebelum offset commit. Verifikasi incarnation memakai
+manifest operator karena SDK belum mengekspos topic UUID. Wiring/deployment tetap
+terbuka; tidak ada source produksi yang diaktifkan.
 
 Recovery QUEUED dari database juga lulus lokal tanpa outbox/event Kafka: bounded
 scan memakai Preparer yang sama, menyelesaikan snapshot/expiry, menghormati due
 hold serta seal/epoch, dan mempertahankan deadline. Recovery PROCESSING/lease,
-adapter Kafka nyata, requeue operator dan wiring proses belum selesai.
+requeue operator dan wiring proses belum selesai.
 
 ## 5. Checklist pelaksanaan
 
@@ -254,11 +257,11 @@ pekerjaan pada baris yang belum dicentang sudah dimulai, sesuai catatan.
 - [ ] 21. Provider selection/credential, error contract, chunking dan invalid-token handling.
 - [ ] 22. Atomic fan-out intent, device snapshot/identity dan unique constraints M05 lulus lokal, termasuk 20k intent; exclusive provider claim M06 belum.
 - [ ] 23. Bounded retry/backoff, lease expiry, recovery, TTL/budget terminalization.
-- [ ] 24. Decoder, source-aware dead-letter dan koordinator serial M05 lulus lokal; adapter Kafka/rebalance nyata dan operator reprocess belum.
+- [ ] 24. Decoder, source-aware dead-letter, koordinator serial dan adapter generation-bound lulus lokal termasuk rebalance Kafka dua partition/consumer; manifest/deployment dan operator reprocess belum.
 - [ ] 25. Atomic send idempotency + claim + outbox, promotion/expiry dan bounded dispatcher M04 lulus lokal; scheduler binary belum memakai durable handoff.
 - [ ] 26. Delivery update outbox dan consumer dedup/ordering contract.
 - [ ] 27. Bounded concurrency, page/chunk memory limits, provider rate limit dan backpressure.
-- [ ] 28. Acceptance/audit rollback, ack-before-commit, preparation/quarantine commit failure dan coordinator unsafe-offset lulus lokal; provider/adapter Kafka nyata dan failure windows lain belum.
+- [ ] 28. Acceptance/audit rollback, ack-before-commit, preparation/quarantine commit failure, coordinator unsafe-offset dan broker rebalance lulus lokal; provider dan failure windows/deployment lain belum.
 
 ### Tahap 5 — kontrak dan keamanan
 
