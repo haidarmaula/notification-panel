@@ -726,3 +726,12 @@ A grant row alone is insufficient: the service also verifies the dedicated
 step-up signature and current DB send authority/explicit app membership. This
 remains an unwired library; per-position replay and real issuer integration are
 open. See [registration verification](analysis/m05-replay-registration-verification.md).
+
+### Replay claim dispositions (M05)
+
+Migration 000027 adds `already_resolved` to immutable attempt outcomes. A new
+request can record that prior evidence resolution already exists without claiming
+another broker publication. Down refuses retained rows using this disposition.
+Claim/control/attempt audit commit together; an uncertain commit returns no new
+execution proof. [Claim verification](analysis/m05-replay-claim-verification.md)
+describes the boundary; broker execution and stale cleanup are still unwired.

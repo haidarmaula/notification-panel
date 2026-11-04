@@ -7,8 +7,10 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"strconv"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -71,7 +73,7 @@ func TestReplayRegistrationAuthorityAndAudit(t *testing.T) {
 	defer cancel()
 	f := newReplayRegistrationFixture(t, ctx)
 	request := f.input(t, ctx)
-	credential, _ := f.credential(t, ctx, request)
+	credential, _ := f.registrationCredential(t, ctx, request)
 	registered, err := f.service.Register(ctx, request, credential)
 	require.NoError(t, err)
 	require.False(t, registered.AlreadyRegistered)
@@ -88,7 +90,7 @@ func TestReplayRegistrationAuthorityAndAudit(t *testing.T) {
 	require.NotContains(t, after, "selection_hash")
 	require.Contains(t, after, "INC-123")
 	request.ChangeReference = "INC-456"
-	changed, _ := f.credential(t, ctx, request)
+	changed, _ := f.registrationCredential(t, ctx, request)
 	result, err := f.service.Register(ctx, request, changed)
 	require.ErrorIs(t, err, dispatch.ErrReplayConflict)
 	require.Equal(t, dispatch.ReplayRegistration{}, result)
@@ -97,7 +99,7 @@ func TestReplayRegistrationAuthorityAndAudit(t *testing.T) {
 	_, err = f.pool.Exec(ctx, "ALTER TABLE audit_logs ADD CONSTRAINT reject_replay_audit CHECK (action<>'NOTIFICATION_REPLAY_REQUEST') NOT VALID")
 	require.NoError(t, err)
 	next := f.input(t, ctx)
-	nextCredential, _ := f.credential(t, ctx, next)
+	nextCredential, _ := f.registrationCredential(t, ctx, next)
 	result, err = f.service.Register(ctx, next, nextCredential)
 	require.Error(t, err)
 	require.Equal(t, dispatch.ReplayRegistration{}, result)
@@ -118,7 +120,7 @@ func TestReplayRegistrationRechecksCurrentAuthority(t *testing.T) {
 			defer cancel()
 			f := newReplayRegistrationFixture(t, ctx)
 			request := f.input(t, ctx)
-			credential, _ := f.credential(t, ctx, request)
+			credential, _ := f.registrationCredential(t, ctx, request)
 			_, err := f.pool.Exec(ctx, change)
 			require.NoError(t, err)
 			result, err := f.service.Register(ctx, request, credential)
@@ -136,7 +138,7 @@ func TestReplayRegistrationGrantRevocationSerializes(t *testing.T) {
 	defer cancel()
 	f := newReplayRegistrationFixture(t, ctx)
 	request := f.input(t, ctx)
-	credential, grant := f.credential(t, ctx, request)
+	credential, grant := f.registrationCredential(t, ctx, request)
 	tx, err := f.pool.BeginTx(ctx, pgx.TxOptions{})
 	require.NoError(t, err)
 	defer func() {
@@ -190,7 +192,7 @@ func TestReplayRegistrationUncertainCommitAndReauthorization(t *testing.T) {
 	defer cancel()
 	f := newReplayRegistrationFixture(t, ctx)
 	request := f.input(t, ctx)
-	credential, grant := f.credential(t, ctx, request)
+	credential, grant := f.registrationCredential(t, ctx, request)
 	verifier, err := dispatch.NewReplayVerifier("fixture-operator", "fixture-replay", "fixture-deployment", f.key.Public().(ed25519.PublicKey))
 	require.NoError(t, err)
 	uncertain, err := dispatch.NewReplayRequests(replayUncertainCommit{Pool: f.pool}, verifier, f.source)
@@ -216,7 +218,7 @@ func TestReplayRegistrationConcurrentIdenticalRequest(t *testing.T) {
 	defer cancel()
 	f := newReplayRegistrationFixture(t, ctx)
 	request := f.input(t, ctx)
-	credential, _ := f.credential(t, ctx, request)
+	credential, _ := f.registrationCredential(t, ctx, request)
 	type response struct {
 		result dispatch.ReplayRegistration
 		err    error
@@ -251,7 +253,7 @@ func TestReplayRegistrationCancellationReleasesConnection(t *testing.T) {
 	defer cancel()
 	f := newReplayRegistrationFixture(t, ctx)
 	request := f.input(t, ctx)
-	credential, _ := f.credential(t, ctx, request)
+	credential, _ := f.registrationCredential(t, ctx, request)
 	blocker, err := f.pool.BeginTx(ctx, pgx.TxOptions{})
 	require.NoError(t, err)
 	defer func() {
@@ -278,7 +280,7 @@ func TestReplayRegistrationHeldAppGrantsNoExecution(t *testing.T) {
 	defer cancel()
 	f := newReplayRegistrationFixture(t, ctx)
 	request := f.input(t, ctx)
-	credential, _ := f.credential(t, ctx, request)
+	credential, _ := f.registrationCredential(t, ctx, request)
 	_, err := f.pool.Exec(ctx, "UPDATE applications SET status='HELD'")
 	require.NoError(t, err)
 	result, err := f.service.Register(ctx, request, credential)
@@ -289,4 +291,160 @@ func TestReplayRegistrationHeldAppGrantsNoExecution(t *testing.T) {
 		require.NoError(t, f.pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&n))
 		require.Zero(t, n, "a held app registration granted no execution")
 	}
+}
+
+func TestReplayClaimIsAtomicAndDoesNotPublish(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	f := newReplayRegistrationFixture(t, ctx)
+	event := f.acceptedEvent(t, ctx)
+	f.quarantineEvent(t, ctx, event)
+	request := f.input(t, ctx)
+	credential, _ := f.registrationCredential(t, ctx, request)
+	first, err := f.service.Claim(ctx, request, credential, request.Positions[0])
+	require.NoError(t, err)
+	require.True(t, first.Claimed)
+	require.Equal(t, dispatch.ReplayStarted, first.Disposition)
+	repeat, err := f.service.Claim(ctx, request, credential, request.Positions[0])
+	require.NoError(t, err)
+	require.False(t, repeat.Claimed, "an identical request must not regain publication authority")
+	require.Equal(t, dispatch.ReplayStarted, repeat.Disposition)
+	other := f.input(t, ctx)
+	otherCredential, _ := f.registrationCredential(t, ctx, other)
+	busy, err := f.service.Claim(ctx, other, otherCredential, other.Positions[0])
+	require.NoError(t, err)
+	require.False(t, busy.Claimed)
+	require.Equal(t, dispatch.ReplayOnHold, busy.Disposition)
+	var attempts, claimed, intents int
+	require.NoError(t, f.pool.QueryRow(ctx, "SELECT count(*) FROM notification_replay_attempts").Scan(&attempts))
+	require.NoError(t, f.pool.QueryRow(ctx, "SELECT count(*) FROM notification_replay_controls WHERE active_claim_token IS NOT NULL").Scan(&claimed))
+	require.NoError(t, f.pool.QueryRow(ctx, "SELECT count(*) FROM notification_delivery_intents").Scan(&intents))
+	require.Equal(t, 2, attempts)
+	require.Equal(t, 1, claimed)
+	require.Zero(t, intents)
+}
+
+func (f replayRegistrationFixture) registrationCredential(t *testing.T, ctx context.Context, request dispatch.ReplayRequest) (string, pgtype.UUID) {
+	t.Helper()
+	for _, position := range request.Positions {
+		_, err := f.pool.Exec(ctx, `INSERT INTO notification_send_dead_letters(log_source_id,original_partition,original_offset,original_key,original_payload,reason,attempts)
+    VALUES($1,$2,$3,'','','invalid_envelope',1) ON CONFLICT DO NOTHING`, position.LogSourceID, position.Partition, position.Offset)
+		require.NoError(t, err)
+	}
+	return f.credential(t, ctx, request)
+}
+
+func TestReplayCrossApplicationSelectionCannotReserveRequest(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	f := newReplayRegistrationFixture(t, ctx)
+	event := f.acceptedEvent(t, ctx)
+	f.quarantineEvent(t, ctx, event)
+	event.ApplicationID = replayUUID(t, ctx, f.pool).String()
+	payload, err := json.Marshal(event)
+	require.NoError(t, err)
+	store, err := dispatch.NewQuarantine(f.pool)
+	require.NoError(t, err)
+	require.NoError(t, store.Store(ctx, dispatch.SourceMessage{LogSourceID: f.source, Topic: "send", Partition: 0, Offset: 43, Key: []byte("notification_" + strconv.FormatInt(event.NotificationID, 10)), Payload: payload}, dispatch.AcceptanceMismatch, 1))
+	request := f.input(t, ctx)
+	request.Positions = append(request.Positions, dispatch.ReplayPosition{LogSourceID: f.source, Partition: 0, Offset: 43})
+	credential, _ := f.credential(t, ctx, request)
+	_, err = f.service.Register(ctx, request, credential)
+	require.ErrorIs(t, err, dispatch.ErrReplayDenied)
+	_, err = f.service.Claim(ctx, request, credential, request.Positions[0])
+	require.ErrorIs(t, err, dispatch.ErrReplayDenied, "a valid first position cannot reserve a mixed-scope request")
+	for _, table := range []string{"notification_replay_requests", "notification_replay_attempts", "notification_replay_controls", "audit_logs"} {
+		var count int
+		require.NoError(t, f.pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&count))
+		require.Zero(t, count, "cross-app selection reserved %s", table)
+	}
+}
+
+func TestReplayClaimNoopResolutionAndAuditRollback(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	f := newReplayRegistrationFixture(t, ctx)
+	event := f.acceptedEvent(t, ctx)
+	f.quarantineEvent(t, ctx, event)
+	request := f.input(t, ctx)
+	credential, _ := f.registrationCredential(t, ctx, request)
+	_, err := f.pool.Exec(ctx, "ALTER TABLE audit_logs ADD CONSTRAINT reject_claim_audit CHECK (action<>'NOTIFICATION_REPLAY_ATTEMPT') NOT VALID")
+	require.NoError(t, err)
+	result, err := f.service.Claim(ctx, request, credential, request.Positions[0])
+	require.Error(t, err)
+	require.Equal(t, dispatch.ReplayAttemptResult{}, result)
+	for _, table := range []string{"notification_replay_attempts", "notification_replay_controls"} {
+		var count int
+		require.NoError(t, f.pool.QueryRow(ctx, "SELECT count(*) FROM "+table).Scan(&count))
+		require.Zero(t, count, "failed claim audit left partial %s", table)
+	}
+	_, err = f.pool.Exec(ctx, "ALTER TABLE audit_logs DROP CONSTRAINT reject_claim_audit; UPDATE notifications SET status='FAILED'")
+	require.NoError(t, err)
+	result, err = f.service.Claim(ctx, request, credential, request.Positions[0])
+	require.NoError(t, err)
+	require.Equal(t, dispatch.ReplayTerminal, result.Disposition)
+	require.False(t, result.Claimed)
+	next := f.input(t, ctx)
+	nextCredential, _ := f.registrationCredential(t, ctx, next)
+	result, err = f.service.Claim(ctx, next, nextCredential, next.Positions[0])
+	require.NoError(t, err)
+	require.Equal(t, dispatch.ReplayResolved, result.Disposition)
+	require.False(t, result.Claimed)
+	var count int
+	require.NoError(t, f.pool.QueryRow(ctx, "SELECT count(*) FROM notification_replay_attempts WHERE outcome='already_resolved'").Scan(&count))
+	require.Equal(t, 1, count)
+	require.NoError(t, f.pool.QueryRow(ctx, "SELECT count(*) FROM notification_delivery_intents").Scan(&count))
+	require.Zero(t, count)
+}
+
+type replayNthCommitFailure struct {
+	*pgxpool.Pool
+	commits atomic.Int32
+}
+type replayNthCommitTx struct {
+	pgx.Tx
+	owner *replayNthCommitFailure
+}
+
+func (s *replayNthCommitFailure) BeginTx(ctx context.Context, options pgx.TxOptions) (pgx.Tx, error) {
+	tx, err := s.Pool.BeginTx(ctx, options)
+	if err != nil {
+		return nil, err
+	}
+	return replayNthCommitTx{Tx: tx, owner: s}, nil
+}
+func (tx replayNthCommitTx) Commit(ctx context.Context) error {
+	if err := tx.Tx.Commit(ctx); err != nil {
+		return err
+	}
+	if tx.owner.commits.Add(1) == 2 {
+		return errors.New("fixture claim commit acknowledgement lost")
+	}
+	return nil
+}
+
+func TestReplayUnknownClaimCommitReturnsNoExecutionProof(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	f := newReplayRegistrationFixture(t, ctx)
+	event := f.acceptedEvent(t, ctx)
+	f.quarantineEvent(t, ctx, event)
+	request := f.input(t, ctx)
+	credential, _ := f.registrationCredential(t, ctx, request)
+	verifier, err := dispatch.NewReplayVerifier("fixture-operator", "fixture-replay", "fixture-deployment", f.key.Public().(ed25519.PublicKey))
+	require.NoError(t, err)
+	service, err := dispatch.NewReplayRequests(&replayNthCommitFailure{Pool: f.pool}, verifier, f.source)
+	require.NoError(t, err)
+	result, err := service.Claim(ctx, request, credential, request.Positions[0])
+	require.Error(t, err)
+	require.Equal(t, dispatch.ReplayAttemptResult{}, result)
+	result, err = f.service.Claim(ctx, request, credential, request.Positions[0])
+	require.NoError(t, err)
+	require.Equal(t, dispatch.ReplayStarted, result.Disposition)
+	require.False(t, result.Claimed, "retry cannot recreate a lost execution proof after uncertain commit")
+	var count int
+	require.NoError(t, f.pool.QueryRow(ctx, "SELECT count(*) FROM notification_replay_controls WHERE active_claim_token IS NOT NULL").Scan(&count))
+	require.Equal(t, 1, count)
+	require.NoError(t, f.pool.QueryRow(ctx, "SELECT count(*) FROM audit_logs WHERE action='NOTIFICATION_REPLAY_ATTEMPT'").Scan(&count))
+	require.Equal(t, 1, count)
 }

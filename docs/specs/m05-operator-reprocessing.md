@@ -6,7 +6,8 @@ persistence primitives implement slice 1; see the
 CLI, operational credential issuer or production activation is implemented.
 [Scoped request registration](../analysis/m05-replay-registration-verification.md)
 is available as an unwired library through migration 000026; per-position replay
-execution remains unimplemented. [Dry-run inspection](../analysis/m05-replay-inspection-verification.md)
+broker execution remains unimplemented. [Per-position claims](../analysis/m05-replay-claim-verification.md)
+now commit attempt/control/audit atomically through migration 000027. [Dry-run inspection](../analysis/m05-replay-inspection-verification.md)
 implements advisory eligibility without mutations. It refines [ADR-02 A-4](../adr/adr-02-worker-consumption.md#a-4-operator-replay-and-retention),
 [ADR-11](../adr/adr-11-security-baseline.md) and
 [ADR-12](../adr/adr-12-multi-application-isolation.md).

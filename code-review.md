@@ -54,6 +54,7 @@ Regression evidence and the remaining review boundary are recorded in
 | --- | --- | --- |
 | RA1 | P2 | The unwired replay verifier checked five seconds of JWT lifetime but could accept MFA freshness with less than that operation margin. Fixed by retaining the earlier JWT/MFA expiry and enforcing the margin in both verifier and DB grant checks. A focused red/green regression covers this boundary. |
 | RA2 | P2 | Operational authority inherited the ACTIVE-app send precondition before inspecting existing marker/terminal evidence, preventing no-op reconciliation during app holds. Fixed by retaining current DB membership and send-role checks while applying app eligibility after marker/terminal/expiry classification. HELD queued/prepared/terminal red/green fixtures and registration no-execution assertions cover the boundary. |
+| RA3 | P2 | Claim registered the full request before decoding a foreign-app selected position, leaving an unauthorized UUID reservation on denial. Fixed by checking every selected immutable evidence row inside registration's authority-locked transaction before header/audit insertion. A mixed-scope batch regression proves no header, attempt, control or audit reservation. |
 
 The [registration verification](docs/analysis/m05-replay-registration-verification.md)
 records the review boundary. Per-position replay/publication is still pending.

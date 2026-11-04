@@ -20,6 +20,9 @@ per-position replay, claim evidence or publish messages.
   an unsealed deployment with active source. App holds permit bookkeeping for
   historical no-op reconciliation; execution eligibility is a separate guard. It does not inspect campaign
   eligibility or imply that the source manifest has been verified against Kafka.
+- Every selected physical position is scope-checked before reserving a header:
+  missing rows/decodable foreign apps deny the full batch. Malformed evidence
+  can only receive an authorized scoped refusal in the later claim classifier.
 - Header and `NOTIFICATION_REPLAY_REQUEST` audit commit atomically. Identical
   retries reauthorize, return the committed identity and add no audit. Changed
   actor/grant/fingerprint/reference conflicts. Audit contains safe provenance,
@@ -58,7 +61,8 @@ delivery and hosted CI are not verified by these fixtures.
 
 [Dry-run inspection](m05-replay-inspection-verification.md) now provides exact
 per-position acceptance/eligibility with no mutations and preserves held-app
-no-ops. Implement atomic attempt+claim+audit,
+no-ops. [Per-position claim transactions](m05-replay-claim-verification.md) now
+implement atomic attempt+claim+audit. Next implement
 revalidation through bounded broker publication/result commit, and stale-claim
 cleanup. Every mutation/publication transaction must repeat current authority;
 registration is not a durable authorization bypass. CLI/wiring remain disabled

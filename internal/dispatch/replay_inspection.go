@@ -77,7 +77,7 @@ func (s *ReplayRequests) Inspect(ctx context.Context, request ReplayRequest, cre
 	if err == nil && !sameReplayHeader(stored, verified) {
 		return none, ErrReplayConflict
 	}
-	result, err := inspectReplayPosition(ctx, q, scope, position)
+	result, err := assessReplayPosition(ctx, q, scope, position, replayAssessmentOptions{})
 	if err != nil {
 		return none, err
 	}
@@ -87,7 +87,11 @@ func (s *ReplayRequests) Inspect(ctx context.Context, request ReplayRequest, cre
 	return result, nil
 }
 
-func inspectReplayPosition(ctx context.Context, q *sqlc.Queries, scope replayScope, position ReplayPosition) (ReplayAssessment, error) {
+type replayAssessmentOptions struct {
+	reserveControl bool
+}
+
+func assessReplayPosition(ctx context.Context, q *sqlc.Queries, scope replayScope, position ReplayPosition, options replayAssessmentOptions) (ReplayAssessment, error) {
 	var none ReplayAssessment
 	rejected := ReplayAssessment{Disposition: ReplayRejected}
 	evidence, err := q.GetSendQuarantine(ctx, sqlc.GetSendQuarantineParams{LogSourceID: position.LogSourceID, OriginalPartition: position.Partition, OriginalOffset: position.Offset})
@@ -130,6 +134,13 @@ func inspectReplayPosition(ctx context.Context, q *sqlc.Queries, scope replaySco
 		(campaign.Status != "PROCESSING" && campaign.Status != "COMPLETED" && campaign.Status != "FAILED")) {
 		result.Disposition = ReplayReconciliation
 		return result, nil
+	}
+	if options.reserveControl {
+		if err := q.InsertReplayControl(ctx, sqlc.InsertReplayControlParams{
+			LogSourceID: position.LogSourceID, OriginalPartition: position.Partition, OriginalOffset: position.Offset,
+		}); err != nil {
+			return none, err
+		}
 	}
 	control, controlErr := q.LockReplayControl(ctx, sqlc.LockReplayControlParams{LogSourceID: position.LogSourceID, OriginalPartition: position.Partition, OriginalOffset: position.Offset})
 	if controlErr != nil && !errors.Is(controlErr, pgx.ErrNoRows) {

@@ -174,8 +174,9 @@ and generated conditional queries. [Request registration](m05-replay-registratio
 adds purpose-bound credentials, current DB authority/revocable grants and atomic
 request audit, locally tested. [Dry-run eligibility](m05-replay-inspection-verification.md)
 checks exact acceptance, marker/state, holds and existing source controls without
-writes. Per-position claim/result/broker transactions,
-stale cleanup and CLI remain unwired and unverified.
+writes. [Claim transactions](m05-replay-claim-verification.md) commit per-position
+attempt/control/audit with exclusive leases and no proof on uncertain commit.
+Publication/result transactions, stale cleanup and CLI remain unwired and unverified.
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,
 preparation cancellation during rebalance, redelivery, offset fencing, and durable

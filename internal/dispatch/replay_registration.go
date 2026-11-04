@@ -12,6 +12,7 @@ import (
 	"hello/internal/audit"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
+	"hello/internal/kafka"
 	"hello/internal/middleware"
 	"hello/internal/token"
 )
@@ -80,6 +81,9 @@ func (s *ReplayRequests) Register(ctx context.Context, request ReplayRequest, cr
 		return none, err
 	}
 	app := scope.app
+	if err := requireReplaySelectionScope(ctx, q, verified.request); err != nil {
+		return none, err
+	}
 	ctx = context.WithValue(ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: verified.staffID})
 	n, err := q.InsertReplayRequest(ctx, sqlc.InsertReplayRequestParams{
 		ApplicationID: app.ID, ID: verified.request.ID, StaffUserID: verified.staffID, OperationalGrantID: verified.grantID,
@@ -120,4 +124,26 @@ func (s *ReplayRequests) Register(ctx context.Context, request ReplayRequest, cr
 func sameReplayHeader(stored sqlc.NotificationReplayRequest, verified VerifiedReplay) bool {
 	return stored.StaffUserID == verified.staffID && stored.OperationalGrantID == verified.grantID &&
 		bytes.Equal(stored.SelectionHash, verified.fingerprint[:]) && stored.ChangeReference == verified.request.ChangeReference
+}
+
+// Scope authorization precedes durable reservation of the request UUID. Malformed
+// evidence has no trusted app attribution and may only receive a scoped refusal;
+// a decodable foreign-app envelope cannot reserve an operational request at all.
+func requireReplaySelectionScope(ctx context.Context, q *sqlc.Queries, request ReplayRequest) error {
+	for _, position := range request.Positions {
+		evidence, err := q.GetSendQuarantine(ctx, sqlc.GetSendQuarantineParams{
+			LogSourceID: position.LogSourceID, OriginalPartition: position.Partition, OriginalOffset: position.Offset,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
+			return ErrReplayDenied
+		}
+		if err != nil {
+			return err
+		}
+		event, decodeErr := kafka.DecodeScopedSend(evidence.OriginalKey, evidence.OriginalPayload)
+		if decodeErr == nil && event.ApplicationID != request.ApplicationID.String() {
+			return ErrReplayDenied
+		}
+	}
+	return nil
 }
