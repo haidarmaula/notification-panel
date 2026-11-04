@@ -114,26 +114,28 @@ type MobileOriginUse struct {
 }
 
 type Notification struct {
-	ID              int64              `db:"id"`
-	TemplateID      pgtype.Int8        `db:"template_id"`
-	TemplateName    pgtype.Text        `db:"template_name"`
-	Title           string             `db:"title"`
-	Body            string             `db:"body"`
-	Payload         []byte             `db:"payload"`
-	Priority        string             `db:"priority"`
-	Status          string             `db:"status"`
-	ScheduledAt     pgtype.Timestamptz `db:"scheduled_at"`
-	PublishedAt     pgtype.Timestamptz `db:"published_at"`
-	CompletedAt     pgtype.Timestamptz `db:"completed_at"`
-	CreatedBy       int64              `db:"created_by"`
-	CreatedAt       pgtype.Timestamptz `db:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `db:"updated_at"`
-	ApplicationID   pgtype.Int8        `db:"application_id"`
-	QueuedAt        pgtype.Timestamptz `db:"queued_at"`
-	DeadlineAt      pgtype.Timestamptz `db:"deadline_at"`
-	OriginEpoch     pgtype.UUID        `db:"origin_epoch"`
-	SourceEpoch     pgtype.UUID        `db:"source_epoch"`
-	LifecycleReason pgtype.Text        `db:"lifecycle_reason"`
+	ID                       int64              `db:"id"`
+	TemplateID               pgtype.Int8        `db:"template_id"`
+	TemplateName             pgtype.Text        `db:"template_name"`
+	Title                    string             `db:"title"`
+	Body                     string             `db:"body"`
+	Payload                  []byte             `db:"payload"`
+	Priority                 string             `db:"priority"`
+	Status                   string             `db:"status"`
+	ScheduledAt              pgtype.Timestamptz `db:"scheduled_at"`
+	PublishedAt              pgtype.Timestamptz `db:"published_at"`
+	CompletedAt              pgtype.Timestamptz `db:"completed_at"`
+	CreatedBy                int64              `db:"created_by"`
+	CreatedAt                pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt                pgtype.Timestamptz `db:"updated_at"`
+	ApplicationID            pgtype.Int8        `db:"application_id"`
+	QueuedAt                 pgtype.Timestamptz `db:"queued_at"`
+	DeadlineAt               pgtype.Timestamptz `db:"deadline_at"`
+	OriginEpoch              pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch              pgtype.UUID        `db:"source_epoch"`
+	LifecycleReason          pgtype.Text        `db:"lifecycle_reason"`
+	PreparationHoldReason    pgtype.Text        `db:"preparation_hold_reason"`
+	PreparationNextAttemptAt pgtype.Timestamptz `db:"preparation_next_attempt_at"`
 }
 
 type NotificationDelivery struct {
@@ -152,6 +154,32 @@ type NotificationDelivery struct {
 	CreatedAt         pgtype.Timestamptz `db:"created_at"`
 	UpdatedAt         pgtype.Timestamptz `db:"updated_at"`
 	ApplicationID     pgtype.Int8        `db:"application_id"`
+}
+
+type NotificationDeliveryIntent struct {
+	ID              pgtype.UUID        `db:"id"`
+	ApplicationID   int64              `db:"application_id"`
+	NotificationID  int64              `db:"notification_id"`
+	InstallationID  int64              `db:"installation_id"`
+	BindingID       int64              `db:"binding_id"`
+	OwnerUserID     int64              `db:"owner_user_id"`
+	OwnerEpoch      int64              `db:"owner_epoch"`
+	DeliveryVersion int64              `db:"delivery_version"`
+	Status          string             `db:"status"`
+	AttemptCount    int32              `db:"attempt_count"`
+	NextAttemptAt   pgtype.Timestamptz `db:"next_attempt_at"`
+	CreatedAt       pgtype.Timestamptz `db:"created_at"`
+}
+
+type NotificationPreparation struct {
+	NotificationID      int64              `db:"notification_id"`
+	ApplicationID       int64              `db:"application_id"`
+	OriginEpoch         pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch         pgtype.UUID        `db:"source_epoch"`
+	CompletedAt         pgtype.Timestamptz `db:"completed_at"`
+	ResolvedUserCount   int64              `db:"resolved_user_count"`
+	EligibleUserCount   int64              `db:"eligible_user_count"`
+	EligibleDeviceCount int64              `db:"eligible_device_count"`
 }
 
 type NotificationRead struct {

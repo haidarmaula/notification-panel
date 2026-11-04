@@ -34,7 +34,9 @@ WITH targets AS (
 )
 SELECT (EXISTS(SELECT 1 FROM targets)
     AND NOT EXISTS(SELECT 1 FROM targets WHERE application_id IS DISTINCT FROM sqlc.arg(application_id)::bigint
-        OR target_type NOT IN ('BROADCAST','SEGMENT','INDIVIDUAL'))
+        OR NOT ((target_type='BROADCAST' AND user_id IS NULL AND segment_id IS NULL AND upload_batch_id IS NULL)
+            OR (target_type='SEGMENT' AND user_id IS NULL AND segment_id IS NOT NULL AND upload_batch_id IS NULL)
+            OR (target_type='INDIVIDUAL' AND user_id IS NOT NULL AND segment_id IS NULL AND upload_batch_id IS NULL)))
     AND NOT EXISTS(SELECT 1 FROM eligible e WHERE
         NOT EXISTS(SELECT 1 FROM installation_bindings b JOIN mobile_installations i
             ON i.application_id=b.application_id AND i.id=b.installation_id

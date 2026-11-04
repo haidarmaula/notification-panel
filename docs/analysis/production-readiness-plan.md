@@ -193,6 +193,14 @@ ack-sebelum-commit gagal. Dispatcher belum dipasang ke binary; M04 masih menungg
 admission M05 dan aktivasi scheduler yang aman. Deployment tetap sealed/held
 dan tidak mengirim ke provider.
 
+M05 atomic preparation juga tersedia sebagai library dan lulus lokal:
+snapshot/count/intent lengkap dalam satu transaksi REPEATABLE READ, dedup event,
+rollback utuh, hold coverage dan expiry tanpa audience palsu. Fixture 20.000
+user/perangkat selesai sekitar 4 detik untuk transaksi preparation saja;
+ini bukan SLA produksi atau waktu kirim FCM. Kafka serial consumer, quarantine,
+recovery dan pemasangan binary tetap pekerjaan berikutnya. Lihat
+[SPEC M05](../specs/m05-durable-preparation.md).
+
 ## 5. Checklist pelaksanaan
 
 `[x]` berarti selesai dan ada bukti; `[ ]` berarti belum selesai. Sebagian

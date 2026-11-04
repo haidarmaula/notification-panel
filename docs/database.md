@@ -658,3 +658,22 @@ Foreign keys retain campaign and staff attribution. Down refuses to remove
 accepted/scheduled timestamps, keys or pending outbox evidence. See the
 [M04 contract](specs/m04-durable-acceptance.md) and
 [acceptance API](api/campaign-acceptance-api.md).
+
+### Atomic audience preparation (M05)
+
+Migration 000023 separates modern notification_preparations and
+notification_delivery_intents from legacy deliveries. One repeatable-read
+transaction inserts the full binding-generation snapshot, immutable counts and
+complete marker, then advances campaign state. Complete counts are immutable;
+intent identity, original owner/epoch and counters cannot be rewritten or
+decreased. Composite binding foreign keys preserve original attribution through
+logout, token rotation and account transfer. The opaque delivery UUID begins at
+version zero with an untouched attempt budget; it is not a receipt capability.
+
+Holds remain on notifications with a deadline-bounded retry time. A hold or an
+expired campaign has no fabricated complete snapshot. A true empty audience
+does have a complete marker with known zero eligible counts. Down refuses
+modern intent, snapshot or hold evidence. See the
+[preparation specification](specs/m05-durable-preparation.md). Provider claims,
+receipt capabilities, Kafka quarantine/offset handling and retention are later
+slices; these tables alone do not implement them.

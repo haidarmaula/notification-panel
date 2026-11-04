@@ -15,6 +15,7 @@ type Querier interface {
 	CampaignAcceptanceReady(ctx context.Context, arg CampaignAcceptanceReadyParams) (bool, error)
 	CampaignHasProtectedChildren(ctx context.Context, arg CampaignHasProtectedChildrenParams) (bool, error)
 	ClearScopedCampaignTargets(ctx context.Context, arg ClearScopedCampaignTargetsParams) error
+	CompleteCampaignPreparation(ctx context.Context, arg CompleteCampaignPreparationParams) (NotificationPreparation, error)
 	ConsumeMobileOrigin(ctx context.Context, arg ConsumeMobileOriginParams) (int64, error)
 	// ==========================================
 	// COUNT
@@ -227,6 +228,7 @@ type Querier interface {
 	// ==========================================
 	ExistsUserByExternalID(ctx context.Context, externalID string) (bool, error)
 	ExpireScopedSchedule(ctx context.Context, arg ExpireScopedScheduleParams) (int64, error)
+	ExpireUnpreparedCampaign(ctx context.Context, arg ExpireUnpreparedCampaignParams) error
 	// Keep staff row when app/grant is absent, for correct 401/404 distinctions.
 	// No authorization/permission/status decision is implied by this data lookup.
 	GetApplicationAuthority(ctx context.Context, arg GetApplicationAuthorityParams) (GetApplicationAuthorityRow, error)
@@ -237,6 +239,7 @@ type Querier interface {
 	// GET
 	// ==========================================
 	GetAuditLogByID(ctx context.Context, id int64) (GetAuditLogByIDRow, error)
+	GetCompletePreparation(ctx context.Context, arg GetCompletePreparationParams) (NotificationPreparation, error)
 	// ==========================================
 	// GET
 	// ==========================================
@@ -293,7 +296,9 @@ type Querier interface {
 	// GET
 	// ==========================================
 	GetUserByID(ctx context.Context, id int64) (User, error)
+	HoldCampaignPreparation(ctx context.Context, arg HoldCampaignPreparationParams) error
 	InsertInstallationBinding(ctx context.Context, arg InsertInstallationBindingParams) error
+	InsertPreparationIntents(ctx context.Context, arg InsertPreparationIntentsParams) (InsertPreparationIntentsRow, error)
 	InsertSendOutbox(ctx context.Context, arg InsertSendOutboxParams) error
 	// Includes revoked grants; application identity validated by owning service.
 	ListApplicationStaffGrants(ctx context.Context, arg ListApplicationStaffGrantsParams) (ListApplicationStaffGrantsRow, error)
@@ -396,9 +401,11 @@ type Querier interface {
 	LockMobileInstallation(ctx context.Context, arg LockMobileInstallationParams) (MobileInstallation, error)
 	LockNextScopedSendOutbox(ctx context.Context, arg LockNextScopedSendOutboxParams) (LockNextScopedSendOutboxRow, error)
 	LockNotificationRuntime(ctx context.Context) (LockNotificationRuntimeRow, error)
+	LockPreparationCampaign(ctx context.Context, arg LockPreparationCampaignParams) (LockPreparationCampaignRow, error)
 	LockScopedCampaign(ctx context.Context, arg LockScopedCampaignParams) (string, error)
 	LockScopedCampaignTemplate(ctx context.Context, arg LockScopedCampaignTemplateParams) (string, error)
 	LockScopedSegment(ctx context.Context, arg LockScopedSegmentParams) (LockScopedSegmentRow, error)
+	MarkCampaignPrepared(ctx context.Context, arg MarkCampaignPreparedParams) error
 	// ==========================================
 	// UPDATE STATUS
 	// ==========================================

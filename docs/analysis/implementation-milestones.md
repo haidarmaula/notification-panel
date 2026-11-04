@@ -152,3 +152,9 @@ Dispatcher tetap unwired sampai admission M05 mendukung envelope modern dan
 aktivasi scheduler direview; hasil ini belum menutup milestone M04 atau gate
 produksi. Kontrak dan batas crash tersedia di
 [SPEC outbox](../specs/m04-outbox-dispatch.md).
+
+M05 atomic preparation tersedia dan diuji lokal, termasuk dua admission serentak,
+rollback sebelum complete marker, immutable attribution/counts, coverage hold,
+expiry unknown versus empty snapshot, dan 20k intents set-wise. Serial consumer,
+source-aware DLQ/requeue, recovery dan binary wiring belum selesai; milestone M05
+belum ditutup. [SPEC preparation](../specs/m05-durable-preparation.md).
