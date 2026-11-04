@@ -405,6 +405,73 @@ func (q *Queries) LockReplayEvidence(ctx context.Context, arg LockReplayEvidence
 	return i, err
 }
 
+const lockReplayOperationalGrant = `-- name: LockReplayOperationalGrant :one
+SELECT id, application_id, staff_user_id, request_id, issuer, deployment, selection_hash, created_at, expires_at, revoked_at, (revoked_at IS NULL AND expires_at>=clock_timestamp()+interval '5 seconds'
+    AND $1::timestamptz>=clock_timestamp()+interval '5 seconds'
+    AND $2::timestamptz<=clock_timestamp()
+    AND $2::timestamptz>=clock_timestamp()-interval '5 minutes'+interval '5 seconds')::boolean AS usable
+FROM notification_replay_grants
+WHERE id=$3::uuid AND application_id=$4::bigint
+    AND staff_user_id=$5::bigint AND request_id=$6::uuid
+    AND issuer=$7::text AND deployment=$8::text
+    AND selection_hash=$9::bytea FOR SHARE
+`
+
+type LockReplayOperationalGrantParams struct {
+	CredentialExpiresAt pgtype.Timestamptz `db:"credential_expires_at"`
+	AuthenticatedAt     pgtype.Timestamptz `db:"authenticated_at"`
+	ID                  pgtype.UUID        `db:"id"`
+	ApplicationID       int64              `db:"application_id"`
+	StaffUserID         int64              `db:"staff_user_id"`
+	RequestID           pgtype.UUID        `db:"request_id"`
+	Issuer              string             `db:"issuer"`
+	Deployment          string             `db:"deployment"`
+	SelectionHash       []byte             `db:"selection_hash"`
+}
+
+type LockReplayOperationalGrantRow struct {
+	ID            pgtype.UUID        `db:"id"`
+	ApplicationID int64              `db:"application_id"`
+	StaffUserID   int64              `db:"staff_user_id"`
+	RequestID     pgtype.UUID        `db:"request_id"`
+	Issuer        string             `db:"issuer"`
+	Deployment    string             `db:"deployment"`
+	SelectionHash []byte             `db:"selection_hash"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	ExpiresAt     pgtype.Timestamptz `db:"expires_at"`
+	RevokedAt     pgtype.Timestamptz `db:"revoked_at"`
+	Usable        bool               `db:"usable"`
+}
+
+func (q *Queries) LockReplayOperationalGrant(ctx context.Context, arg LockReplayOperationalGrantParams) (LockReplayOperationalGrantRow, error) {
+	row := q.db.QueryRow(ctx, lockReplayOperationalGrant,
+		arg.CredentialExpiresAt,
+		arg.AuthenticatedAt,
+		arg.ID,
+		arg.ApplicationID,
+		arg.StaffUserID,
+		arg.RequestID,
+		arg.Issuer,
+		arg.Deployment,
+		arg.SelectionHash,
+	)
+	var i LockReplayOperationalGrantRow
+	err := row.Scan(
+		&i.ID,
+		&i.ApplicationID,
+		&i.StaffUserID,
+		&i.RequestID,
+		&i.Issuer,
+		&i.Deployment,
+		&i.SelectionHash,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.Usable,
+	)
+	return i, err
+}
+
 const lockReplayRequest = `-- name: LockReplayRequest :one
 SELECT application_id, id, staff_user_id, operational_grant_id, selection_hash, change_reference, created_at FROM notification_replay_requests
 WHERE application_id=$1::bigint AND id=$2::uuid FOR UPDATE

@@ -418,6 +418,7 @@ type Querier interface {
 	LockPreparationCampaign(ctx context.Context, arg LockPreparationCampaignParams) (LockPreparationCampaignRow, error)
 	LockReplayControl(ctx context.Context, arg LockReplayControlParams) (NotificationReplayControl, error)
 	LockReplayEvidence(ctx context.Context, arg LockReplayEvidenceParams) (NotificationSendDeadLetter, error)
+	LockReplayOperationalGrant(ctx context.Context, arg LockReplayOperationalGrantParams) (LockReplayOperationalGrantRow, error)
 	LockReplayRequest(ctx context.Context, arg LockReplayRequestParams) (NotificationReplayRequest, error)
 	LockScopedCampaign(ctx context.Context, arg LockScopedCampaignParams) (string, error)
 	LockScopedCampaignTemplate(ctx context.Context, arg LockScopedCampaignTemplateParams) (string, error)

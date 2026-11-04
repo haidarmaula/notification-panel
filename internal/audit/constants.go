@@ -113,3 +113,7 @@ const (
 )
 
 const ACTION_NOTIFICATION_SCHEDULE = "NOTIFICATION_SCHEDULE"
+
+// ACTION_NOTIFICATION_REPLAY_REQUEST records a scoped operational request header.
+// It does not indicate broker acceptance or provider/device delivery.
+const ACTION_NOTIFICATION_REPLAY_REQUEST = "NOTIFICATION_REPLAY_REQUEST"

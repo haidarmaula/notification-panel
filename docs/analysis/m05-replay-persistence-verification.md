@@ -33,7 +33,8 @@ provider, device or operational credential issuer is involved.
 
 The [request/credential verifier](../specs/m05-replay-credential.md) now supplies
 stable selection hashing and authenticated provenance, with unit/race evidence.
-The operational grant UUID is opaque provenance at this layer. DB authority,
-full request conflict checks, acceptance eligibility,
-atomic audit, broker I/O/result reconciliation, service-owned stale cleanup and
-CLI remain subsequent slices. No public or executable replay path is wired.
+[Request registration](m05-replay-registration-verification.md) now adds current
+DB authority/revocable grant checks, complete request conflict comparison and
+atomic header audit. Per-position acceptance eligibility, attempt/result audit,
+broker I/O/result reconciliation, service-owned stale cleanup and CLI remain
+subsequent slices. No executable replay path is wired.

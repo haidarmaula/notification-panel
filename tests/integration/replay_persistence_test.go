@@ -109,9 +109,11 @@ func TestReplayPersistence(t *testing.T) {
 
 	tx, err := f.pool.BeginTx(ctx, pgx.TxOptions{})
 	require.NoError(t, err)
-	cleanup, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
-	defer cancelCleanup()
-	defer tx.Rollback(cleanup)
+	defer func() {
+		cleanup, cancelCleanup := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancelCleanup()
+		_ = tx.Rollback(cleanup)
+	}()
 	n, err = sqlc.New(tx).FinishReplayAttempt(ctx, replayFinish(first, "published"))
 	require.NoError(t, err)
 	require.EqualValues(t, 1, n)

@@ -227,6 +227,19 @@ type NotificationReplayControl struct {
 	ResolvedOutcome       pgtype.Text `db:"resolved_outcome"`
 }
 
+type NotificationReplayGrant struct {
+	ID            pgtype.UUID        `db:"id"`
+	ApplicationID int64              `db:"application_id"`
+	StaffUserID   int64              `db:"staff_user_id"`
+	RequestID     pgtype.UUID        `db:"request_id"`
+	Issuer        string             `db:"issuer"`
+	Deployment    string             `db:"deployment"`
+	SelectionHash []byte             `db:"selection_hash"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+	ExpiresAt     pgtype.Timestamptz `db:"expires_at"`
+	RevokedAt     pgtype.Timestamptz `db:"revoked_at"`
+}
+
 type NotificationReplayRequest struct {
 	ApplicationID      int64              `db:"application_id"`
 	ID                 pgtype.UUID        `db:"id"`

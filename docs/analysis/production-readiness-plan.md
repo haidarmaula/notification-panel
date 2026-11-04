@@ -223,9 +223,11 @@ contracts on 2026-11-04. Two deadline defects were fixed and verified with unit/
 and local PostgreSQL/Kafka integration tests. This does not complete step 20 or
 approve deployment. The [operator reprocessing contract](../specs/m05-operator-reprocessing.md) is now
 written, and [persistence slice 1](m05-replay-persistence-verification.md) adds
-request/attempt/control schema and conditional SQLC primitives. Scoped operational
-authority, service/audit/broker transactions and their crash tests are next, followed
-by worker/scheduler wiring and M06 provider execution. Replay is not enabled.
+request/attempt/control schema and conditional SQLC primitives.
+[Request registration](m05-replay-registration-verification.md) now adds pinned
+step-up verification, revocable DB grants and atomic request audit, tested locally.
+Per-position eligibility/claim/result, broker I/O and stale-claim cleanup are next,
+followed by worker/scheduler wiring and M06 provider execution. Replay is not enabled.
 
 ## 5. Execution checklist
 

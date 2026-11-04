@@ -170,8 +170,10 @@ remain in M06; requeue/wiring remain open. The proposed
 [operator reprocessing contract](../specs/m05-operator-reprocessing.md) specifies
 scoped step-up authority, immutable evidence, fenced claims and broker/DB
 uncertainty. [Replay persistence](m05-replay-persistence-verification.md) adds migration 000025
-and generated conditional queries. Service/CLI, authority and broker/audit
-transactions remain unwired and unverified.
+and generated conditional queries. [Request registration](m05-replay-registration-verification.md)
+adds purpose-bound credentials, current DB authority/revocable grants and atomic
+request audit, locally tested. Per-position claim/result/broker transactions,
+stale cleanup and CLI remain unwired and unverified.
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,
 preparation cancellation during rebalance, redelivery, offset fencing, and durable

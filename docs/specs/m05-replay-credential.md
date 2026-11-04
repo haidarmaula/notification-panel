@@ -2,7 +2,9 @@
 
 Status: local provenance-verification library, 2026-11-04. This implements input
 binding and cryptographic verification for the [reprocessing protocol](m05-operator-reprocessing.md).
-It does not implement database authority/revocation, audit, publication or a CLI.
+The [registration service](../analysis/m05-replay-registration-verification.md)
+adds transaction-time DB authority/revocation and atomic request audit. Publication
+and CLI remain unimplemented; this verifier itself only establishes provenance.
 A valid assertion alone is insufficient to mutate replay state.
 
 ## Trust and lifetime
@@ -19,7 +21,9 @@ canonical decimal staff subject, nonempty `jti`, explicit issuance/expiry,
 `auth_time` at or before issuance and no more than five minutes old, and MFA in
 `amr`. Future issuance/not-before, expired credentials and credentials with less
 than five seconds remaining are rejected without clock leeway. Deployment clocks
-must be maintained. Recheck lifetime before actual publication.
+must be maintained. Both token expiry and MFA freshness need the five-second
+margin; verified evidence retains the earlier effective expiry. Recheck lifetime
+before actual publication.
 
 | Claim | Binding |
 | --- | --- |

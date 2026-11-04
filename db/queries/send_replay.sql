@@ -101,3 +101,14 @@ FROM notification_replay_attempts a JOIN notification_replay_controls c
 WHERE a.outcome='started' AND a.lease_expires_at<=clock_timestamp()
 ORDER BY a.lease_expires_at,a.log_source_id,a.original_partition,a.original_offset
 LIMIT sqlc.arg(page_size)::integer;
+
+-- name: LockReplayOperationalGrant :one
+SELECT *, (revoked_at IS NULL AND expires_at>=clock_timestamp()+interval '5 seconds'
+    AND sqlc.arg(credential_expires_at)::timestamptz>=clock_timestamp()+interval '5 seconds'
+    AND sqlc.arg(authenticated_at)::timestamptz<=clock_timestamp()
+    AND sqlc.arg(authenticated_at)::timestamptz>=clock_timestamp()-interval '5 minutes'+interval '5 seconds')::boolean AS usable
+FROM notification_replay_grants
+WHERE id=sqlc.arg(id)::uuid AND application_id=sqlc.arg(application_id)::bigint
+    AND staff_user_id=sqlc.arg(staff_user_id)::bigint AND request_id=sqlc.arg(request_id)::uuid
+    AND issuer=sqlc.arg(issuer)::text AND deployment=sqlc.arg(deployment)::text
+    AND selection_hash=sqlc.arg(selection_hash)::bytea FOR SHARE;

@@ -3,7 +3,10 @@
 Status: implementation in progress, 2026-11-04. Migration 000025 and generated
 persistence primitives implement slice 1; see the
 [verification record](../analysis/m05-replay-persistence-verification.md). No replay
-service, CLI, operational credential issuer or production activation is implemented. It refines [ADR-02 A-4](../adr/adr-02-worker-consumption.md#a-4-operator-replay-and-retention),
+CLI, operational credential issuer or production activation is implemented.
+[Scoped request registration](../analysis/m05-replay-registration-verification.md)
+is available as an unwired library through migration 000026; per-position replay
+execution remains unimplemented. It refines [ADR-02 A-4](../adr/adr-02-worker-consumption.md#a-4-operator-replay-and-retention),
 [ADR-11](../adr/adr-11-security-baseline.md) and
 [ADR-12](../adr/adr-12-multi-application-isolation.md).
 

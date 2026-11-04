@@ -30,11 +30,14 @@ type ReplayVerifier struct {
 // VerifiedReplay holds authenticated request provenance for transaction-time
 // authority checks. Its zero value is invalid; only ReplayVerifier issues values.
 type VerifiedReplay struct {
-	request     ReplayRequest
-	staffID     int64
-	grantID     pgtype.UUID
-	fingerprint [32]byte
-	expiresAt   time.Time
+	request         ReplayRequest
+	staffID         int64
+	grantID         pgtype.UUID
+	fingerprint     [32]byte
+	expiresAt       time.Time
+	authenticatedAt time.Time
+	issuer          string
+	deployment      string
 }
 
 // NewReplayVerifier pins a dedicated operational issuer, audience and deployment.
@@ -92,7 +95,7 @@ func (v *ReplayVerifier) Verify(request ReplayRequest, credential string) (Verif
 		!validReplayText(claims.ID) || claims.IssuedAt == nil || claims.AuthTime == nil || claims.ExpiresAt == nil ||
 		!claims.ExpiresAt.After(claims.IssuedAt.Time) || claims.ExpiresAt.Sub(claims.IssuedAt.Time) > replayCredentialLifetime ||
 		claims.ExpiresAt.Before(now.Add(5*time.Second)) || claims.AuthTime.After(claims.IssuedAt.Time) ||
-		claims.AuthTime.After(now) || now.Sub(claims.AuthTime.Time) > replayCredentialLifetime || !slices.Contains(claims.Methods, "mfa") {
+		claims.AuthTime.After(now) || now.Sub(claims.AuthTime.Time) > replayCredentialLifetime-5*time.Second || !slices.Contains(claims.Methods, "mfa") {
 		return invalid, ErrReplayCredential
 	}
 	app, ok := replayClaimUUID(claims.ApplicationID)
@@ -119,5 +122,13 @@ func (v *ReplayVerifier) Verify(request ReplayRequest, credential string) (Verif
 	if err != nil || len(claimed) != len(fingerprint) || subtle.ConstantTimeCompare(claimed, fingerprint[:]) != 1 {
 		return invalid, ErrReplayCredential
 	}
-	return VerifiedReplay{request: request, staffID: staffID, grantID: grant, fingerprint: fingerprint, expiresAt: claims.ExpiresAt.Time}, nil
+	expiresAt := claims.ExpiresAt.Time
+	if mfaExpiry := claims.AuthTime.Add(replayCredentialLifetime); mfaExpiry.Before(expiresAt) {
+		expiresAt = mfaExpiry
+	}
+	return VerifiedReplay{
+		request: request, staffID: staffID, grantID: grant, fingerprint: fingerprint,
+		expiresAt: expiresAt, authenticatedAt: claims.AuthTime.Time,
+		issuer: v.issuer, deployment: v.deployment,
+	}, nil
 }

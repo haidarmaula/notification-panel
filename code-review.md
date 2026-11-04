@@ -48,6 +48,15 @@ all historical findings or establish production readiness.
 Regression evidence and the remaining review boundary are recorded in
 [the modern Go audit](docs/analysis/modern-go-audit.md).
 
+## Replay authority review — 2026-11-04
+
+| ID | Severity | Finding and remediation |
+| --- | --- | --- |
+| RA1 | P2 | The unwired replay verifier checked five seconds of JWT lifetime but could accept MFA freshness with less than that operation margin. Fixed by retaining the earlier JWT/MFA expiry and enforcing the margin in both verifier and DB grant checks. A focused red/green regression covers this boundary. |
+
+The [registration verification](docs/analysis/m05-replay-registration-verification.md)
+records the review boundary. Per-position replay/publication is still pending.
+
 ## Critical Findings
 
 Crashes, security bypasses, data corruption, or issues that affect every user of a given endpoint.

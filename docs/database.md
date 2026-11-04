@@ -711,3 +711,18 @@ lock order and atomic audit transactions; SQLC calls alone do not establish that
 protocol. Down refuses retained requests, attempts or control rows. No CLI,
 service, operational grant verifier or publisher is enabled by this migration.
 See the [reprocessing contract](specs/m05-operator-reprocessing.md).
+
+### Revocable operational replay grants (M05)
+
+Migration 000026 stores scoped operational grants separately from ordinary app
+membership. Each grant binds one actor/application/request, trusted issuer,
+deployment and complete selection fingerprint. Identity and expiry cannot be
+rewritten; revocation is one-way. Retain grant evidence under the operational
+retention policy; no deletion/issuance endpoint is provided. The down migration
+refuses any retained grant. Request registration locks the grant through its
+atomic header/audit transaction and evaluates expiry/freshness with database time.
+
+A grant row alone is insufficient: the service also verifies the dedicated
+step-up signature and current DB send authority/explicit app membership. This
+remains an unwired library; per-position replay and real issuer integration are
+open. See [registration verification](analysis/m05-replay-registration-verification.md).
