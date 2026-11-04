@@ -158,3 +158,8 @@ rollback sebelum complete marker, immutable attribution/counts, coverage hold,
 expiry unknown versus empty snapshot, dan 20k intents set-wise. Serial consumer,
 source-aware DLQ/requeue, recovery dan binary wiring belum selesai; milestone M05
 belum ditutup. [SPEC preparation](../specs/m05-durable-preparation.md).
+
+Storage source-aware quarantine, decoder modern dan koordinator serial juga
+tersedia/teruji lokal. Koordinator memakai kontrak reader yang harus memverifikasi
+source dan mengikat ack ke assignment; adapter Kafka nyata, requeue/recovery dan
+binary wiring tetap terbuka. [SPEC coordinator](../specs/m05-serial-admission.md).

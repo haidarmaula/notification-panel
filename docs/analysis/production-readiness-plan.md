@@ -204,8 +204,11 @@ recovery dan pemasangan binary tetap pekerjaan berikutnya. Lihat
 Decoder envelope ketat dan storage quarantine source-aware juga lulus unit serta
 PostgreSQL lokal: redelivery identik, konflik bytes pada offset sama, topic
 incarnation berbeda, seal/inactive source, kegagalan commit/insert dan batas
-ukuran. Belum ada consumer serial yang memanggil storage tersebut atau commit
-offset; tidak ada source produksi yang diaktifkan.
+ukuran. Koordinator consumer serial tersedia sebagai library dan lulus unit/race:
+tidak fetch pesan berikut sebelum ack, tidak ack saat evidence gagal, retry
+bounded, sanitasi panic, shutdown dan assignment-loss. Adapter Kafka nyata yang
+memverifikasi source/generation serta recovery/wiring belum selesai; tidak ada
+source produksi yang diaktifkan.
 
 ## 5. Checklist pelaksanaan
 
