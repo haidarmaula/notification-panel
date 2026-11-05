@@ -38,7 +38,8 @@ or deadline must also remain discoverable for later no-send finalization. A conf
 TTL or accepted deadline is never extended by lease acquisition/renewal/recovery.
 
 Lease policy is explicit and copied at construction: lease duration 30s–5m,
-unknown-attempt retry floor 10s–24h, and per-device budget 1–100. These are defensive
+unknown-attempt retry floor 10s–24h, per-device budget 1–100 and an explicit
+[receipt metadata policy](m06-receipt-payload.md#committed-signing-metadata). These are defensive
 implementation bounds, not approved production values. The full executor must
 add request/renewal safety validation and calibrated rate/replica allocation before
 configuration can enable delivery. Proposed values remain lease 60s, renewal 15s,
@@ -66,6 +67,8 @@ DB time. An unresolved reservation cannot be charged again in the same generatio
 Takeover may reserve it only after its persisted retry floor and while budget/TTL
 remain. An attempt is never refunded because a process crashed or lost its response.
 
+Receipt metadata freezes atomically with the first charge; retries preserve its
+key/environment/expiry and charged legacy intents without metadata remain held.
 Only an acknowledged commit returns a private in-memory attempt capability. A lost
 commit acknowledgement returns none, even if the database committed. No row lookup
 can recreate that permission. The later executor must consume a shared one-use bit

@@ -245,7 +245,8 @@ Trusted per-process configuration and actual worker/scheduler entry points are
 now wired and locally verified. The worker explicitly runs admission-only; M06
 [lease/reservation foundations](m06-execution-verification.md) now pass focused
 local tests. Dedicated [receipt signing and scoped payload libraries](m06-receipt-payload-verification.md)
-now also pass local tests. Capability metadata persistence, provider transport,
+now also pass local tests. Atomic [capability metadata persistence](m06-receipt-metadata-verification.md)
+is now locally tested; provider transport,
 results/recovery/outbox and delivery runtime composition remain open. Production
 activation and acceptance stay open.
 

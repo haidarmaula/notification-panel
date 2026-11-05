@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"hello/internal/database/sqlc"
+	"hello/internal/receipt"
 )
 
 var (
@@ -22,12 +23,13 @@ type ExecutionPolicy struct {
 	LeaseDuration time.Duration
 	RetryFloor    time.Duration
 	MaxAttempts   int32
+	Receipt       receipt.Policy
 }
 
 // Validate rejects unbounded/overflowing intervals before SQL second conversion.
 func (p ExecutionPolicy) Validate() error {
 	if p.LeaseDuration < 30*time.Second || p.LeaseDuration > 5*time.Minute || p.LeaseDuration%time.Second != 0 ||
-		p.RetryFloor < 10*time.Second || p.RetryFloor > 24*time.Hour || p.RetryFloor%time.Second != 0 || p.MaxAttempts < 1 || p.MaxAttempts > 100 {
+		p.RetryFloor < 10*time.Second || p.RetryFloor > 24*time.Hour || p.RetryFloor%time.Second != 0 || p.MaxAttempts < 1 || p.MaxAttempts > 100 || p.Receipt.Validate() != nil {
 		return ErrExecutionInput
 	}
 	return nil
@@ -59,6 +61,7 @@ type AttemptReservation struct {
 	lease                                              *ExecutionLease
 	deliveryID, attemptID                              pgtype.UUID
 	bindingID, installationID, ownerUserID, ownerEpoch int64
+	material                                           receipt.Material
 }
 
 // NewExecution creates a distinct owner; restarts do not recover old capabilities.
@@ -185,6 +188,10 @@ func (s *Execution) Reserve(ctx context.Context, lease *ExecutionLease, delivery
 			binding.RetiredAt.Valid || binding.InstallationID != identity.InstallationID || binding.OwnerUserID != identity.OwnerUserID || binding.OwnerEpoch != identity.OwnerEpoch {
 			return ErrExecutionUnavailable
 		}
+		material, err := s.freezeReceipt(ctx, q, lease, deliveryID, identity, installation.PublicID)
+		if err != nil {
+			return err
+		}
 		attemptID, err := newReplayClaimToken()
 		if err != nil {
 			return err
@@ -195,7 +202,7 @@ func (s *Execution) Reserve(ctx context.Context, lease *ExecutionLease, delivery
 		if err != nil {
 			return executionMissing(err)
 		}
-		provisional = &AttemptReservation{lease: lease, deliveryID: deliveryID, attemptID: attemptID, bindingID: identity.BindingID, installationID: identity.InstallationID, ownerUserID: identity.OwnerUserID, ownerEpoch: identity.OwnerEpoch}
+		provisional = &AttemptReservation{lease: lease, deliveryID: deliveryID, attemptID: attemptID, bindingID: identity.BindingID, installationID: identity.InstallationID, ownerUserID: identity.OwnerUserID, ownerEpoch: identity.OwnerEpoch, material: material}
 		return nil
 	})
 	if err != nil {
@@ -284,4 +291,40 @@ func (s *Execution) transaction(ctx context.Context, run func(context.Context, *
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// ReceiptMaterial returns committed signing inputs only. It cannot recreate or
+// transfer provider execution authority. Nil/unacknowledged reservations return false.
+func (r *AttemptReservation) ReceiptMaterial() (receipt.Material, bool) {
+	if r == nil || !r.material.Valid() {
+		return receipt.Material{}, false
+	}
+	return r.material, true
+}
+func (s *Execution) freezeReceipt(ctx context.Context, q *sqlc.Queries, lease *ExecutionLease, deliveryID pgtype.UUID, identity sqlc.GetExecutionIntentIdentityRow, installationPublicID pgtype.UUID) (receipt.Material, error) {
+	none := receipt.Material{}
+	delivery, err := q.LockReceiptDelivery(ctx, sqlc.LockReceiptDeliveryParams{ApplicationID: lease.applicationID, NotificationID: lease.notificationID, DeliveryID: deliveryID})
+	if err != nil {
+		return none, executionMissing(err)
+	}
+	if delivery.Status != "PENDING" {
+		return none, ErrExecutionUnavailable
+	}
+	if err := q.FreezeReceiptMetadata(ctx, sqlc.FreezeReceiptMetadataParams{ApplicationID: lease.applicationID, NotificationID: lease.notificationID, DeliveryID: deliveryID,
+		KeyID: s.policy.Receipt.KeyID, Environment: s.policy.Receipt.Environment, WindowSeconds: int64(s.policy.Receipt.ObservationWindow / time.Second)}); err != nil {
+		return none, err
+	}
+	frozen, err := q.GetFrozenReceiptMetadata(ctx, sqlc.GetFrozenReceiptMetadataParams{ApplicationID: lease.applicationID, DeliveryID: deliveryID})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return none, ErrExecutionHeld
+	}
+	if err != nil {
+		return none, err
+	}
+	material := receipt.Material{Version: frozen.Version, KeyID: frozen.KeyID, Environment: frozen.Environment,
+		Scope: receipt.Scope{ApplicationID: lease.application, OriginEpoch: lease.origin, NotificationID: lease.notificationID, DeliveryID: deliveryID, BindingID: identity.BindingID, InstallationID: installationPublicID, OwnerEpoch: identity.OwnerEpoch, ExpiresUnix: frozen.ExpiresUnix}}
+	if !frozen.CoversDeadline || !material.Valid() || material.Environment != s.policy.Receipt.Environment {
+		return none, ErrExecutionHeld
+	}
+	return material, nil
 }

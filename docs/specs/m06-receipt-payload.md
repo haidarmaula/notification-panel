@@ -1,8 +1,8 @@
 # M06/M07 receipt capability and FCM payload
 
-Date: 2026-11-05. Status: pure signer/verifier and payload builder implemented
-and locally tested. Persistence/transport/composition remain open; no delivery or
-receipt route is enabled. See [verification](../analysis/m06-receipt-payload-verification.md).
+Date: 2026-11-05. Status: signer/verifier, payload builder and atomic metadata
+freeze are implemented and locally tested. Transport/composition remain open;
+no delivery or receipt route is enabled. See [verification](../analysis/m06-receipt-payload-verification.md).
 Related: [M06](m06-execution.md), [ADR-05](../adr/adr-05-receipt-ingestion.md).
 
 ## Capability version 1
@@ -60,18 +60,41 @@ owner epoch before accepting evidence. Same-owner refresh may report an old push
 logout/account transfer cannot. Signature verification alone must not write an
 observation. Semantic dedup and idempotency remain M07 work.
 
-## Persistence prerequisite
+## Committed signing metadata
 
-Before enabling delivery, freeze capability version, key ID, environment and
-expiry with the immutable per-delivery scope in a committed transaction. Choose
-expiry from the accepted deadline plus an explicitly approved observation window,
-rounding up to Unix seconds without shortening it. The proposed seven-day window
-is not silently adopted as production policy. Retries/rotation do not recompute
-expiry/key ID or change audience identity. Source-epoch recovery retains the
-business origin; recovery still needs its revocation/lineage gates.
+Migration 000029 adds immutable per-delivery metadata: capability version, key ID,
+environment and expiry Unix seconds. A composite application/delivery FK prevents
+cross-application attribution; identity comes from immutable intent/preparation/
+installation/application rows rather than copied mutable request fields.
 
-The pure signer/builder boundary does not persist these fields or enable requests.
-That prerequisite must be completed before worker composition calls it.
+`ExecutionPolicy` requires explicit `receipt.Policy`: environment/key ID and a
+whole-second observation window (1s–90d defensive bounds). There is no production
+default; the proposed seven-day window still needs approval. Validate signer key
+availability/overlap separately before enabling provider execution.
+
+The first successful device reservation locks the delivery after its binding,
+freezes metadata and charges the attempt in one transaction. Expiry is
+ceil(accepted deadline Unix seconds) + the explicit observation window, bounded
+through year 9999. Failed/uncertain commits return no signing material through the
+reservation. Uncertainty may leave both metadata and charge durable, so no blind
+retry recreates execution permission.
+
+Existing metadata is never overwritten on retry, takeover or key/window rotation.
+Return its original key/expiry for signing; missing overlap keys fail closed.
+A foreign environment, unsupported version or expiry not covering the current
+persisted deadline holds execution. This coverage check is not a general detector
+of every possible deadline mutation; accepted-deadline immutability still follows
+the campaign contract. No attempt count is refunded or audience identity changed.
+
+An older charged intent without metadata is held for explicit reconciliation;
+it is never silently backfilled. Trigger guards reject metadata update/delete,
+and down refuses retained metadata. Retention/erasure must introduce a separately
+reviewed maintenance protocol, not delete/recreate a new capability window.
+
+An acknowledged `AttemptReservation.ReceiptMaterial` returns value-copied signing
+inputs only. `Signer.SignMaterial` checks supported version and pinned environment
+and uses the frozen key ID. This accessor is not provider execution permission.
+The worker remains admission-only; transport/results/recovery/outbox are later work.
 
 ## FCM payload version 1
 

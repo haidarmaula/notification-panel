@@ -234,6 +234,7 @@ type Querier interface {
 	ExpireScopedSchedule(ctx context.Context, arg ExpireScopedScheduleParams) (int64, error)
 	ExpireUnpreparedCampaign(ctx context.Context, arg ExpireUnpreparedCampaignParams) error
 	FinishReplayAttempt(ctx context.Context, arg FinishReplayAttemptParams) (int64, error)
+	FreezeReceiptMetadata(ctx context.Context, arg FreezeReceiptMetadataParams) error
 	// Keep staff row when app/grant is absent, for correct 401/404 distinctions.
 	// No authorization/permission/status decision is implied by this data lookup.
 	GetApplicationAuthority(ctx context.Context, arg GetApplicationAuthorityParams) (GetApplicationAuthorityRow, error)
@@ -251,6 +252,7 @@ type Querier interface {
 	GetDeviceTokenByID(ctx context.Context, id int64) (DeviceToken, error)
 	GetDeviceTokenByPushToken(ctx context.Context, pushToken string) (DeviceToken, error)
 	GetExecutionIntentIdentity(ctx context.Context, arg GetExecutionIntentIdentityParams) (GetExecutionIntentIdentityRow, error)
+	GetFrozenReceiptMetadata(ctx context.Context, arg GetFrozenReceiptMetadataParams) (GetFrozenReceiptMetadataRow, error)
 	// ==========================================
 	// GET
 	// ==========================================
@@ -421,6 +423,7 @@ type Querier interface {
 	LockNextScopedSendOutbox(ctx context.Context, arg LockNextScopedSendOutboxParams) (LockNextScopedSendOutboxRow, error)
 	LockNotificationRuntime(ctx context.Context) (LockNotificationRuntimeRow, error)
 	LockPreparationCampaign(ctx context.Context, arg LockPreparationCampaignParams) (LockPreparationCampaignRow, error)
+	LockReceiptDelivery(ctx context.Context, arg LockReceiptDeliveryParams) (LockReceiptDeliveryRow, error)
 	LockReplayCleanupGrant(ctx context.Context, arg LockReplayCleanupGrantParams) (pgtype.UUID, error)
 	LockReplayControl(ctx context.Context, arg LockReplayControlParams) (NotificationReplayControl, error)
 	LockReplayEvidence(ctx context.Context, arg LockReplayEvidenceParams) (NotificationSendDeadLetter, error)

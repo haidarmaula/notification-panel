@@ -19,6 +19,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"hello/internal/dispatch"
 	"hello/internal/installation"
+	"hello/internal/receipt"
 )
 
 type executionFixture struct {
@@ -65,7 +66,7 @@ func newExecutionFixture(t *testing.T, ctx context.Context) executionFixture {
 	return f
 }
 func executionPolicy() dispatch.ExecutionPolicy {
-	return dispatch.ExecutionPolicy{LeaseDuration: time.Minute, RetryFloor: 10 * time.Second, MaxAttempts: 3}
+	return dispatch.ExecutionPolicy{LeaseDuration: time.Minute, RetryFloor: 10 * time.Second, MaxAttempts: 3, Receipt: receipt.Policy{Environment: "fixture", KeyID: "fixture-key", ObservationWindow: 24 * time.Hour}}
 }
 func executionService(t *testing.T, db dispatch.Transactor) *dispatch.Execution {
 	t.Helper()

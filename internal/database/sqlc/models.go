@@ -206,6 +206,16 @@ type NotificationRead struct {
 	ApplicationID  pgtype.Int8        `db:"application_id"`
 }
 
+type NotificationReceiptMetadatum struct {
+	DeliveryID    pgtype.UUID        `db:"delivery_id"`
+	ApplicationID int64              `db:"application_id"`
+	Version       int16              `db:"version"`
+	KeyID         string             `db:"key_id"`
+	Environment   string             `db:"environment"`
+	ExpiresUnix   int64              `db:"expires_unix"`
+	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+}
+
 type NotificationReplayAttempt struct {
 	ApplicationID     int64              `db:"application_id"`
 	RequestID         pgtype.UUID        `db:"request_id"`

@@ -5,10 +5,12 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"hello/internal/receipt"
 )
 
 func TestExecutionPolicyRejectsUnsafeBounds(t *testing.T) {
-	valid := ExecutionPolicy{LeaseDuration: time.Minute, RetryFloor: 10 * time.Second, MaxAttempts: 5}
+	valid := ExecutionPolicy{LeaseDuration: time.Minute, RetryFloor: 10 * time.Second, MaxAttempts: 5, Receipt: receipt.Policy{Environment: "fixture", KeyID: "fixture-key", ObservationWindow: 24 * time.Hour}}
 	for _, change := range []func(*ExecutionPolicy){
 		func(p *ExecutionPolicy) { p.LeaseDuration = 29 * time.Second },
 		func(p *ExecutionPolicy) { p.LeaseDuration = 6 * time.Minute },
@@ -17,6 +19,7 @@ func TestExecutionPolicyRejectsUnsafeBounds(t *testing.T) {
 		func(p *ExecutionPolicy) { p.RetryFloor = 25 * time.Hour },
 		func(p *ExecutionPolicy) { p.MaxAttempts = 0 },
 		func(p *ExecutionPolicy) { p.MaxAttempts = 101 },
+		func(p *ExecutionPolicy) { p.Receipt = receipt.Policy{} },
 	} {
 		p := valid
 		change(&p)

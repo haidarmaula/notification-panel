@@ -60,8 +60,8 @@ misconfiguration hazard and proves constructor rejection.
 
 ## Remaining prerequisites
 
-Freeze capability version/key ID/environment/expiry with committed delivery scope
-before use. The proposed observation window needs approval; it has no production
+Capability version/key ID/environment/expiry now freeze with the first device
+charge in the [metadata follow-up](m06-receipt-metadata-verification.md). The proposed observation window needs approval; it has no production
 default here. Implement private-key distribution/rotation, route-bound real
 transport, physical-request rate accounting, single-use submission, fenced result
 writes/conditional invalidation, recovery/finalization, versioned update outbox and

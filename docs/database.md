@@ -708,6 +708,23 @@ Empty up/down/up remains supported. This schema/service boundary does not yet
 implement provider calls, attempt results, terminalization, receipt signing or
 update outbox. See the [M06 contract](specs/m06-execution.md).
 
+### Frozen receipt capability metadata (M06)
+
+Migration 000029 adds one immutable notification_receipt_metadata row per delivery,
+with an application/delivery FK backed by a scoped parent unique constraint.
+Version, bounded ASCII key/environment labels and bounded Unix-second expiry are
+non-null; no token, private key or registration address is stored. Existing intent,
+preparation and installation identities provide the signed scope.
+
+The first acknowledged device reservation freezes this row in the same transaction
+as its attempt charge, after the delivery lock. A single accepted deadline plus an
+explicit observation window determines expiry (Unix seconds rounded up). Retries
+retain the row across lease/key/window changes. Missing metadata on an already
+charged intent, foreign environment and insufficient expiry fail closed. Immutable
+triggers prevent update/delete and down refuses populated metadata. Controlled
+retention/erasure remains separate reviewed work. See the
+[receipt/payload contract](specs/m06-receipt-payload.md#committed-signing-metadata).
+
 ### Source-aware send quarantine (M05)
 
 Migration 000024 adds immutable physical log identities and bounded raw

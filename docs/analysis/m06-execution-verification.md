@@ -56,8 +56,9 @@ outbox. Those subsequent M06/M07 requirements remain open.
 
 ## Remaining M06 work
 
-Dedicated receipt capability signer/payload, explicit app/provider routes,
-bounded FCM transport/physical retry accounting, rate/breaker permits, single-use
+Receipt signer/payload and [atomic metadata freeze](m06-receipt-metadata-verification.md)
+are now locally tested. Explicit app/provider transport routes, bounded FCM
+transport/physical retry accounting, rate/breaker permits, single-use
 submission, fenced results/conditional binding invalidation, retry/finalization/
 recovery, versioned state-update outbox and delivery-worker composition remain.
 Provider errors/retry floors are based on the primary sources linked in the SPEC;
