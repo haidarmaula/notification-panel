@@ -8,6 +8,8 @@ Engineering guidance: [Go standards](docs/go-standards.md) and
 [pinned Go skills](docs/tooling/go-skills.md).
 For current implementation status and release gates, use the
 [production readiness plan](docs/analysis/production-readiness-plan.md).
+The editable [target architecture diagram](docs/diagrams/README.md) shows the
+multi-application design and distinguishes local foundations from planned work.
 The architecture overview below describes the earlier pipeline; its modern
 replacement is still under implementation and is not production-ready.
 
