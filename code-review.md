@@ -91,9 +91,21 @@ and supervised drain/handoff remain open. See the
 
 Independent review found no concrete new fault in authenticated transport
 propagation, source-before-outbox locking, per-candidate promotion or loop
-cancellation/join ownership. The executable configuration/wiring and production
-verification gates remain open; see
+cancellation/join ownership. Protected executable configuration/wiring is now
+locally verified; production gates remain open. See
 [runtime composition](docs/specs/m04-m05-runtime-composition.md).
+
+## M06 execution review — 2026-11-05
+
+| ID | Severity | Finding and remediation |
+| --- | --- | --- |
+| ER1 | P2 | Separate clock_timestamp evaluations for reserved-at and retry floor could persist a floor one microsecond shorter than the required interval because UPDATE assignment evaluation order is unspecified. A PostgreSQL regression observed 9.999999s for a 10s floor. Fixed by one materialized reservation-clock value for both persisted timestamps, retaining fresh DB-clock lease/deadline guards. |
+
+Narrow independent review checked constraints, parent/child lock order,
+DB-clock fencing, takeover and acknowledged-commit proof issuance. It found no
+additional concrete blocker in this slice. Provider/result/recovery completion
+is not implied by this review. See the
+[verification record](docs/analysis/m06-execution-verification.md).
 
 ## Critical Findings
 

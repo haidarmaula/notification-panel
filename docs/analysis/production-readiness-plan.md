@@ -243,7 +243,8 @@ polling and four joined scheduler tasks, with a composed local TLS pipeline test
 The [verification record](runtime-composition-verification.md) covers this boundary.
 Trusted per-process configuration and actual worker/scheduler entry points are
 now wired and locally verified. The worker explicitly runs admission-only; M06
-provider execution remains next. Production activation and acceptance stay open.
+[lease/reservation foundations](m06-execution-verification.md) now pass focused
+local tests; provider transport/results/runtime execution remain next. Production activation and acceptance stay open.
 
 ## 5. Execution checklist
 
@@ -282,10 +283,10 @@ work on unchecked rows has started, as noted.
 ### Phase 4 — delivery pipeline
 
 - [ ] 21. Provider selection/credentials, error contract, chunking, and invalid-token handling.
-- [ ] 22. M05 atomic fan-out intents, device snapshots/identity, and unique constraints pass locally, including 20k intents; M06 exclusive provider claims do not yet.
+- [ ] 22. M05 atomic fan-out intents, device snapshots/identity, and unique constraints pass locally, including 20k intents; M06 exclusive campaign leases and acknowledged per-device reservation foundations also pass focused local tests; provider execution/results remain open.
 - [ ] 23. Bounded retry/backoff, lease expiry, recovery, TTL/budget terminalization.
 - [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; replay registration/inspection/claim/publication and expired-claim cleanup libraries also pass locally. Replay CLI/configuration and PostgreSQL verified-TLS/Kafka mTLS command tests also pass locally. Production issuer/incarnation approval, supervised drain/handoff and runtime deployment remain pending.
-- [ ] 25. M04 atomic send idempotency + claim + outbox, promotion/expiry, and bounded dispatcher pass locally; the scheduler binary does not yet use durable handoff.
+- [ ] 25. M04 atomic send idempotency + claim + outbox, promotion/expiry, and bounded dispatcher pass locally; the scheduler binary now uses protected source-bound durable handoff locally. Production policy/activation and target-environment evidence remain open.
 - [ ] 26. Delivery update outbox and consumer dedup/ordering contract.
 - [ ] 27. Bounded concurrency, page/chunk memory limits, provider rate limits, and backpressure.
 - [ ] 28. Acceptance/audit rollback, ack-before-commit, preparation/quarantine commit failure, coordinator unsafe-offset, and broker rebalance pass locally; provider and other failure windows/deployment are pending.

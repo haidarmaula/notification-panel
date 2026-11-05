@@ -686,6 +686,28 @@ modern intent, snapshot or hold evidence. See the
 receipt capabilities, Kafka quarantine/offset handling and retention are later
 slices; these tables alone do not implement them.
 
+### Execution ownership and reservations (M06)
+
+Migration 000028 adds campaign lease owner/generation/expiry and the latest
+per-device attempt UUID/generation/timestamps. Generation and consumed attempt
+count survive release/takeover. Owner/expiry and attempt metadata have explicit
+NULL-pair constraints; latest attempt IDs are unique. A partial PROCESSING lease
+index supports later bounded recovery; the existing PENDING due index remains
+available for candidate discovery. No raw address or provider credential is copied.
+
+The execution service checks current runtime/app/dispatch policy, exact business
+lineage and complete preparation before leasing. Reservation additionally locks
+and rechecks active user/current installation owner and immutable binding before
+charging one due PENDING intent. A single sampled DB-clock value persists the
+reservation timestamp and retry floor; lease/deadline predicates use fresh DB time.
+There is no row-count/identity rewrite, budget refund or implicit whole-page claim.
+
+The down migration takes table locks and refuses retained generation/attempt
+history, even after release. It cannot erase fencing evidence on a used pipeline.
+Empty up/down/up remains supported. This schema/service boundary does not yet
+implement provider calls, attempt results, terminalization, receipt signing or
+update outbox. See the [M06 contract](specs/m06-execution.md).
+
 ### Source-aware send quarantine (M05)
 
 Migration 000024 adds immutable physical log identities and bounded raw

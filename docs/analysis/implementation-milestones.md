@@ -188,7 +188,9 @@ supervised producer drain/handoff remain gates. The
 for mTLS group handoff, source-bound publication, bounded schedule polling and
 joined scheduler/worker composition. Protected per-process policy and actual
 worker/scheduler entry points now run this pipeline locally; the worker remains
-explicitly admission-only. M06 provider execution is next. See
+explicitly admission-only. M06 [lease/reservation foundations](m06-execution-verification.md)
+now pass focused local tests; provider transport, results/recovery/outbox and
+execution composition remain open. See
 [verification](runtime-composition-verification.md).
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,

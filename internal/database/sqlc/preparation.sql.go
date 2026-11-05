@@ -174,7 +174,7 @@ func (q *Queries) InsertPreparationIntents(ctx context.Context, arg InsertPrepar
 }
 
 const lockPreparationCampaign = `-- name: LockPreparationCampaign :one
-SELECT id, template_id, template_name, title, body, payload, priority, status, scheduled_at, published_at, completed_at, created_by, created_at, updated_at, application_id, queued_at, deadline_at, origin_epoch, source_epoch, lifecycle_reason, preparation_hold_reason, preparation_next_attempt_at,coalesce(deadline_at<=clock_timestamp(),false)::boolean AS expired FROM notifications
+SELECT id, template_id, template_name, title, body, payload, priority, status, scheduled_at, published_at, completed_at, created_by, created_at, updated_at, application_id, queued_at, deadline_at, origin_epoch, source_epoch, lifecycle_reason, preparation_hold_reason, preparation_next_attempt_at, lease_owner, lease_generation, lease_until,coalesce(deadline_at<=clock_timestamp(),false)::boolean AS expired FROM notifications
 WHERE application_id=$1::bigint AND id=$2::bigint FOR UPDATE
 `
 
@@ -206,6 +206,9 @@ type LockPreparationCampaignRow struct {
 	LifecycleReason          pgtype.Text        `db:"lifecycle_reason"`
 	PreparationHoldReason    pgtype.Text        `db:"preparation_hold_reason"`
 	PreparationNextAttemptAt pgtype.Timestamptz `db:"preparation_next_attempt_at"`
+	LeaseOwner               pgtype.UUID        `db:"lease_owner"`
+	LeaseGeneration          int64              `db:"lease_generation"`
+	LeaseUntil               pgtype.Timestamptz `db:"lease_until"`
 	Expired                  bool               `db:"expired"`
 }
 
@@ -235,6 +238,9 @@ func (q *Queries) LockPreparationCampaign(ctx context.Context, arg LockPreparati
 		&i.LifecycleReason,
 		&i.PreparationHoldReason,
 		&i.PreparationNextAttemptAt,
+		&i.LeaseOwner,
+		&i.LeaseGeneration,
+		&i.LeaseUntil,
 		&i.Expired,
 	)
 	return i, err

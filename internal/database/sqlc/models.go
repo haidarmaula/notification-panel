@@ -136,6 +136,9 @@ type Notification struct {
 	LifecycleReason          pgtype.Text        `db:"lifecycle_reason"`
 	PreparationHoldReason    pgtype.Text        `db:"preparation_hold_reason"`
 	PreparationNextAttemptAt pgtype.Timestamptz `db:"preparation_next_attempt_at"`
+	LeaseOwner               pgtype.UUID        `db:"lease_owner"`
+	LeaseGeneration          int64              `db:"lease_generation"`
+	LeaseUntil               pgtype.Timestamptz `db:"lease_until"`
 }
 
 type NotificationDelivery struct {
@@ -157,18 +160,22 @@ type NotificationDelivery struct {
 }
 
 type NotificationDeliveryIntent struct {
-	ID              pgtype.UUID        `db:"id"`
-	ApplicationID   int64              `db:"application_id"`
-	NotificationID  int64              `db:"notification_id"`
-	InstallationID  int64              `db:"installation_id"`
-	BindingID       int64              `db:"binding_id"`
-	OwnerUserID     int64              `db:"owner_user_id"`
-	OwnerEpoch      int64              `db:"owner_epoch"`
-	DeliveryVersion int64              `db:"delivery_version"`
-	Status          string             `db:"status"`
-	AttemptCount    int32              `db:"attempt_count"`
-	NextAttemptAt   pgtype.Timestamptz `db:"next_attempt_at"`
-	CreatedAt       pgtype.Timestamptz `db:"created_at"`
+	ID                pgtype.UUID        `db:"id"`
+	ApplicationID     int64              `db:"application_id"`
+	NotificationID    int64              `db:"notification_id"`
+	InstallationID    int64              `db:"installation_id"`
+	BindingID         int64              `db:"binding_id"`
+	OwnerUserID       int64              `db:"owner_user_id"`
+	OwnerEpoch        int64              `db:"owner_epoch"`
+	DeliveryVersion   int64              `db:"delivery_version"`
+	Status            string             `db:"status"`
+	AttemptCount      int32              `db:"attempt_count"`
+	NextAttemptAt     pgtype.Timestamptz `db:"next_attempt_at"`
+	CreatedAt         pgtype.Timestamptz `db:"created_at"`
+	AttemptID         pgtype.UUID        `db:"attempt_id"`
+	ClaimGeneration   pgtype.Int8        `db:"claim_generation"`
+	LastAttemptAt     pgtype.Timestamptz `db:"last_attempt_at"`
+	AttemptResolvedAt pgtype.Timestamptz `db:"attempt_resolved_at"`
 }
 
 type NotificationLogSource struct {

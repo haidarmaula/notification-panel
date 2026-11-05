@@ -12,6 +12,7 @@ import (
 
 type Querier interface {
 	AbandonExpiredReplayAttempt(ctx context.Context, arg AbandonExpiredReplayAttemptParams) (int64, error)
+	AcquireExecutionLease(ctx context.Context, arg AcquireExecutionLeaseParams) (AcquireExecutionLeaseRow, error)
 	AdvanceMobileInstallation(ctx context.Context, arg AdvanceMobileInstallationParams) (MobileInstallation, error)
 	CampaignAcceptanceReady(ctx context.Context, arg CampaignAcceptanceReadyParams) (bool, error)
 	CampaignHasProtectedChildren(ctx context.Context, arg CampaignHasProtectedChildrenParams) (bool, error)
@@ -249,6 +250,7 @@ type Querier interface {
 	// ==========================================
 	GetDeviceTokenByID(ctx context.Context, id int64) (DeviceToken, error)
 	GetDeviceTokenByPushToken(ctx context.Context, pushToken string) (DeviceToken, error)
+	GetExecutionIntentIdentity(ctx context.Context, arg GetExecutionIntentIdentityParams) (GetExecutionIntentIdentityRow, error)
 	// ==========================================
 	// GET
 	// ==========================================
@@ -410,6 +412,9 @@ type Querier interface {
 	LockActiveInstallationBinding(ctx context.Context, arg LockActiveInstallationBindingParams) (InstallationBinding, error)
 	LockApplicationByPublicID(ctx context.Context, publicID pgtype.UUID) (Application, error)
 	LockCampaignAcceptance(ctx context.Context, arg LockCampaignAcceptanceParams) (LockCampaignAcceptanceRow, error)
+	LockExecutionApplication(ctx context.Context, applicationPublicID pgtype.UUID) (LockExecutionApplicationRow, error)
+	LockExecutionBinding(ctx context.Context, arg LockExecutionBindingParams) (InstallationBinding, error)
+	LockExecutionInstallation(ctx context.Context, arg LockExecutionInstallationParams) (MobileInstallation, error)
 	LockInstallationProject(ctx context.Context, applicationID int64) (string, error)
 	LockInstallationUser(ctx context.Context, arg LockInstallationUserParams) (int64, error)
 	LockMobileInstallation(ctx context.Context, arg LockMobileInstallationParams) (MobileInstallation, error)
@@ -435,8 +440,10 @@ type Querier interface {
 	MarkNotificationSent(ctx context.Context, id int64) error
 	PromoteScopedCampaign(ctx context.Context, arg PromoteScopedCampaignParams) (PromoteScopedCampaignRow, error)
 	QueueScopedCampaign(ctx context.Context, arg QueueScopedCampaignParams) (QueueScopedCampaignRow, error)
+	ReleaseExecutionLease(ctx context.Context, arg ReleaseExecutionLeaseParams) (int64, error)
 	// Caller holds application lock and handles matching no-op before this CAS.
 	RenameApplication(ctx context.Context, arg RenameApplicationParams) (Application, error)
+	RenewExecutionLease(ctx context.Context, arg RenewExecutionLeaseParams) (int64, error)
 	ReplaceScopedCampaignDraft(ctx context.Context, arg ReplaceScopedCampaignDraftParams) (int64, error)
 	ReplaceScopedSegment(ctx context.Context, arg ReplaceScopedSegmentParams) (ReplaceScopedSegmentRow, error)
 	ReplaceScopedTemplate(ctx context.Context, arg ReplaceScopedTemplateParams) (ReplaceScopedTemplateRow, error)
@@ -444,6 +451,7 @@ type Querier interface {
 	ReplayCleanupContext(ctx context.Context, arg ReplayCleanupContextParams) (ReplayCleanupContextRow, error)
 	ReplayPreparationRetryDue(ctx context.Context, arg ReplayPreparationRetryDueParams) (bool, error)
 	ReplayTargetsSupported(ctx context.Context, arg ReplayTargetsSupportedParams) (bool, error)
+	ReserveExecutionAttempt(ctx context.Context, arg ReserveExecutionAttemptParams) (ReserveExecutionAttemptRow, error)
 	ReserveInstallationBindingID(ctx context.Context) (int64, error)
 	ResolveMobileIdentity(ctx context.Context, arg ResolveMobileIdentityParams) (int64, error)
 	ResolveReplayControl(ctx context.Context, arg ResolveReplayControlParams) (int64, error)
