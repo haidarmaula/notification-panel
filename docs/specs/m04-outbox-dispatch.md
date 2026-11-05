@@ -1,11 +1,16 @@
 # M04 bounded outbox dispatch
 
 Scheduler owns this protocol; HTTP acceptance never publishes. This library is
-kept unwired until M05 can admit the modern envelope and rollout is reviewed.
+now participates in a locally tested scheduler composition; executable wiring
+and rollout approval remain open.
 Retired legacy binaries must not consume it. No provider I/O is involved.
 
 Each invocation has a five-second total context and one transaction. Lock the
-deployment control row FOR SHARE first; sealed restore returns held. Select one
+deployment control row FOR SHARE first; sealed restore returns held. Deployed
+composition uses `NewSourceOutbox` to lock/check the exact active source next,
+retaining runtime -> source -> outbox order through publication. A missing,
+inactive or mismatched registration returns held without consuming an attempt.
+The original `NewOutbox` constructor remains source-unbound for fixtures. Select one
 due outbox in the active origin/source lineage, ordered by next_publish_at,id,
 FOR UPDATE OF outbox SKIP LOCKED. Read only the project's public identity via
 an unlocked join; never lock a parent campaign after the outbox. Foreign keys

@@ -82,9 +82,14 @@ WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(campaign_i
   AND status='SCHEDULED' AND deadline_at<=clock_timestamp();
 
 -- name: ListDueScopedSchedules :many
-SELECT application_id,id FROM notifications WHERE status='SCHEDULED'
-  AND scheduled_at<=clock_timestamp() AND deadline_at IS NOT NULL AND origin_epoch IS NOT NULL AND source_epoch IS NOT NULL
-ORDER BY scheduled_at,id LIMIT sqlc.arg(page_size)::integer;
+SELECT n.application_id,n.id,a.public_id AS application_public_id
+FROM notifications n
+JOIN applications a ON a.id=n.application_id
+JOIN notification_runtime r ON r.singleton
+WHERE n.status='SCHEDULED' AND n.scheduled_at<=clock_timestamp()
+  AND n.deadline_at IS NOT NULL AND NOT r.sealed
+  AND n.origin_epoch=r.origin_epoch AND n.source_epoch=r.source_epoch
+ORDER BY n.scheduled_at,n.id LIMIT sqlc.arg(page_size)::integer;
 
 -- name: LockAcceptanceStaff :one
 SELECT id FROM staff_users WHERE id=sqlc.arg(staff_id)::bigint FOR SHARE;

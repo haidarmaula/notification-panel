@@ -82,6 +82,18 @@ command evidence. Production policy/issuer provisioning, incarnation/ACL approva
 and supervised drain/handoff remain open. See the
 [verification record](docs/analysis/m05-replay-command-verification.md).
 
+## Scheduler runtime review — 2026-11-05
+
+| ID | Severity | Finding and remediation |
+| --- | --- | --- |
+| SR1 | P2 | The unused due-schedule query included old runtime epochs, which could fill the first bounded page once polling was wired. A real PostgreSQL red regression selected an old-origin row ahead of the live campaign. Fixed by joining exact current lineage/unsealed runtime while retaining expired schedules and migration-held bookkeeping. |
+
+Independent review found no concrete new fault in authenticated transport
+propagation, source-before-outbox locking, per-candidate promotion or loop
+cancellation/join ownership. The executable configuration/wiring and production
+verification gates remain open; see
+[runtime composition](docs/specs/m04-m05-runtime-composition.md).
+
 ## Critical Findings
 
 Crashes, security bypasses, data corruption, or issues that affect every user of a given endpoint.

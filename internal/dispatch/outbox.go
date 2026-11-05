@@ -40,14 +40,31 @@ const (
 type Outbox struct {
 	db        Transactor
 	publisher Publisher
+	source    *SourceManifest
 }
 
-// NewOutbox requires a database and synchronous publisher; it starts no workers.
+// NewOutbox retains source-unbound fixture compatibility and starts no workers.
+// Deployed publishers must use NewSourceOutbox and verified broker transport.
 func NewOutbox(db Transactor, publisher Publisher) (*Outbox, error) {
 	if db == nil || publisher == nil {
 		return nil, errors.New("outbox requires database and publisher")
 	}
 	return &Outbox{db: db, publisher: publisher}, nil
+}
+
+// NewSourceOutbox pins the approved destination for deployed publication. Each
+// drain locks runtime -> source -> outbox and holds source approval through its
+// broker call. The publisher must separately verify live metadata and own drain.
+func NewSourceOutbox(db Transactor, publisher Publisher, source SourceManifest) (*Outbox, error) {
+	if err := source.Validate(); err != nil {
+		return nil, err
+	}
+	outbox, err := NewOutbox(db, publisher)
+	if err != nil {
+		return nil, err
+	}
+	outbox.source = &source
+	return outbox, nil
 }
 
 func publishBackoff(attempts int32) time.Duration {
@@ -79,6 +96,15 @@ func (o *Outbox) DrainOne(ctx context.Context) (Outcome, error) {
 	}
 	if runtime.Sealed {
 		return Held, nil
+	}
+	if o.source != nil {
+		approved, err := o.source.approved(ctx, q)
+		if err != nil {
+			return "", err
+		}
+		if !approved {
+			return Held, nil
+		}
 	}
 	row, err := q.LockNextScopedSendOutbox(ctx, sqlc.LockNextScopedSendOutboxParams{OriginEpoch: runtime.OriginEpoch, SourceEpoch: runtime.SourceEpoch})
 	if errors.Is(err, pgx.ErrNoRows) {

@@ -56,7 +56,7 @@ func TestVerifyScopedMetadata(t *testing.T) {
 	good := func() *broker.MetadataResponse {
 		return &broker.MetadataResponse{ClusterID: "cluster-a", Topics: []broker.Topic{{Name: "send", Partitions: []broker.Partition{{Topic: "send", ID: 0, Leader: broker.Broker{Host: "broker", Port: 9093}}, {Topic: "send", ID: 1, Leader: broker.Broker{Host: "broker", Port: 9093}}}}}}
 	}
-	if err := verifyScopedMetadata(good(), "cluster-a", "send", 2); err != nil {
+	if err := ValidateScopedMetadata(good(), "cluster-a", "send", 2); err != nil {
 		t.Fatal(err)
 	}
 	for _, tt := range []struct {
@@ -75,12 +75,12 @@ func TestVerifyScopedMetadata(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := good()
 			tt.change(m)
-			if !errors.Is(verifyScopedMetadata(m, "cluster-a", "send", 2), ErrScopedSource) {
+			if !errors.Is(ValidateScopedMetadata(m, "cluster-a", "send", 2), ErrScopedSource) {
 				t.Fatal("accepted mismatched source")
 			}
 		})
 	}
-	if !errors.Is(verifyScopedMetadata(nil, "cluster-a", "send", 2), ErrScopedSource) {
+	if !errors.Is(ValidateScopedMetadata(nil, "cluster-a", "send", 2), ErrScopedSource) {
 		t.Fatal("accepted nil metadata")
 	}
 }

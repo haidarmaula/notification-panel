@@ -24,3 +24,8 @@ the tick; the polling caller must back off. The library owns no goroutines.
 This slice does not recover PROCESSING leases/provider claims, reconcile old epochs or activate the scheduler. [Replay execution libraries](../analysis/m05-replay-execution-verification.md)
 now provide separately authorized DLQ publication and expired replay-claim cleanup;
 PROCESSING/provider lease recovery remains M06 work.
+
+
+The [scheduler composition](m04-m05-runtime-composition.md) now polls this service
+alongside promotion, outbox and replay cleanup with joined task ownership.
+Executable configuration/wiring remain open; provider recovery is still M06.

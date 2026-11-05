@@ -45,5 +45,7 @@ review and are excluded.
 The outbox retains project/campaign identity and epochs. Down refuses accepted
 or scheduled records, keys, or pending outbox. The
 [bounded outbox dispatcher](m04-outbox-dispatch.md) is implemented as an unwired
-library and tested locally. Durable event admission and scheduler activation
-remain subsequent slices. Older publishers remain retired.
+library and tested locally. The [runtime composition](m04-m05-runtime-composition.md)
+now includes bounded due-schedule discovery/promotion, authenticated admission
+and source-bound publication. Executable activation remains open; older publishers
+remain retired.

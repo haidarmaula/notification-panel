@@ -237,8 +237,12 @@ protected fixed-file configuration, pinned trust, current DB authority checks,
 live cluster/topic/partition verification, serial safe reports and resource drain.
 No production source is enabled. Trusted issuer/grant provisioning, independently
 reviewed incarnation, deployment ACLs and backpressure/handoff verification remain
-release gates. Next implementation work is modern worker/scheduler composition
-before M06 provider execution.
+release gates. [Worker/scheduler composition foundations](../specs/m04-m05-runtime-composition.md)
+now include authenticated admission, source-bound publication, bounded due-schedule
+polling and four joined scheduler tasks, with a composed local TLS pipeline test.
+The [verification record](runtime-composition-verification.md) covers this boundary.
+Next is trusted per-process configuration and actual worker/scheduler entry-point
+wiring before M06 provider execution.
 
 ## 5. Execution checklist
 

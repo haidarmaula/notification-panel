@@ -89,10 +89,12 @@ func (p *ScopedProducer) VerifyClusterTopic(ctx context.Context, cluster string,
 		}
 		return ErrScopedSource
 	}
-	return verifyScopedMetadata(metadata, cluster, p.writer.Topic, partitions)
+	return ValidateScopedMetadata(metadata, cluster, p.writer.Topic, partitions)
 }
 
-func verifyScopedMetadata(metadata *broker.MetadataResponse, cluster, topicName string, count int32) error {
+// ValidateScopedMetadata checks the exact cluster/topic and contiguous partition
+// set required by an approved manifest. It does not establish topic incarnation.
+func ValidateScopedMetadata(metadata *broker.MetadataResponse, cluster, topicName string, count int32) error {
 	if metadata == nil || metadata.ClusterID != cluster || len(metadata.Topics) != 1 || count < 1 {
 		return ErrScopedSource
 	}

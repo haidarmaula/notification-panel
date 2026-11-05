@@ -183,8 +183,12 @@ configuration, pinned operational trust, verified DB TLS and authenticated broke
 transport, actual cluster/topic/partition checks, serial safe reports and cleanup.
 Local unit/race and PostgreSQL TLS/Kafka mTLS command fixtures pass. Operational
 issuer/grant provisioning, real deployment ACLs, reviewed incarnation and
-supervised producer drain/handoff remain gates. Next is modern worker/scheduler
-composition, then M06 provider execution.
+supervised producer drain/handoff remain gates. The
+[runtime foundation](../specs/m04-m05-runtime-composition.md) now passes local tests
+for mTLS group handoff, source-bound publication, bounded schedule polling and
+joined scheduler/worker composition. Trusted per-process policy and actual daemon
+entry-point wiring remain the next executable boundary before M06. See
+[verification](runtime-composition-verification.md).
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,
 preparation cancellation during rebalance, redelivery, offset fencing, and durable

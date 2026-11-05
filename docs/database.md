@@ -659,6 +659,14 @@ accepted/scheduled timestamps, keys or pending outbox evidence. See the
 [M04 contract](specs/m04-durable-acceptance.md) and
 [acceptance API](api/campaign-acceptance-api.md).
 
+Due-schedule discovery joins the application public UUID and the singleton runtime,
+selecting only unsealed exact origin/source lineage. It remains a nonlocking
+metadata scan; per-campaign promotion rechecks under canonical transaction locks.
+Expired schedules remain discoverable, and migration holds do not exclude already
+accepted bookkeeping. This query-only change adds no schema/migration and avoids
+stale/restored rows starving the first bounded polling page. See
+[runtime composition](specs/m04-m05-runtime-composition.md).
+
 ### Atomic audience preparation (M05)
 
 Migration 000023 separates modern notification_preparations and

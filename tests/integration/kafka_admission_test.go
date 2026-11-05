@@ -5,8 +5,12 @@ package integration
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strconv"
 	"sync/atomic"
 	"testing"
@@ -30,6 +34,15 @@ func (f brokerPreparationFixture) Prepare(ctx context.Context, e kafka.ScopedSen
 // Real group assignments/commits and DB preparation with one injected suspension
 // before preparation, to verify redelivery and immutable intent dedup together.
 func TestKafkaAdmissionGenerationHandoff(t *testing.T) {
+	kafkaAdmissionGenerationHandoff(t, false)
+}
+
+func TestAuthenticatedKafkaAdmissionGenerationHandoff(t *testing.T) {
+	kafkaAdmissionGenerationHandoff(t, true)
+}
+
+func kafkaAdmissionGenerationHandoff(t *testing.T, authenticated bool) {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 55*time.Second)
 	defer cancel()
 	pool := acceptanceFixture(t, ctx)
@@ -85,6 +98,12 @@ func TestKafkaAdmissionGenerationHandoff(t *testing.T) {
 	quarantine, err := dispatch.NewQuarantine(pool)
 	require.NoError(t, err)
 	config := dispatch.KafkaAdmissionConfig{Brokers: []string{"127.0.0.1:19092"}, GroupID: topic + "-group", SourceID: source, Topic: topic, ClusterID: metadata.ClusterID, Incarnation: "fixture-generation"}
+	if authenticated {
+		config.Brokers = []string{"127.0.0.1:19095"}
+		config.PartitionCount = 2
+		config.TLS = admissionFixtureTLS(t)
+	}
+
 	// A brand-new broker creates/loads __consumer_offsets on first lookup.
 	require.Eventually(t, func() bool {
 		coordinator, err := client.FindCoordinator(ctx, &broker.FindCoordinatorRequest{Key: config.GroupID, KeyType: broker.CoordinatorKeyTypeConsumer})
@@ -167,7 +186,13 @@ func TestKafkaAdmissionGenerationHandoff(t *testing.T) {
 	})
 	start := func(preparer dispatch.AdmissionPreparer) (context.CancelFunc, <-chan error) {
 		t.Helper()
-		runner, err := dispatch.NewKafkaAdmission(sqlc.New(pool), config, preparer, quarantine)
+		var runner *dispatch.KafkaAdmission
+		var err error
+		if authenticated {
+			runner, err = dispatch.NewAuthenticatedKafkaAdmission(sqlc.New(pool), config, preparer, quarantine)
+		} else {
+			runner, err = dispatch.NewKafkaAdmission(sqlc.New(pool), config, preparer, quarantine)
+		}
 		require.NoError(t, err)
 		runCtx, stop := context.WithCancel(ctx)
 		done := make(chan error, 1)
@@ -249,4 +274,20 @@ func TestKafkaAdmissionGenerationHandoff(t *testing.T) {
 	require.EqualValues(t, 2, snapshots, "both accepted campaigns have complete snapshots before offset advance")
 	stopFirst()
 	stopSecond()
+}
+
+func admissionFixtureTLS(t *testing.T) *tls.Config {
+	t.Helper()
+	directory := os.Getenv("HELLO_INTEGRATION_CERTS_DIR")
+	require.NotEmpty(t, directory, "use the isolated TLS fixture runner")
+	read := func(name string) []byte {
+		data, err := os.ReadFile(filepath.Join(directory, name))
+		require.NoError(t, err)
+		return data
+	}
+	certificate, err := tls.X509KeyPair(read("client.crt"), read("client.key"))
+	require.NoError(t, err)
+	roots := x509.NewCertPool()
+	require.True(t, roots.AppendCertsFromPEM(read("ca.crt")))
+	return &tls.Config{MinVersion: tls.VersionTLS12, RootCAs: roots, Certificates: []tls.Certificate{certificate}}
 }

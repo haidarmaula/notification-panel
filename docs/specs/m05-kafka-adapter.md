@@ -39,8 +39,14 @@ UUID. Therefore the incarnation generation is an operator-verified manifest,
 not automatic detection of topic recreation. Production requires provisioning
 and ACL/runbook controls that replace the manifest/source identity when a topic
 is recreated; an unknown/unreviewed generation must remain inactive. This gate
-must not be described as automatic topic-UUID validation. TLS/SASL and deployment
-shutdown timing remain explicit production configuration work.
+must not be described as automatic topic-UUID validation.
+
+[Authenticated runtime composition](m04-m05-runtime-composition.md) now provides
+verified TLS/mTLS or SASL policy for group, metadata and partition reads, with an
+explicit partition count. Deployed callers must use
+`NewAuthenticatedKafkaAdmission`; the original constructor remains for plaintext
+fixtures. Per-process trusted configuration and deployment shutdown timing remain
+open.
 
 Local tests must exercise actual broker generation cancellation, no unsafe offset
 advance and redelivery/dedup before process wiring. Source:
@@ -56,3 +62,9 @@ quarantine row before its offset advances. Both members join their fetchers on
 shutdown. The complete integration suite passes with GOFLAGS=-race. This uses one
 local broker, synthetic mobile identity and an explicitly provisioned fixture
 incarnation; it proves neither production Kafka HA nor real FCM delivery.
+
+
+The same two-member handoff fixture now also passes through the actual mTLS
+listener (`TestAuthenticatedKafkaAdmissionGenerationHandoff`), including all
+revocation, offset, quarantine, deduplication and shutdown assertions above.
+This verifies mTLS locally; it does not verify a deployed SASL profile or Kafka HA.

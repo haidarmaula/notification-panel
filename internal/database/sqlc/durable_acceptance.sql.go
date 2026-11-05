@@ -184,14 +184,20 @@ func (q *Queries) InsertSendOutbox(ctx context.Context, arg InsertSendOutboxPara
 }
 
 const listDueScopedSchedules = `-- name: ListDueScopedSchedules :many
-SELECT application_id,id FROM notifications WHERE status='SCHEDULED'
-  AND scheduled_at<=clock_timestamp() AND deadline_at IS NOT NULL AND origin_epoch IS NOT NULL AND source_epoch IS NOT NULL
-ORDER BY scheduled_at,id LIMIT $1::integer
+SELECT n.application_id,n.id,a.public_id AS application_public_id
+FROM notifications n
+JOIN applications a ON a.id=n.application_id
+JOIN notification_runtime r ON r.singleton
+WHERE n.status='SCHEDULED' AND n.scheduled_at<=clock_timestamp()
+  AND n.deadline_at IS NOT NULL AND NOT r.sealed
+  AND n.origin_epoch=r.origin_epoch AND n.source_epoch=r.source_epoch
+ORDER BY n.scheduled_at,n.id LIMIT $1::integer
 `
 
 type ListDueScopedSchedulesRow struct {
-	ApplicationID pgtype.Int8 `db:"application_id"`
-	ID            int64       `db:"id"`
+	ApplicationID       pgtype.Int8 `db:"application_id"`
+	ID                  int64       `db:"id"`
+	ApplicationPublicID pgtype.UUID `db:"application_public_id"`
 }
 
 func (q *Queries) ListDueScopedSchedules(ctx context.Context, pageSize int32) ([]ListDueScopedSchedulesRow, error) {
@@ -203,7 +209,7 @@ func (q *Queries) ListDueScopedSchedules(ctx context.Context, pageSize int32) ([
 	items := []ListDueScopedSchedulesRow{}
 	for rows.Next() {
 		var i ListDueScopedSchedulesRow
-		if err := rows.Scan(&i.ApplicationID, &i.ID); err != nil {
+		if err := rows.Scan(&i.ApplicationID, &i.ID, &i.ApplicationPublicID); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
