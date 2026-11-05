@@ -12,7 +12,6 @@ for tool in docker postman migrate go python3; do
 done
 docker info >/dev/null
 compose=(docker compose --env-file /dev/null -f compose.integration.yml -p hello-integration)
-"${compose[@]}" config --quiet
 
 # Fixed project/ports must never be shared with another active run.
 lock_dir="${TMPDIR:-/tmp}/hello-integration.lock"
@@ -52,17 +51,20 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-if [[ -n "$("${compose[@]}" ps -a -q)" ]]; then
-  printf 'Refusing to reuse existing hello-integration containers. Inspect them first.\n' >&2
-  exit 1
-fi
 python3 - <<'PY'
 import socket
-for port in (15432, 19092, 14010):
+for port in (15432, 19092, 19095, 14010):
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', port))
 PY
 log_dir="$(mktemp -d "${TMPDIR:-/tmp}/hello-integration.XXXXXX")"
+export HELLO_INTEGRATION_CERTS_DIR="$log_dir/tls"
+GOFLAGS= go run ./scripts/integration-certs.go "$HELLO_INTEGRATION_CERTS_DIR"
+"${compose[@]}" config --quiet
+if [[ -n "$("${compose[@]}" ps -a -q)" ]]; then
+  printf 'Refusing to reuse existing hello-integration containers. Inspect them first.\n' >&2
+  exit 1
+fi
 owns_compose=true
 "${compose[@]}" up -d --wait --wait-timeout 120
 
@@ -97,7 +99,7 @@ while time.monotonic() < deadline:
 else:
     raise SystemExit('FCM simulation readiness timed out')
 PY
-HELLO_INTEGRATION=1 go test -mod=readonly -tags=integration -count=1 -timeout=90s -v ./tests/integration
+HELLO_INTEGRATION=1 go test -mod=readonly -tags=integration -count=1 -timeout=120s -v ./tests/integration
 python3 - "$log_dir/simulation.ndjson" <<'PY'
 import collections, json, sys, time
 deadline = time.monotonic() + 5

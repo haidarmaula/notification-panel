@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/url"
@@ -17,6 +18,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"hello/internal/dispatch"
+	"hello/internal/kafka"
 )
 
 // ErrConfiguration deliberately omits decoder, DSN, key and filesystem details.
@@ -29,6 +31,7 @@ type Configuration struct {
 	database *pgxpool.Config
 	verifier *dispatch.ReplayVerifier
 	source   sourceManifest
+	kafka    kafka.ScopedProducerConfig
 }
 
 type sourceManifest struct {
@@ -45,7 +48,7 @@ type sourceManifest struct {
 // an insecure transport override. Broker TLS/SASL and live source verification
 // remain separate prerequisites before a session factory may enable execution.
 func LoadConfiguration(source io.Reader) (*Configuration, error) {
-	if source == nil {
+	if source == nil || !configurationEnvironmentAllowed() {
 		return nil, ErrConfiguration
 	}
 	data, err := io.ReadAll(io.LimitReader(source, 64*1024+1))
@@ -54,10 +57,11 @@ func LoadConfiguration(source io.Reader) (*Configuration, error) {
 	}
 	var databaseURL, issuer, audience, deployment, keyText, sourceID string
 	var manifest sourceManifest
+	var kafkaPolicy json.RawMessage
 	if decodeObject(data, map[string]any{
 		"database_url": &databaseURL, "issuer": &issuer, "audience": &audience, "deployment": &deployment,
 		"verification_key": &keyText, "log_source_id": &sourceID, "cluster_identity": &manifest.clusterIdentity,
-		"topic_name": &manifest.topicName, "topic_incarnation": &manifest.topicIncarnation, "partition_count": &manifest.partitionCount,
+		"topic_name": &manifest.topicName, "topic_incarnation": &manifest.topicIncarnation, "partition_count": &manifest.partitionCount, "kafka": &kafkaPolicy,
 	}) != nil {
 		return nil, ErrConfiguration
 	}
@@ -78,7 +82,11 @@ func LoadConfiguration(source io.Reader) (*Configuration, error) {
 	if err != nil {
 		return nil, ErrConfiguration
 	}
-	return &Configuration{database: database, verifier: verifier, source: manifest}, nil
+	brokerConfig, err := parseBrokerPolicy(kafkaPolicy, manifest.topicName)
+	if err != nil {
+		return nil, ErrConfiguration
+	}
+	return &Configuration{database: database, verifier: verifier, source: manifest, kafka: brokerConfig}, nil
 }
 
 func validPolicyText(value string) bool {
@@ -101,12 +109,8 @@ func validTopic(value string) bool {
 // environment defaults. Only verified TLS is permitted; host/identity overrides,
 // multiple hosts, duplicate query fields and plaintext fallbacks are rejected.
 func parseDatabasePolicy(value string) (*pgxpool.Config, error) {
-	// pgx merges PG* variables before URI settings and can load service policies.
-	// Reject that second policy source; never mutate the process environment.
-	for _, setting := range os.Environ() {
-		if name, value, _ := strings.Cut(setting, "="); strings.HasPrefix(name, "PG") && value != "" {
-			return nil, ErrConfiguration
-		}
+	if !configurationEnvironmentAllowed() {
+		return nil, ErrConfiguration
 	}
 
 	u, err := url.Parse(value)
@@ -152,4 +156,16 @@ func parseDatabasePolicy(value string) (*pgxpool.Config, error) {
 	cfg.MinConns = 0
 	cfg.ConnConfig.RuntimeParams["application_name"] = "hello-requeue"
 	return cfg, nil
+}
+
+// Reject alternate policy/trust sources before pgx parsing or deferred TLS work.
+// The loader never clears or rewrites the process environment.
+func configurationEnvironmentAllowed() bool {
+	for _, setting := range os.Environ() {
+		name, value, _ := strings.Cut(setting, "=")
+		if value != "" && (strings.HasPrefix(name, "PG") || name == "SSL_CERT_FILE" || name == "SSL_CERT_DIR") {
+			return false
+		}
+	}
+	return true
 }

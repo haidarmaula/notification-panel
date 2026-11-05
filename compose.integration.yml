@@ -5,6 +5,16 @@ services:
       POSTGRES_USER: integration
       POSTGRES_PASSWORD: integration_only
       POSTGRES_DB: notification_integration
+    command:
+      - bash
+      - -ec
+      - |
+        cp /fixtures/server.key /tmp/integration-server.key
+        chown postgres:postgres /tmp/integration-server.key
+        chmod 600 /tmp/integration-server.key
+        exec docker-entrypoint.sh postgres -c ssl=on -c ssl_cert_file=/fixtures/server.crt -c ssl_key_file=/tmp/integration-server.key
+    volumes:
+      - '${HELLO_INTEGRATION_CERTS_DIR:?fixture certificate directory required}:/fixtures:ro'
     ports:
       - '127.0.0.1:15432:5432'
     tmpfs:
@@ -22,9 +32,9 @@ services:
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: HOST://0.0.0.0:9092,INTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: HOST://127.0.0.1:19092,INTERNAL://kafka:9094
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: HOST:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LISTENERS: HOST://0.0.0.0:9092,SECURE://0.0.0.0:9095,INTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: HOST://127.0.0.1:19092,SECURE://127.0.0.1:19095,INTERNAL://kafka:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: HOST:PLAINTEXT,SECURE:SSL,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
@@ -33,8 +43,17 @@ services:
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
       KAFKA_LOG_DIRS: /tmp/integration-kafka
+      KAFKA_SSL_KEYSTORE_TYPE: PEM
+      KAFKA_SSL_KEYSTORE_LOCATION: /fixtures/server.pem
+      KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /fixtures/ca.crt
+      KAFKA_SSL_CLIENT_AUTH: required
+      KAFKA_SSL_ENABLED_PROTOCOLS: TLSv1.2,TLSv1.3
     ports:
       - '127.0.0.1:19092:9092'
+      - '127.0.0.1:19095:9095'
+    volumes:
+      - '${HELLO_INTEGRATION_CERTS_DIR:?fixture certificate directory required}:/fixtures:ro'
     tmpfs:
       - /tmp/integration-kafka:uid=1000,gid=1000
     healthcheck:

@@ -89,8 +89,10 @@ cleanup issue. The literal pre-publication margin was strengthened after review.
 
 ## Remaining gates
 
-Add a restricted CLI and configuration/issuer integration, then wire the modern
-worker/scheduler under reviewed lifecycle, source manifest, TLS/SASL/ACL, drain
+The [restricted CLI and session wiring](m05-replay-command-verification.md) are
+now tested locally with PostgreSQL TLS/Kafka mTLS. Trusted issuer integration and
+production source controls remain open. Next wire the modern worker/scheduler
+under reviewed lifecycle, source manifest, transport/ACL, drain
 and rollout controls. M05 is not closed by this library slice. M06 FCM execution
 and M07 receipt/statistics contracts remain separate work; replay publication
 acknowledgement means neither preparation nor provider/device delivery.

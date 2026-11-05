@@ -301,3 +301,15 @@ func TestRunPreservesSuppliedPositionOrder(t *testing.T) {
 		t.Fatalf("reports: %+v", rows)
 	}
 }
+
+type canceledInput struct{ cancel context.CancelFunc }
+
+func (r canceledInput) Read([]byte) (int, error) { r.cancel(); return 0, io.ErrClosedPipe }
+func TestRunCancellationDuringInput(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	var out, diag bytes.Buffer
+	if code := Run(ctx, nil, canceledInput{cancel}, &out, &diag, nil); code != 1 || !strings.Contains(diag.String(), "canceled") {
+		t.Fatalf("code=%d diag=%q", code, diag.String())
+	}
+}

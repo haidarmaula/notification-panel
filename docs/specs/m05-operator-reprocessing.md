@@ -2,10 +2,11 @@
 
 Status: implementation in progress, 2026-11-05. Migration 000025 and generated
 persistence primitives implement slice 1; see the
-[verification record](../analysis/m05-replay-persistence-verification.md). No replay
-executable, operational credential issuer or production activation is implemented.
-The [command protocol adapter](m05-replay-command.md) now implements strict stdin
-input, serial inspection/execution and safe partial reports as an unwired library.
+[verification record](../analysis/m05-replay-persistence-verification.md). The
+[restricted executable](m05-replay-command.md) now implements strict stdin input,
+trusted configuration, serial inspection/execution and safe partial reports, with
+local PostgreSQL TLS/Kafka mTLS evidence. Operational issuer integration, source
+incarnation approval and production activation remain open.
 [Scoped request registration](../analysis/m05-replay-registration-verification.md)
 is available as an unwired library through migration 000026; per-position replay
 broker execution and expired-claim recovery are now available as unwired libraries;

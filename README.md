@@ -10,6 +10,8 @@ For current implementation status and release gates, use the
 [production readiness plan](docs/analysis/production-readiness-plan.md).
 The editable [target architecture diagram](docs/diagrams/README.md) shows the
 multi-application design and distinguishes local foundations from planned work.
+The restricted [operator replay runbook](docs/runbooks/operator-replay.md) covers
+the new CLI and its deployment gates.
 The architecture overview below describes the earlier pipeline; its modern
 replacement is still under implementation and is not production-ready.
 

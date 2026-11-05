@@ -3,8 +3,8 @@
 Status: local provenance-verification library, 2026-11-04. This implements input
 binding and cryptographic verification for the [reprocessing protocol](m05-operator-reprocessing.md).
 The [registration service](../analysis/m05-replay-registration-verification.md)
-adds transaction-time DB authority/revocation and atomic request audit. Publication
-and CLI remain unimplemented; this verifier itself only establishes provenance.
+adds transaction-time DB authority/revocation and atomic request audit. Publication and the [restricted CLI](m05-replay-command.md) are now implemented
+and tested locally; this verifier itself only establishes provenance.
 A valid assertion alone is insufficient to mutate replay state.
 
 ## Trust and lifetime

@@ -69,8 +69,17 @@ handoff therefore requires producer drain. CLI/runtime/deployment gates remain o
 | RC1 | P2 | Slash-only or encoded-slash database URI paths passed the explicit-name check but pgx normalized them to an absent database. Fixed by rejecting an empty effective path and comparing the parsed database name. Red/green URI regressions cover both forms. |
 | RC2 | P2 | pgx merged ambient `PG*`/service policy and home certificate defaults into the supposedly explicit replay configuration. Fixed by rejecting nonempty `PG*` settings, overriding unconfigured certificate paths and disabling implicit passfile lookup. Environment regressions and focused race tests pass; the process environment is never changed by the loader. |
 
-This is a static configuration/command adapter review. Trusted-file, executable,
-live broker/source, transport and shutdown gates remain open. See the
+Additional executable/session review:
+
+| ID | Severity | Finding and remediation |
+| --- | --- | --- |
+| RC3 | P2 | Cancellation while reading incomplete input was reported as usage exit 2. Fixed by preferring context cancellation over the resulting pipe-read error; canceled-reader and real-pipe regressions pass. |
+| RC4 | P2 | Root ownership/POSIX modes alone missed Darwin extended ACL write/security/delete grants. Fixed by rejecting nonempty extended ACLs on every config/ancestor/DB TLS path; native Darwin and Linux ACL regressions pass, with unsupported inspection failing closed. |
+| RC5 | P2 | Implicit system roots could inherit `SSL_CERT_FILE`/`SSL_CERT_DIR` outside trusted JSON. Fixed by rejecting nonempty overrides at load and again before session startup; environment regressions pass. |
+
+The executable/session now also has local PostgreSQL verified-TLS and Kafka mTLS
+command evidence. Production policy/issuer provisioning, incarnation/ACL approval
+and supervised drain/handoff remain open. See the
 [verification record](docs/analysis/m05-replay-command-verification.md).
 
 ## Critical Findings

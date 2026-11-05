@@ -178,12 +178,13 @@ writes. [Claim transactions](m05-replay-claim-verification.md) commit per-positi
 attempt/control/audit with exclusive leases and no proof on uncertain commit.
 [Publication and expired-claim recovery](m05-replay-execution-verification.md)
 pass locally, including real Kafka/dedup and unknown commit windows. The
-[command adapter](../specs/m05-replay-command.md) adds strict stdin parsing, default
-dry-run, serial execution and safe partial reports, covered by unit/race tests.
-Static trust/database/source configuration is validated locally; live identity and
-file/session composition remain open.
-Executable/configuration/issuer integration, producer drain, source manifest and
-runtime/deployment wiring remain open.
+[restricted command](../specs/m05-replay-command.md) now adds protected fixed-file
+configuration, pinned operational trust, verified DB TLS and authenticated broker
+transport, actual cluster/topic/partition checks, serial safe reports and cleanup.
+Local unit/race and PostgreSQL TLS/Kafka mTLS command fixtures pass. Operational
+issuer/grant provisioning, real deployment ACLs, reviewed incarnation and
+supervised producer drain/handoff remain gates. Next is modern worker/scheduler
+composition, then M06 provider execution.
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,
 preparation cancellation during rebalance, redelivery, offset fencing, and durable

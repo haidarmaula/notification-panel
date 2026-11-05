@@ -1,9 +1,11 @@
 # M05 replay command protocol
 
-Date: 2026-11-05. Status: implemented and unit-tested as the dependency-injected
-`internal/requeue` adapter. The `cmd/requeue` executable, deployment file/session wiring, source verification and operational issuer integration remain open.
-This protocol does not activate a broker or grant production replay authority.
-See the [local verification record](../analysis/m05-replay-command-verification.md).
+Date: 2026-11-05. Status: `cmd/requeue`, trusted-file loading and session wiring
+are implemented and tested locally, including verified PostgreSQL TLS and Kafka
+mTLS. No production source is activated. Trusted issuer/grant integration,
+incarnation approval, deployment ACLs and supervised drain/handoff remain gates.
+See the [runbook](../runbooks/operator-replay.md) and
+[local verification](../analysis/m05-replay-command-verification.md).
 
 ## Input and invocation
 
@@ -82,20 +84,22 @@ fail while retaining any earlier result rows. The command must not detach a
 producer drain into an unjoined goroutine. Callers own stdin and must arrange
 interruptible reads; a byte limit is not a time limit on an incomplete pipe.
 
-The production factory and executable still need:
+`Configuration.Open` verifies the credential before connecting, checks runtime
+and source registration under canonical locks, then performs current application/
+staff/grant inspection. The same authenticated transport checks actual cluster,
+topic and partition metadata before returning a session, and again before each
+publication. A dry-run session has no executor. Every service operation still
+reauthorizes under its own transaction; startup inspection grants no cached access.
 
-- A read-once trusted configuration source and pinned operational verification key.
-- Explicit database/TLS and broker TLS/SASL/ACL policies without legacy config or
-  ordinary staff JWT fallbacks.
-- Verification of the approved source registration, actual broker cluster/topic
-  and reviewed incarnation manifest before enabling publication.
-- Signal handling, producer drain and source/epoch handoff behavior tested with
-  actual PostgreSQL/Kafka fixtures, including initialization and output failures.
-- Operational grant issuance/revocation and trusted step-up issuer integration.
+`cmd/requeue` loads only protected deployment policy, handles SIGINT/SIGTERM, and
+joins the callback that interrupts incomplete stdin/blocked stdout. Broken stdout
+returns an error instead of terminating with SIGPIPE before producer cleanup.
+Cancellation during input is an operational failure, not a malformed-input error.
 
-The adapter tests exercise command behavior using substituted sessions. They do
-not establish real database authorization, source identity, broker I/O drain or
-production readiness; those are separate service/integration/deployment gates.
+Operational release still requires the dedicated trusted MFA issuer and grant
+provisioning, real broker/DB ACLs and credentials, independently reviewed topic
+incarnation, and supervised backpressure/drain/source-handoff/restore exercises.
+Local command tests do not establish those deployment conditions.
 
 ## Static deployment configuration
 
@@ -114,6 +118,7 @@ required; duplicate/unknown/aliased/null fields and trailing values are rejected
 | `topic_name` | Exact Kafka topic, 1–249 ASCII letters/digits/dot/underscore/hyphen, excluding `.` and `..`. |
 | `topic_incarnation` | Expected reviewed incarnation label, 1–255 bytes. |
 | `partition_count` | Positive int32 expected partition count. |
+| `kafka` | Exact authenticated transport object described below. |
 
 Cluster/incarnation labels reject edge whitespace and controls. Source values
 are expectations, not proof of a live broker or authorization to activate one.
@@ -133,7 +138,20 @@ paths explicitly override pgx home-directory defaults; absent custom roots use
 system roots with hostname verification. Implicit passfile lookup is neutralized.
 The loader does not mutate process environment or read `.env`.
 
-The caller still owns trusted-file permission/parent-directory checks and stream
-cancellation. Broker TLS/SASL/ACL configuration, live source checks, executable
-composition and actual connection/drain tests remain open. Parsing a verified-TLS
-policy does not establish that a server certificate, role or network is usable.
+`kafka` requires exact fields `brokers` (1–8 unique host:port addresses),
+`authentication` (`MTLS` or `SASL_PLAIN`), `ca_pem`, `client_certificate_pem`,
+`client_key_pem`, `sasl_username` and `sasl_password`. Unused credentials must be
+empty. TLS 1.2+ and certificate/host verification are mandatory. mTLS requires a
+parsed certificate/key pair; SASL/PLAIN requires a username/password and verified
+TLS. CA input is empty for OS roots or consists entirely of PEM certificates.
+No anonymous/plaintext or unsupported authentication fallback is available.
+
+Nonempty `SSL_CERT_FILE` and `SSL_CERT_DIR` are rejected alongside `PG*` settings,
+at load and session startup. The protected-file loader checks root ownership,
+mode, symlinks and extended ACLs for config/ancestors and DB TLS files; ACL
+inspection failure rejects the policy. The standalone stream loader relies on
+its caller to supply trusted input. No configuration loader mutates environment.
+
+The [runbook](../runbooks/operator-replay.md) specifies fixed platform paths and
+provisioning. Library/session tests do not approve deployment or establish that
+production roles, source manifest, transport authentication and ACLs are usable.

@@ -95,10 +95,16 @@ type ScopedProducer struct {
 	transport *broker.Transport
 }
 
+// NewScopedProducer constructs a plaintext producer for isolated fixtures.
+// Deployed scoped runtimes must use NewAuthenticatedScopedProducer.
 func NewScopedProducer(address, topic string) *ScopedProducer {
 	transport := &broker.Transport{DialTimeout: time.Second}
+	return newScopedProducer([]string{address}, topic, transport)
+}
+
+func newScopedProducer(addresses []string, topic string, transport *broker.Transport) *ScopedProducer {
 	return &ScopedProducer{transport: transport, writer: &broker.Writer{
-		Addr: broker.TCP(address), Topic: topic, Balancer: &broker.Hash{},
+		Addr: broker.TCP(addresses...), Topic: topic, Balancer: &broker.Hash{},
 		RequiredAcks: broker.RequireAll, BatchSize: 1, MaxAttempts: 1,
 		ReadTimeout: time.Second, WriteTimeout: time.Second, Transport: transport,
 	}}

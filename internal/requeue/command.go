@@ -79,13 +79,13 @@ func Run(ctx context.Context, args []string, input io.Reader, output, diagnostic
 		return 1
 	}
 	request, credential, err := decodeInput(input)
-	if err != nil {
-		diagnostic(diagnostics, "invalid replay input; use --help")
-		return 2
-	}
 	if ctx.Err() != nil {
 		diagnostic(diagnostics, "replay canceled")
 		return 1
+	}
+	if err != nil {
+		diagnostic(diagnostics, "invalid replay input; use --help")
+		return 2
 	}
 	if open == nil {
 		diagnostic(diagnostics, "replay configuration unavailable")

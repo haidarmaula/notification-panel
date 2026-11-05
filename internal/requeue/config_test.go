@@ -22,7 +22,7 @@ func validConfiguration(t *testing.T) map[string]any {
 		"issuer":       "operations.example.test", "audience": "notification-replay", "deployment": "production-a",
 		"verification_key": base64.StdEncoding.EncodeToString(key),
 		"log_source_id":    "00000000-0000-4000-8000-000000000003", "cluster_identity": "approved-cluster",
-		"topic_name": "notification.send.requested", "topic_incarnation": "reviewed-incarnation", "partition_count": 4,
+		"topic_name": "notification.send.requested", "topic_incarnation": "reviewed-incarnation", "partition_count": 4, "kafka": validBrokerPolicy(),
 	}
 }
 func configurationJSON(t *testing.T, data map[string]any) string {
@@ -37,7 +37,7 @@ func clearPostgresEnvironment(t *testing.T) {
 	t.Helper()
 	for _, setting := range os.Environ() {
 		name, _, _ := strings.Cut(setting, "=")
-		if strings.HasPrefix(name, "PG") {
+		if strings.HasPrefix(name, "PG") || name == "SSL_CERT_FILE" || name == "SSL_CERT_DIR" {
 			t.Setenv(name, "")
 		}
 	}
@@ -155,7 +155,7 @@ func TestLoadConfigurationRetainsEncodedDatabasePassword(t *testing.T) {
 
 func TestLoadConfigurationRejectsAmbientPostgresSettings(t *testing.T) {
 	clearPostgresEnvironment(t)
-	for _, name := range []string{"PGDATABASE", "PGOPTIONS", "PGSSLROOTCERT", "PGSERVICE", "PGSERVICEFILE"} {
+	for _, name := range []string{"PGDATABASE", "PGOPTIONS", "PGSSLROOTCERT", "PGSERVICE", "PGSERVICEFILE", "SSL_CERT_FILE", "SSL_CERT_DIR"} {
 		t.Run(name, func(t *testing.T) {
 			t.Setenv(name, "unapproved-setting")
 			cfg, err := LoadConfiguration(strings.NewReader(configurationJSON(t, validConfiguration(t))))

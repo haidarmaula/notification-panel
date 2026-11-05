@@ -231,13 +231,14 @@ acceptance/state/holds without writes. [Per-position claims](m05-replay-claim-ve
 now commit classification/control/audit atomically and withhold execution proof
 on uncertain commit. [Publication/result transactions and expired-claim recovery](m05-replay-execution-verification.md)
 also pass locally, including real Kafka, unknown commit outcomes and lease expiry.
-The [command adapter](../specs/m05-replay-command.md) now passes unit/race tests
-for strict stdin input, default dry-run, serial execution and safe partial reports.
-Its static configuration loader also validates pinned trust, explicit verified-TLS
-database policy and source expectations; it does not establish live source identity.
-Restricted executable/configuration, issuer/manifest/drain verification and modern
-worker/scheduler wiring remain open before M06 provider execution. Replay is not
-enabled in a binary or production deployment.
+The [restricted replay command](m05-replay-command-verification.md) now passes
+local unit/race and PostgreSQL verified-TLS/Kafka mTLS integration tests. It has
+protected fixed-file configuration, pinned trust, current DB authority checks,
+live cluster/topic/partition verification, serial safe reports and resource drain.
+No production source is enabled. Trusted issuer/grant provisioning, independently
+reviewed incarnation, deployment ACLs and backpressure/handoff verification remain
+release gates. Next implementation work is modern worker/scheduler composition
+before M06 provider execution.
 
 ## 5. Execution checklist
 
@@ -278,7 +279,7 @@ work on unchecked rows has started, as noted.
 - [ ] 21. Provider selection/credentials, error contract, chunking, and invalid-token handling.
 - [ ] 22. M05 atomic fan-out intents, device snapshots/identity, and unique constraints pass locally, including 20k intents; M06 exclusive provider claims do not yet.
 - [ ] 23. Bounded retry/backoff, lease expiry, recovery, TTL/budget terminalization.
-- [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; replay registration/inspection/claim/publication and expired-claim cleanup libraries also pass locally. Replay CLI/configuration, source manifest/drain and runtime deployment remain pending.
+- [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; replay registration/inspection/claim/publication and expired-claim cleanup libraries also pass locally. Replay CLI/configuration and PostgreSQL verified-TLS/Kafka mTLS command tests also pass locally. Production issuer/incarnation approval, supervised drain/handoff and runtime deployment remain pending.
 - [ ] 25. M04 atomic send idempotency + claim + outbox, promotion/expiry, and bounded dispatcher pass locally; the scheduler binary does not yet use durable handoff.
 - [ ] 26. Delivery update outbox and consumer dedup/ordering contract.
 - [ ] 27. Bounded concurrency, page/chunk memory limits, provider rate limits, and backpressure.
