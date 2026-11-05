@@ -16,13 +16,14 @@ the same change. Keep labels and explanatory text in English.
 
 ## Scope and status
 
-- Green identifies foundations implemented and tested locally. Labels explicitly
-  identify outstanding runtime or operational work; green does not mean a
-  complete milestone or production readiness.
-- Amber identifies planned work or incomplete runtime composition.
-- Blue identifies external clients, messaging infrastructure, or providers.
-- Solid arrows show foundation flows; dashed arrows show planned flows. Boxes
-  describe logical responsibilities, not a requirement for separate services.
+- The sketch layout groups backend responsibilities inside a dashed boundary;
+  clients, Kafka and the delivery provider remain outside it.
+- Colors identify responsibilities: teal for client/API/control flows, amber for
+  broker publication, purple for admission/delivery, and green for durable state.
+  Colors do not represent implementation completion.
+- Named arrows describe target data flows. The implementation snapshot below
+  the drawing separates local evidence from work still open. Boxes describe
+  logical responsibilities rather than mandatory separate services.
 - The API commits acceptance and outbox together in PostgreSQL. The publisher
   reads that outbox; there is no direct API-to-Kafka dual write.
 - Admission persists the audience snapshot and delivery intents. The executor
