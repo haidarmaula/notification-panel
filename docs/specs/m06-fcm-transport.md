@@ -14,8 +14,8 @@ Only declared routes may build a per-device payload; no raw SDK message API exis
 An acquired permit precedes the DB device claim. Failure to acquire consumes no
 attempt. On claim failure, release the permit neutrally. Sending/releasing copied
 permits shares one-use state. An unused permit cannot start after client shutdown.
-The later executor must separately consume its private attempt proof and recheck
-DB lease/deadline/current binding immediately before submission.
+The [Submitter](m06-submission.md) separately consumes its private attempt proof
+and rechecks DB lease/deadline/current binding immediately before submission.
 
 Logical admission and physical HTTP start each have their own pacing gate at the
 configured request rate. This preserves pre-claim rate permits while controlling
@@ -95,7 +95,7 @@ The client is process-local; restarts lose its cooldown/breaker state. Durable
 per-attempt retry/finalization and deployment restart/backpressure policy remain
 part of the later executor and operational acceptance.
 
-Managed ADC/startup policy, DB-proof-aware submission, fenced results,
+Managed ADC/startup policy, fenced results,
 retry/recovery/finalization/update outbox and worker composition remain required.
 Numeric SLO/quota allocation, real Firebase/APNs/mobile behavior and release gates
 remain unverified. Reference: pinned SDK `internal/http_client.go`, cloud auth

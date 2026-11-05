@@ -704,9 +704,14 @@ There is no row-count/identity rewrite, budget refund or implicit whole-page cla
 
 The down migration takes table locks and refuses retained generation/attempt
 history, even after release. It cannot erase fencing evidence on a used pipeline.
-Empty up/down/up remains supported. This schema/service boundary does not yet
-implement provider calls, attempt results, terminalization, receipt signing or
-update outbox. See the [M06 contract](specs/m06-execution.md).
+Empty up/down/up remains supported. Lease/reservation alone does not grant
+provider permission. The separate [submission boundary](specs/m06-submission.md)
+now consumes acknowledged reservations once and rechecks exact unresolved attempt,
+current identity, frozen receipt metadata and live DB-clock lease/deadline after
+credential/rate waits. Query-only changes add bounded payload reads and a remaining
+lease/deadline interval; no schema change is required. Locks release before provider
+I/O, and unknown validation commits authorize none. Attempt result persistence,
+terminalization and update outbox remain open. See the [M06 contract](specs/m06-execution.md).
 
 ### Frozen receipt capability metadata (M06)
 

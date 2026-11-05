@@ -1,7 +1,8 @@
 # M06 scoped provider execution
 
 Date: 2026-11-05. Status: lease/reservation persistence and service are implemented
-and locally tested; later boundaries remain specified. Delivery runtime remains
+and locally tested. [Single-use submission](m06-submission.md) is implemented;
+result persistence/recovery/outbox remain specified. Delivery runtime remains
 disabled. See [verification](../analysis/m06-execution-verification.md).
 Dependencies: [ADR-01](../adr/adr-01-provider-retry.md),
 [ADR-04](../adr/adr-04-provider-selection.md),
@@ -71,8 +72,8 @@ Receipt metadata freezes atomically with the first charge; retries preserve its
 key/environment/expiry and charged legacy intents without metadata remain held.
 Only an acknowledged commit returns a private in-memory attempt capability. A lost
 commit acknowledgement returns none, even if the database committed. No row lookup
-can recreate that permission. The later executor must consume a shared one-use bit
-before provider I/O and recheck deadline/lease/route; a copied result cannot cause
+can recreate that permission. The Submitter consumes a shared one-use bit
+before provider I/O and rechecks deadline/lease/route after credential/rate waits; a copied result cannot cause
 another invocation. This does not fence physical requests under arbitrary process
 suspension or provider uncertainty, and does not promise exactly-once push delivery.
 

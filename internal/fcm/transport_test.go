@@ -1,8 +1,10 @@
 package fcm
 
 import (
+	"cloud.google.com/go/auth"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -154,5 +156,77 @@ func TestPhysicalPacingAfterClaimDelay(t *testing.T) {
 	}
 	if len(starts) != 2 || starts[1].Sub(starts[0]) < 45*time.Millisecond {
 		t.Fatal("post-claim burst bypassed rate")
+	}
+}
+
+func TestFinalAuthorizationRunsAfterCredentialsAndBoundsHTTP(t *testing.T) {
+	config, request := transportFixture(t)
+	credentialReady := false
+	source := tokenFunc(func(context.Context) (*auth.Token, error) {
+		credentialReady = true
+		return fixtureToken(context.Background())
+	})
+	c, err := newClient(config, source, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		<-r.Context().Done()
+		return nil, r.Context().Err()
+	}), func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	p, err := c.Acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	started := time.Now()
+	out := c.SendAuthorized(context.Background(), p, request, func(context.Context) (time.Time, error) {
+		if !credentialReady {
+			t.Error("authorization ran before refresh")
+		}
+		return time.Now().Add(30 * time.Millisecond), nil
+	})
+	if out.Disposition != Unconfirmed || out.PhysicalRequests != 1 || time.Since(started) > time.Second {
+		t.Fatal(out)
+	}
+	p, err = c.Acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	out = c.SendAuthorized(context.Background(), p, request, func(context.Context) (time.Time, error) { return time.Time{}, errors.New("private DB fault") })
+	if out.Disposition != NotSubmitted || out.Reason != AuthorizationFailure || out.PhysicalRequests != 0 {
+		t.Fatal(out)
+	}
+}
+
+func TestAuthorizedSendRejectsForeignPermit(t *testing.T) {
+	config, request := transportFixture(t)
+	blocked := roundTripFunc(func(*http.Request) (*http.Response, error) {
+		t.Error("unexpected provider call")
+		return nil, errTransport
+	})
+	first, second := makeClient(t, config, blocked), makeClient(t, config, blocked)
+	if !first.Allows(config.Routes[0]) {
+		t.Fatal("declared route missing")
+	}
+	route := config.Routes[0]
+	route.Environment = "foreign"
+	if first.Allows(route) {
+		t.Fatal("foreign environment allowed")
+	}
+	permit, err := second.Acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer permit.Release()
+	out := first.SendAuthorized(context.Background(), permit, request, func(context.Context) (time.Time, error) {
+		t.Error("foreign permit authorized")
+		return time.Now().Add(time.Minute), nil
+	})
+	if out.Disposition != NotSubmitted || out.PhysicalRequests != 0 || out.Reason != AuthorizationFailure {
+		t.Fatal(out)
+	}
+	first.Close()
+	if first.Allows(config.Routes[0]) {
+		t.Fatal("closed client allows route")
 	}
 }

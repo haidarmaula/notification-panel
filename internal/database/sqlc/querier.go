@@ -252,6 +252,7 @@ type Querier interface {
 	GetDeviceTokenByID(ctx context.Context, id int64) (DeviceToken, error)
 	GetDeviceTokenByPushToken(ctx context.Context, pushToken string) (DeviceToken, error)
 	GetExecutionIntentIdentity(ctx context.Context, arg GetExecutionIntentIdentityParams) (GetExecutionIntentIdentityRow, error)
+	GetExecutionProviderRoute(ctx context.Context, arg GetExecutionProviderRouteParams) (GetExecutionProviderRouteRow, error)
 	GetFrozenReceiptMetadata(ctx context.Context, arg GetFrozenReceiptMetadataParams) (GetFrozenReceiptMetadataRow, error)
 	// ==========================================
 	// GET
@@ -417,6 +418,7 @@ type Querier interface {
 	LockExecutionApplication(ctx context.Context, applicationPublicID pgtype.UUID) (LockExecutionApplicationRow, error)
 	LockExecutionBinding(ctx context.Context, arg LockExecutionBindingParams) (InstallationBinding, error)
 	LockExecutionInstallation(ctx context.Context, arg LockExecutionInstallationParams) (MobileInstallation, error)
+	LockExecutionSubmission(ctx context.Context, arg LockExecutionSubmissionParams) (LockExecutionSubmissionRow, error)
 	LockInstallationProject(ctx context.Context, applicationID int64) (string, error)
 	LockInstallationUser(ctx context.Context, arg LockInstallationUserParams) (int64, error)
 	LockMobileInstallation(ctx context.Context, arg LockMobileInstallationParams) (MobileInstallation, error)

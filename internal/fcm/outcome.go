@@ -24,21 +24,22 @@ const (
 type Reason string
 
 const (
-	Success           Reason = "accepted"
-	Unregistered      Reason = "unregistered"
-	InvalidPayload    Reason = "invalid_payload"
-	SenderMismatch    Reason = "sender_mismatch"
-	CredentialFailure Reason = "credentials"
-	APNsCredentials   Reason = "apns_credentials"
-	Quota             Reason = "quota"
-	Unavailable       Reason = "unavailable"
-	Internal          Reason = "provider_internal"
-	Unknown           Reason = "unknown"
-	Network           Reason = "transport_uncertain"
-	InvalidResponse   Reason = "invalid_response"
-	Closed            Reason = "closed"
-	PermitUsed        Reason = "permit_used"
-	Cancelled         Reason = "cancelled"
+	AuthorizationFailure Reason = "execution_authorization"
+	Success              Reason = "accepted"
+	Unregistered         Reason = "unregistered"
+	InvalidPayload       Reason = "invalid_payload"
+	SenderMismatch       Reason = "sender_mismatch"
+	CredentialFailure    Reason = "credentials"
+	APNsCredentials      Reason = "apns_credentials"
+	Quota                Reason = "quota"
+	Unavailable          Reason = "unavailable"
+	Internal             Reason = "provider_internal"
+	Unknown              Reason = "unknown"
+	Network              Reason = "transport_uncertain"
+	InvalidResponse      Reason = "invalid_response"
+	Closed               Reason = "closed"
+	PermitUsed           Reason = "permit_used"
+	Cancelled            Reason = "cancelled"
 )
 
 // Outcome contains safe normalized evidence. PhysicalRequests counts attempted
@@ -62,7 +63,11 @@ func classify(name string, sdkErr error, record callSnapshot, project string, de
 		now = record.at
 	}
 	if record.calls == 0 {
-		return Outcome{Disposition: NotSubmitted, Reason: Network}
+		reason := record.reason
+		if reason == "" {
+			reason = Network
+		}
+		return Outcome{Disposition: NotSubmitted, Reason: reason}
 	}
 	retry := func(reason Reason, disposition Disposition, floor time.Duration) Outcome {
 		out.Reason = reason

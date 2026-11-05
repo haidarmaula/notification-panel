@@ -265,9 +265,35 @@ func (p *Permit) Release() {
 }
 
 // Send consumes the permit once and builds only its trusted scoped route. The
-// future DB executor must additionally supply a valid single-use attempt proof.
+// DB executor uses SendAuthorized with a valid single-use attempt proof.
 // Raw SDK errors, access tokens, addresses and receipt values never enter Outcome.
-func (p *Permit) Send(parent context.Context, request pushpayload.Request) (out Outcome) {
+func (p *Permit) Send(parent context.Context, request pushpayload.Request) Outcome {
+	return p.send(parent, request, nil)
+}
+
+// Allows reports whether an explicit route belongs to this open client. It is
+// advisory; SendAuthorized and the payload builder still validate the request.
+func (c *Client) Allows(route pushpayload.Route) bool {
+	if c == nil || c.s == nil || route.Environment != c.s.config.Environment {
+		return false
+	}
+	s := c.s
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.closed && s.routes[routeKey{route.ApplicationID, route.Namespace, route.Key, route.Platform, route.AddressType}] != nil
+}
+
+// SendAuthorized consumes a permit from this client and requires a final DB
+// authorization callback at the physical boundary. The trusted callback releases
+// all locks before returning a conservative local lease/deadline cutoff.
+func (c *Client) SendAuthorized(ctx context.Context, p *Permit, request pushpayload.Request, check func(context.Context) (time.Time, error)) Outcome {
+	if c == nil || c.s == nil || p == nil || p.state == nil || p.state.client != c.s || check == nil {
+		return Outcome{Disposition: NotSubmitted, Reason: AuthorizationFailure}
+	}
+	return p.send(ctx, request, check)
+}
+
+func (p *Permit) send(parent context.Context, request pushpayload.Request, check func(context.Context) (time.Time, error)) (out Outcome) {
 	if p == nil || p.state == nil || !p.state.used.CompareAndSwap(false, true) {
 		return Outcome{Disposition: NotSubmitted, Reason: PermitUsed}
 	}
@@ -310,7 +336,7 @@ func (p *Permit) Send(parent context.Context, request pushpayload.Request) (out 
 	}
 	call, cancel := context.WithCancel(ctx)
 	defer cancel()
-	record := &callRecord{cancel: cancel, token: token.Value, deadline: request.Deadline}
+	record := &callRecord{cancel: cancel, token: token.Value, deadline: request.Deadline, check: check}
 	name, sdkErr := s.sdk.Send(context.WithValue(call, callKey{}, record), message)
 	snapshot := record.snapshot()
 	out = classify(name, sdkErr, snapshot, s.config.ProjectID, request.Deadline)

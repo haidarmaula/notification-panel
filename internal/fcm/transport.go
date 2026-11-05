@@ -18,6 +18,7 @@ var errTransport = errors.New("FCM transport boundary rejected")
 type callKey struct{}
 type callSnapshot struct {
 	calls, status int
+	reason        Reason
 	complete, bad bool
 	retryAfter    string
 	at            time.Time
@@ -28,6 +29,7 @@ type callRecord struct {
 	cancel        context.CancelFunc
 	token         string
 	deadline      time.Time
+	check         func(context.Context) (time.Time, error)
 	snapshotValue callSnapshot
 }
 
@@ -59,14 +61,42 @@ func (t *guardTransport) RoundTrip(request *http.Request) (*http.Response, error
 		r.cancel()
 		return nil, errTransport
 	}
+	physicalContext := request.Context()
+	validUntil := r.deadline
+	cancelWindow := func() {}
+	if r.check != nil {
+		until, err := r.check(physicalContext)
+		if err != nil || !until.After(time.Now()) {
+			r.mu.Lock()
+			r.snapshotValue.reason = AuthorizationFailure
+			r.mu.Unlock()
+			r.cancel()
+			return nil, errTransport
+		}
+		if until.Before(validUntil) {
+			validUntil = until
+		}
+		physicalContext, cancelWindow = context.WithDeadline(physicalContext, validUntil)
+	}
+	if physicalContext.Err() != nil || !r.deadline.After(time.Now()) {
+		cancelWindow()
+		r.cancel()
+		return nil, errTransport
+	}
 	// Retime after local pacing, not before it. Network transit/provider retention
 	// still cannot promise device display before a wall-clock deadline.
 	body, err := retime(request.Body, r.deadline)
 	if err != nil {
+		cancelWindow()
 		r.cancel()
 		return nil, errTransport
 	}
-	cloned := request.Clone(request.Context())
+	if physicalContext.Err() != nil || !validUntil.After(time.Now()) {
+		cancelWindow()
+		r.cancel()
+		return nil, errTransport
+	}
+	cloned := request.Clone(physicalContext)
 	cloned.Body = io.NopCloser(bytes.NewReader(body))
 	cloned.ContentLength = int64(len(body))
 	// Disable Go's own replay of a non-idempotent POST, including zero-write retry.
@@ -79,6 +109,7 @@ func (t *guardTransport) RoundTrip(request *http.Request) (*http.Response, error
 	r.mu.Unlock()
 	response, err := t.base.RoundTrip(cloned)
 	if err != nil || response == nil {
+		cancelWindow()
 		if response != nil && response.Body != nil {
 			_ = response.Body.Close()
 		}
@@ -93,7 +124,7 @@ func (t *guardTransport) RoundTrip(request *http.Request) (*http.Response, error
 	if response.Body == nil {
 		response.Body = http.NoBody
 	}
-	response.Body = &boundedResponse{original: response.Body, reader: io.LimitReader(response.Body, 64*1024+1), record: r, status: response.StatusCode}
+	response.Body = &boundedResponse{original: response.Body, reader: io.LimitReader(response.Body, 64*1024+1), record: r, status: response.StatusCode, cancel: cancelWindow}
 	return response, nil
 }
 func retime(body io.ReadCloser, deadline time.Time) ([]byte, error) {
@@ -142,6 +173,7 @@ type boundedResponse struct {
 	reader        io.Reader
 	record        *callRecord
 	status, total int
+	cancel        context.CancelFunc
 }
 
 func (b *boundedResponse) Read(p []byte) (int, error) {
@@ -164,4 +196,4 @@ func (b *boundedResponse) Read(p []byte) (int, error) {
 	}
 	return n, err
 }
-func (b *boundedResponse) Close() error { return b.original.Close() }
+func (b *boundedResponse) Close() error { defer b.cancel(); return b.original.Close() }

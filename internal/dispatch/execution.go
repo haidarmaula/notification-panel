@@ -3,6 +3,7 @@ package dispatch
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -54,14 +55,15 @@ type ExecutionLease struct {
 }
 
 // AttemptReservation is an opaque, acknowledged single-device charge. It grants
-// no public send API; the future executor must enforce permits and consume it
-// once, with a fresh lease/deadline/route check immediately before provider I/O.
+// no independent send permission. Submitter consumes its shared one-use state
+// with fresh lease/deadline/route checks immediately before provider I/O.
 // Do not log the reservation.
 type AttemptReservation struct {
 	lease                                              *ExecutionLease
 	deliveryID, attemptID                              pgtype.UUID
 	bindingID, installationID, ownerUserID, ownerEpoch int64
 	material                                           receipt.Material
+	use                                                *atomic.Bool
 }
 
 // NewExecution creates a distinct owner; restarts do not recover old capabilities.
@@ -202,7 +204,7 @@ func (s *Execution) Reserve(ctx context.Context, lease *ExecutionLease, delivery
 		if err != nil {
 			return executionMissing(err)
 		}
-		provisional = &AttemptReservation{lease: lease, deliveryID: deliveryID, attemptID: attemptID, bindingID: identity.BindingID, installationID: identity.InstallationID, ownerUserID: identity.OwnerUserID, ownerEpoch: identity.OwnerEpoch, material: material}
+		provisional = &AttemptReservation{lease: lease, deliveryID: deliveryID, attemptID: attemptID, bindingID: identity.BindingID, installationID: identity.InstallationID, ownerUserID: identity.OwnerUserID, ownerEpoch: identity.OwnerEpoch, material: material, use: new(atomic.Bool)}
 		return nil
 	})
 	if err != nil {

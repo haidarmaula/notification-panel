@@ -82,6 +82,39 @@ func (q *Queries) GetExecutionIntentIdentity(ctx context.Context, arg GetExecuti
 	return i, err
 }
 
+const getExecutionProviderRoute = `-- name: GetExecutionProviderRoute :one
+SELECT b.provider_namespace,b.provider_route_key,b.platform,b.address_type
+FROM notification_delivery_intents d JOIN installation_bindings b
+    ON b.application_id=d.application_id AND b.id=d.binding_id
+WHERE d.application_id=$1::bigint AND d.notification_id=$2::bigint
+    AND d.id=$3
+`
+
+type GetExecutionProviderRouteParams struct {
+	ApplicationID  int64       `db:"application_id"`
+	NotificationID int64       `db:"notification_id"`
+	DeliveryID     pgtype.UUID `db:"delivery_id"`
+}
+
+type GetExecutionProviderRouteRow struct {
+	ProviderNamespace string `db:"provider_namespace"`
+	ProviderRouteKey  string `db:"provider_route_key"`
+	Platform          string `db:"platform"`
+	AddressType       string `db:"address_type"`
+}
+
+func (q *Queries) GetExecutionProviderRoute(ctx context.Context, arg GetExecutionProviderRouteParams) (GetExecutionProviderRouteRow, error) {
+	row := q.db.QueryRow(ctx, getExecutionProviderRoute, arg.ApplicationID, arg.NotificationID, arg.DeliveryID)
+	var i GetExecutionProviderRouteRow
+	err := row.Scan(
+		&i.ProviderNamespace,
+		&i.ProviderRouteKey,
+		&i.Platform,
+		&i.AddressType,
+	)
+	return i, err
+}
+
 const lockExecutionApplication = `-- name: LockExecutionApplication :one
 SELECT id,status FROM applications WHERE public_id=$1 FOR SHARE
 `
@@ -153,6 +186,64 @@ func (q *Queries) LockExecutionInstallation(ctx context.Context, arg LockExecuti
 		&i.OwnerEpoch,
 		&i.CreatedAt,
 		&i.LastSeenAt,
+	)
+	return i, err
+}
+
+const lockExecutionSubmission = `-- name: LockExecutionSubmission :one
+SELECT n.title,n.body,n.payload,n.deadline_at,
+    floor(extract(epoch FROM (least(n.lease_until,n.deadline_at)-clock_timestamp()))*1000000)::bigint AS valid_micros
+FROM notification_delivery_intents d JOIN notifications n ON n.application_id=d.application_id AND n.id=d.notification_id
+WHERE d.application_id=$1::bigint AND d.notification_id=$2::bigint
+    AND d.id=$3 AND d.status='PENDING' AND d.attempt_id=$4
+    AND d.claim_generation=$5::bigint AND d.attempt_resolved_at IS NULL
+    AND d.attempt_count>0 AND d.attempt_count<=$6::integer
+    AND n.status='PROCESSING' AND n.origin_epoch=$7 AND n.source_epoch=$8
+    AND n.lease_owner=$9 AND n.lease_generation=$5::bigint
+    AND n.lease_until>clock_timestamp() AND n.deadline_at>clock_timestamp()
+    AND octet_length(n.payload::text)<=65536 AND octet_length(n.title)<=4096 AND octet_length(n.body)<=4096
+FOR UPDATE OF d
+`
+
+type LockExecutionSubmissionParams struct {
+	ApplicationID  int64       `db:"application_id"`
+	NotificationID int64       `db:"notification_id"`
+	DeliveryID     pgtype.UUID `db:"delivery_id"`
+	AttemptID      pgtype.UUID `db:"attempt_id"`
+	Generation     int64       `db:"generation"`
+	MaxAttempts    int32       `db:"max_attempts"`
+	OriginEpoch    pgtype.UUID `db:"origin_epoch"`
+	SourceEpoch    pgtype.UUID `db:"source_epoch"`
+	Owner          pgtype.UUID `db:"owner"`
+}
+
+type LockExecutionSubmissionRow struct {
+	Title       string             `db:"title"`
+	Body        string             `db:"body"`
+	Payload     []byte             `db:"payload"`
+	DeadlineAt  pgtype.Timestamptz `db:"deadline_at"`
+	ValidMicros int64              `db:"valid_micros"`
+}
+
+func (q *Queries) LockExecutionSubmission(ctx context.Context, arg LockExecutionSubmissionParams) (LockExecutionSubmissionRow, error) {
+	row := q.db.QueryRow(ctx, lockExecutionSubmission,
+		arg.ApplicationID,
+		arg.NotificationID,
+		arg.DeliveryID,
+		arg.AttemptID,
+		arg.Generation,
+		arg.MaxAttempts,
+		arg.OriginEpoch,
+		arg.SourceEpoch,
+		arg.Owner,
+	)
+	var i LockExecutionSubmissionRow
+	err := row.Scan(
+		&i.Title,
+		&i.Body,
+		&i.Payload,
+		&i.DeadlineAt,
+		&i.ValidMicros,
 	)
 	return i, err
 }

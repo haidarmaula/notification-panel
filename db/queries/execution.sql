@@ -48,3 +48,24 @@ WHERE d.application_id=sqlc.arg(application_id)::bigint AND d.notification_id=sq
         AND n.origin_epoch=sqlc.arg(origin_epoch) AND n.source_epoch=sqlc.arg(source_epoch)
         AND n.lease_owner=sqlc.arg(owner) AND n.lease_generation=sqlc.arg(generation)::bigint AND n.lease_until>clock_timestamp())
 RETURNING d.attempt_count,d.last_attempt_at,d.next_attempt_at;
+
+-- name: GetExecutionProviderRoute :one
+SELECT b.provider_namespace,b.provider_route_key,b.platform,b.address_type
+FROM notification_delivery_intents d JOIN installation_bindings b
+    ON b.application_id=d.application_id AND b.id=d.binding_id
+WHERE d.application_id=sqlc.arg(application_id)::bigint AND d.notification_id=sqlc.arg(notification_id)::bigint
+    AND d.id=sqlc.arg(delivery_id);
+
+-- name: LockExecutionSubmission :one
+SELECT n.title,n.body,n.payload,n.deadline_at,
+    floor(extract(epoch FROM (least(n.lease_until,n.deadline_at)-clock_timestamp()))*1000000)::bigint AS valid_micros
+FROM notification_delivery_intents d JOIN notifications n ON n.application_id=d.application_id AND n.id=d.notification_id
+WHERE d.application_id=sqlc.arg(application_id)::bigint AND d.notification_id=sqlc.arg(notification_id)::bigint
+    AND d.id=sqlc.arg(delivery_id) AND d.status='PENDING' AND d.attempt_id=sqlc.arg(attempt_id)
+    AND d.claim_generation=sqlc.arg(generation)::bigint AND d.attempt_resolved_at IS NULL
+    AND d.attempt_count>0 AND d.attempt_count<=sqlc.arg(max_attempts)::integer
+    AND n.status='PROCESSING' AND n.origin_epoch=sqlc.arg(origin_epoch) AND n.source_epoch=sqlc.arg(source_epoch)
+    AND n.lease_owner=sqlc.arg(owner) AND n.lease_generation=sqlc.arg(generation)::bigint
+    AND n.lease_until>clock_timestamp() AND n.deadline_at>clock_timestamp()
+    AND octet_length(n.payload::text)<=65536 AND octet_length(n.title)<=4096 AND octet_length(n.body)<=4096
+FOR UPDATE OF d;

@@ -58,6 +58,13 @@ assumptions:
     verification: On 2026-11-05 the synthetic successful exchange supplied two accepted SDK sends using one credential HTTP call. Invalid-grant and caller-timeout cases made no FCM request. No real key, Google key-registry validation, OAuth acceptance, target IAM or APNs/device delivery was exercised. The public protected-path constructor is tested separately in an offline disposable root-owned container.
     source: internal/fcm/credentials_integration_test.go; internal/fcm/credentials_test.go; postman/mocks/oauth/default.js; postman/contracts/oauth-fixture.openapi.yaml; docs/analysis/m06-fcm-credentials-verification.md
     updated_at: '2026-11-05'
+  - id: db-authorized-device-submission
+    status: supported
+    claim: A copied acknowledged reservation submits once, and post-credential authority or payload changes block the scoped SDK send in the local scenarios.
+    reason: Real PostgreSQL transactions and the actual SDK pass through the final authorization callback and fixed loopback simulation. The private shared consumption bit and commit acknowledgement gate remain independent of transport permits.
+    verification: On 2026-11-05 the focused race suite passed copied concurrent proof, ordinary driver, holds/lineage/lease/attempt/observation/user/binding/owner/payload changes and lost prepare/final-check commit acknowledgement. Denied final checks had zero physical FCM calls and retained one charged attempt. No production delivery or complete result/recovery protocol was exercised.
+    source: tests/integration/submission_test.go; internal/dispatch/submission.go; internal/fcm/transport.go; docs/analysis/m06-submission-verification.md
+    updated_at: '2026-11-05'
 fingerprints:
   - id: foundation-step-19
     date: '2026-11-02'
@@ -70,4 +77,8 @@ fingerprints:
   - id: m06-protected-file-credentials
     date: '2026-11-05'
     commit: 51acec2 plus uncommitted protected file credential and OAuth simulation artifacts
+    cli: Postman 1.75.0
+  - id: m06-db-authorized-submission
+    date: '2026-11-05'
+    commit: eb4fb71 plus uncommitted submission guards and synthetic fixture support
     cli: Postman 1.75.0

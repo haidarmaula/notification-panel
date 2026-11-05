@@ -30,6 +30,8 @@ http.createServer((req, res) => {
       return failure(res, 503, 'UNAVAILABLE', 'UNAVAILABLE', { 'Retry-After': '0' });
     case 'fixture-timeout':
       return setTimeout(() => send(res, 200, { name: 'projects/integration-fixture/messages/delayed' }), 2000);
+    case 'execution-address-0':
+    case 'execution-address-1':
     case 'fixture-accepted':
       if (!message.data || message.data.fixture !== 'integration') {
         return failure(res, 400, 'INVALID_ARGUMENT', 'INVALID_ARGUMENT');

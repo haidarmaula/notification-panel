@@ -250,7 +250,8 @@ is now locally tested. The [route-bound FCM transport](m06-fcm-transport-verific
 also passes local SDK/HTTP simulation and race tests, including one physical
 request per permit. [Protected file credential loading](m06-fcm-credentials-verification.md)
 also passes local OAuth/SDK and offline protected-filesystem tests. Managed ADC,
-deployment credential selection, DB-proof-aware submission, fenced
+deployment credential selection remain open. [Single-use DB-authorized submission](m06-submission-verification.md)
+is implemented with final checks after credential/rate waits; fenced
 results/recovery/outbox and delivery runtime composition remain open. Production
 activation and acceptance stay open.
 
@@ -290,8 +291,8 @@ work on unchecked rows has started, as noted.
 
 ### Phase 4 — delivery pipeline
 
-- [ ] 21. Provider selection and scoped per-device transport/error contract pass local SDK simulation; protected file credentials also pass local tests; managed ADC/deployment credentials, DB-proof-aware submission, fenced result persistence and conditional invalid-token handling remain open.
-- [ ] 22. M05 atomic fan-out intents, device snapshots/identity, and unique constraints pass locally, including 20k intents; M06 exclusive campaign leases and acknowledged per-device reservation foundations also pass focused local tests; provider execution/results remain open.
+- [ ] 21. Scoped FCM transport/error handling, protected file credentials and DB-authorized single-use submission pass local tests. Managed ADC/deployment credential selection, fenced result persistence and conditional invalid-token handling remain open.
+- [ ] 22. M05 atomic fan-out intents, device snapshots/identity, and unique constraints pass locally, including 20k intents; M06 exclusive campaign leases and acknowledged per-device reservation foundations also pass focused local tests; result persistence and delivery runtime activation remain open.
 - [ ] 23. Bounded retry/backoff, lease expiry, recovery, TTL/budget terminalization.
 - [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; replay registration/inspection/claim/publication and expired-claim cleanup libraries also pass locally. Replay CLI/configuration and PostgreSQL verified-TLS/Kafka mTLS command tests also pass locally. Production issuer/incarnation approval, supervised drain/handoff and runtime deployment remain pending.
 - [ ] 25. M04 atomic send idempotency + claim + outbox, promotion/expiry, and bounded dispatcher pass locally; the scheduler binary now uses protected source-bound durable handoff locally. Production policy/activation and target-environment evidence remain open.
