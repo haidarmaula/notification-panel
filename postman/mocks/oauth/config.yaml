@@ -1,0 +1,10 @@
+version: 1
+name: oauth-fixture
+slug: oauth-fixture
+protocol: http
+port: 14012
+interceptRequests: true
+scenarios:
+  - name: default
+    path: ./default.js
+    default: true

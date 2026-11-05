@@ -91,13 +91,15 @@ opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
 while time.monotonic() < deadline:
     os.kill(pid, 0)
     try:
-        with opener.open('http://127.0.0.1:14010/fcm/__health', timeout=1) as r:
-            if json.load(r) == {'fixture': 'fcm', 'ready': True}:
-                break
+        for member in ('fcm', 'oauth'):
+            with opener.open(f'http://127.0.0.1:14010/{member}/__health', timeout=1) as r:
+                if json.load(r) != {'fixture': member, 'ready': True}:
+                    raise ValueError('Unexpected fixture readiness')
+        break
     except (OSError, ValueError):
         time.sleep(0.2)
 else:
-    raise SystemExit('FCM simulation readiness timed out')
+    raise SystemExit('Dependency simulation readiness timed out')
 PY
 HELLO_INTEGRATION=1 go test -mod=readonly -tags=integration -count=1 -timeout=120s -v ./tests/integration ./internal/fcm
 python3 - "$log_dir/simulation.ndjson" <<'PY'
@@ -120,4 +122,9 @@ while True:
         raise SystemExit(f'Missing SDK-to-fixture evidence: {statuses}')
     time.sleep(0.1)
 print(f'Simulation evidence: {len(requests)} actual SDK HTTP requests; statuses {dict(statuses)}')
+oauth = [e for e in events if e.get('event') == 'request' and e.get('method') == 'POST'
+         and e.get('path') == '/token']
+# Focused invocations may omit credential tests; summarize observed OAuth events.
+if oauth:
+    print(f'OAuth simulation evidence: {len(oauth)} completed credential HTTP requests')
 PY

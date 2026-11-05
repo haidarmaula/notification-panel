@@ -193,8 +193,10 @@ now pass focused local tests; DB-proof-aware submission, results/recovery/outbox
 and execution composition remain open. The [receipt signer/payload boundary](m06-receipt-payload-verification.md)
 is now locally tested, including [atomic metadata freeze](m06-receipt-metadata-verification.md).
 The [route-bound FCM transport](m06-fcm-transport-verification.md) now passes local
-SDK simulation/race tests, including one physical request per permit. Credential
-loading, DB-proof-aware submission, fenced results/recovery/outbox and delivery
+SDK simulation/race tests, including one physical request per permit.
+[Protected file credentials](m06-fcm-credentials-verification.md) now pass local
+OAuth/SDK and offline protected-file tests. Managed ADC/deployment credential
+selection, DB-proof-aware submission, fenced results/recovery/outbox and delivery
 composition remain open. See
 [verification](runtime-composition-verification.md).
 

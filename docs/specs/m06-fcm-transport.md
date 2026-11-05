@@ -27,8 +27,9 @@ guarantee a device display deadline across network/provider uncertainty.
 
 A trusted cloud auth TokenProvider receives the bounded call context. Its
 implementation must honor that context and owns credential acquisition/refresh.
-Credential file/ADC loading, managed provenance and rotation remain deployment
-composition work. No client data selects credentials, project, host or key URL.
+[Protected file loading](m06-fcm-credentials.md) is implemented with synchronous
+refresh and owned HTTP cleanup. ADC/managed provenance and deployment rotation
+remain composition work. No client data selects credentials, project, host or key URL.
 Only Bearer access tokens with lifetime covering the call are accepted; tokens
 and raw SDK/network errors never enter results/logs. Cloud auth is already pinned
 in the dependency graph; using its context-aware interface adds no module/version.
@@ -94,7 +95,7 @@ The client is process-local; restarts lose its cooldown/breaker state. Durable
 per-attempt retry/finalization and deployment restart/backpressure policy remain
 part of the later executor and operational acceptance.
 
-Credential loading/startup policy, DB-proof-aware submission, fenced results,
+Managed ADC/startup policy, DB-proof-aware submission, fenced results,
 retry/recovery/finalization/update outbox and worker composition remain required.
 Numeric SLO/quota allocation, real Firebase/APNs/mobile behavior and release gates
 remain unverified. Reference: pinned SDK `internal/http_client.go`, cloud auth

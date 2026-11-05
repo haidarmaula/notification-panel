@@ -1,6 +1,6 @@
 purpose:
-  stands_in_for: FCM HTTP v1 send response/error subset; no OAuth, APNs or real devices.
-  unblocks: Dependency smoke and route-bound transport HTTP tests; not real provider acceptance.
+  stands_in_for: FCM HTTP v1 send/error and synthetic service-account OAuth subsets; no real Google authentication, APNs or devices.
+  unblocks: Dependency smoke, route-bound transport and file-credential HTTP tests; not real provider acceptance.
 assumptions:
   - id: send-error-envelope
     status: supported
@@ -51,6 +51,13 @@ assumptions:
     verification: On 2026-11-05, TestFCMTransportAgainstSimulation passed with race detection for Android/iOS token and FID, typed unregistered, quota, 503 and timeout. Each case asserts one base request; simulation logs show the corresponding HTTP statuses. The unchanged dependency test still makes five 503 requests without the guard. No real OAuth, Firebase permissions, APNs or devices were tested.
     source: internal/fcm/client_integration_test.go; internal/fcm/transport.go; scripts/integration.sh; docs/analysis/m06-fcm-transport-verification.md
     updated_at: '2026-11-05'
+  - id: service-account-oauth-library-exchange
+    status: supported
+    claim: Protected-file credential parsing feeds the pinned cloud auth 2LO library into a synchronous cached exchange before an actual FCM SDK send in local simulation.
+    reason: The test invokes the production source/parser and library, with private exact-URL loopback transports for OAuth and FCM. The OAuth fixture checks serialized grant and issuer/audience/scope; unit tests separately verify the RSA assertion signature.
+    verification: On 2026-11-05 the synthetic successful exchange supplied two accepted SDK sends using one credential HTTP call. Invalid-grant and caller-timeout cases made no FCM request. No real key, Google key-registry validation, OAuth acceptance, target IAM or APNs/device delivery was exercised. The public protected-path constructor is tested separately in an offline disposable root-owned container.
+    source: internal/fcm/credentials_integration_test.go; internal/fcm/credentials_test.go; postman/mocks/oauth/default.js; postman/contracts/oauth-fixture.openapi.yaml; docs/analysis/m06-fcm-credentials-verification.md
+    updated_at: '2026-11-05'
 fingerprints:
   - id: foundation-step-19
     date: '2026-11-02'
@@ -59,4 +66,8 @@ fingerprints:
   - id: m06-route-bound-transport
     date: '2026-11-05'
     commit: 85e3be9 plus uncommitted internal/fcm transport and integration-runner changes
+    cli: Postman 1.75.0
+  - id: m06-protected-file-credentials
+    date: '2026-11-05'
+    commit: 51acec2 plus uncommitted protected file credential and OAuth simulation artifacts
     cli: Postman 1.75.0

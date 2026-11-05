@@ -64,6 +64,19 @@ func (c Client) MarshalJSON() ([]byte, error) { return []byte(`"[REDACTED]"`), n
 // bounded connections/response sizes and explicit context-aware Bearer credentials.
 // Construction makes no provider send; remote permissions/APNs are not proven.
 func New(config Config, tokens auth.TokenProvider) (*Client, error) {
+	base, err := verifiedHTTP(config)
+	if err != nil {
+		return nil, err
+	}
+	client, err := newClient(config, tokens, base, base.CloseIdleConnections)
+	if err != nil {
+		base.CloseIdleConnections()
+	}
+	return client, err
+}
+
+// verifiedHTTP owns frozen trust and never consults proxy configuration.
+func verifiedHTTP(config Config) (*http.Transport, error) {
 	if os.Getenv("SSL_CERT_FILE") != "" || os.Getenv("SSL_CERT_DIR") != "" {
 		return nil, ErrConfiguration
 	}
@@ -85,11 +98,7 @@ func New(config Config, tokens auth.TokenProvider) (*Client, error) {
 		MaxIdleConnsPerHost:    config.Concurrency,
 		Protocols:              http1Protocols(),
 	}
-	client, err := newClient(config, tokens, base, base.CloseIdleConnections)
-	if err != nil {
-		base.CloseIdleConnections()
-	}
-	return client, err
+	return base, nil
 }
 
 func newClient(config Config, tokens auth.TokenProvider, base http.RoundTripper, closeHTTP func()) (*Client, error) {

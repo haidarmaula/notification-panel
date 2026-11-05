@@ -1,0 +1,45 @@
+openapi: 3.0.3
+info:
+  title: Synthetic service-account OAuth fixture subset
+  version: 1.0.0
+  description: >-
+    Local test subset based on Google's service-account OAuth documentation.
+    No real Google authentication, key registry or IAM validation is modeled.
+servers:
+  - url: https://oauth2.googleapis.com
+paths:
+  /token:
+    post:
+      summary: Exchange a signed service-account assertion
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, assertion]
+              properties:
+                grant_type:
+                  type: string
+                  enum: ['urn:ietf:params:oauth:grant-type:jwt-bearer']
+                assertion:
+                  type: string
+                  description: RS256 JWT with pinned issuer, audience and messaging scope.
+      responses:
+        '200':
+          description: Synthetic access token; not usable at Google endpoints.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [access_token, token_type, expires_in]
+                properties:
+                  access_token: {type: string}
+                  token_type: {type: string, enum: [Bearer]}
+                  expires_in: {type: integer, minimum: 1, maximum: 3600}
+        '400':
+          description: Malformed assertion or fixture-selected invalid grant.
+        '501':
+          description: Operation not modeled by the fixture.
+externalDocs:
+  url: https://developers.google.com/identity/protocols/oauth2/service-account

@@ -38,6 +38,13 @@ func CheckDatabaseFiles(connection string) error {
 	return nil
 }
 
+// ReadSecret reads bounded JSON from an explicitly trusted deployment secret path.
+// The file and every ancestor must pass the same protections as component policy.
+// Callers must validate its schema and must not expose the returned bytes.
+func ReadSecret(path string) ([]byte, error) {
+	return readFile(path)
+}
+
 func readFile(path string) (data []byte, err error) {
 	if !filepath.IsAbs(path) || filepath.Clean(path) != path {
 		return nil, ErrConfiguration

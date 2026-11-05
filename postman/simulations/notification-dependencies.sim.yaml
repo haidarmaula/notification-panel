@@ -5,3 +5,7 @@ mocks:
     routeKey: fcm
     origin: [fcm.googleapis.com]
     path: postman/mocks/fcm/config.yaml
+  - name: oauth-fixture
+    routeKey: oauth
+    origin: [oauth2.googleapis.com]
+    path: postman/mocks/oauth/config.yaml
