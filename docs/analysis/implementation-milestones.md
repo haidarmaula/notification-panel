@@ -177,8 +177,11 @@ checks exact acceptance, marker/state, holds and existing source controls withou
 writes. [Claim transactions](m05-replay-claim-verification.md) commit per-position
 attempt/control/audit with exclusive leases and no proof on uncertain commit.
 [Publication and expired-claim recovery](m05-replay-execution-verification.md)
-pass locally, including real Kafka/dedup and unknown commit windows. CLI/issuer
-integration, producer drain, source manifest and runtime/deployment wiring remain open.
+pass locally, including real Kafka/dedup and unknown commit windows. The
+[command adapter](../specs/m05-replay-command.md) adds strict stdin parsing, default
+dry-run, serial execution and safe partial reports, covered by unit/race tests.
+Executable/configuration/issuer integration, producer drain, source manifest and
+runtime/deployment wiring remain open.
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,
 preparation cancellation during rebalance, redelivery, offset fencing, and durable

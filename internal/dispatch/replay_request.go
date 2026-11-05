@@ -41,6 +41,13 @@ func validReplayText(value string) bool {
 		strings.TrimSpace(value) == value && !strings.ContainsFunc(value, unicode.IsControl)
 }
 
+// Validate checks the complete selection without changing its order or granting
+// authority. CLI adapters use it before opening database or publisher resources.
+func (r ReplayRequest) Validate() error {
+	_, err := r.normalized()
+	return err
+}
+
 func (r ReplayRequest) normalized() (ReplayRequest, error) {
 	if !validReplayUUID(r.ApplicationID) || !validReplayUUID(r.ID) || len(r.Positions) < 1 || len(r.Positions) > 100 ||
 		!validReplayText(r.ChangeReference) {

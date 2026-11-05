@@ -231,7 +231,9 @@ acceptance/state/holds without writes. [Per-position claims](m05-replay-claim-ve
 now commit classification/control/audit atomically and withhold execution proof
 on uncertain commit. [Publication/result transactions and expired-claim recovery](m05-replay-execution-verification.md)
 also pass locally, including real Kafka, unknown commit outcomes and lease expiry.
-Restricted CLI/configuration, issuer/manifest/drain verification and modern
+The [command adapter](../specs/m05-replay-command.md) now passes unit/race tests
+for strict stdin input, default dry-run, serial execution and safe partial reports.
+Restricted executable/configuration, issuer/manifest/drain verification and modern
 worker/scheduler wiring remain open before M06 provider execution. Replay is not
 enabled in a binary or production deployment.
 

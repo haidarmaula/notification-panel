@@ -1,9 +1,11 @@
 # M05 operator reprocessing
 
-Status: implementation in progress, 2026-11-04. Migration 000025 and generated
+Status: implementation in progress, 2026-11-05. Migration 000025 and generated
 persistence primitives implement slice 1; see the
 [verification record](../analysis/m05-replay-persistence-verification.md). No replay
-CLI, operational credential issuer or production activation is implemented.
+executable, operational credential issuer or production activation is implemented.
+The [command protocol adapter](m05-replay-command.md) now implements strict stdin
+input, serial inspection/execution and safe partial reports as an unwired library.
 [Scoped request registration](../analysis/m05-replay-registration-verification.md)
 is available as an unwired library through migration 000026; per-position replay
 broker execution and expired-claim recovery are now available as unwired libraries;
