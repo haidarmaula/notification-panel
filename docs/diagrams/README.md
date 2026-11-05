@@ -10,7 +10,8 @@ implementation status as of **2026-11-05**.
 
 Open the `.excalidraw` file in Excalidraw using **Open**, or drag it onto the
 canvas. All shapes, text, and arrows are editable; no external assets are needed.
-The adjacent SVG is a static preview of the same diagram. After editing the
+The adjacent SVG is a static preview of the same diagram. Both files use an explicit
+dark canvas with matching high-contrast colors. After editing the
 Excalidraw source, export an SVG with a background and replace the preview in
 the same change. Keep labels and explanatory text in English.
 
