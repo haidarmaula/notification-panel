@@ -186,8 +186,9 @@ issuer/grant provisioning, real deployment ACLs, reviewed incarnation and
 supervised producer drain/handoff remain gates. The
 [runtime foundation](../specs/m04-m05-runtime-composition.md) now passes local tests
 for mTLS group handoff, source-bound publication, bounded schedule polling and
-joined scheduler/worker composition. Trusted per-process policy and actual daemon
-entry-point wiring remain the next executable boundary before M06. See
+joined scheduler/worker composition. Protected per-process policy and actual
+worker/scheduler entry points now run this pipeline locally; the worker remains
+explicitly admission-only. M06 provider execution is next. See
 [verification](runtime-composition-verification.md).
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,

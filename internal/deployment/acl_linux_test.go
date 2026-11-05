@@ -1,6 +1,6 @@
 //go:build linux
 
-package requeue
+package deployment
 
 import (
 	"encoding/binary"

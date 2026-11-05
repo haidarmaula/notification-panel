@@ -165,3 +165,7 @@ func TestLoadConfigurationRejectsAmbientPostgresSettings(t *testing.T) {
 		})
 	}
 }
+
+func validBrokerPolicy() map[string]any {
+	return map[string]any{"brokers": []string{"broker.example.test:9093"}, "authentication": "SASL_PLAIN", "ca_pem": "", "client_certificate_pem": "", "client_key_pem": "", "sasl_username": "replay", "sasl_password": "secret"}
+}

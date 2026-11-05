@@ -5,21 +5,28 @@ package integration
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
+	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	broker "github.com/segmentio/kafka-go"
 	"github.com/stretchr/testify/require"
+	"hello/internal/daemon"
+	"hello/internal/deployment"
 	"hello/internal/dispatch"
 	"hello/internal/features/applications"
 	"hello/internal/installation"
 	"hello/internal/kafka"
 	"hello/internal/middleware"
 	"hello/internal/runloop"
-	"hello/internal/scheduler"
 	"hello/internal/token"
 )
 
@@ -58,6 +65,12 @@ func TestSourceOutboxHoldsInactiveRegistration(t *testing.T) {
 }
 
 func TestSchedulerAndAuthenticatedWorkerComposeDurablePipeline(t *testing.T) {
+	for _, setting := range os.Environ() {
+		name, _, _ := strings.Cut(setting, "=")
+		if strings.HasPrefix(name, "PG") || name == "SSL_CERT_FILE" || name == "SSL_CERT_DIR" {
+			t.Setenv(name, "")
+		}
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Second)
 	defer cancel()
 	f := newReplayRegistrationFixture(t, ctx)
@@ -100,40 +113,71 @@ func TestSchedulerAndAuthenticatedWorkerComposeDurablePipeline(t *testing.T) {
 	}, 5*time.Second, 100*time.Millisecond)
 	require.NoError(t, f.pool.QueryRow(ctx, `INSERT INTO notification_log_sources(id,topic,cluster_identity,topic_incarnation,active) VALUES(gen_random_uuid(),$1,$2,'runtime-generation',true) RETURNING id`, topic, metadata.ClusterID).Scan(&f.source))
 	source := dispatch.SourceManifest{ID: f.source, ClusterID: metadata.ClusterID, Topic: topic, Incarnation: "runtime-generation", PartitionCount: 2}
-	tlsConfig := admissionFixtureTLS(t)
-	producer, err := kafka.NewAuthenticatedScopedProducer(kafka.ScopedProducerConfig{Brokers: []string{"127.0.0.1:19095"}, Topic: topic, TLS: tlsConfig})
+	// A server-side role selects the disposable schema; production policy has
+	// no PGOPTIONS/search_path override. Fixture superuser is not a privilege model.
+	role := fmt.Sprintf("daemon_role_%d", time.Now().UnixNano())
+	roleSQL := pgx.Identifier{role}.Sanitize()
+	_, err = f.pool.Exec(ctx, "CREATE ROLE "+roleSQL+" LOGIN SUPERUSER PASSWORD 'integration_only'")
 	require.NoError(t, err)
-	defer func() { require.NoError(t, producer.Close()) }()
-	require.NoError(t, producer.VerifyClusterTopic(ctx, source.ClusterID, source.PartitionCount))
-	publisher := scopedPublishFunc(func(ctx context.Context, event kafka.ScopedSendRequested) error {
-		if err := producer.VerifyClusterTopic(ctx, source.ClusterID, source.PartitionCount); err != nil {
-			return err
-		}
-		return producer.PublishScopedSend(ctx, event)
-	})
-	var runtimeLog bytes.Buffer
-	logger := slog.New(slog.NewJSONHandler(&runtimeLog, nil))
+	schema := strings.Split(f.pool.Config().ConnConfig.RuntimeParams["search_path"], ",")[0]
+	_, err = f.pool.Exec(ctx, "ALTER ROLE "+roleSQL+" SET search_path TO "+pgx.Identifier{schema}.Sanitize()+",pg_catalog")
+	require.NoError(t, err)
 	defer func() {
-		if t.Failed() {
-			t.Log(runtimeLog.String())
-		}
+		cleanup, stop := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+		defer stop()
+		var sessions int
+		require.NoError(t, f.pool.QueryRow(cleanup, "SELECT count(*) FROM pg_stat_activity WHERE usename=$1", role).Scan(&sessions))
+		require.Zero(t, sessions, "daemon pools must close before role cleanup")
+		_, err := f.pool.Exec(cleanup, "DROP ROLE "+roleSQL)
+		require.NoError(t, err)
 	}()
-	policy := runloop.RetryPolicy{MinimumDelay: 100 * time.Millisecond, MaximumDelay: time.Second}
-	scheduledRuntime, err := scheduler.New(f.pool, publisher, source, scheduler.Config{Interval: 100 * time.Millisecond, PageSize: 10, Retry: policy}, logger)
-	require.NoError(t, err)
-	preparer, err := dispatch.NewPreparer(f.pool)
-	require.NoError(t, err)
-	quarantine, err := dispatch.NewQuarantine(f.pool)
-	require.NoError(t, err)
+	directory := os.Getenv("HELLO_INTEGRATION_CERTS_DIR")
+	require.NotEmpty(t, directory)
+	read := func(name string) string {
+		data, err := os.ReadFile(filepath.Join(directory, name))
+		require.NoError(t, err)
+		return string(data)
+	}
+	uri := "postgresql://" + role + ":integration_only@127.0.0.1:15432/notification_integration?sslmode=verify-full&connect_timeout=3&sslrootcert=" + url.QueryEscape(filepath.Join(directory, "ca.crt"))
 	groupID := topic + "-group"
-	worker, err := dispatch.NewAuthenticatedKafkaAdmission(f.q, dispatch.KafkaAdmissionConfig{Brokers: []string{"127.0.0.1:19095"}, GroupID: groupID, SourceID: f.source, ClusterID: source.ClusterID, Topic: topic, Incarnation: source.Incarnation, PartitionCount: source.PartitionCount, TLS: tlsConfig}, preparer, quarantine)
-	require.NoError(t, err)
+	load := func(role deployment.Component, change func(map[string]any)) *daemon.Configuration {
+		policy := map[string]any{
+			"database_url": uri, "log_source_id": source.ID.String(), "cluster_identity": source.ClusterID, "topic_name": source.Topic, "topic_incarnation": source.Incarnation, "partition_count": 2,
+			"retry_min_ms": 100, "retry_max_ms": 1000,
+			"kafka": map[string]any{"brokers": []string{"127.0.0.1:19095"}, "authentication": "MTLS", "ca_pem": read("ca.crt"), "client_certificate_pem": read("client.crt"), "client_key_pem": read("client.key"), "sasl_username": "", "sasl_password": ""},
+		}
+		if role == deployment.Worker {
+			policy["mode"] = "admission_only"
+			policy["group_id"] = groupID
+		} else {
+			policy["poll_interval_ms"] = 100
+			policy["page_size"] = 10
+		}
+		if change != nil {
+			change(policy)
+		}
+		data, err := json.Marshal(policy)
+		require.NoError(t, err)
+		cfg, err := daemon.Load(role, bytes.NewReader(data))
+		require.NoError(t, err)
+		return cfg
+	}
+	// Startup rejection must join/close its pool and preserve the accepted work.
+	logger := slog.New(slog.NewJSONHandler(os.Stderr, nil))
+	for _, change := range []func(map[string]any){
+		func(p map[string]any) { p["topic_incarnation"] = "wrong-generation" },
+		func(p map[string]any) { p["partition_count"] = 3 },
+		func(p map[string]any) { p["kafka"].(map[string]any)["ca_pem"] = "" },
+		func(p map[string]any) { p["database_url"] = strings.Split(uri, "&sslrootcert=")[0] },
+	} {
+		require.Error(t, load(deployment.Worker, change).Run(ctx, logger))
+	}
+	scheduledRuntime := load(deployment.Scheduler, nil)
+	worker := load(deployment.Worker, nil)
 	runCtx, stop := context.WithCancel(ctx)
 	done := make(chan error, 1)
 	go func() {
-		done <- runloop.RunGroup(runCtx, scheduledRuntime.Run, func(ctx context.Context) error {
-			return runloop.Supervise(ctx, "admission", worker.Run, policy, logger)
-		})
+		done <- runloop.RunGroup(runCtx, func(ctx context.Context) error { return scheduledRuntime.Run(ctx, logger) }, func(ctx context.Context) error { return worker.Run(ctx, logger) })
 	}()
 	defer func() {
 		stop()

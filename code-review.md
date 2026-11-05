@@ -87,6 +87,7 @@ and supervised drain/handoff remain open. See the
 | ID | Severity | Finding and remediation |
 | --- | --- | --- |
 | SR1 | P2 | The unused due-schedule query included old runtime epochs, which could fill the first bounded page once polling was wired. A real PostgreSQL red regression selected an old-origin row ahead of the live campaign. Fixed by joining exact current lineage/unsealed runtime while retaining expired schedules and migration-held bookkeeping. |
+| DR1 | P2 | New daemon entry points could block forever writing to a full output pipe during SIGTERM, preventing joined cleanup. Fixed by closing process-owned stdout/stderr on cancellation and joining the interruption callback; full-pipe diagnostics/help regressions pass with the race detector. |
 
 Independent review found no concrete new fault in authenticated transport
 propagation, source-before-outbox locking, per-candidate promotion or loop

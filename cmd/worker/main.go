@@ -1,8 +1,23 @@
-// Command worker reserves the entry point for the scoped delivery executor.
+// Command worker runs the scoped admission-only worker.
 package main
 
-import "log"
+import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"hello/internal/daemon"
+	"hello/internal/deployment"
+)
 
 func main() {
-	log.Fatal("legacy worker retired; scoped delivery executor is required")
+	os.Exit(run())
+}
+
+func run() int {
+	signal.Ignore(syscall.SIGPIPE)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	return daemon.Process(ctx, deployment.Worker, os.Args[1:], os.Stdout, os.Stderr)
 }

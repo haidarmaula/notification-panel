@@ -77,15 +77,22 @@ func NewKafkaAdmission(q *sqlc.Queries, cfg KafkaAdmissionConfig, preparer Admis
 // an explicit partition count and a bounded group ID. Group/coordinator calls,
 // metadata verification and partition fetchers all use the same retained policy.
 func NewAuthenticatedKafkaAdmission(q *sqlc.Queries, cfg KafkaAdmissionConfig, preparer AdmissionPreparer, quarantine AdmissionQuarantine) (*KafkaAdmission, error) {
-	source := SourceManifest{ID: cfg.SourceID, ClusterID: cfg.ClusterID, Topic: cfg.Topic, Incarnation: cfg.Incarnation, PartitionCount: cfg.PartitionCount}
-	if source.Validate() != nil {
-		return nil, ErrQuarantineSource
-	}
-	if cfg.TLS == nil || len(cfg.GroupID) > 255 ||
-		!utf8.ValidString(cfg.GroupID) || strings.TrimSpace(cfg.GroupID) != cfg.GroupID || strings.ContainsFunc(cfg.GroupID, unicode.IsControl) {
-		return nil, kafka.ErrScopedTransport
+	if err := cfg.Validate(); err != nil {
+		return nil, err
 	}
 	return NewKafkaAdmission(q, cfg, preparer, quarantine)
+}
+
+// Validate checks authenticated source/group/transport policy without I/O.
+func (cfg KafkaAdmissionConfig) Validate() error {
+	source := SourceManifest{ID: cfg.SourceID, ClusterID: cfg.ClusterID, Topic: cfg.Topic, Incarnation: cfg.Incarnation, PartitionCount: cfg.PartitionCount}
+	if source.Validate() != nil {
+		return ErrQuarantineSource
+	}
+	if cfg.TLS == nil || len(cfg.GroupID) < 1 || len(cfg.GroupID) > 255 || !utf8.ValidString(cfg.GroupID) || strings.TrimSpace(cfg.GroupID) != cfg.GroupID || strings.ContainsFunc(cfg.GroupID, unicode.IsControl) {
+		return kafka.ErrScopedTransport
+	}
+	return (kafka.ScopedProducerConfig{Brokers: cfg.Brokers, Topic: cfg.Topic, TLS: cfg.TLS, SASL: cfg.SASL}).Validate()
 }
 
 func (c KafkaAdmissionConfig) dialer() *broker.Dialer {

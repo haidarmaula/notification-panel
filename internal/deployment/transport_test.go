@@ -1,4 +1,4 @@
-package requeue
+package deployment
 
 import (
 	"crypto/ecdsa"
@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"math/big"
 	"strings"
@@ -34,7 +35,7 @@ func TestBrokerPolicyRejectsUnsafeTransport(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			m := validBrokerPolicy()
 			tt.change(m)
-			_, err := parseBrokerPolicy([]byte(configurationJSON(t, m)), "send")
+			_, err := Broker([]byte(configurationJSON(t, m)), "send")
 			if err != ErrConfiguration || strings.Contains(err.Error(), "secret") {
 				t.Fatal("accepted unsafe policy or leaked secret")
 			}
@@ -63,12 +64,21 @@ func TestBrokerPolicyAcceptsMTLS(t *testing.T) {
 	m["client_key_pem"] = string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: private}))
 	m["sasl_username"] = ""
 	m["sasl_password"] = ""
-	cfg, err := parseBrokerPolicy([]byte(configurationJSON(t, m)), "send")
+	cfg, err := Broker([]byte(configurationJSON(t, m)), "send")
 	if err != nil || len(cfg.TLS.Certificates) != 1 || cfg.TLS.RootCAs == nil || cfg.SASL != nil {
 		t.Fatal("mTLS configuration rejected")
 	}
 	m["ca_pem"] = cert + "invalid trailing data"
-	if _, err := parseBrokerPolicy([]byte(configurationJSON(t, m)), "send"); err != ErrConfiguration {
+	if _, err := Broker([]byte(configurationJSON(t, m)), "send"); err != ErrConfiguration {
 		t.Fatal("accepted trailing invalid CA data")
 	}
+}
+
+func configurationJSON(t *testing.T, value map[string]any) string {
+	t.Helper()
+	data, err := json.Marshal(value)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
 }

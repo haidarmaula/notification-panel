@@ -1,8 +1,23 @@
-// Command scheduler reserves the entry point for scoped durable scheduling.
+// Command scheduler runs the scoped durable scheduler.
 package main
 
-import "log"
+import (
+	"context"
+	"os"
+	"os/signal"
+	"syscall"
+
+	"hello/internal/daemon"
+	"hello/internal/deployment"
+)
 
 func main() {
-	log.Fatal("legacy scheduler retired; scoped durable scheduling is required")
+	os.Exit(run())
+}
+
+func run() int {
+	signal.Ignore(syscall.SIGPIPE)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	return daemon.Process(ctx, deployment.Scheduler, os.Args[1:], os.Stdout, os.Stderr)
 }

@@ -1,11 +1,10 @@
 # M04/M05 runtime composition
 
-Date: 2026-11-05. Status: authenticated consumer, source-bound publisher and
-scheduler composition are implemented and tested as libraries. The worker and
-scheduler executable entry points remain intentionally unwired pending trusted
-per-process configuration and startup/shutdown composition. No provider is called
-and no production source/application is enabled. See
-[local verification](../analysis/runtime-composition-verification.md).
+Date: 2026-11-05. Status: authenticated admission, source-bound publication,
+scheduler composition and protected per-process worker/scheduler entry points are
+implemented and locally tested. The worker explicitly runs `admission_only`; M06
+provider execution is not implemented. No production source/application is
+enabled. See [local verification](../analysis/runtime-composition-verification.md).
 
 ## Authenticated admission
 
@@ -83,12 +82,40 @@ snapshot/untouched delivery intent, an empty outbox, one safe committed Kafka
 position and preserved deadline before canceling/joining the runtime. This does
 not prove FCM execution, production HA, real identity integration or capacity.
 
-## Next executable boundary
+## Executable policy and lifecycle
 
-Share the tested protected-policy/database/broker parsing primitives with daemon
-configuration, without requiring operator replay keys/grants in worker/scheduler.
-Then compose `cmd/worker` and `cmd/scheduler` with one pool, immutable per-process
-policy, authenticated source checks, signal cancellation, joined tasks and
-producer drain before pool close. Exercise dependency/startup/shutdown failures
-through those executable paths. Provider execution remains M06; real issuer,
-incarnation/ACL, restore/backpressure and production acceptance remain gates.
+`cmd/worker` and `cmd/scheduler` compile in their process role and accept only
+`--help` (`-h`). They load `/etc/hello/worker.json` or
+`/etc/hello/scheduler.json`; Darwin uses `/private/etc/hello/`. The shared
+`internal/deployment` checks retain the replay command's protected root-owned
+ancestry, file modes, symlink/extended-ACL rejection, exact bounded JSON, verified
+DB TLS, and authenticated broker transport. No argv/environment path, transport,
+role or trust override exists. Replay issuer/key/grant fields are rejected by
+daemon schemas. Configuration remains private and immutable after one load.
+
+Common required fields are `database_url`, `log_source_id`, `cluster_identity`,
+`topic_name`, `topic_incarnation`, `partition_count`, `kafka`, `retry_min_ms` and
+`retry_max_ms`. The broker object has the same exact fields as the
+[replay policy](m05-replay-command.md). Retry minimum is at least 100ms and maximum
+at most 300,000ms, with maximum no smaller than minimum. Worker additionally
+requires `mode: "admission_only"` and `group_id`; any delivery mode fails closed.
+Scheduler additionally requires `poll_interval_ms` (100–60,000) and `page_size`
+(1–100). These bounds are implementation limits, not production tuning approval.
+
+Startup has a 15-second parent budget. Each daemon opens one two-connection pool,
+pings verified DB TLS, checks unsealed runtime/active source registration and live
+broker identity/topic/partition metadata. Worker preflights metadata without a
+Produce request, closes that temporary transport and starts its supervised group.
+Scheduler retains its producer and rechecks metadata before publication. Startup
+preflight does not replace transaction-time authority/epoch/source gates.
+
+SIGINT/SIGTERM cancel and join work, drain the producer, then close the pool.
+Owned stdout/stderr close on cancellation to interrupt blocked pipe writes; the
+interruption callback is joined. Clean cancellation exits 0; runtime, startup or
+drain failures exit 1; invalid arguments exit 2. Logs contain static failure
+messages and no raw dependency errors/policy values. Shutdown must be supervised:
+SDK-owned I/O may outlive call cancellation until producer Close finishes.
+
+Provider execution/recovery remains M06. Real issuer integration, source
+incarnation/ACL review, HA, restore/backpressure, capacity and production acceptance
+remain release gates. There is no automatic source/application activation.

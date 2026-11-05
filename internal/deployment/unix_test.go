@@ -1,6 +1,6 @@
 //go:build unix
 
-package requeue
+package deployment
 
 import (
 	"os"
@@ -49,7 +49,7 @@ func TestTrustedDeploymentEntry(t *testing.T) {
 }
 func TestDeploymentFileRejectsUntrustedPaths(t *testing.T) {
 	for _, path := range []string{"relative.json", "/etc/hello/../requeue.json", t.TempDir() + "/requeue.json"} {
-		if cfg, err := loadDeploymentFile(path); cfg != nil || err != ErrConfiguration {
+		if cfg, err := readFile(path); cfg != nil || err != ErrConfiguration {
 			t.Fatal("accepted untrusted deployment path")
 		}
 	}

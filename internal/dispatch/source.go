@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 
@@ -52,4 +53,46 @@ func (s SourceManifest) approved(ctx context.Context, q *sqlc.Queries) (bool, er
 		return false, err
 	}
 	return row.Active && row.ClusterIdentity == s.ClusterID && row.Topic == s.Topic && row.TopicIncarnation == s.Incarnation, nil
+}
+
+// ErrRuntimeSealed identifies an operator-sealed deployment at startup.
+var ErrRuntimeSealed = errors.New("notification runtime is sealed")
+
+// VerifyRegistration checks runtime and source in one bounded read transaction.
+// This is startup preflight, not permission for later I/O: publication must still
+// hold its own runtime/source locks and compare live broker metadata.
+func (s SourceManifest) VerifyRegistration(ctx context.Context, db Transactor) error {
+	if db == nil || s.Validate() != nil {
+		return ErrQuarantineSource
+	}
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	tx, err := db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		return err
+	}
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		_ = tx.Rollback(cleanup)
+	}()
+	q := sqlc.New(tx)
+	runtime, err := q.LockNotificationRuntime(ctx)
+	if err != nil {
+		return err
+	}
+	if runtime.Sealed {
+		return ErrRuntimeSealed
+	}
+	approved, err := s.approved(ctx, q)
+	if err != nil {
+		return err
+	}
+	if !approved {
+		return ErrQuarantineSource
+	}
+	return tx.Commit(ctx)
 }

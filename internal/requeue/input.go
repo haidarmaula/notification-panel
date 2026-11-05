@@ -1,16 +1,15 @@
 package requeue
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"hello/internal/dispatch"
+	"hello/internal/jsonobject"
 )
 
 var errInput = errors.New("invalid replay input")
@@ -22,13 +21,13 @@ func decodeInput(reader io.Reader) (dispatch.ReplayRequest, string, error) {
 	if reader == nil {
 		return none, "", errInput
 	}
-	data, err := io.ReadAll(io.LimitReader(reader, 64*1024+1))
-	if err != nil || len(data) > 64*1024 || !utf8.Valid(data) {
+	data, err := jsonobject.Read(reader)
+	if err != nil {
 		return none, "", errInput
 	}
 	var application, request, reference, credential string
 	var positions []json.RawMessage
-	if err := decodeObject(data, map[string]any{
+	if err := jsonobject.Decode(data, map[string]any{
 		"application_id": &application, "request_id": &request, "change_reference": &reference,
 		"credential": &credential, "positions": &positions,
 	}); err != nil {
@@ -53,7 +52,7 @@ func decodeInput(reader io.Reader) (dispatch.ReplayRequest, string, error) {
 		var source string
 		var partition int32
 		var offset int64
-		if err := decodeObject(raw, map[string]any{"log_source_id": &source, "partition": &partition, "offset": &offset}); err != nil {
+		if err := jsonobject.Decode(raw, map[string]any{"log_source_id": &source, "partition": &partition, "offset": &offset}); err != nil {
 			return none, "", errInput
 		}
 		sourceID, err := parseUUID(source)
@@ -67,42 +66,6 @@ func decodeInput(reader io.Reader) (dispatch.ReplayRequest, string, error) {
 		return none, "", errInput
 	}
 	return result, credential, nil
-}
-
-// decodeObject requires each known field exactly once and rejects nulls, case
-// aliases and trailing values. Nested positions are decoded separately with
-// their own exact schema, so duplicate detection applies at both object levels.
-func decodeObject(data []byte, fields map[string]any) error {
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	start, err := decoder.Token()
-	if err != nil || start != json.Delim('{') {
-		return errInput
-	}
-	seen := make(map[string]bool, len(fields))
-	for decoder.More() {
-		token, err := decoder.Token()
-		name, ok := token.(string)
-		if err != nil || !ok || seen[name] {
-			return errInput
-		}
-		target, ok := fields[name]
-		if !ok {
-			return errInput
-		}
-		var raw json.RawMessage
-		if decoder.Decode(&raw) != nil || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) || json.Unmarshal(raw, target) != nil {
-			return errInput
-		}
-		seen[name] = true
-	}
-	if end, err := decoder.Token(); err != nil || end != json.Delim('}') || len(seen) != len(fields) {
-		return errInput
-	}
-	var extra json.RawMessage
-	if decoder.Decode(&extra) != io.EOF {
-		return errInput
-	}
-	return nil
 }
 
 func parseUUID(value string) (pgtype.UUID, error) {

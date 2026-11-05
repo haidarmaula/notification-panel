@@ -1,6 +1,6 @@
 //go:build darwin
 
-package requeue
+package deployment
 
 import (
 	"encoding/binary"

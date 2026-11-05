@@ -1,6 +1,6 @@
 //go:build unix
 
-package requeue
+package deployment
 
 import (
 	"os"

@@ -3,21 +3,18 @@ package requeue
 import (
 	"bytes"
 	"crypto/ed25519"
-	"crypto/tls"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"io"
-	"net/url"
-	"os"
-	"strconv"
 	"strings"
 	"unicode"
-	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"hello/internal/deployment"
 	"hello/internal/dispatch"
+	"hello/internal/jsonobject"
 	"hello/internal/kafka"
 )
 
@@ -48,18 +45,18 @@ type sourceManifest struct {
 // an insecure transport override. Broker TLS/SASL and live source verification
 // remain separate prerequisites before a session factory may enable execution.
 func LoadConfiguration(source io.Reader) (*Configuration, error) {
-	if source == nil || !configurationEnvironmentAllowed() {
+	if source == nil || !deployment.EnvironmentAllowed() {
 		return nil, ErrConfiguration
 	}
-	data, err := io.ReadAll(io.LimitReader(source, 64*1024+1))
-	if err != nil || len(data) > 64*1024 || !utf8.Valid(data) {
+	data, err := jsonobject.Read(source)
+	if err != nil {
 		return nil, ErrConfiguration
 	}
-	var databaseURL, issuer, audience, deployment, keyText, sourceID string
+	var databaseURL, issuer, audience, deploymentID, keyText, sourceID string
 	var manifest sourceManifest
 	var kafkaPolicy json.RawMessage
-	if decodeObject(data, map[string]any{
-		"database_url": &databaseURL, "issuer": &issuer, "audience": &audience, "deployment": &deployment,
+	if jsonobject.Decode(data, map[string]any{
+		"database_url": &databaseURL, "issuer": &issuer, "audience": &audience, "deployment": &deploymentID,
 		"verification_key": &keyText, "log_source_id": &sourceID, "cluster_identity": &manifest.clusterIdentity,
 		"topic_name": &manifest.topicName, "topic_incarnation": &manifest.topicIncarnation, "partition_count": &manifest.partitionCount, "kafka": &kafkaPolicy,
 	}) != nil {
@@ -69,7 +66,7 @@ func LoadConfiguration(source io.Reader) (*Configuration, error) {
 	if err != nil || len(key) != ed25519.PublicKeySize || bytes.Equal(key, make([]byte, ed25519.PublicKeySize)) || base64.StdEncoding.EncodeToString(key) != keyText {
 		return nil, ErrConfiguration
 	}
-	verifier, err := dispatch.NewReplayVerifier(issuer, audience, deployment, key)
+	verifier, err := dispatch.NewReplayVerifier(issuer, audience, deploymentID, key)
 	if err != nil {
 		return nil, ErrConfiguration
 	}
@@ -78,11 +75,11 @@ func LoadConfiguration(source io.Reader) (*Configuration, error) {
 		!validTopic(manifest.topicName) || manifest.partitionCount < 1 {
 		return nil, ErrConfiguration
 	}
-	database, err := parseDatabasePolicy(databaseURL)
+	database, err := deployment.Database(databaseURL, "hello-requeue")
 	if err != nil {
 		return nil, ErrConfiguration
 	}
-	brokerConfig, err := parseBrokerPolicy(kafkaPolicy, manifest.topicName)
+	brokerConfig, err := deployment.Broker(kafkaPolicy, manifest.topicName)
 	if err != nil {
 		return nil, ErrConfiguration
 	}
@@ -99,71 +96,6 @@ func validTopic(value string) bool {
 	}
 	for _, r := range value {
 		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '.' || r == '_' || r == '-') {
-			return false
-		}
-	}
-	return true
-}
-
-// parseDatabasePolicy requires explicit endpoint and identity to avoid accidental
-// environment defaults. Only verified TLS is permitted; host/identity overrides,
-// multiple hosts, duplicate query fields and plaintext fallbacks are rejected.
-func parseDatabasePolicy(value string) (*pgxpool.Config, error) {
-	if !configurationEnvironmentAllowed() {
-		return nil, ErrConfiguration
-	}
-
-	u, err := url.Parse(value)
-	if err != nil || (u.Scheme != "postgres" && u.Scheme != "postgresql") || u.Hostname() == "" || u.User == nil ||
-		u.User.Username() == "" || u.Port() == "" || strings.TrimLeft(u.Path, "/") == "" || u.Fragment != "" || strings.Contains(u.Host, ",") {
-		return nil, ErrConfiguration
-	}
-	password, ok := u.User.Password()
-	if !ok || password == "" {
-		return nil, ErrConfiguration
-	}
-	port, err := strconv.ParseUint(u.Port(), 10, 16)
-	if err != nil || port == 0 {
-		return nil, ErrConfiguration
-	}
-	query, err := url.ParseQuery(u.RawQuery)
-	if err != nil || query.Get("sslmode") != "verify-full" {
-		return nil, ErrConfiguration
-	}
-	for name, values := range query {
-		if len(values) != 1 {
-			return nil, ErrConfiguration
-		}
-		switch name {
-		case "sslmode", "sslrootcert", "sslcert", "sslkey", "connect_timeout":
-		default:
-			return nil, ErrConfiguration
-		}
-	}
-	// Override pgx's implicit home-directory certificate and passfile defaults.
-	// An empty root path explicitly uses system roots with hostname verification.
-	for _, name := range []string{"sslrootcert", "sslcert", "sslkey"} {
-		query.Set(name, query.Get(name))
-	}
-	query.Set("passfile", os.DevNull)
-	u.RawQuery = query.Encode()
-	cfg, err := pgxpool.ParseConfig(u.String())
-	if err != nil || cfg.ConnConfig.TLSConfig == nil || cfg.ConnConfig.TLSConfig.InsecureSkipVerify || len(cfg.ConnConfig.Fallbacks) != 0 || cfg.ConnConfig.Database != strings.TrimLeft(u.Path, "/") {
-		return nil, ErrConfiguration
-	}
-	cfg.ConnConfig.TLSConfig.MinVersion = tls.VersionTLS12
-	cfg.MaxConns = 2
-	cfg.MinConns = 0
-	cfg.ConnConfig.RuntimeParams["application_name"] = "hello-requeue"
-	return cfg, nil
-}
-
-// Reject alternate policy/trust sources before pgx parsing or deferred TLS work.
-// The loader never clears or rewrites the process environment.
-func configurationEnvironmentAllowed() bool {
-	for _, setting := range os.Environ() {
-		name, value, _ := strings.Cut(setting, "=")
-		if value != "" && (strings.HasPrefix(name, "PG") || name == "SSL_CERT_FILE" || name == "SSL_CERT_DIR") {
 			return false
 		}
 	}

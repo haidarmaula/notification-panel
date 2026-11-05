@@ -1,4 +1,4 @@
-package requeue
+package deployment
 
 import (
 	"bytes"
@@ -8,16 +8,17 @@ import (
 	"strings"
 
 	"github.com/segmentio/kafka-go/sasl/plain"
+	"hello/internal/jsonobject"
 	"hello/internal/kafka"
 )
 
-// parseBrokerPolicy accepts only explicit authenticated TLS profiles. PLAIN is
+// Broker accepts only explicit authenticated TLS profiles. PLAIN is
 // permitted solely inside verified TLS; mTLS never falls back to anonymous TLS.
-func parseBrokerPolicy(data []byte, topic string) (kafka.ScopedProducerConfig, error) {
+func Broker(data []byte, topic string) (kafka.ScopedProducerConfig, error) {
 	var none kafka.ScopedProducerConfig
 	var brokers []string
 	var mode, caPEM, certificatePEM, keyPEM, username, password string
-	if decodeObject(data, map[string]any{
+	if jsonobject.Decode(data, map[string]any{
 		"brokers": &brokers, "authentication": &mode, "ca_pem": &caPEM,
 		"client_certificate_pem": &certificatePEM, "client_key_pem": &keyPEM,
 		"sasl_username": &username, "sasl_password": &password,

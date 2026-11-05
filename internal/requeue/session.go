@@ -6,9 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"hello/internal/database/sqlc"
+	"hello/internal/deployment"
 	"hello/internal/dispatch"
 	"hello/internal/kafka"
 )
@@ -27,7 +26,7 @@ func (c *Configuration) Open(ctx context.Context, request dispatch.ReplayRequest
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	if c == nil || c.database == nil || c.verifier == nil || !configurationEnvironmentAllowed() {
+	if c == nil || c.database == nil || c.verifier == nil || !deployment.EnvironmentAllowed() {
 		return nil, ErrConfiguration
 	}
 	if _, err := c.verifier.Verify(request, credential); err != nil {
@@ -126,36 +125,15 @@ func (p sourcePublisher) PublishScopedSend(ctx context.Context, event kafka.Scop
 }
 
 func verifyRegisteredSource(ctx context.Context, pool *pgxpool.Pool, manifest sourceManifest) error {
-	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-	tx, err := pool.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
-	if err != nil {
-		return err
-	}
-	defer func() {
-		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
-		defer cancel()
-		_ = tx.Rollback(cleanup)
-	}()
-	q := sqlc.New(tx)
-	runtime, err := q.LockNotificationRuntime(ctx)
-	if err != nil {
-		return err
-	}
-	if runtime.Sealed {
+	source := dispatch.SourceManifest{ID: manifest.id, ClusterID: manifest.clusterIdentity, Topic: manifest.topicName, Incarnation: manifest.topicIncarnation, PartitionCount: manifest.partitionCount}
+	err := source.VerifyRegistration(ctx, pool)
+	if errors.Is(err, dispatch.ErrRuntimeSealed) {
 		return dispatch.ErrReplayHeld
 	}
-	source, err := q.LockSendLogSource(ctx, manifest.id)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if errors.Is(err, dispatch.ErrQuarantineSource) {
 		return kafka.ErrScopedSource
 	}
-	if err != nil {
-		return err
-	}
-	if !source.Active || source.Topic != manifest.topicName || source.ClusterIdentity != manifest.clusterIdentity || source.TopicIncarnation != manifest.topicIncarnation {
-		return kafka.ErrScopedSource
-	}
-	return tx.Commit(ctx)
+	return err
 }
 
 func safeStartupError(err error) error {

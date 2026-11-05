@@ -241,8 +241,9 @@ release gates. [Worker/scheduler composition foundations](../specs/m04-m05-runti
 now include authenticated admission, source-bound publication, bounded due-schedule
 polling and four joined scheduler tasks, with a composed local TLS pipeline test.
 The [verification record](runtime-composition-verification.md) covers this boundary.
-Next is trusted per-process configuration and actual worker/scheduler entry-point
-wiring before M06 provider execution.
+Trusted per-process configuration and actual worker/scheduler entry points are
+now wired and locally verified. The worker explicitly runs admission-only; M06
+provider execution remains next. Production activation and acceptance stay open.
 
 ## 5. Execution checklist
 
