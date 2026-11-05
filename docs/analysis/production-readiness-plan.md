@@ -244,7 +244,10 @@ The [verification record](runtime-composition-verification.md) covers this bound
 Trusted per-process configuration and actual worker/scheduler entry points are
 now wired and locally verified. The worker explicitly runs admission-only; M06
 [lease/reservation foundations](m06-execution-verification.md) now pass focused
-local tests; provider transport/results/runtime execution remain next. Production activation and acceptance stay open.
+local tests. Dedicated [receipt signing and scoped payload libraries](m06-receipt-payload-verification.md)
+now also pass local tests. Capability metadata persistence, provider transport,
+results/recovery/outbox and delivery runtime composition remain open. Production
+activation and acceptance stay open.
 
 ## 5. Execution checklist
 

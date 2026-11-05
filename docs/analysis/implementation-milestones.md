@@ -190,7 +190,9 @@ joined scheduler/worker composition. Protected per-process policy and actual
 worker/scheduler entry points now run this pipeline locally; the worker remains
 explicitly admission-only. M06 [lease/reservation foundations](m06-execution-verification.md)
 now pass focused local tests; provider transport, results/recovery/outbox and
-execution composition remain open. See
+execution composition remain open. The [receipt signer/payload boundary](m06-receipt-payload-verification.md)
+is now locally tested; persisted capability metadata is still a prerequisite before
+any worker calls it. See
 [verification](runtime-composition-verification.md).
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,

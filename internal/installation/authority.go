@@ -11,6 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"hello/internal/cryptokey"
 	"hello/internal/database/sqlc"
 )
 
@@ -72,7 +73,7 @@ func NewMobileAuthority(store MobileIdentityStore, policies map[pgtype.UUID]Mobi
 		_, duplicate := pairs[pair]
 		if !id.Valid || duplicate || !validIdentityText(policy.Issuer) || !validIdentityText(policy.Audience) ||
 			!validIdentityText(policy.Purpose) || !validIdentityText(policy.Namespace) ||
-			len(policy.VerificationKey) != ed25519.PublicKeySize || policy.Origin == nil {
+			!cryptokey.StrongEd25519PublicKey(policy.VerificationKey) || policy.Origin == nil {
 			return nil, ErrConfiguration
 		}
 		pairs[pair] = struct{}{}

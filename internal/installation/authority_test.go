@@ -154,3 +154,12 @@ func TestMobileAuthorityPinsProjectAndEnrollmentOrigin(t *testing.T) {
 	_, err = auth.Authenticate(ctx, project, raw)
 	require.ErrorIs(t, err, ErrProjectInactive)
 }
+
+func TestMobileAuthorityRejectsWeakTrustKey(t *testing.T) {
+	key := make(ed25519.PublicKey, 32)
+	key[0] = 1
+	project := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
+	authority, err := NewMobileAuthority(&identityFixture{}, map[pgtype.UUID]MobilePolicy{project: {Issuer: "issuer", Audience: "audience", Purpose: "mobile", Namespace: "namespace", VerificationKey: key, Origin: &originFixture{}}})
+	require.ErrorIs(t, err, ErrConfiguration)
+	require.Nil(t, authority)
+}

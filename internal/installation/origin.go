@@ -10,6 +10,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"hello/internal/cryptokey"
 	"hello/internal/database/sqlc"
 )
 
@@ -32,7 +33,7 @@ type SignedOrigin struct {
 
 // NewSignedOrigin pins the broker issuer, audience and a copied Ed25519 public key.
 func NewSignedOrigin(store OriginUseStore, issuer, audience string, key ed25519.PublicKey) (*SignedOrigin, error) {
-	if store == nil || !validIdentityText(issuer) || !validIdentityText(audience) || len(key) != ed25519.PublicKeySize {
+	if store == nil || !validIdentityText(issuer) || !validIdentityText(audience) || !cryptokey.StrongEd25519PublicKey(key) {
 		return nil, ErrConfiguration
 	}
 	return &SignedOrigin{store: store, issuer: issuer, audience: audience, key: append(ed25519.PublicKey(nil), key...)}, nil

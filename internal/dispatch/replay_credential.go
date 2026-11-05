@@ -11,6 +11,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"hello/internal/cryptokey"
 )
 
 var ErrReplayCredential = errors.New("invalid operational replay credential")
@@ -44,7 +45,7 @@ type VerifiedReplay struct {
 // The public key is copied. Key provisioning and trusted MFA issuance are external
 // deployment gates; ordinary staff/mobile token issuers are not implicit fallbacks.
 func NewReplayVerifier(issuer, audience, deployment string, key ed25519.PublicKey) (*ReplayVerifier, error) {
-	if !validReplayText(issuer) || !validReplayText(audience) || !validReplayText(deployment) || len(key) != ed25519.PublicKeySize {
+	if !validReplayText(issuer) || !validReplayText(audience) || !validReplayText(deployment) || !cryptokey.StrongEd25519PublicKey(key) {
 		return nil, ErrReplayCredential
 	}
 	return &ReplayVerifier{issuer: issuer, audience: audience, deployment: deployment, key: slices.Clone(key)}, nil

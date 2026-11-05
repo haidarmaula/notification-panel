@@ -34,6 +34,15 @@ http.createServer((req, res) => {
       if (!message.data || message.data.fixture !== 'integration') {
         return failure(res, 400, 'INVALID_ARGUMENT', 'INVALID_ARGUMENT');
       }
+      if (message.data.schema_version === '1') {
+        const required = ['application_id', 'notification_id', 'delivery_id', 'registration_id', 'owner_epoch', 'receipt_token'];
+        const scoped = required.every(key => typeof message.data[key] === 'string' && message.data[key].length > 0);
+        const expiry = (message.android && typeof message.android.ttl === 'string') ||
+          (message.apns && message.apns.headers && typeof message.apns.headers['apns-expiration'] === 'string');
+        if (!scoped || !expiry || !message.data.receipt_token.startsWith('r1.')) {
+          return failure(res, 400, 'INVALID_ARGUMENT', 'INVALID_ARGUMENT');
+        }
+      }
       return send(res, 200, { name: `projects/integration-fixture/messages/accepted-${++accepted}` });
     default:
       return failure(res, 400, 'INVALID_ARGUMENT', 'INVALID_ARGUMENT');

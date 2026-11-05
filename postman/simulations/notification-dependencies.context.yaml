@@ -37,6 +37,13 @@ assumptions:
     verification: Tagged smoke test and request logs passed; no inference about whether a real provider accepted a timed-out request.
     source: tests/integration/dependencies_test.go; postman/mocks/fcm/default.js
     updated_at: '2026-11-02'
+  - id: scoped-payload-sdk-serialization
+    status: supported
+    claim: The pinned SDK submits schema-v1 scoped payloads using FID and registration-token targets for Android and iOS through the local fixture.
+    reason: The real payload builder and receipt signer feed messaging.Send; the fixture requires scope fields, receipt-token version and platform expiry serialization.
+    verification: Four platform/address combinations pass, and the test verifier validates the unchanged capability. No real project credentials, APNs or devices are exercised.
+    source: tests/integration/receipt_payload_test.go; internal/pushpayload/payload.go; docs/specs/m06-receipt-payload.md
+    updated_at: '2026-11-05'
 fingerprints:
   - id: foundation-step-19
     date: '2026-11-02'

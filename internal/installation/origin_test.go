@@ -78,3 +78,11 @@ func TestSignedOriginBindsEvidenceBeforeConsuming(t *testing.T) {
 	require.ErrorIs(t, verifier.VerifyOrigin(ctx, binding, raw), ErrMobileOrigin)
 	require.Equal(t, 2, store.calls)
 }
+
+func TestSignedOriginRejectsWeakTrustKey(t *testing.T) {
+	key := make(ed25519.PublicKey, 32)
+	key[0] = 1
+	verifier, err := NewSignedOrigin(&originUseFixture{}, "issuer", "audience", key)
+	require.ErrorIs(t, err, ErrConfiguration)
+	require.Nil(t, verifier)
+}

@@ -13,7 +13,7 @@ This does not accept unresolved product TTL/SLO, credential, mobile, or recovery
 
 1. Campaign lease and per-device reservation persistence, with acknowledged-commit
    capabilities, DB-clock fencing and ownership checks. No provider calls.
-2. Dedicated receipt signer/payload and one-device FCM transport, explicit route
+2. Dedicated [receipt signer/payload](m06-receipt-payload.md) and one-device FCM transport, explicit route
    policy, typed outcomes, retry floors, process-wide bounded permits and breaker.
 3. Guarded results/recovery/finalization and versioned update outbox; then worker
    composition, simulation/fault tests and operational diagnostics. M06/M07 share

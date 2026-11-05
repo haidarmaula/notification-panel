@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"errors"
 	"strings"
 	"testing"
 	"time"
@@ -155,5 +156,14 @@ func TestReplayVerifierRejectsUntrustedSigningAndConfiguration(t *testing.T) {
 	} {
 		_, err = NewReplayVerifier(c.issuer, c.audience, c.deployment, c.key)
 		require.ErrorIs(t, err, ErrReplayCredential)
+	}
+}
+
+func TestReplayVerifierRejectsWeakTrustKey(t *testing.T) {
+	key := make(ed25519.PublicKey, 32)
+	key[0] = 1
+	verifier, err := NewReplayVerifier("issuer", "audience", "deployment", key)
+	if verifier != nil || !errors.Is(err, ErrReplayCredential) {
+		t.Fatal("accepted weak operational trust key")
 	}
 }

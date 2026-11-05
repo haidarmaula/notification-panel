@@ -107,6 +107,20 @@ additional concrete blocker in this slice. Provider/result/recovery completion
 is not implied by this review. See the
 [verification record](docs/analysis/m06-execution-verification.md).
 
+## Receipt capability/payload review — 2026-11-05
+
+| ID | Severity | Finding and remediation |
+| --- | --- | --- |
+| RP1 | P2 | Length-only Ed25519 public-key configuration admitted the identity point, under which a fixed signature verifies arbitrary messages. This requires a bad configured trust key, not attacker control over the ring. Fixed by canonical-y/small-order screening (both signs and negative-zero aliases) before retaining receipt, operational replay, mobile JWT and signed-origin trust keys; standard-library verification remains mandatory. Regressions reproduce the forgery and reject the key. |
+| RP2 | P2 | Pointer-only signer formatting redaction could be bypassed by copying/dereferencing its exported Go value. Fixed with value-receiver formatting/slog/JSON redaction and pointer/copied-value regressions. |
+| RP3 | P2 | Routing-only destination metadata could pair one binding's address with another binding's receipt scope on the same route. Fixed by comparing destination binding ID, installation public UUID and owner epoch with the signed scope; mismatched identity tests pass. Current-DB eligibility/decryption remains the executor's separate responsibility. |
+
+Independent follow-up review found these three issues addressed. Key screening
+uses the mathematical low-order encodings documented by
+[libsodium 1.0.18](https://github.com/jedisct1/libsodium/blob/1.0.18/src/libsodium/crypto_core/ed25519/ref10/ed25519_ref10.c#L965-L1017)
+and rejects noncanonical aliases; it is not full curve/provenance validation.
+See [verification](docs/analysis/m06-receipt-payload-verification.md).
+
 ## Critical Findings
 
 Crashes, security bypasses, data corruption, or issues that affect every user of a given endpoint.
