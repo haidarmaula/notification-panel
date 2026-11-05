@@ -233,6 +233,8 @@ on uncertain commit. [Publication/result transactions and expired-claim recovery
 also pass locally, including real Kafka, unknown commit outcomes and lease expiry.
 The [command adapter](../specs/m05-replay-command.md) now passes unit/race tests
 for strict stdin input, default dry-run, serial execution and safe partial reports.
+Its static configuration loader also validates pinned trust, explicit verified-TLS
+database policy and source expectations; it does not establish live source identity.
 Restricted executable/configuration, issuer/manifest/drain verification and modern
 worker/scheduler wiring remain open before M06 provider execution. Replay is not
 enabled in a binary or production deployment.

@@ -180,6 +180,8 @@ attempt/control/audit with exclusive leases and no proof on uncertain commit.
 pass locally, including real Kafka/dedup and unknown commit windows. The
 [command adapter](../specs/m05-replay-command.md) adds strict stdin parsing, default
 dry-run, serial execution and safe partial reports, covered by unit/race tests.
+Static trust/database/source configuration is validated locally; live identity and
+file/session composition remain open.
 Executable/configuration/issuer integration, producer drain, source manifest and
 runtime/deployment wiring remain open.
 

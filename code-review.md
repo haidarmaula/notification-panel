@@ -62,6 +62,17 @@ now covers the unwired publication/recovery libraries, proof reuse and commit
 uncertainty. Pinned Kafka cancellation can retain producer-owned I/O; source
 handoff therefore requires producer drain. CLI/runtime/deployment gates remain open.
 
+## Replay command configuration review — 2026-11-05
+
+| ID | Severity | Finding and remediation |
+| --- | --- | --- |
+| RC1 | P2 | Slash-only or encoded-slash database URI paths passed the explicit-name check but pgx normalized them to an absent database. Fixed by rejecting an empty effective path and comparing the parsed database name. Red/green URI regressions cover both forms. |
+| RC2 | P2 | pgx merged ambient `PG*`/service policy and home certificate defaults into the supposedly explicit replay configuration. Fixed by rejecting nonempty `PG*` settings, overriding unconfigured certificate paths and disabling implicit passfile lookup. Environment regressions and focused race tests pass; the process environment is never changed by the loader. |
+
+This is a static configuration/command adapter review. Trusted-file, executable,
+live broker/source, transport and shutdown gates remain open. See the
+[verification record](docs/analysis/m05-replay-command-verification.md).
+
 ## Critical Findings
 
 Crashes, security bypasses, data corruption, or issues that affect every user of a given endpoint.

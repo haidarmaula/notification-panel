@@ -1,8 +1,7 @@
 # M05 replay command protocol
 
 Date: 2026-11-05. Status: implemented and unit-tested as the dependency-injected
-`internal/requeue` adapter. The `cmd/requeue` executable, trusted deployment
-configuration, source verification and operational issuer integration remain open.
+`internal/requeue` adapter. The `cmd/requeue` executable, deployment file/session wiring, source verification and operational issuer integration remain open.
 This protocol does not activate a broker or grant production replay authority.
 See the [local verification record](../analysis/m05-replay-command-verification.md).
 
@@ -97,3 +96,44 @@ The production factory and executable still need:
 The adapter tests exercise command behavior using substituted sessions. They do
 not establish real database authorization, source identity, broker I/O drain or
 production readiness; those are separate service/integration/deployment gates.
+
+## Static deployment configuration
+
+`LoadConfiguration` now validates a separate trusted JSON stream, at most 64 KiB.
+It retains a private read-once verifier, database pool configuration and expected
+source manifest without opening a network connection. Every field below is
+required; duplicate/unknown/aliased/null fields and trailing values are rejected.
+
+| Field | Meaning |
+| --- | --- |
+| `database_url` | Explicit PostgreSQL URI with host, port, user, password and effective database name; `sslmode=verify-full` is mandatory. |
+| `issuer`, `audience`, `deployment` | Dedicated operational assertion trust scope. |
+| `verification_key` | Canonical standard-base64 Ed25519 public key, exactly 32 bytes and not all zero. No private signing key is loaded. |
+| `log_source_id` | Canonical nonzero source UUID. |
+| `cluster_identity` | Expected broker cluster identity, 1–255 bytes. |
+| `topic_name` | Exact Kafka topic, 1–249 ASCII letters/digits/dot/underscore/hyphen, excluding `.` and `..`. |
+| `topic_incarnation` | Expected reviewed incarnation label, 1–255 bytes. |
+| `partition_count` | Positive int32 expected partition count. |
+
+Cluster/incarnation labels reject edge whitespace and controls. Source values
+are expectations, not proof of a live broker or authorization to activate one.
+The session factory must compare them with current database registration and
+broker metadata, with the reviewed incarnation manifest as a separate gate.
+
+The URI permits only `sslmode`, `sslrootcert`, `sslcert`, `sslkey` and
+`connect_timeout` query parameters, each once. Reject keyword DSNs, multiple
+hosts, query host/identity overrides, missing effective database names (including
+slash-only/encoded-slash paths), and any effective unverified TLS or fallback
+connection. Preserve percent-encoded passwords. TLS is pinned to at least 1.2;
+the pool has at most two connections and no minimum idle population.
+
+Nonempty `PG*` environment settings fail closed instead of silently supplying
+service, certificate, connection or SQL options. Unconfigured certificate/root
+paths explicitly override pgx home-directory defaults; absent custom roots use
+system roots with hostname verification. Implicit passfile lookup is neutralized.
+The loader does not mutate process environment or read `.env`.
+
+The caller still owns trusted-file permission/parent-directory checks and stream
+cancellation. Broker TLS/SASL/ACL configuration, live source checks, executable
+composition and actual connection/drain tests remain open. Parsing a verified-TLS
+policy does not establish that a server certificate, role or network is usable.

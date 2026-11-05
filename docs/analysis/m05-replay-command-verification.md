@@ -51,3 +51,23 @@ Next: trusted configuration + executable/session composition, source/manifest an
 transport verification, then real PostgreSQL/Kafka command and shutdown tests.
 Modern worker/scheduler wiring and M06/M07 remain open. No production source,
 application or replay command has been activated.
+
+
+## Static configuration follow-up
+
+The private configuration loader now validates pinned operational trust, explicit
+verified-TLS database policy and expected source identity. Unit/race cases cover
+missing/ambiguous/unknown fields, unsafe or overridden DB transport policy,
+missing/zero source data, malformed keys, ambient `PG*` settings and encoded
+password preservation. No connection or source activation occurs.
+
+Independent review found that slash-only URI paths could inherit pgx database
+defaults, and that pgx otherwise merges environment/service/home certificate
+policy. New red regressions reproduced the path and environment defects. The
+loader now compares the effective database name, rejects nonempty `PG*` settings,
+overrides unconfigured certificate paths and disables implicit passfile lookup.
+Focused race tests pass; follow-up review found no remaining concrete gap in
+these fixes. See RC1/RC2 in [the code review](../../code-review.md).
+
+Trusted-file opening, broker transport policy, live source/manifest verification
+and the executable/session factory are still the next implementation boundary.
