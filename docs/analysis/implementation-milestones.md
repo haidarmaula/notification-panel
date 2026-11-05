@@ -198,7 +198,8 @@ SDK simulation/race tests, including one physical request per permit.
 OAuth/SDK and offline protected-file tests. Deployment credential selection remains
 open; ADC composition is conditional on selecting keyless deployment. [DB-authorized single-use submission](m06-submission-verification.md)
 is implemented. [Fenced results and atomic update insertion](m06-results-verification.md)
-are implemented; recovery, update publication and delivery composition remain open. See
+are implemented. [Ordered update publication](m06-update-publication-verification.md)
+also passes focused local Kafka tests; recovery and delivery composition remain open. See
 [verification](runtime-composition-verification.md).
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,

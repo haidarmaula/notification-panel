@@ -117,6 +117,16 @@ Focused independent review found no additional concrete result fencing, lock-ord
 conditional invalidation, commit uncertainty or atomic outbox fault. Legacy migration
 fixtures now unwind migration 000030 before dropping their dependent intent tables.
 
+## M06 update publication review — 2026-11-05
+
+| ID | Severity | Finding and remediation |
+| --- | --- | --- |
+| UP1 | P2 — fixed | A due current-lineage successor blocked by a retained foreign-lineage predecessor was indistinguishable from an idle queue. Such work now reports Held and retains both rows for coordinated reconciliation; it never silently bypasses/deletes old evidence. A mixed-epoch regression covers the policy. |
+
+Review found no additional concrete same-lineage ordering, ack/delete atomicity,
+JSON ambiguity or malformed-envelope fairness defect. Actual producer-owned late
+I/O still requires shutdown drain and consumer event-ID/version deduplication.
+
 ## Receipt capability/payload review — 2026-11-05
 
 | ID | Severity | Finding and remediation |

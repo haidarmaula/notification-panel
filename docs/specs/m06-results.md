@@ -47,10 +47,10 @@ nullable times do not invent missing timestamps. Provider acceptance is not deli
 Outbox rows pin application/notification/delivery/version, origin/source epochs and
 immutable serialized payload. Unique(source_epoch,delivery_id,delivery_version),
 restrictive scoped FK and guarded down migration retain evidence. Dispatcher retry
-metadata is mutable; immutable event fields are not. Later dispatcher work must
-preserve delivery_<notification_id>, stable event bytes/ID, predecessor ordering,
-ack-before-delete and consumer dedup/version rules. This slice does not publish.
+metadata is mutable; immutable event fields are not. The [ordered dispatcher](m06-update-publication.md) preserves
+delivery_<notification_id>, stable event bytes/ID, predecessor ordering and
+ack-before-delete. Consumer dedup/version acceptance remains required.
 
-Remaining: retry/recovery/finalizer loops, predecessor-safe dispatcher, v2 consumer
+Remaining: retry/recovery/finalizer loops, v2 consumer
 acceptance, receipts/statistics and delivery composition. No production activation
 or external exactly-once guarantee is implied.

@@ -72,6 +72,13 @@ assumptions:
     verification: On 2026-11-05 focused and complete race runs passed accepted/rejected/transient/configuration outcomes, early observations, logout/refresh, lease/epoch fences, budget/expiry, new-attempt fencing, duplicate persistence and guarded down migration. Complete simulation recorded 50 FCM and three OAuth requests. Update publication and real provider/device readiness remain unverified.
     source: tests/integration/delivery_results_test.go; internal/dispatch/results.go; docs/analysis/m06-results-verification.md
     updated_at: '2026-11-05'
+  - id: ordered-update-publication
+    status: supported
+    claim: Locally persisted v2 projections publish byte-for-byte to Kafka under the established notification key, with predecessor ordering and at-least-once retry semantics.
+    reason: The real outbox service and Kafka producer are exercised against disposable PostgreSQL/Kafka; synthetic FCM creates the original immutable projections.
+    verification: On 2026-11-05 focused and complete race suites passed locked/deferred predecessors, unrelated-delivery progress, ack/rollback/lost-commit, corrupt envelope, source/epoch controls and cancellation. A real Kafka read matched persisted bytes and delivery_<notification_id>. Foreign-lineage predecessors remain held for explicit reconciliation. Runtime activation and consumer compatibility remain unverified.
+    source: tests/integration/update_outbox_test.go; internal/dispatch/update_outbox.go; docs/analysis/m06-update-publication-verification.md
+    updated_at: '2026-11-05'
 fingerprints:
   - id: foundation-step-19
     date: '2026-11-02'
@@ -92,4 +99,8 @@ fingerprints:
   - id: m06-fenced-results
     date: '2026-11-05'
     commit: 1b47459 plus uncommitted result/outbox persistence and migration000030 artifacts
+    cli: Postman 1.75.0
+  - id: m06-ordered-update-publication
+    date: '2026-11-05'
+    commit: 0009fd5 plus uncommitted ordered update publisher artifacts
     cli: Postman 1.75.0

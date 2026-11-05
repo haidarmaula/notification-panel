@@ -254,7 +254,8 @@ credential selection remains open; managed ADC is conditional on choosing keyles
 deployment. [Single-use DB-authorized submission](m06-submission-verification.md)
 is implemented with final checks after credential/rate waits.
 [Fenced result persistence/outbox insertion](m06-results-verification.md) is implemented.
-Recovery, update publication and delivery runtime composition remain open. Production
+[Ordered update publication](m06-update-publication-verification.md) passes focused
+local Kafka tests. Recovery and delivery runtime composition remain open. Production
 activation and acceptance stay open.
 
 ## 5. Execution checklist
@@ -298,7 +299,7 @@ work on unchecked rows has started, as noted.
 - [ ] 23. Bounded retry/backoff, lease expiry, recovery, TTL/budget terminalization.
 - [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; replay registration/inspection/claim/publication and expired-claim cleanup libraries also pass locally. Replay CLI/configuration and PostgreSQL verified-TLS/Kafka mTLS command tests also pass locally. Production issuer/incarnation approval, supervised drain/handoff and runtime deployment remain pending.
 - [ ] 25. M04 atomic send idempotency + claim + outbox, promotion/expiry, and bounded dispatcher pass locally; the scheduler binary now uses protected source-bound durable handoff locally. Production policy/activation and target-environment evidence remain open.
-- [ ] 26. Atomic versioned update outbox insertion is implemented; predecessor-safe publication and consumer dedup/ordering acceptance remain open.
+- [ ] 26. Atomic versioned outbox insertion and predecessor-safe publication pass local tests. Consumer dedup/version acceptance and delivery runtime composition remain open.
 - [ ] 27. Bounded concurrency, page/chunk memory limits, provider rate limits, and backpressure.
 - [ ] 28. Acceptance/audit rollback, ack-before-commit, preparation/quarantine commit failure, coordinator unsafe-offset, and broker rebalance pass locally; provider and other failure windows/deployment are pending.
 

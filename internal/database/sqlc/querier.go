@@ -154,6 +154,7 @@ type Querier interface {
 	// CREATE
 	// ==========================================
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeferDeliveryUpdate(ctx context.Context, arg DeferDeliveryUpdateParams) (int64, error)
 	DeferSendOutbox(ctx context.Context, arg DeferSendOutboxParams) error
 	// ==========================================
 	// DELETE
@@ -168,6 +169,7 @@ type Querier interface {
 	// ==========================================
 	DeleteNotificationTarget(ctx context.Context, id int64) error
 	DeleteNotificationTargetsByNotification(ctx context.Context, notificationID int64) error
+	DeletePublishedDeliveryUpdate(ctx context.Context, eventID pgtype.UUID) (int64, error)
 	DeletePublishedSendOutbox(ctx context.Context, id int64) (int64, error)
 	// ==========================================
 	// DELETE
@@ -307,6 +309,7 @@ type Querier interface {
 	// GET
 	// ==========================================
 	GetUserByID(ctx context.Context, id int64) (User, error)
+	HasLineageBlockedDeliveryUpdate(ctx context.Context, arg HasLineageBlockedDeliveryUpdateParams) (bool, error)
 	HoldCampaignPreparation(ctx context.Context, arg HoldCampaignPreparationParams) error
 	HoldResultDispatch(ctx context.Context, applicationID int64) error
 	InsertDeliveryUpdate(ctx context.Context, arg InsertDeliveryUpdateParams) error
@@ -424,6 +427,7 @@ type Querier interface {
 	LockInstallationProject(ctx context.Context, applicationID int64) (string, error)
 	LockInstallationUser(ctx context.Context, arg LockInstallationUserParams) (int64, error)
 	LockMobileInstallation(ctx context.Context, arg LockMobileInstallationParams) (MobileInstallation, error)
+	LockNextDeliveryUpdate(ctx context.Context, arg LockNextDeliveryUpdateParams) (LockNextDeliveryUpdateRow, error)
 	LockNextScopedSendOutbox(ctx context.Context, arg LockNextScopedSendOutboxParams) (LockNextScopedSendOutboxRow, error)
 	LockNotificationRuntime(ctx context.Context) (LockNotificationRuntimeRow, error)
 	LockPreparationCampaign(ctx context.Context, arg LockPreparationCampaignParams) (LockPreparationCampaignRow, error)

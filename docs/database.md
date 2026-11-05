@@ -741,8 +741,10 @@ prevents duplicate persistence from recreating a deleted published event.
 notification_update_outbox stores immutable serialized schema-v2 full projections,
 stable event IDs and DB occurrence times. A scoped application/notification/delivery
 FK prevents attribution to another campaign; a unique source/delivery/version key
-prevents duplicate envelopes. Due and predecessor indexes support the later bounded
-ordered drainer. Only retry scheduling metadata may change on a retained row.
+prevents duplicate envelopes. Due and predecessor indexes support the bounded
+[ordered drainer](specs/m06-update-publication.md). Locked or deferred predecessors
+block successors of that delivery; a retained foreign-lineage predecessor requires
+explicit reconciliation. Other eligible deliveries can progress. Only retry scheduling metadata may change on a retained row.
 
 Ledger mutation, original-generation-only invalidation, configuration hold and
 outbox insertion share one transaction. Provider acceptance records server evidence

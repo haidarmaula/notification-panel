@@ -1,10 +1,17 @@
 package kafka
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
 	"errors"
+	broker "github.com/segmentio/kafka-go"
+	"io"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
@@ -83,4 +90,66 @@ func (e ScopedDeliveryUpdated) Validate() error {
 }
 func eventTime(t time.Time) bool {
 	return !t.IsZero() && t.Year() >= 1 && t.Year() <= 9999 && t.Nanosecond()%1000 == 0 && t.Location() == time.UTC
+}
+
+// DecodeScopedDelivery requires the complete closed v2 schema, preserving explicit
+// null evidence while rejecting ambiguous JSON. The caller verifies its Kafka key
+// and current approved source scope before applying a projection.
+func DecodeScopedDelivery(value []byte) (ScopedDeliveryUpdated, error) {
+	var event ScopedDeliveryUpdated
+	if len(value) == 0 || len(value) > 65536 || !utf8.Valid(value) {
+		return event, ErrScopedDeliveryEnvelope
+	}
+	nullable := map[string]bool{"provider_message_id": true, "provider_accepted_at": true, "observed_delivered_at": true, "observed_opened_at": true, "failed_at": true, "reason": true}
+	fields := map[string]bool{}
+	for _, name := range []string{"schema_version", "application_id", "origin_epoch", "source_epoch", "event_id", "delivery_id", "delivery_version", "event_kind", "notification_id", "user_id", "provider", "status", "provider_message_id", "provider_accepted_at", "observed_delivered", "observed_delivered_at", "observed_opened", "observed_opened_at", "failed_at", "reason", "occurred_at"} {
+		fields[name] = false
+	}
+	decoder := json.NewDecoder(bytes.NewReader(value))
+	start, err := decoder.Token()
+	if err != nil || start != json.Delim('{') {
+		return event, ErrScopedDeliveryEnvelope
+	}
+	for decoder.More() {
+		token, err := decoder.Token()
+		name, ok := token.(string)
+		seen, known := fields[name]
+		if err != nil || !ok || !known || seen {
+			return event, ErrScopedDeliveryEnvelope
+		}
+		var raw json.RawMessage
+		if decoder.Decode(&raw) != nil || bytes.Equal(bytes.TrimSpace(raw), []byte("null")) && !nullable[name] {
+			return event, ErrScopedDeliveryEnvelope
+		}
+		fields[name] = true
+	}
+	if end, err := decoder.Token(); err != nil || end != json.Delim('}') {
+		return event, ErrScopedDeliveryEnvelope
+	}
+	for _, seen := range fields {
+		if !seen {
+			return event, ErrScopedDeliveryEnvelope
+		}
+	}
+	var trailing json.RawMessage
+	if decoder.Decode(&trailing) != io.EOF || json.Unmarshal(value, &event) != nil || event.Validate() != nil {
+		return ScopedDeliveryUpdated{}, ErrScopedDeliveryEnvelope
+	}
+	return event, nil
+}
+
+// DeliveryUpdateKey preserves the established per-notification Kafka key format.
+// Callers must validate the event before deriving its key.
+func DeliveryUpdateKey(notificationID int64) []byte {
+	return []byte("delivery_" + strconv.FormatInt(notificationID, 10))
+}
+
+// PublishScopedDelivery publishes an immutable copy of the exact persisted v2
+// envelope. Cancellation can leave producer-owned I/O; Close must drain it.
+func (p *ScopedProducer) PublishScopedDelivery(ctx context.Context, value []byte) error {
+	event, err := DecodeScopedDelivery(value)
+	if err != nil {
+		return err
+	}
+	return p.writer.WriteMessages(ctx, broker.Message{Key: DeliveryUpdateKey(event.NotificationID), Value: bytes.Clone(value)})
 }
