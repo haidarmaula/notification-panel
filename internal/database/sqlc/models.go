@@ -160,22 +160,31 @@ type NotificationDelivery struct {
 }
 
 type NotificationDeliveryIntent struct {
-	ID                pgtype.UUID        `db:"id"`
-	ApplicationID     int64              `db:"application_id"`
-	NotificationID    int64              `db:"notification_id"`
-	InstallationID    int64              `db:"installation_id"`
-	BindingID         int64              `db:"binding_id"`
-	OwnerUserID       int64              `db:"owner_user_id"`
-	OwnerEpoch        int64              `db:"owner_epoch"`
-	DeliveryVersion   int64              `db:"delivery_version"`
-	Status            string             `db:"status"`
-	AttemptCount      int32              `db:"attempt_count"`
-	NextAttemptAt     pgtype.Timestamptz `db:"next_attempt_at"`
-	CreatedAt         pgtype.Timestamptz `db:"created_at"`
-	AttemptID         pgtype.UUID        `db:"attempt_id"`
-	ClaimGeneration   pgtype.Int8        `db:"claim_generation"`
-	LastAttemptAt     pgtype.Timestamptz `db:"last_attempt_at"`
-	AttemptResolvedAt pgtype.Timestamptz `db:"attempt_resolved_at"`
+	ID                    pgtype.UUID        `db:"id"`
+	ApplicationID         int64              `db:"application_id"`
+	NotificationID        int64              `db:"notification_id"`
+	InstallationID        int64              `db:"installation_id"`
+	BindingID             int64              `db:"binding_id"`
+	OwnerUserID           int64              `db:"owner_user_id"`
+	OwnerEpoch            int64              `db:"owner_epoch"`
+	DeliveryVersion       int64              `db:"delivery_version"`
+	Status                string             `db:"status"`
+	AttemptCount          int32              `db:"attempt_count"`
+	NextAttemptAt         pgtype.Timestamptz `db:"next_attempt_at"`
+	CreatedAt             pgtype.Timestamptz `db:"created_at"`
+	AttemptID             pgtype.UUID        `db:"attempt_id"`
+	ClaimGeneration       pgtype.Int8        `db:"claim_generation"`
+	LastAttemptAt         pgtype.Timestamptz `db:"last_attempt_at"`
+	AttemptResolvedAt     pgtype.Timestamptz `db:"attempt_resolved_at"`
+	ProviderMessageID     pgtype.Text        `db:"provider_message_id"`
+	ProviderAcceptedAt    pgtype.Timestamptz `db:"provider_accepted_at"`
+	ObservedDeliveredAt   pgtype.Timestamptz `db:"observed_delivered_at"`
+	ObservedOpenedAt      pgtype.Timestamptz `db:"observed_opened_at"`
+	FailedAt              pgtype.Timestamptz `db:"failed_at"`
+	TerminalReason        pgtype.Text        `db:"terminal_reason"`
+	LastResultDisposition pgtype.Text        `db:"last_result_disposition"`
+	LastResultReason      pgtype.Text        `db:"last_result_reason"`
+	LastResultFingerprint []byte             `db:"last_result_fingerprint"`
 }
 
 type NotificationLogSource struct {
@@ -320,6 +329,20 @@ type NotificationTarget struct {
 	UploadBatchID  pgtype.Int8        `db:"upload_batch_id"`
 	CreatedAt      pgtype.Timestamptz `db:"created_at"`
 	ApplicationID  pgtype.Int8        `db:"application_id"`
+}
+
+type NotificationUpdateOutbox struct {
+	EventID         pgtype.UUID        `db:"event_id"`
+	ApplicationID   int64              `db:"application_id"`
+	NotificationID  int64              `db:"notification_id"`
+	DeliveryID      pgtype.UUID        `db:"delivery_id"`
+	DeliveryVersion int64              `db:"delivery_version"`
+	OriginEpoch     pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch     pgtype.UUID        `db:"source_epoch"`
+	Payload         []byte             `db:"payload"`
+	OccurredAt      pgtype.Timestamptz `db:"occurred_at"`
+	Attempts        int32              `db:"attempts"`
+	NextAttemptAt   pgtype.Timestamptz `db:"next_attempt_at"`
 }
 
 type Role struct {

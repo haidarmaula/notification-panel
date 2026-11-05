@@ -195,9 +195,10 @@ is now locally tested, including [atomic metadata freeze](m06-receipt-metadata-v
 The [route-bound FCM transport](m06-fcm-transport-verification.md) now passes local
 SDK simulation/race tests, including one physical request per permit.
 [Protected file credentials](m06-fcm-credentials-verification.md) now pass local
-OAuth/SDK and offline protected-file tests. Managed ADC/deployment credential
-selection remain open. [DB-authorized single-use submission](m06-submission-verification.md)
-is implemented; fenced results/recovery/outbox and delivery composition remain open. See
+OAuth/SDK and offline protected-file tests. Deployment credential selection remains
+open; ADC composition is conditional on selecting keyless deployment. [DB-authorized single-use submission](m06-submission-verification.md)
+is implemented. [Fenced results and atomic update insertion](m06-results-verification.md)
+are implemented; recovery, update publication and delivery composition remain open. See
 [verification](runtime-composition-verification.md).
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,

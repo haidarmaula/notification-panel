@@ -107,6 +107,16 @@ additional concrete blocker in this slice. Provider/result/recovery completion
 is not implied by this review. See the
 [verification record](docs/analysis/m06-execution-verification.md).
 
+## M06 result review — 2026-11-05
+
+| ID | Severity | Finding and remediation |
+| --- | --- | --- |
+| RR1 | P2 — fixed | Truncating a nanosecond provider retry hint to PostgreSQL microsecond precision could shorten its floor by less than one microsecond. A focused red/green test reproduces this; next-at rounding now uses the ceiling before deciding deadline eligibility. |
+
+Focused independent review found no additional concrete result fencing, lock-order,
+conditional invalidation, commit uncertainty or atomic outbox fault. Legacy migration
+fixtures now unwind migration 000030 before dropping their dependent intent tables.
+
 ## Receipt capability/payload review — 2026-11-05
 
 | ID | Severity | Finding and remediation |

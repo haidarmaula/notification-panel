@@ -730,6 +730,27 @@ triggers prevent update/delete and down refuses populated metadata. Controlled
 retention/erasure remains separate reviewed work. See the
 [receipt/payload contract](specs/m06-receipt-payload.md#committed-signing-metadata).
 
+### Fenced results and update envelopes (M06)
+
+Migration 000030 adds nullable provider/observation/failure evidence and internal
+last-result disposition/reason/fingerprint to the modern intent ledger. Result
+writes match the acknowledged attempt, live owner/generation and current lineage.
+Retry scheduling alone does not advance delivery_version. A stable fingerprint
+prevents duplicate persistence from recreating a deleted published event.
+
+notification_update_outbox stores immutable serialized schema-v2 full projections,
+stable event IDs and DB occurrence times. A scoped application/notification/delivery
+FK prevents attribution to another campaign; a unique source/delivery/version key
+prevents duplicate envelopes. Due and predecessor indexes support the later bounded
+ordered drainer. Only retry scheduling metadata may change on a retained row.
+
+Ledger mutation, original-generation-only invalidation, configuration hold and
+outbox insertion share one transaction. Provider acceptance records server evidence
+and preserves early observation states. Holds block new sends without discarding
+already in-flight results. The down migration refuses retained result/projection
+or outbox evidence, including evidence whose dispatched outbox row was removed.
+See the [result contract](specs/m06-results.md).
+
 ### Source-aware send quarantine (M05)
 
 Migration 000024 adds immutable physical log identities and bounded raw

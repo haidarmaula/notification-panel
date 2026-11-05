@@ -22,7 +22,7 @@ must not be considered complete merely because a design or code file exists.
 | R10 | Kafka will be deployed on the company's own servers (self-hosted) | Confirmed by the user; host/failure-domain/resource counts and operators are unknown. |
 | R11 | V1 focuses on broadcast/segment/individual, scheduling, recovery, receipts/statistics, security, and operations | Confirmed by the user; UPLOAD, cancel/resubmit, rich media, and preferences/quiet hours are deferred. |
 | R12 | VIEWER is read-only; OPERATOR handles drafts/segments; only ADMIN/SUPER_ADMIN may send/schedule; only SUPER_ADMIN may administer staff/roles | Confirmed by the user on 2026-11-02. SPEC M02a is ready for the notification/segment/member subset; M02a guards are implemented/locally tested; M02b staff administration is also implemented/locally verified; other security work remains pending. |
-| R13 | A generic backend for multiple mobile applications, not specific to kaiapps2 | Confirmed by the user on 2026-11-03. [ADR-12](../adr/adr-12-multi-application-isolation.md) and the [M03 plan](../specs/m03a-application-scope-plan.md) are proposed; the current runtime/schema does not yet isolate applications. |
+| R13 | A generic backend for multiple mobile applications, not specific to kaiapps2 | Confirmed by the user on 2026-11-03. [ADR-12](../adr/adr-12-multi-application-isolation.md) and the [M03 plan](../specs/m03a-application-scope-plan.md) have locally tested registry, scoped lifecycle and dispatch foundations; production activation remains gated. |
 
 The user expects a Firebase project already exists because it is used by the
 OneSignal integration. This is a starting point for inventory, **not** confirmation that the project ID,
@@ -249,10 +249,12 @@ now also pass local tests. Atomic [capability metadata persistence](m06-receipt-
 is now locally tested. The [route-bound FCM transport](m06-fcm-transport-verification.md)
 also passes local SDK/HTTP simulation and race tests, including one physical
 request per permit. [Protected file credential loading](m06-fcm-credentials-verification.md)
-also passes local OAuth/SDK and offline protected-filesystem tests. Managed ADC,
-deployment credential selection remain open. [Single-use DB-authorized submission](m06-submission-verification.md)
-is implemented with final checks after credential/rate waits; fenced
-results/recovery/outbox and delivery runtime composition remain open. Production
+also passes local OAuth/SDK and offline protected-filesystem tests. Deployment
+credential selection remains open; managed ADC is conditional on choosing keyless
+deployment. [Single-use DB-authorized submission](m06-submission-verification.md)
+is implemented with final checks after credential/rate waits.
+[Fenced result persistence/outbox insertion](m06-results-verification.md) is implemented.
+Recovery, update publication and delivery runtime composition remain open. Production
 activation and acceptance stay open.
 
 ## 5. Execution checklist
@@ -291,12 +293,12 @@ work on unchecked rows has started, as noted.
 
 ### Phase 4 — delivery pipeline
 
-- [ ] 21. Scoped FCM transport/error handling, protected file credentials and DB-authorized single-use submission pass local tests. Managed ADC/deployment credential selection, fenced result persistence and conditional invalid-token handling remain open.
-- [ ] 22. M05 atomic fan-out intents, device snapshots/identity, and unique constraints pass locally, including 20k intents; M06 exclusive campaign leases and acknowledged per-device reservation foundations also pass focused local tests; result persistence and delivery runtime activation remain open.
+- [ ] 21. Scoped FCM transport/errors, file credentials, DB-authorized single-use submission, fenced results and conditional invalid-token handling pass local tests. Selected deployment credential policy and delivery activation remain open.
+- [ ] 22. M05 atomic fan-out/device snapshots pass locally, including 20k intents. M06 leases, per-device claims, submission and fenced results also pass locally; recovery loops and delivery runtime activation remain open.
 - [ ] 23. Bounded retry/backoff, lease expiry, recovery, TTL/budget terminalization.
 - [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; replay registration/inspection/claim/publication and expired-claim cleanup libraries also pass locally. Replay CLI/configuration and PostgreSQL verified-TLS/Kafka mTLS command tests also pass locally. Production issuer/incarnation approval, supervised drain/handoff and runtime deployment remain pending.
 - [ ] 25. M04 atomic send idempotency + claim + outbox, promotion/expiry, and bounded dispatcher pass locally; the scheduler binary now uses protected source-bound durable handoff locally. Production policy/activation and target-environment evidence remain open.
-- [ ] 26. Delivery update outbox and consumer dedup/ordering contract.
+- [ ] 26. Atomic versioned update outbox insertion is implemented; predecessor-safe publication and consumer dedup/ordering acceptance remain open.
 - [ ] 27. Bounded concurrency, page/chunk memory limits, provider rate limits, and backpressure.
 - [ ] 28. Acceptance/audit rollback, ack-before-commit, preparation/quarantine commit failure, coordinator unsafe-offset, and broker rebalance pass locally; provider and other failure windows/deployment are pending.
 

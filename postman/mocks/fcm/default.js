@@ -24,6 +24,12 @@ http.createServer((req, res) => {
   switch (message.fid || message.token) {
     case 'fixture-unregistered':
       return failure(res, 404, 'NOT_FOUND', 'UNREGISTERED');
+    case 'fixture-sender':
+      return failure(res, 403, 'PERMISSION_DENIED', 'SENDER_ID_MISMATCH');
+    case 'fixture-auth':
+      return failure(res, 401, 'UNAUTHENTICATED', 'UNSPECIFIED_ERROR');
+    case 'fixture-apns':
+      return failure(res, 401, 'UNAUTHENTICATED', 'THIRD_PARTY_AUTH_ERROR');
     case 'fixture-quota':
       return failure(res, 429, 'RESOURCE_EXHAUSTED', 'QUOTA_EXCEEDED', { 'Retry-After': '60' });
     case 'fixture-unavailable':

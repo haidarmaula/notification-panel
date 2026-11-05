@@ -308,6 +308,8 @@ type Querier interface {
 	// ==========================================
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	HoldCampaignPreparation(ctx context.Context, arg HoldCampaignPreparationParams) error
+	HoldResultDispatch(ctx context.Context, applicationID int64) error
+	InsertDeliveryUpdate(ctx context.Context, arg InsertDeliveryUpdateParams) error
 	InsertInstallationBinding(ctx context.Context, arg InsertInstallationBindingParams) error
 	InsertPreparationIntents(ctx context.Context, arg InsertPreparationIntentsParams) (InsertPreparationIntentsRow, error)
 	InsertReplayAttempt(ctx context.Context, arg InsertReplayAttemptParams) (NotificationReplayAttempt, error)
@@ -431,6 +433,10 @@ type Querier interface {
 	LockReplayEvidence(ctx context.Context, arg LockReplayEvidenceParams) (NotificationSendDeadLetter, error)
 	LockReplayOperationalGrant(ctx context.Context, arg LockReplayOperationalGrantParams) (LockReplayOperationalGrantRow, error)
 	LockReplayRequest(ctx context.Context, arg LockReplayRequestParams) (NotificationReplayRequest, error)
+	LockResultBinding(ctx context.Context, arg LockResultBindingParams) (InstallationBinding, error)
+	LockResultDelivery(ctx context.Context, arg LockResultDeliveryParams) (LockResultDeliveryRow, error)
+	LockResultInstallation(ctx context.Context, arg LockResultInstallationParams) (MobileInstallation, error)
+	LockResultPolicy(ctx context.Context, applicationID int64) (ApplicationDispatchPolicy, error)
 	LockScopedCampaign(ctx context.Context, arg LockScopedCampaignParams) (string, error)
 	LockScopedCampaignTemplate(ctx context.Context, arg LockScopedCampaignTemplateParams) (string, error)
 	LockScopedSegment(ctx context.Context, arg LockScopedSegmentParams) (LockScopedSegmentRow, error)
@@ -526,6 +532,7 @@ type Querier interface {
 	// ==========================================
 	UpdateUser(ctx context.Context, arg UpdateUserParams) error
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error
+	WriteDeliveryResult(ctx context.Context, arg WriteDeliveryResultParams) (NotificationDeliveryIntent, error)
 }
 
 var _ Querier = (*Queries)(nil)

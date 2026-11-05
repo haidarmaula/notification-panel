@@ -65,6 +65,13 @@ assumptions:
     verification: On 2026-11-05 the focused race suite passed copied concurrent proof, ordinary driver, holds/lineage/lease/attempt/observation/user/binding/owner/payload changes and lost prepare/final-check commit acknowledgement. Denied final checks had zero physical FCM calls and retained one charged attempt. No production delivery or complete result/recovery protocol was exercised.
     source: tests/integration/submission_test.go; internal/dispatch/submission.go; internal/fcm/transport.go; docs/analysis/m06-submission-verification.md
     updated_at: '2026-11-05'
+  - id: fenced-result-persistence
+    status: supported
+    claim: Scoped SDK outcomes persist under the exact live attempt/lease and atomically enqueue a versioned full update in the local scenarios.
+    reason: Real PostgreSQL mutations and SDK fixture responses exercise the production result service. Lost acknowledgement is reconciled without another send; outbox rejection rolls back ledger and invalidation.
+    verification: On 2026-11-05 focused and complete race runs passed accepted/rejected/transient/configuration outcomes, early observations, logout/refresh, lease/epoch fences, budget/expiry, new-attempt fencing, duplicate persistence and guarded down migration. Complete simulation recorded 50 FCM and three OAuth requests. Update publication and real provider/device readiness remain unverified.
+    source: tests/integration/delivery_results_test.go; internal/dispatch/results.go; docs/analysis/m06-results-verification.md
+    updated_at: '2026-11-05'
 fingerprints:
   - id: foundation-step-19
     date: '2026-11-02'
@@ -81,4 +88,8 @@ fingerprints:
   - id: m06-db-authorized-submission
     date: '2026-11-05'
     commit: eb4fb71 plus uncommitted submission guards and synthetic fixture support
+    cli: Postman 1.75.0
+  - id: m06-fenced-results
+    date: '2026-11-05'
+    commit: 1b47459 plus uncommitted result/outbox persistence and migration000030 artifacts
     cli: Postman 1.75.0

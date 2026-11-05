@@ -30,7 +30,7 @@ type executionFixture struct {
 	lifecycle  *installation.Lifecycle
 }
 
-func newExecutionFixture(t *testing.T, ctx context.Context) executionFixture {
+func newExecutionFixture(t *testing.T, ctx context.Context, primaryAddress ...string) executionFixture {
 	t.Helper()
 	f := executionFixture{replayRegistrationFixture: newReplayRegistrationFixture(t, ctx)}
 	event := f.acceptedEvent(t, ctx)
@@ -41,8 +41,12 @@ func newExecutionFixture(t *testing.T, ctx context.Context) executionFixture {
 	require.NoError(t, err)
 	f.lifecycle = lifecycle
 	for i := 0; i < 2; i++ {
+		address := fmt.Sprintf("execution-address-%d", i)
+		if i == 0 && len(primaryAddress) > 0 {
+			address = primaryAddress[0]
+		}
 		var enrollment installation.Enrollment
-		enrollment, err = lifecycle.Enroll(ctx, installation.Principal{ApplicationID: f.app, UserID: f.user}, installation.Route{Namespace: "execution-fixture", Key: "route", Platform: "ANDROID", AddressType: installation.FCMRegistrationToken}, fmt.Sprintf("execution-address-%d", i))
+		enrollment, err = lifecycle.Enroll(ctx, installation.Principal{ApplicationID: f.app, UserID: f.user}, installation.Route{Namespace: "execution-fixture", Key: "route", Platform: "ANDROID", AddressType: installation.FCMRegistrationToken}, address)
 		require.NoError(t, err)
 		if i == 0 {
 			f.enrollment = enrollment
