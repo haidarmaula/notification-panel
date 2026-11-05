@@ -121,6 +121,16 @@ uses the mathematical low-order encodings documented by
 and rejects noncanonical aliases; it is not full curve/provenance validation.
 See [verification](docs/analysis/m06-receipt-payload-verification.md).
 
+## M06 FCM transport review — 2026-11-05
+
+| ID | Severity | Finding and remediation |
+| --- | --- | --- |
+| FT1 | Medium — fixed | Shared quota cooldown reused the per-delivery retry timestamp, which is capped at that delivery's deadline. A short-lived delivery could shorten a project-wide `Retry-After` hold. Shared cooldown now computes the provider/floor delay independently. `TestQuotaHoldSurvivesDeliveryDeadline` checks the individual terminal deadline and longer shared admission deferral. |
+
+Focused independent review found no additional concrete route/auth isolation,
+hidden retry, response-bound or cancellation/join fault. This does not prove
+real Firebase/APNs delivery or authorize production execution.
+
 ## Critical Findings
 
 Crashes, security bypasses, data corruption, or issues that affect every user of a given endpoint.

@@ -1,6 +1,6 @@
 purpose:
   stands_in_for: FCM HTTP v1 send response/error subset; no OAuth, APNs or real devices.
-  unblocks: Dependency smoke environment; not production adapter acceptance.
+  unblocks: Dependency smoke and route-bound transport HTTP tests; not real provider acceptance.
 assumptions:
   - id: send-error-envelope
     status: supported
@@ -44,8 +44,19 @@ assumptions:
     verification: Four platform/address combinations pass, and the test verifier validates the unchanged capability. No real project credentials, APNs or devices are exercised.
     source: tests/integration/receipt_payload_test.go; internal/pushpayload/payload.go; docs/specs/m06-receipt-payload.md
     updated_at: '2026-11-05'
+  - id: guarded-fcm-physical-attempt
+    status: supported
+    claim: The route-bound FCM transport makes one base HTTP attempt per used permit in the local acceptance, rejection, 503 and timeout scenarios.
+    reason: The real pinned SDK runs through the transport guard and a restricted loopback rewrite; SDK retries cannot make a second physical call under the same record.
+    verification: On 2026-11-05, TestFCMTransportAgainstSimulation passed with race detection for Android/iOS token and FID, typed unregistered, quota, 503 and timeout. Each case asserts one base request; simulation logs show the corresponding HTTP statuses. The unchanged dependency test still makes five 503 requests without the guard. No real OAuth, Firebase permissions, APNs or devices were tested.
+    source: internal/fcm/client_integration_test.go; internal/fcm/transport.go; scripts/integration.sh; docs/analysis/m06-fcm-transport-verification.md
+    updated_at: '2026-11-05'
 fingerprints:
   - id: foundation-step-19
     date: '2026-11-02'
     commit: c8041aa plus uncommitted integration-environment artifacts
+    cli: Postman 1.75.0
+  - id: m06-route-bound-transport
+    date: '2026-11-05'
+    commit: 85e3be9 plus uncommitted internal/fcm transport and integration-runner changes
     cli: Postman 1.75.0

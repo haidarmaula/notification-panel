@@ -99,7 +99,7 @@ while time.monotonic() < deadline:
 else:
     raise SystemExit('FCM simulation readiness timed out')
 PY
-HELLO_INTEGRATION=1 go test -mod=readonly -tags=integration -count=1 -timeout=120s -v ./tests/integration
+HELLO_INTEGRATION=1 go test -mod=readonly -tags=integration -count=1 -timeout=120s -v ./tests/integration ./internal/fcm
 python3 - "$log_dir/simulation.ndjson" <<'PY'
 import collections, json, sys, time
 deadline = time.monotonic() + 5
