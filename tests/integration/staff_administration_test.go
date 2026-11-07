@@ -51,7 +51,7 @@ func TestStaffAdministrationAPI(t *testing.T) {
 	mux := http.NewServeMux()
 	staff.NewStaffModule(q, api.Use, jwt.Use, auditMW.Use).RegisterRoutes(mux)
 	sign := func(id int64, role string) string {
-		value, err := tokens.GenerateAccessToken(id, role, "fixture@fixture.invalid")
+		value, err := fixtureAccess(ctx, q, tokens, id, role, "fixture@fixture.invalid")
 		require.NoError(t, err)
 		return value
 	}
@@ -175,7 +175,7 @@ func TestStaffAdministrationAPI(t *testing.T) {
 		require.NoError(t, err)
 		before := snapshot()
 		w := request(mux, "GET", "/api/v1/staff", "", access, "")
-		require.Equal(t, 403, w.Code)
+		require.Equal(t, 401, w.Code)
 		require.Equal(t, before, snapshot())
 		_, err = tx.Exec(ctx, "UPDATE staff_users SET is_active=false WHERE id=$1", actor)
 		require.NoError(t, err)
@@ -209,11 +209,7 @@ func TestStaffAdministrationAPI(t *testing.T) {
 			require.NoError(t, tx.QueryRow(ctx, "SELECT count(*) FROM audit_logs WHERE actor_user_id=$1", actor).Scan(&after))
 			require.Equal(t, before+1, after)
 			w = request(mux, "GET", "/api/v1/staff", "", access, "")
-			want := 403
-			if operation.suffix != "" {
-				want = 401
-			}
-			require.Equal(t, want, w.Code)
+			require.Equal(t, 401, w.Code)
 		}
 	})
 	t.Run("demotion after route check is denied by service", func(t *testing.T) {
@@ -258,8 +254,14 @@ func TestCommittedStaffAuthority(t *testing.T) {
 	jwt := middleware.NewJWTMiddleware(tokens, repo)
 	mux := http.NewServeMux()
 	staff.NewStaffModule(q, api.Use, jwt.Use).RegisterRoutes(mux)
-	access, err := tokens.GenerateAccessToken(id, "SUPER_ADMIN", "")
+	access, err := fixtureAccess(ctx, q, tokens, id, "SUPER_ADMIN", "")
 	require.NoError(t, err)
+	claims, err := tokens.ParseAccessToken(access)
+	require.NoError(t, err)
+	defer func() {
+		_, err := pool.Exec(context.Background(), "DELETE FROM staff_sessions WHERE id=$1::uuid", claims.SessionID)
+		require.NoError(t, err)
+	}()
 	request := func(want int) {
 		r := httptest.NewRequest("GET", "/api/v1/staff", nil).WithContext(ctx)
 		r.Header.Set("X-API-Key", "fixture-api-key")
@@ -271,7 +273,7 @@ func TestCommittedStaffAuthority(t *testing.T) {
 	request(200)
 	_, err = pool.Exec(ctx, "UPDATE staff_users SET role_id=(SELECT id FROM roles WHERE name='VIEWER') WHERE id=$1", id)
 	require.NoError(t, err)
-	request(403)
+	request(401)
 	_, err = pool.Exec(ctx, "UPDATE staff_users SET is_active=false WHERE id=$1", id)
 	require.NoError(t, err)
 	request(401)

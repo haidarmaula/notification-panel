@@ -423,6 +423,25 @@ type SegmentMember struct {
 	ApplicationID pgtype.Int8        `db:"application_id"`
 }
 
+type StaffSession struct {
+	SessionEpoch     pgtype.UUID        `db:"session_epoch"`
+	ID               pgtype.UUID        `db:"id"`
+	StaffUserID      pgtype.Int8        `db:"staff_user_id"`
+	AuthEpoch        int64              `db:"auth_epoch"`
+	RefreshDigest    []byte             `db:"refresh_digest"`
+	Generation       int64              `db:"generation"`
+	CreatedAt        pgtype.Timestamptz `db:"created_at"`
+	ExpiresAt        pgtype.Timestamptz `db:"expires_at"`
+	RotatedAt        pgtype.Timestamptz `db:"rotated_at"`
+	RevokedAt        pgtype.Timestamptz `db:"revoked_at"`
+	RevocationReason pgtype.Text        `db:"revocation_reason"`
+}
+
+type StaffSessionControl struct {
+	Singleton    bool        `db:"singleton"`
+	SessionEpoch pgtype.UUID `db:"session_epoch"`
+}
+
 type StaffUser struct {
 	ID           int64              `db:"id"`
 	RoleID       int64              `db:"role_id"`
@@ -432,6 +451,7 @@ type StaffUser struct {
 	IsActive     bool               `db:"is_active"`
 	CreatedAt    pgtype.Timestamptz `db:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `db:"updated_at"`
+	AuthEpoch    int64              `db:"auth_epoch"`
 }
 
 type Template struct {

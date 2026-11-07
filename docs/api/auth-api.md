@@ -1,143 +1,32 @@
-# Authentication API Documentation
+# Staff authentication API
 
-JSON input limits and shared 413/400 behavior are documented in
-[request body contract](request-bodies-api.md) (M02d, locally verified; not deployed).
+All three endpoints accept JSON at `/api/v1/auth` behind the server's `X-API-Key` guard. Use the approved private HTTPS ingress. Keep the API key on the trusted server or BFF. The API does not set browser cookies.
 
-Staff JWT parsing (M02e, locally verified): access/refresh tokens must use HS256,
-include a valid `exp` and positive integer `user_id`, and carry the exact token
-purpose. Invalid tokens return generic 401; normal repo-generated tokens keep
-their existing fields and TTLs. Older noncanonical tokens require re-login.
-Refresh derives the new role from the current database account, not its role
-claim. Full issuer/audience/session rotation and key policy remain pending; see
-[M02e evidence](../analysis/m02e-verification.md).
+| Method and path | Request | Success |
+| --- | --- | --- |
+| `POST /api/v1/auth/login` | `{"email":"staff@example.invalid","password":"…"}` | Opens a new session family and returns an access/refresh pair. |
+| `POST /api/v1/auth/refresh` | `{"refresh_token":"…"}` | Consumes the current refresh token and returns both successors in the same family. |
+| `POST /api/v1/auth/logout` | `{"refresh_token":"…"}` | Revokes the represented family. Repeated logout with the same signed, unexpired credential returns 200. Other login sessions are independent. |
 
-**Version:** 1.0  
-**Base URL:** `/api/v1`  
-**Content-Type:** `application/json`
-
----
-
-## Authentication
-
-All endpoints in this module require:
-- **API Key**: Passed in the `X-API-Key` header.
-
-JWT tokens are not required for login or refresh endpoints, as they are used to obtain or renew tokens.
-
----
-
-## Common Error Responses
-
-| Status Code | Message | Description |
-|-------------|---------|-------------|
-| `400` | Invalid request body | Malformed JSON or validation error |
-| `401` | Unauthorized | Invalid credentials or token |
-| `500` | Internal server error | Unexpected server error |
-
----
-
-## 1. Login
-
-**`POST /auth/login`**
-
-Authenticates a staff user using email and password, and returns access and refresh tokens.
-
-### Request Body
+A successful login or rotation returns HTTP 200 and `Cache-Control: no-store`.
 
 ```json
 {
-  "email": "admin@example.com",
-  "password": "secure_password"
+  "success": true,
+  "message": "success",
+  "data": {
+    "access_token": "ACCESS_JWT",
+    "refresh_token": "REFRESH_JWT"
+  }
 }
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `email` | string | ✅ | Staff email address |
-| `password` | string | ✅ | Staff password |
+Send `Authorization: Bearer ACCESS_JWT` with the API key on protected business endpoints. The current implementation issues access tokens for up to 15 minutes and caps each family at 24 hours from login. Access also ends at family expiry. The API checks current account, session and recovery generation before accepting a token. Password changes, role changes, deactivation and logout invalidate affected access and refresh credentials. Changing a role or enabling an account again requires fresh login. Token role claims are descriptive. Object and operation permissions still come from the database.
 
-### Success Response (200 OK)
+Serialize refresh calls per family and atomically replace both credentials with the successful response. Redeeming an already-used refresh token revokes the active family, including its latest access token. If a refresh response is lost or the credential store update fails, discard the pair and log in again. Keep the refresh credential in the trusted BFF session or native secure storage under the approved client policy.
 
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
+Invalid JSON returns 400, a body above 64 KiB returns 413 and invalid/expired/revoked credentials return 401. Database failures return 500 with `internal server error`. Login and rotation require successful session persistence before credentials are released. A restored database requires a new session recovery epoch and reconciliation before exposure.
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `access_token` | string | Short-lived JWT for API authorization |
-| `refresh_token` | string | Long-lived token to obtain new access tokens |
+## Cutover
 
-### Error Responses
-
-| Status | Message | Condition |
-|--------|---------|-----------|
-| `400` | invalid request body | Malformed JSON |
-| `401` | invalid email or password | Invalid credentials or inactive account |
-| `500` | internal server error | Unexpected server error |
-
----
-
-## 2. Refresh Token
-
-**`POST /auth/refresh`**
-
-Exchanges a valid refresh token for a new access token. The refresh token itself remains valid and can be reused.
-
-### Request Body
-
-```json
-{
-  "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `refresh_token` | string | ✅ | The refresh token obtained from login |
-
-### Success Response (200 OK)
-
-```json
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `access_token` | string | New short-lived JWT for API authorization |
-
-### Error Responses
-
-| Status | Message | Condition |
-|--------|---------|-----------|
-| `400` | invalid request body | Malformed JSON |
-| `401` | invalid or expired token | Refresh token is invalid, expired, or account inactive |
-| `500` | internal server error | Unexpected server error |
-
----
-
-## Token Usage
-
-After successful login, include the access token in the `Authorization` header for all protected endpoints:
-
-```
-Authorization: Bearer <access_token>
-```
-
-When the access token expires (usually after a short time), use the refresh token to obtain a new one without re-entering credentials. The refresh token has a longer lifetime and should be stored securely on the client side.
-
----
-
-## Changelog
-
-| Version | Date | Description |
-|---------|------|-------------|
-| 1.0 | 2026-07-20 | Initial API documentation for Authentication feature |
-
----
-
-**Note:** Both endpoints require the API Key header (`X-API-Key`) as they are considered internal service endpoints.
+Deploy migration 000033 and drain every older server before restarting shared ingress. Tokens issued by the stateless implementation require fresh login. Roll out clients that consume both tokens before enabling the new refresh contract. Downgrading to a stateless server could re-enable legacy credentials. Keep old servers out of service and rotate signing material if a compatible rollback requires it. For database recovery and outstanding deployment decisions, see the [staff session specification](../specs/staff-sessions.md).

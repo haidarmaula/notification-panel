@@ -42,7 +42,7 @@ func TestJSONRequestLimitsAPI(t *testing.T) {
 	var actor int64
 	require.NoError(t, tx.QueryRow(ctx, `INSERT INTO staff_users(role_id,name,email,password_hash) SELECT id,'Body fixture',gen_random_uuid()::text || '@fixture.invalid','fixture-only' FROM roles WHERE name='SUPER_ADMIN' RETURNING id`).Scan(&actor))
 	tokens := token.NewTokenManager("fixture-access-not-production", "fixture-refresh-not-production")
-	access, err := tokens.GenerateAccessToken(actor, "VIEWER", "")
+	access, err := fixtureAccess(ctx, q, tokens, actor, "VIEWER", "")
 	require.NoError(t, err)
 	mobileAccess, err := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, jwtlib.MapClaims{"external_id": "body-fixture", "exp": time.Now().Add(time.Hour).Unix()}).SignedString([]byte("fixture-mobile-secret"))
 	require.NoError(t, err)
@@ -99,6 +99,7 @@ func TestJSONRequestLimitsAPI(t *testing.T) {
 	}{
 		{"POST", "/api/v1/auth/login", httprequest.DefaultJSONLimit, false},
 		{"POST", "/api/v1/auth/refresh", httprequest.DefaultJSONLimit, false},
+		{"POST", "/api/v1/auth/logout", httprequest.DefaultJSONLimit, false},
 		{"POST", "/api/v1/mobile/sync", httprequest.DefaultJSONLimit, false},
 		{"PATCH", "/api/v1/profile", httprequest.DefaultJSONLimit, false},
 		{"PATCH", "/api/v1/profile/password", httprequest.DefaultJSONLimit, false},
@@ -175,13 +176,19 @@ func TestJSONRequestLimitsAPI(t *testing.T) {
 		require.Equal(t, 401, w.Code)
 		w = request("POST", "/api/v1/staff", oversized, access, "Authorization", true)
 		require.Equal(t, 401, w.Code)
+		_, err = tx.Exec(ctx, "SAVEPOINT limits_demotion")
+		require.NoError(t, err)
 		_, err = tx.Exec(ctx, "UPDATE staff_users SET role_id=(SELECT id FROM roles WHERE name='VIEWER') WHERE id=$1", actor)
 		require.NoError(t, err)
 		demotedBefore := snapshot()
 		w = request("POST", "/api/v1/notifications", oversized, access, "", true)
+		require.Equal(t, 401, w.Code)
+		viewer, err := fixtureAccess(ctx, q, tokens, actor, "SUPER_ADMIN", "")
+		require.NoError(t, err)
+		w = request("POST", "/api/v1/notifications", oversized, viewer, "", true)
 		require.Equal(t, 403, w.Code)
 		require.Equal(t, demotedBefore, snapshot())
-		_, err = tx.Exec(ctx, "UPDATE staff_users SET role_id=(SELECT id FROM roles WHERE name='SUPER_ADMIN') WHERE id=$1", actor)
+		_, err = tx.Exec(ctx, "ROLLBACK TO SAVEPOINT limits_demotion; RELEASE SAVEPOINT limits_demotion")
 		require.NoError(t, err)
 		require.Equal(t, before, snapshot())
 	})

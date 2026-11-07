@@ -60,11 +60,13 @@ func TestStaffJWTPolicyAPI(t *testing.T) {
 		return w
 	}
 	for _, purpose := range []string{"access", "refresh"} {
-		for _, variant := range []string{"HS384", "missing exp", "zero identity"} {
+		for _, variant := range []string{"HS384", "missing exp", "zero identity", "legacy format"} {
 			t.Run(purpose+"/"+variant, func(t *testing.T) {
-				claims := jwtlib.MapClaims{"user_id": actor, "role_name": "SUPER_ADMIN", "type": purpose, "exp": time.Now().Add(time.Hour).Unix()}
+				claims := jwtlib.MapClaims{"user_id": actor, "role_name": "SUPER_ADMIN", "type": purpose, "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "sub": "700001", "sid": token.NewFamily().ID.String(), "jti": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
 				var method jwtlib.SigningMethod = jwtlib.SigningMethodHS256
 				switch variant {
+				case "legacy format":
+					delete(claims, "sid")
 				case "HS384":
 					method = jwtlib.SigningMethodHS384
 				case "missing exp":
@@ -84,12 +86,12 @@ func TestStaffJWTPolicyAPI(t *testing.T) {
 			})
 		}
 	}
-	access, err := manager.GenerateAccessToken(actor, "VIEWER", "")
+	access, err := fixtureAccess(ctx, q, manager, actor, "VIEWER", "")
 	require.NoError(t, err)
 	require.Equal(t, 200, request("access", access).Code)
-	refresh, err := manager.GenerateRefreshToken(actor, "VIEWER")
+	pair, err := fixtureStaffPair(ctx, q, manager, actor, "VIEWER", "")
 	require.NoError(t, err)
-	w := request("refresh", refresh)
+	w := request("refresh", pair.RefreshToken)
 	require.Equal(t, 200, w.Code, w.Body.String())
 	var result struct {
 		Data struct {

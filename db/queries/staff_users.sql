@@ -11,7 +11,8 @@ SELECT
     password_hash,
     is_active,
     created_at,
-    updated_at
+    updated_at,
+    auth_epoch
 FROM staff_users
 WHERE id = sqlc.arg('id')
 LIMIT 1;
@@ -32,7 +33,8 @@ SELECT
     password_hash,
     is_active,
     created_at,
-    updated_at
+    updated_at,
+    auth_epoch
 FROM staff_users
 WHERE email = sqlc.arg('email')
 LIMIT 1;
@@ -73,7 +75,8 @@ RETURNING
     password_hash,
     is_active,
     created_at,
-    updated_at;
+    updated_at,
+    auth_epoch;
 
 -- ==========================================
 -- UPDATE

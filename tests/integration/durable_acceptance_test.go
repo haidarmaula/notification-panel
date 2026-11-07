@@ -98,7 +98,7 @@ func TestDurableAcceptance(t *testing.T) {
 		actors[role] = id
 		exec("INSERT INTO application_staff_grants(application_id,staff_id) VALUES($1,$2)", appID, id)
 		var err error
-		tokens[role], err = manager.GenerateAccessToken(id, "VIEWER", "")
+		tokens[role], err = fixtureAccess(ctx, q, manager, id, "VIEWER", "")
 		require.NoError(t, err)
 	}
 	actorCtx := context.WithValue(ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: actors["ADMIN"]})

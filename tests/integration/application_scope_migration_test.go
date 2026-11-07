@@ -73,6 +73,7 @@ func TestBusinessApplicationScopeMigration(t *testing.T) {
 		require.NoError(t, e)
 		return string(b)
 	}
+	exec(read("db/migrations/000033_create_staff_sessions.down.sql"))
 	exec(read("db/migrations/000032_create_retention_jobs.down.sql"))
 	exec(read("db/migrations/000031_create_receipt_observations.down.sql"))
 	exec(read("db/migrations/000030_create_delivery_results.down.sql"))

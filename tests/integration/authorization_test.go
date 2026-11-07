@@ -64,7 +64,7 @@ func TestStaffAuthorizationAPI(t *testing.T) {
 	segments.NewSegmentModule(q, api.Use, jwt.Use, auditMW.Use).RegisterRoutes(mux)
 
 	request := func(handler http.Handler, method, path, body string, id int64, claimRole string) *httptest.ResponseRecorder {
-		access, err := tokens.GenerateAccessToken(id, claimRole, "fixture@fixture.invalid")
+		access, err := fixtureAccess(ctx, q, tokens, id, claimRole, "fixture@fixture.invalid")
 		require.NoError(t, err)
 		req := httptest.NewRequest(method, path, strings.NewReader(body)).WithContext(ctx)
 		req.Header.Set("X-API-Key", "fixture-api-key")
@@ -192,7 +192,7 @@ func TestStaffAuthorizationAPI(t *testing.T) {
 	})
 	t.Run("missing API key or JWT", func(t *testing.T) {
 		for _, header := range []string{"X-API-Key", "Authorization"} {
-			access, err := tokens.GenerateAccessToken(adminID, "ADMIN", "")
+			access, err := fixtureAccess(ctx, q, tokens, adminID, "ADMIN", "")
 			require.NoError(t, err)
 			req := httptest.NewRequest("GET", "/api/v1/segments", nil).WithContext(ctx)
 			req.Header.Set("X-API-Key", "fixture-api-key")

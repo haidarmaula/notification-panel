@@ -53,7 +53,7 @@ func TestParseAccessToken_WrongSecret(t *testing.T) {
 	issuer := NewTokenManager("secret-A-32-bytes-minimum-xxxxxxxxx", testRefreshSecret)
 	verifier := NewTokenManager("secret-B-32-bytes-minimum-xxxxxxxxx", testRefreshSecret)
 
-	tok, err := issuer.GenerateAccessToken(1, "ADMIN", "a@b.com")
+	tok, err := accessForTest(issuer, 1, "ADMIN", "a@b.com")
 	require.NoError(t, err)
 
 	claims, err := verifier.ParseAccessToken(tok)
@@ -66,7 +66,7 @@ func TestParseAccessToken_WrongSecret(t *testing.T) {
 func TestParseAccessToken_RefreshTokenPresentedAsAccess(t *testing.T) {
 	tm := newTestManager()
 
-	tok, err := tm.GenerateRefreshToken(1, "ADMIN")
+	tok, err := refreshForTest(tm, 1, "ADMIN")
 	require.NoError(t, err)
 
 	claims, err := tm.ParseAccessToken(tok)
@@ -78,7 +78,7 @@ func TestParseAccessToken_RefreshTokenPresentedAsAccess(t *testing.T) {
 func TestParseAccessToken_ValidToken(t *testing.T) {
 	tm := newTestManager()
 
-	tok, err := tm.GenerateAccessToken(42, "SUPER_ADMIN", "admin@example.com")
+	tok, err := accessForTest(tm, 42, "SUPER_ADMIN", "admin@example.com")
 	require.NoError(t, err)
 
 	claims, err := tm.ParseAccessToken(tok)
@@ -124,7 +124,7 @@ func TestParseRefreshToken_WrongSecret(t *testing.T) {
 	issuer := NewTokenManager(testAccessSecret, "secret-A-32-bytes-minimum-xxxxxxxxx")
 	verifier := NewTokenManager(testAccessSecret, "secret-B-32-bytes-minimum-xxxxxxxxx")
 
-	tok, err := issuer.GenerateRefreshToken(1, "ADMIN")
+	tok, err := refreshForTest(issuer, 1, "ADMIN")
 	require.NoError(t, err)
 
 	claims, err := verifier.ParseRefreshToken(tok)
@@ -137,7 +137,7 @@ func TestParseRefreshToken_WrongSecret(t *testing.T) {
 func TestParseRefreshToken_AccessTokenPresentedAsRefresh(t *testing.T) {
 	tm := newTestManager()
 
-	tok, err := tm.GenerateAccessToken(1, "ADMIN", "a@b.com")
+	tok, err := accessForTest(tm, 1, "ADMIN", "a@b.com")
 	require.NoError(t, err)
 
 	claims, err := tm.ParseRefreshToken(tok)
@@ -150,7 +150,7 @@ func TestParseRefreshToken_AccessTokenPresentedAsRefresh(t *testing.T) {
 func TestParseRefreshToken_ValidToken(t *testing.T) {
 	tm := newTestManager()
 
-	tok, err := tm.GenerateRefreshToken(7, "ADMIN")
+	tok, err := refreshForTest(tm, 7, "ADMIN")
 	require.NoError(t, err)
 
 	claims, err := tm.ParseRefreshToken(tok)
@@ -159,4 +159,13 @@ func TestParseRefreshToken_ValidToken(t *testing.T) {
 	assert.Equal(t, int64(7), claims.StaffID)
 	assert.Equal(t, "ADMIN", claims.RoleName)
 	assert.Equal(t, "refresh", claims.Type)
+}
+
+func accessForTest(m *TokenManager, staff int64, role, email string) (string, error) {
+	p, err := m.Issue(staff, role, email, NewFamily())
+	return p.AccessToken, err
+}
+func refreshForTest(m *TokenManager, staff int64, role string) (string, error) {
+	p, err := m.Issue(staff, role, "", NewFamily())
+	return p.RefreshToken, err
 }

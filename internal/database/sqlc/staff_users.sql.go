@@ -49,7 +49,8 @@ RETURNING
     password_hash,
     is_active,
     created_at,
-    updated_at
+    updated_at,
+    auth_epoch
 `
 
 type CreateStaffUserParams struct {
@@ -79,6 +80,7 @@ func (q *Queries) CreateStaffUser(ctx context.Context, arg CreateStaffUserParams
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AuthEpoch,
 	)
 	return i, err
 }
@@ -147,7 +149,8 @@ SELECT
     password_hash,
     is_active,
     created_at,
-    updated_at
+    updated_at,
+    auth_epoch
 FROM staff_users
 WHERE email = $1
 LIMIT 1
@@ -165,6 +168,7 @@ func (q *Queries) GetStaffUserByEmail(ctx context.Context, email string) (StaffU
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AuthEpoch,
 	)
 	return i, err
 }
@@ -179,7 +183,8 @@ SELECT
     password_hash,
     is_active,
     created_at,
-    updated_at
+    updated_at,
+    auth_epoch
 FROM staff_users
 WHERE id = $1
 LIMIT 1
@@ -200,6 +205,7 @@ func (q *Queries) GetStaffUserByID(ctx context.Context, id int64) (StaffUser, er
 		&i.IsActive,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.AuthEpoch,
 	)
 	return i, err
 }

@@ -22,8 +22,8 @@ not completion of future transaction/session/operations features in advance.
 | Staff management only current active SUPER_ADMIN | Locally verified | M02b: seven staff routes/services, stale JWT and committed demotion/lifecycle tests. No last-admin or transactional revocation guarantee. |
 | No password hashes in new staff audits | Locally verified | M02c safe projections and strict staff payload guard. Production historical cleanup/backups remain unverified; other entity payloads are not certified. |
 | Bounded JSON before service work | Locally verified | M02d: 16 handlers, 64KiB/1MiB caps, actual chunked HTTP, 48 rejection route cases. No aggregate/rate/time/depth/field policy claim. |
-| Staff JWT purpose/algorithm/expiry/identity | Locally verified after M02e | HS256-only, required exp, positive user_id, correct purpose/secret; malformed-policy tokens rejected before lookup. iss/aud/session/key policy remains open. |
-| Inactive/deleted staff denied | Locally verified in guarded routes | JWT active-status checks plus current-authority checks; M02a/b committed/lifecycle tests. This is not session-family revocation. |
+| Staff JWT purpose/algorithm/expiry/identity | Locally verified after M02e | HS256-only, required exp, positive user_id, correct purpose/secret; malformed-policy tokens rejected before lookup. M33 adds subject, token ID, session binding and current generation checks. Issuer/audience and key-ring policy remain open. |
+| Inactive/deleted staff denied | Locally verified in guarded routes | JWT active-status checks plus current-authority checks; M02a/b committed/lifecycle tests. Migration 000033 now also checks family expiry/revocation and account/recovery generations. |
 | Unknown 500 errors are generic | Reviewed current branches; scoped regression coverage | Feature-handler 500 branches inspected use literal internal server error. M02a/b tests cover authz errors; not a proof that every mapped 4xx, log or DTO is redacted. |
 | Current role on refresh | Locally verified existing behavior | M02e real-DB test uses staff ID 700001, DB role ADMIN and stale VIEWER claim; returned access has current ADMIN. C2's old finding no longer matches source. |
 | API compatibility documented | Scoped only | M02a–e contracts record changed permissions, audit and JSON/token rejection behavior. No full OpenAPI/consumer/mobile acceptance yet. |
@@ -38,7 +38,7 @@ introduce a new sensitive path must implement its applicable controls then.
 
 | Remaining requirement | Owning work | Required before |
 | --- | --- | --- |
-| Staff issuer/audience/versioned claims, key policy, refresh families/rotation/reuse, logout/password revocation and privileged step-up | Remaining M02 identity/session SPEC; corporate auth policy G5 | Production staff API/security sign-off. A stricter parser cannot require claims the existing generator never minted without a rollout contract. |
+| Staff issuer/audience, key lifecycle, session client cutover and privileged step-up | Remaining M02 identity/session SPEC; corporate auth policy G5 | Production staff API/security sign-off. The [session cutover](../specs/staff-sessions.md) requires fresh login and clients that replace both credentials on rotation. |
 | Laravel/mobile verified-claims contract, installation proof, immutable binding, account switch/logout and closing legacy sync bypass | M03, G3/G5 | New enrollment activation and later dispatch/receipt ownership acceptance |
 | Content-Type, protected/duplicate fields and field/item/depth limits | Remaining API baseline plus owning M03/M04/M07 DTO contracts | Activation of the affected new/changed endpoints; full request security review before release |
 | Target count and provider payload limits | M04/M06 | Campaign acceptance/execution release; request byte caps alone are insufficient |

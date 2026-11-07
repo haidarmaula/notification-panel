@@ -34,12 +34,16 @@ func TestStaffParserPolicy(t *testing.T) {
 				{name: "fractional identity", change: func(c jwt.MapClaims) { c["user_id"] = 1.5 }},
 				{name: "string identity", change: func(c jwt.MapClaims) { c["user_id"] = "7" }},
 				{name: "future nbf", change: func(c jwt.MapClaims) { c["nbf"] = time.Now().Add(time.Hour).Unix() }},
+				{name: "missing session", change: func(c jwt.MapClaims) { delete(c, "sid") }},
+				{name: "invalid jti", change: func(c jwt.MapClaims) { c["jti"] = "bad" }},
+				{name: "missing iat", change: func(c jwt.MapClaims) { delete(c, "iat") }},
+				{name: "wrong subject", change: func(c jwt.MapClaims) { c["sub"] = "8" }},
 				{name: "missing purpose", change: func(c jwt.MapClaims) { delete(c, "type") }},
 				{name: "wrong purpose", change: func(c jwt.MapClaims) { c["type"] = "other" }},
 			}
 			for _, tc := range cases {
 				t.Run(tc.name, func(t *testing.T) {
-					claims := jwt.MapClaims{"user_id": 7, "type": purpose, "exp": time.Now().Add(time.Hour).Unix()}
+					claims := jwt.MapClaims{"user_id": 7, "type": purpose, "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "sub": "7", "sid": NewFamily().ID.String(), "jti": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
 					if tc.change != nil {
 						tc.change(claims)
 					}
@@ -74,9 +78,9 @@ func TestStaffParserPolicy(t *testing.T) {
 
 func TestEqualSecretPurposeIsolation(t *testing.T) {
 	manager := NewTokenManager("fixture-same-secret", "fixture-same-secret")
-	access, err := manager.GenerateAccessToken(7, "VIEWER", "")
+	access, err := accessForTest(manager, 7, "VIEWER", "")
 	require.NoError(t, err)
-	refresh, err := manager.GenerateRefreshToken(7, "VIEWER")
+	refresh, err := refreshForTest(manager, 7, "VIEWER")
 	require.NoError(t, err)
 	a, err := manager.ParseAccessToken(refresh)
 	require.ErrorIs(t, err, ErrInvalidToken)
@@ -88,7 +92,7 @@ func TestEqualSecretPurposeIsolation(t *testing.T) {
 
 func TestParserDoesNotTreatRoleAsAuthority(t *testing.T) {
 	manager := newTestManager()
-	access, err := manager.GenerateAccessToken(7, "", "")
+	access, err := accessForTest(manager, 7, "", "")
 	require.NoError(t, err)
 	claims, err := manager.ParseAccessToken(access)
 	require.NoError(t, err)

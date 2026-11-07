@@ -474,6 +474,7 @@ type Querier interface {
 	MarkNotificationFailed(ctx context.Context, arg MarkNotificationFailedParams) error
 	MarkNotificationOpened(ctx context.Context, id int64) error
 	MarkNotificationSent(ctx context.Context, id int64) error
+	OpenStaffSession(ctx context.Context, arg OpenStaffSessionParams) (int64, error)
 	PromoteScopedCampaign(ctx context.Context, arg PromoteScopedCampaignParams) (PromoteScopedCampaignRow, error)
 	QueueScopedCampaign(ctx context.Context, arg QueueScopedCampaignParams) (QueueScopedCampaignRow, error)
 	RecordObservationFact(ctx context.Context, arg RecordObservationFactParams) (int64, error)
@@ -495,6 +496,8 @@ type Querier interface {
 	ResolveMobileIdentity(ctx context.Context, arg ResolveMobileIdentityParams) (int64, error)
 	ResolveReplayControl(ctx context.Context, arg ResolveReplayControlParams) (int64, error)
 	RetireInstallationBinding(ctx context.Context, arg RetireInstallationBindingParams) (int64, error)
+	RevokeStaffSession(ctx context.Context, arg RevokeStaffSessionParams) (int64, error)
+	RotateStaffSession(ctx context.Context, arg RotateStaffSessionParams) (bool, error)
 	RunRetentionBatch(ctx context.Context, arg RunRetentionBatchParams) (RunRetentionBatchRow, error)
 	ScheduleScopedCampaign(ctx context.Context, arg ScheduleScopedCampaignParams) (ScheduleScopedCampaignRow, error)
 	ScopedSegmentHasReferences(ctx context.Context, segmentID int64) (bool, error)
@@ -521,6 +524,7 @@ type Querier interface {
 	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]User, error)
 	// Caller holds app lock; no-op and conditional semantics belong to service.
 	SetApplicationStaffGrantActive(ctx context.Context, arg SetApplicationStaffGrantActiveParams) (ApplicationStaffGrant, error)
+	StaffSessionActive(ctx context.Context, arg StaffSessionActiveParams) (bool, error)
 	StoreSendKey(ctx context.Context, arg StoreSendKeyParams) error
 	TouchMobileInstallation(ctx context.Context, arg TouchMobileInstallationParams) error
 	// ==========================================

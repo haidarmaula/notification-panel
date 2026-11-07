@@ -829,3 +829,7 @@ See the [receipt contract](api/mobile-receipts.md).
 ### Policy-bound retention jobs (M09)
 
 Migration 000032 adds application/class holds, versioned authorization grants and per-batch preview/apply evidence. Its two scoped expiry indexes cover spent origin assertions and expired receipt request deduplication. Receipt removal verifies the independently frozen capability expiry. Grants bind a finite cutoff, operator login OID, application, epochs and row/batch budget. The guarded down migration refuses to remove policy, grant or job evidence. See the [retention job runbook](runbooks/retention.md) for the command, privileges, reconciliation and excluded classes.
+
+### Staff session families (M02)
+
+Migration 000033 adds staff authentication generations, a singleton session recovery epoch and scoped session families. A family stores a refresh digest and counters with an absolute expiry. Password, role and activation changes advance the staff generation. Staff deletion clears the family FK so a reused numeric ID cannot reclaim it. The down migration refuses retained session or generation evidence. The [staff session contract](specs/staff-sessions.md) covers lock ordering, legacy credential cutover and sealed recovery.

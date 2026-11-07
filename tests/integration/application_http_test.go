@@ -40,6 +40,8 @@ func TestApplicationHTTP(t *testing.T) {
 		require.NoError(t, e)
 		_, e = pool.Exec(context.Background(), "DELETE FROM applications WHERE key=ANY($1)", keys)
 		require.NoError(t, e)
+		_, e = pool.Exec(context.Background(), "DELETE FROM staff_sessions WHERE staff_user_id=ANY($1)", ids)
+		require.NoError(t, e)
 		_, e = pool.Exec(context.Background(), "DELETE FROM staff_users WHERE id=ANY($1)", ids)
 		require.NoError(t, e)
 	}()
@@ -56,7 +58,7 @@ func TestApplicationHTTP(t *testing.T) {
 		if role == "SUPER_ADMIN" {
 			claim = "VIEWER"
 		}
-		tokens[role], err = manager.GenerateAccessToken(id, claim, "")
+		tokens[role], err = fixtureAccess(ctx, q, manager, id, claim, "")
 		require.NoError(t, err)
 	}
 	super := context.WithValue(ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: actors["SUPER_ADMIN"]})
@@ -244,6 +246,9 @@ func TestApplicationHTTP(t *testing.T) {
 		current := request(t, "SUPER_ADMIN", "GET", grantPath, "", nil, 200).Header().Get("ETag")
 		request(t, "SUPER_ADMIN", "PUT", grantPath, `{"is_active":true}`, map[string]string{"If-Match": current}, 409)
 		_, err = pool.Exec(ctx, "UPDATE staff_users SET role_id=(SELECT id FROM roles WHERE name='VIEWER') WHERE id=$1", actors["SUPER_ADMIN"])
+		require.NoError(t, err)
+		request(t, "SUPER_ADMIN", "GET", "/api/v1/admin/apps", "", nil, 401)
+		tokens["SUPER_ADMIN"], err = fixtureAccess(ctx, q, manager, actors["SUPER_ADMIN"], "SUPER_ADMIN", "")
 		require.NoError(t, err)
 		request(t, "SUPER_ADMIN", "GET", "/api/v1/admin/apps", "", nil, 403)
 		request(t, "SUPER_ADMIN", "GET", public, "", nil, 200)

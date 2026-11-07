@@ -18,15 +18,20 @@ import (
 
 type statusProbe struct{ calls int }
 
-func (p *statusProbe) IsActive(context.Context, int64) (bool, error) { p.calls++; return true, nil }
+func (p *statusProbe) SessionActive(context.Context, int64, string) (bool, error) {
+	p.calls++
+	return true, nil
+}
 
 func TestStaffHTTPRejectsBeforeLookup(t *testing.T) {
 	for _, purpose := range []string{"access", "refresh"} {
-		for _, variant := range []string{"HS384", "missing exp", "zero identity"} {
+		for _, variant := range []string{"HS384", "missing exp", "zero identity", "legacy format"} {
 			t.Run(purpose+"/"+variant, func(t *testing.T) {
-				claims := jwt.MapClaims{"type": purpose, "user_id": 7, "exp": time.Now().Add(time.Hour).Unix()}
+				claims := jwt.MapClaims{"type": purpose, "user_id": 7, "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "sub": "7", "sid": token.NewFamily().ID.String(), "jti": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
 				var method jwt.SigningMethod = jwt.SigningMethodHS256
 				switch variant {
+				case "legacy format":
+					delete(claims, "sid")
 				case "HS384":
 					method = jwt.SigningMethodHS384
 				case "missing exp":

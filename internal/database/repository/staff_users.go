@@ -2,11 +2,9 @@ package repository
 
 import (
 	"context"
-	"errors"
 
 	"hello/internal/database/sqlc"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -65,50 +63,13 @@ func (r *StaffUserRepository) FindByID(ctx context.Context, id int64) (sqlc.Staf
 	return r.q.GetStaffUserByID(ctx, id)
 }
 
-// IsActive reports whether the staff user identified by id currently has an
-// active account.
-//
-// It is the narrow read that the JWT middleware performs on every
-// authenticated request to enforce effective revocation: a token whose
-// signature and expiry are still valid is rejected as soon as the backing
-// account is deactivated or deleted.
-//
-// # Semantics
-//
-// The method distinguishes three outcomes, which the caller must not
-// conflate:
-//
-//   - The row exists and its is_active column is true: returns (true, nil).
-//   - The row exists and its is_active column is false: returns (false, nil).
-//   - The row does not exist: returns (false, nil). The token references a
-//     staff user that has since been deleted, and the caller is expected to
-//     treat this exactly like a deactivated account.
-//
-// A genuine infrastructure failure — a connection error, a query error —
-// is surfaced as a non-nil error with the underlying cause intact, so that
-// the caller can respond with a 500 rather than a misleading "inactive".
-//
-// # Implementation note
-//
-// The method reuses the existing GetStaffUserByID query and reads only the
-// IsActive field of the returned row. This avoids introducing a new SQL
-// statement solely to save a column read; the query is indexed on the
-// primary key and the row is small. A future optimisation that projects
-// only the is_active column would remove the extra column reads without
-// changing this method's contract.
-//
-// # Concurrency
-//
-// Safe for concurrent use. The method holds no state between calls.
-func (r *StaffUserRepository) IsActive(ctx context.Context, id int64) (bool, error) {
-	user, err := r.q.GetStaffUserByID(ctx, id)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return false, nil
-		}
-		return false, err
+// SessionActive checks the signed family and the account's current authentication generation.
+func (r *StaffUserRepository) SessionActive(ctx context.Context, staffID int64, sessionID string) (bool, error) {
+	var id pgtype.UUID
+	if err := id.Scan(sessionID); err != nil {
+		return false, nil
 	}
-	return user.IsActive, nil
+	return r.q.StaffSessionActive(ctx, sqlc.StaffSessionActiveParams{StaffID: staffID, SessionID: id})
 }
 
 // FindByEmail retrieves a staff user by email address and returns the base
