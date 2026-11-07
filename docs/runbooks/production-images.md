@@ -36,7 +36,7 @@ Role policies accept exact field names and reject missing, unknown or duplicate
 members. Use explicit PostgreSQL host, port, database, service account and
 percent-escaped credentials with `sslmode=verify-full`. Optional TLS auxiliary
 files must also pass ownership, mode and ACL checks. PG* and TLS trust override
-variables are rejected. The protected DB pool allows up to two connections per process; retention uses one.
+variables are rejected. Protected DB pools default to two connections per process. The delivery worker supports an explicit [per-replica and deployment connection budget](delivery-worker.md). Retention uses one.
 Account for all replicas and other services when comparing DB connection demand
 with PostgreSQL capacity. Select CPU, memory, replica counts, request-rate
 allocations and drain deadlines from staging measurements.
@@ -50,12 +50,15 @@ approval. Roll back via a compatible prior image and the applicable schema
 runbook. Guarded down migrations can intentionally refuse removal of durable
 delivery or receipt evidence.
 
-To check entrypoints offline, run each target with `--network none --read-only
---cap-drop ALL --security-opt no-new-privileges`. Worker, scheduler and requeue
-accept `--help`. For server and bootstrap, mount synthetic role policies owned by
-`0:65532` with mode 0640 and point the database URL at a closed local port.
-The commands should reach their database startup check and exit with failure.
-Changing a policy to mode 0660 should instead fail at configuration loading.
+Run `python3 scripts/check-images.py` with Python 3, OpenSSL and a local Docker
+daemon to build all six targets. The runner prints each checked image ID and
+leaves the local images tagged `hello-<role>:local-verify`. It verifies each
+entrypoint and UID/GID, and starts the commands with a read-only filesystem,
+network disabled, all capabilities dropped and no-new-privileges. Server and
+bootstrap load synthetic mode-0640 policies and reach their database startup
+check. Changing the files to mode 0660 fails at policy loading. Worker,
+scheduler, requeue and retention exercise their actual `--help` entrypoints.
+Use the protected integration fixtures for DB, Kafka and provider behavior.
 
 Related decisions: [transport topology](../adr/adr-07-kafka-topology.md),
 [deployment security](../adr/adr-11-security-baseline.md) and

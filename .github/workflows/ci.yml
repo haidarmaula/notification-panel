@@ -39,6 +39,12 @@ jobs:
         run: bash scripts/ci.sh format
       - name: Verify pinned Go skills
         run: python3 scripts/check-go-skills.py
+      - name: Check consumer routes and examples
+        run: |
+          python3 scripts/check-api-routes.py
+          python3 -m venv "$RUNNER_TEMP/hello-contracts"
+          "$RUNNER_TEMP/hello-contracts/bin/pip" install 'openapi-spec-validator==0.7.2' 'jsonschema[format-nongpl]==4.23.0'
+          "$RUNNER_TEMP/hello-contracts/bin/python" scripts/check-api-contracts.py
       - name: Verify modules
         run: bash scripts/ci.sh modules
       - name: Build all binaries
@@ -47,6 +53,36 @@ jobs:
         run: bash scripts/ci.sh test
       - name: Run go vet
         run: bash scripts/ci.sh vet
+
+  delivery:
+    name: Isolated worker, PostgreSQL, Kafka and simulated provider
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Verify transient retry and complete update drain
+        run: bash scripts/delivery-load.sh 32 2 transient burst 8 8 10
+
+  release-images:
+    name: Build and check six offline production images
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Check the production commands
+        run: python3 scripts/check-images.py
 
   vulnerability:
     name: Reachable Go vulnerabilities

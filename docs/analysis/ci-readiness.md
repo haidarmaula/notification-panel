@@ -78,6 +78,15 @@ Configuration references: [checkout](https://github.com/actions/checkout),
 [setup-go](https://github.com/actions/setup-go),
 [govulncheck](https://pkg.go.dev/golang.org/x/vuln/cmd/govulncheck).
 Action pins and the scanner version were verified against official GitHub/Go metadata.
-API contract lint and Postman collection runs will be added when artifacts and
-an isolated integration target are available; no Postman workspace was created
-or published by this step.
+
+## Backend release checks added on November 8
+
+The quality job checks all mounted route registrations, required staff permissions,
+three OpenAPI documents, two event schemas and their synthetic examples. The
+delivery job exercises two 32-device broadcasts in an isolated Docker network.
+Local execution of the CI command produced 66 charged calls, 64 accepted
+delivery results, 64 unique Kafka updates and an empty outbox after transient
+503 responses. Manual workflow dispatch also builds and [checks the six
+production images](../runbooks/production-images.md). The complete opt-in
+Postman/DB/Kafka/race and physical recovery suites run separately. Hosted
+execution and repository branch rules still require target evidence.
