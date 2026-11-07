@@ -1,6 +1,10 @@
 # Backend production readiness plan
 
-Date: 2026-11-02 (Asia/Jakarta). Status: active design, not yet production-ready.
+Updated 2026-11-08 (Asia/Jakarta). Step 23 is complete. The current phase is pre-production acceptance. Production dispatch remains on hold.
+
+The next deployment gate is Step 40, a staging run with real Android and iOS devices. Step 41 also remains open. The final isolated worker recorded all 20,000 simulated device results in 61.948 s with eight database connections and 61.847 s with sixteen. Both exceeded the proposed 60 s.
+
+The [cutover evidence register](cutover-readiness.md) records the outstanding device, provider, operations and approval gates. The [capacity report](delivery-load.md) records the measured results for the current authorization path.
 
 This document indexes the latest work and requirements. ADRs remain
 `proposed` until decisions and reviews are complete. Implementation checklist items
@@ -18,7 +22,7 @@ must not be considered complete merely because a design or code file exists.
 | R6 | Android and iOS are supported | Confirmed by the user. |
 | R7 | The backend sends through FCM for both platforms; iOS uses APNs on the Firebase side | Confirmed by the user. A direct backend APNs provider is not required for the first version. |
 | R8 | Broadcasts should be very fast | Confirmed as a requirement direction; no numeric time limit has been agreed. |
-| R9 | The mobile application uses React Native | Confirmed by the user; framework/native/library versions have not been verified. |
+| R9 | The mobile application uses React Native | Confirmed. The [first client source checkpoint](mobile-source-checkpoint.md) records React Native, Expo and OneSignal versions. Signed build and device checks remain open. |
 | R10 | Kafka will be deployed on the company's own servers (self-hosted) | Confirmed by the user; host/failure-domain/resource counts and operators are unknown. |
 | R11 | V1 focuses on broadcast/segment/individual, scheduling, recovery, receipts/statistics, security, and operations | Confirmed by the user; UPLOAD, cancel/resubmit, rich media, and preferences/quiet hours are deferred. |
 | R12 | VIEWER is read-only; OPERATOR handles drafts/segments; only ADMIN/SUPER_ADMIN may send/schedule; only SUPER_ADMIN may administer staff/roles | Confirmed by the user on 2026-11-02. SPEC M02a is ready for the notification/segment/member subset; M02a guards are implemented/locally tested; M02b staff administration is also implemented/locally verified; other security work remains pending. |
@@ -51,7 +55,7 @@ rate control, and audit remain core reliability/security requirements, rather th
 parity features. A hold stops new claims; it does not recall pushes
 already submitted to the provider.
 
-The user states that the React Native repository is available (location not yet provided).
+The first React Native repository has been [inspected read-only](mobile-source-checkpoint.md).
 Laravel runs directly on the server and its repository is unavailable.
 Auth contract verification remains open; do not assume Laravel server
 inspection/deployment has been authorized or make server access a prerequisite
@@ -74,7 +78,7 @@ baseline benchmarks and the pilot; avoid uncontrolled traffic spikes.
 | API, scheduling, fan-out, availability SLOs | p95/p99 values, measurement windows, conditions, and error budgets | Final sizing and production go/no-go |
 | Infrastructure | Self-hosted Kafka is confirmed; hosts/failure domains, PostgreSQL, resource budget, staging, and TLS are undetermined | ADR-07/08/11 and deployment |
 | Recovery | RPO/RTO, backups, restore, operators, and alert escalation | Release gate |
-| Mobile | React Native is confirmed; versions/libraries, repository access, update schedule, rollout adoption, and actual identifiers are unverified | ADR-06 and cutover |
+| Mobile | First client source and dependencies are verified at a recorded revision. Signed builds, release schedule, adoption and actual identifiers remain open | ADR-06 and cutover |
 | Token lifecycle | Login/logout/account switch, multi-device, refresh, and invalidation | Mobile contract and security tests |
 | Retention | Delivery, audit, dead-letter, keys, outbox, PII deletion | ADR-10 and production maintenance |
 | Additional scope | UPLOAD, cancel/resubmit, rich media, preferences/quiet hours are deferred; localisation is undecided | Input rejection and API contract boundaries |
@@ -108,45 +112,26 @@ and the SDK against an HTTP simulation. Real providers/devices have not been tes
 
 ## 4. ADR / SPEC index
 
-Table paths are relative to `docs/adr/`; canonical companion SPECs will
-use the same basenames in `docs/specs/` and have not yet been created.
+The decisions below retain their proposed status until the related owners accept the deployment requirements. The evidence column records the current backend boundary.
 
-| ADR | Document | Status and next work |
+| ADR | Document | Evidence and open gate |
 | --- | --- | --- |
-| 01 | [Provider retry](../adr/adr-01-provider-retry.md) | Proposed, revised: atomic fan-out, per-device budget, lease/generation, recovery, and acceptance idempotency. Not yet tested. |
-| 02 | [Worker consumption](../adr/adr-02-worker-consumption.md) | Proposed, revised: serial durable admission, fail-closed commit/DLQ, replay audit. Not yet tested. |
-| 03 | [Transactional outbox](../adr/adr-03-transactional-outbox.md) | Proposed, revised: one acceptance transaction and a scheduler-only publisher, one row per bounded transaction. Not yet tested. |
-| 04 | [Provider selection](../adr/adr-04-provider-selection.md) | Proposed, revised: explicit FCM, credential modes, typed registration, immutable binding/owner_epoch, and SDK limits. Not yet tested. |
-| 05 | [Receipt ingestion](../adr/adr-05-receipt-ingestion.md) | Proposed, revised: device-scoped capability receipts, early/late observations, snapshot stats, and versioned event outbox. Not yet tested. |
-| 06 | [Cutover/token migration](../adr/adr-06-onesignal-fcm-cutover.md) | Proposed: React Native enrollment, exclusive routing/cohorts, full-coverage gate, pilot, stage-specific rollback, and retirement; not yet executed. |
-| 07 | [Kafka topology](../adr/adr-07-kafka-topology.md) | Proposed: self-hosted profiles, RF/ISR, explicit hash routing, retention/groups, seed/batch config, provisioning, and ACL; not yet applied. |
-| 08 | [Observability](../adr/adr-08-observability.md) | Proposed: private health/readiness, structured logs, metric catalog/freshness, sparse-work alerts, dashboards/runbooks, and verification; not yet applied. |
-| 09 | [API conventions](../adr/adr-09-api-consistency.md) | Proposed: safe envelope/errors, state vocabulary, presence-aware PATCH/CAS, pagination/filter, audit/DTO, and compatibility; not yet applied. |
-| 10 | [Retention/recovery](../adr/adr-10-retention-recovery.md) | Proposed: safety floors, controlled erasure/archive, backup/PITR, sealed restore, and source epoch; policy/RPO/RTO not yet set. |
-| 11 | [Security baseline](../adr/adr-11-security-baseline.md) | Proposed overall; business role matrix confirmed and scoped SPEC M02a written. M02a operation enforcement is implemented/locally tested; session/abuse/key/enrollment and other security work remain pending. |
-| 12 | [Multi-application isolation](../adr/adr-12-multi-application-isolation.md) | NEW proposed: applications as identity/data/permission/provider/event/receipt boundaries; not yet implemented. Optional product parity remains in the backlog without an assigned ADR number. |
+| 01 | [Provider retry](../adr/adr-01-provider-retry.md) | [Worker recovery](../runbooks/delivery-worker.md) and [20,000-device trials](delivery-load.md) exercise per-device charges, deadline/lease fences and terminal results. Real provider quotas and SLO remain open. |
+| 02 | [Worker consumption](../adr/adr-02-worker-consumption.md) | [Admission](../specs/m05-kafka-adapter.md) and [replay](../runbooks/operator-replay.md) cover durable admission, numeric checkpoints and gap fencing. Production source and operator trust remain open. |
+| 03 | [Transactional outbox](../adr/adr-03-transactional-outbox.md) | The scheduler publishes durable acceptances, and the worker drains ordered updates. [Composition checks](runtime-composition-verification.md) exercise actual protected commands. |
+| 04 | [Provider selection](../adr/adr-04-provider-selection.md) | The scoped worker uses the Firebase SDK with protected credentials. [Wire tests](m06-fcm-transport-verification.md) use a simulated provider. Device and IAM acceptance remain open. |
+| 05 | [Receipt ingestion](../adr/adr-05-receipt-ingestion.md) | [Receipt and statistics checks](../specs/m07-receipts-statistics.md) and a [v2 reference consumer](../specs/m06-delivery-consumer.md) pass locally. Real client and downstream integration remain open. |
+| 06 | [Cutover](../adr/adr-06-onesignal-fcm-cutover.md) | The [mobile checkpoint](mobile-source-checkpoint.md) found OneSignal in the first consumer. Release, consent/coverage, pilot and retirement await [cutover evidence](cutover-readiness.md). |
+| 07 | [Kafka topology](../adr/adr-07-kafka-topology.md) | The [six-node drill](../runbooks/kafka-replication-drill.md) covers replicated writes, ACLs, broker and controller failover and checkpoint continuity. Target failure domains and storage remain unverified. |
+| 08 | [Observability](../adr/adr-08-observability.md) | Private diagnostics, dashboards and alert firing/recovery were [exercised locally](../runbooks/monitoring.md). Target scrape inventory, receivers and on-call coverage remain open. |
+| 09 | [API conventions](../adr/adr-09-api-consistency.md) | [HTTP and Kafka contracts](../contracts/README.md) check mounted routes, permissions, example data and wire schemas. Real frontend acceptance remains open. |
+| 10 | [Retention and recovery](../adr/adr-10-retention-recovery.md) | [Bounded retention](../runbooks/retention.md), [sealed database/Kafka reconciliation](../runbooks/sealed-restore.md) and [physical PITR](../runbooks/physical-pitr.md) have isolated evidence. Erasure, archives, backup policy and actual recovery objectives remain open. |
+| 11 | [Security](../adr/adr-11-security-baseline.md) | [DB-backed sessions and rotating keys](../specs/staff-sessions.md), [authenticated ingress](../specs/m02-gateway.md) and [key dependencies](../runbooks/credential-rotation.md) have local evidence. Corporate access and secret custody remain open. |
+| 12 | [Application isolation](../adr/adr-12-multi-application-isolation.md) | Registry, role grants, bindings, delivery and receipts use scoped IDs. Two synthetic applications exercise isolation. Production migration remains gated by the [ownership runbook](../specs/m03b-cutover.md). |
 
-First review: [ADR-01/02 review](adr-01-02-review.md). Proposed status means
-not yet accepted; migration names mentioned in ADRs are design reservations only.
-Actual numbers follow implementation order, always with up/down and sqlc
-regeneration. Old drafts must not become parallel implementation instructions.
+### Implementation history
 
-Next review: [ADR-04/05 review](adr-04-05-review.md), including integration
-questions, contract changes, and acceptance tests that have not been run.
-
-Migration gate: [cutover readiness](cutover-readiness.md). The Firebase project,
-React Native versions/libraries, and provider configuration still need inventory.
-
-Kafka gate: [Kafka readiness](kafka-readiness.md). H47/H48/M48 are open
-runtime findings, not fixes completed merely because ADR-07 exists.
-
-Monitoring gate: [observability readiness](observability-readiness.md).
-No live endpoints, scrapes, dashboards, or alert notifications have been
-installed merely because ADR-08/a checklist exists.
-
-API/data/security gate: [readiness register](api-data-security-readiness.md).
-The C21 operation bypass has been remediated and locally verified in [M02a](m02a-verification.md). Retention/RPO/RTO,
-identity policy, and contract changes still require decisions/verification.
+The following entries preserve what each milestone verified at the time. The execution checklist below tracks current status.
 
 Cross-ADR review results: [CR1–CR9 and gates G1–G7](adr-01-11-consistency-review.md).
 Technical corrections have been written as proposed; core scope is confirmed, but
@@ -265,23 +250,23 @@ work on unchecked rows has started, as noted.
 
 ### Phase 1 — context and targets
 
-- [ ] 01. Review/adopt existing changes and preserve them in separate commits. Inventory and preservation commits are complete; audit/adoption against the new reliability design are not.
+- [x] 01. Reviewed the preserved legacy processor and tooling commits. The current worker enters through `internal/daemon`, uses fenced per-device attempts and has no call to the old processor constructor. Historical retry drafts and OpenCode configuration remain reference material. The preserved processor’s post-send history heuristic and target truncation were excluded from the modern path; the 20,000-device fixture verifies the current path.
 - [x] 02. Create an initial index of ADR, SPEC, backlog, and dependency status (this document).
 - [x] 03. Lock core v1 scope; additional features mentioned by the user are deferred. Localisation is not a v1 promise; input boundaries must be explicit in SPECs.
 - [x] 04. Record user scale requirements: approximately 20,000 devices, 5 campaigns/month, full broadcast. Final sizing awaits benchmarks.
 - [ ] 05. Set SLOs, RPO/RTO, and acceptance thresholds. The 60-second benchmark is only a proposal.
-- [ ] 06. Verify mobile/Laravel/token integrations. Android+iOS and transport are confirmed; mobile inspection is not.
+- [ ] 06. Verify mobile/Laravel/token integrations. [First mobile source inspected](mobile-source-checkpoint.md); the current client still uses OneSignal. Laravel issuer, provider project and real device enrollment remain unverified.
 
 ### Phase 2 — design
 
 - [x] 07. Review and revise ADR-01/02 at the design level. D1-D7 are mapped to decisions and verification cases; cross-ADR/runtime acceptance is pending.
-- [x] 08. Review/revise ADR-03 and idempotency + outbox transactions at the design level; still proposed, not yet implemented.
+- [x] 08. Review/revise ADR-03 and idempotency + outbox transactions at the design level. Atomic acceptance, idempotency and outbox publication now have local implementation evidence in Steps 25–26.
 - [x] 09. Review/revise ADR-04 for Android+iOS FCM, credentials, SDK, and token lifecycle at the design level; mobile/security integration is not yet validated.
-- [x] 10. Review/revise ADR-05 for device receipts, statistics snapshots, and versioned event ordering at the design level; not yet tested/accepted.
+- [x] 10. Review/revise ADR-05 for device receipts, statistics snapshots, and versioned event ordering at the design level. Local HTTP, PostgreSQL and reference-consumer tests now cover the contract in Steps 26 and 29.
 - [x] 11. Write ADR-06 cutover and its evidence checklist: React Native enrollment, exclusive cohorts, coverage, pilot, per-stage rollback, and retirement; still proposed, not executed.
-- [x] 12. Write ADR-07 self-hosted Kafka topology/provisioning and its evidence checklist; still proposed, without infrastructure/runtime changes.
-- [x] 13. Write ADR-08 observability, signal/alert catalog, and evidence checklist; still proposed, no instrumentation/monitoring installed or tested.
-- [x] 14. Write minimum ADR-09/10/11 decisions and the API/data/security readiness register; still proposed, policy/identity/RPO/RTO not approved, without runtime changes.
+- [x] 12. Write ADR-07 self-hosted Kafka topology/provisioning and its evidence checklist; the isolated three-controller/three-broker drill passes. Company host placement and release approval remain open.
+- [x] 13. Write ADR-08 observability, signal/alert catalog, and evidence checklist; local monitoring installation, alert rules and dashboard queries now have evidence in Step 36.
+- [x] 14. Write minimum ADR-09/10/11 decisions and the API/data/security readiness register; still proposed, policy/identity/RPO/RTO pending approval. Local controls and recovery evidence are recorded in Steps 32 and 37–38.
 - [ ] 15. Cross-ADR review: technical CR1–CR9 checks and revisions are complete at the design level; acceptance remains conditional on G2–G7. No ADR is automatically accepted.
 
 ### Phase 3 — implementation foundations
@@ -289,45 +274,45 @@ work on unchecked rows has started, as noted.
 - [x] 16. Organize M00–M10 with a dependency graph, outputs, gates, and completion criteria; milestone implementation is not automatically complete.
 - [x] 17. Regenerate segment mocks; align staff actor/password/not-found fixtures and filtered/batch count assertions; build and all unit tests passed on 2026-11-02. No service behavior changes or integration/load-test evidence.
 - [x] 18. GitHub Actions + local format/modules/build/test/vet/vulnerability scripts; local checks/actionlint pass, security dependencies updated and reachable scan reports zero findings. Main workflow remains; hosted run/ruleset unverified because changes have not been pushed.
-- [x] 19. Isolated fixture runner: 15 migrations up/down/up, repositories, both Kafka topics/producer round trips, and Firebase SDK HTTP simulation pass locally; guards/cleanup verified. Not an adapter/worker/new-pipeline test or real FCM/APNs; no hosted integration job yet.
-- [ ] 20. Progresses by milestone: SPEC M02a and implementation/18-case evidence are complete within scope; 56 role/route API cases plus negative DB/Kafka tests pass locally. M02b staff administration is also complete within scope with 28 role/route API cases and local lifecycle/demotion tests; M02c audit redaction and SQL cleanup fixtures pass locally. M02d limits 16 JSON inputs; boundary/48 rejection route cases pass locally. M02e tightens staff JWT parsing and the baseline assessment establishes minimum development guards as ready for isolated M03. Historical production cleanup and release controls are incomplete; this is not evidence of complete security/production readiness. M03a.1–3 registry/grants also pass locally; M03b.1–M03b.5 are complete in the repository and pass locally. Target-environment cutover remains open. M03c has schemas, protections, lifecycle transactions, a verifier, origin, and HTTP. M03d has a contract and two synthetic cross-project consumers that pass locally. State recovery and real binding invalidation pass locally. M06 provider-result hooks, real-consumer verification, and deployment policies remain open. Step 20 also covers M04 durable acceptance foundations.
+- [x] 19. The isolated fixture exercises the migration chain in both directions, PostgreSQL repositories, both Kafka topics, the worker, and Firebase SDK traffic against a simulator. CI includes integration and synthetic worker jobs. The protected environment and hosted run still require deployment evidence. See the [integration runbook](integration-readiness.md).
+- [ ] 20. Staff operation and lifecycle permissions, input limits, session revocation, project ownership, mobile binding, durable acceptance, fenced provider results and reference consumers have isolated test evidence. The selected deployment still needs verified legacy data and writer cleanup, real consumer compatibility, credentials and release approval.
 
 ### Phase 4 — delivery pipeline
 
 - [ ] 21. Scoped FCM transport/errors, file credentials, DB-authorized single-use submission, fenced results and conditional invalid-token handling pass local tests. Selected deployment credential policy and delivery activation remain open.
 - [ ] 22. M05 atomic fan-out/device snapshots pass locally, including 20k intents. M06 leases, per-device claims, submission and fenced results also pass locally; recovery and finalization are implemented; target-environment activation remains open.
 - [x] 23. Per-device retries use bounded exponential backoff and preserve charged attempts after lease expiry. The worker recovers eligible devices and finalizes deliveries that exhaust their deadline or budget. Verified with PostgreSQL, Kafka and a synthetic FCM endpoint in the [isolated worker deployment](../runbooks/delivery-worker.md#acceptance).
-- [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; replay registration/inspection/claim/publication and expired-claim cleanup libraries also pass locally. Replay CLI/configuration and PostgreSQL verified-TLS/Kafka mTLS command tests also pass locally. Production issuer/incarnation approval, supervised drain/handoff and runtime deployment remain pending.
+- [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; replay registration/inspection/claim/publication and expired-claim cleanup libraries also pass locally. Replay CLI/configuration and PostgreSQL verified-TLS/Kafka mTLS command tests also pass locally. Numeric group checkpoints, live retention gaps and generation handoff also pass locally. Production issuer/incarnation approval and target runtime deployment remain pending.
 - [ ] 25. M04 atomic send idempotency + claim + outbox, promotion/expiry, and bounded dispatcher pass locally; the scheduler binary now uses protected source-bound durable handoff locally. Production policy/activation and target-environment evidence remain open.
 - [ ] 26. Atomic versioned outbox insertion and predecessor-safe publication pass local tests. The delivery worker drains its scoped outbox. A PostgreSQL reference consumer passes duplicate, version gap, conflict, restart and restored-source tests against the published v2 record. Rollout evidence from actual downstream owners remains open. See the [consumer contract](../specs/m06-delivery-consumer.md).
-- [ ] 27. Bounded concurrency, page/chunk memory limits, provider rate limits, and backpressure.
-- [ ] 28. Acceptance/audit rollback, ack-before-commit, preparation/quarantine commit failure, coordinator unsafe-offset, and broker rebalance pass locally; provider and other failure windows/deployment are pending.
+- [x] 27. Bounded pages and provider concurrency, process and fleet allocations, memory measurements and 429 backpressure pass the isolated [load experiments](delivery-load.md).
+- [ ] 28. Local tests cover rollback, ambiguous commits, stale owners/offsets, broker rebalance, provider timeout, 429 and 503. The [load fixture](delivery-load.md) checks charges, deferrals and exact update IDs. Target failure and migration drills remain open.
 
 ### Phase 5 — contracts and security
 
 - [x] 29. Scoped mobile receipts and staff campaign statistics are implemented. PostgreSQL and HTTP fixtures verify account and key changes, expiry, duplicate requests, early and late observations, atomic rollback and snapshot counts. See the [M07 contract](../specs/m07-receipts-statistics.md).
-- [ ] 30. Mobile token refresh, login/logout/account switch, multi-device, and migration tests.
-- [ ] 31. Close in-scope correctness findings; do not assume the old code-review checklist is accurate without verification.
-- [ ] 32. Authorization/ownership, JWT claim validation, rate/body limits, trusted proxies, and secrets.
-- [ ] 33. API/event contracts and example/error/compatibility tests for frontend and mobile.
+- [ ] 30. Backend fixtures cover refresh, logout, account switching, ownership epochs and two-project isolation. Real app integration and the multi-device migration pilot remain open. See the [source checkpoint](mobile-source-checkpoint.md).
+- [ ] 31. The mounted staff and profile paths now serialize admin changes, protect the last active super-admin, retain current roles and reject stale password proofs. Audit rollback and concurrent HTTP checks pass. The [review inventory](../../code-review.md) records mounted credential parsing and distinguishes the protected Kafka writer from the legacy notification module. Target security review and reconciliation of the remaining historical findings are open.
+- [ ] 32. Project and current staff authority, rotating JWT families, exact gateway mTLS/peer addresses, and bounded auth and mobile receipt requests pass local tests. Target identity, rate allocations, gateway and secret custody remain open.
+- [x] 33. Published and verified all 57 mounted HTTP method/path pairs and both Kafka wire schemas. Synthetic examples and error cases exercise the real routers, Kafka decoders, campaign acceptance and receipt ingress. [Contracts and verification](../contracts/README.md).
 
 ### Phase 6 — operations
 
-- [ ] 34. Five digest-pinned, non-root process images built and passed offline entrypoint smoke checks with a read-only filesystem. Protected role configuration is implemented. Target resource sizing, image attestation and deployment drills remain open. See the [image runbook](../runbooks/production-images.md).
+- [ ] 34. All six process images use the pinned toolchain and run as a non-root user. The offline image check builds each command and verifies its entrypoint and protected policy behavior on a read-only filesystem. Protected role configuration is implemented. Target resource sizing, image attestation and deployment drills remain open. See the [image runbook](../runbooks/production-images.md).
 - [x] 35. Server, worker, scheduler and one-shot commands now bound startup and join or cancel outstanding work on shutdown. Local tests cover active HTTP drain, forced cancellation, inherited pipes and closing PostgreSQL connections. See the [lifecycle specification](../specs/process-lifecycle.md).
 - [ ] 36. Private mTLS health/readiness, redacted structured HTTP logs, provider/outbox metrics, a provisioned Grafana dashboard and Prometheus firing/recovery fixtures are implemented. Target scrape coverage, notification-path and broker exporter drills remain open. See the [monitoring runbook](../runbooks/monitoring.md).
-- [ ] 37. Retention/purge for delivery/audit/key/outbox/dead-letter and PII deletion.
-- [ ] 38. A [sealed restore drill](../runbooks/sealed-restore.md) preserves post-backup Kafka ambiguity and validates fenced recovery locally. Backup/WAL policy, actual recovery objectives, real credential rotation and target recovery remain open.
-- [ ] 39. Service owners, alert escalation, and operator access.
+- [ ] 37. A [protected retention job](../runbooks/retention.md) expires spent origin nonces, receipt request markers and reviewed terminal send keys in bounded authorized batches with holds and crash-safe progress. A [read-only subject impact preview](../runbooks/subject-erasure.md) inventories dependent records and incomplete coverage. Archive behavior, actual erasure across systems and owner-approved lifetimes remain open.
+- [ ] 38. [Sealed Kafka reconciliation](../runbooks/sealed-restore.md), [physical PITR and missing-WAL denial](../runbooks/physical-pitr.md), and [credential rollover](../runbooks/credential-rotation.md) pass isolated checks. Backup custody, actual recovery objectives and target credential retirement remain open.
+- [ ] 39. Operator grants and alert firing/recovery have isolated evidence. The company service owners, on-call receivers, escalation paths and operator access still require verification.
 
 ### Phase 7 — production evidence
 
 - [ ] 40. Staging end-to-end tests with real Android/iOS devices and relevant application states.
-- [ ] 41. Load/burst/soak: 20,000 devices and agreed headroom scenarios; record environment, quotas, and results.
-- [ ] 42. Failure injection: restart/rebalance, DB/Kafka outage, provider timeout/429/5xx, duplicate/replay.
-- [ ] 43. Restore, deploy, rollback, and migration compatibility drills.
+- [ ] 41. [Measured synthetic 20,000-device trials, quota holds and multi-campaign bursts](delivery-load.md). Target storage, network, provider quota and agreed headroom/soak profile remain open.
+- [ ] 42. Local failure drills cover controller/broker elections, lost ISR, gaps, DB rollback, ambiguous publication, expired leases, duplicate/replay and provider timeout/429/503. Repeat in the approved failure domains with independent monitoring.
+- [ ] 43. Logical and physical recovery, post-backup revocations, missing WAL and guarded downgrade refusal pass locally. Target restore, compatible image rollback, off-site recovery keys and cutover rehearsal remain open.
 - [ ] 44. Security/operational readiness review; all release blockers closed.
-- [ ] 45. Gradual pilot with controlled test traffic/devices and success metrics.
+- [ ] 45. The [enrollment switch](../runbooks/application-lifecycle.md), [per-binding routes](../runbooks/binding-route-cutover.md) and [pilot/full release procedure](../runbooks/application-dispatch.md) enforce scoped approval, coverage and holds in the backend. The actual exclusive cohort, signed builds and observed pilot remain open.
 - [ ] 46. Evidence-based go/no-go, gradual cutover, and post-release observation.
 
 ## 6. Release gates

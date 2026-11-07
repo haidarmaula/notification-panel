@@ -1,7 +1,6 @@
 # API, data lifecycle and security readiness
 
-Date: 2026-11-02. Status: proposed design gates, no implementation/policy
-approval/security tests yet. Documents:
+The initial November 2 design assessment is preserved below. The current backend checks and owner dependencies are tracked in the [readiness plan](production-readiness-plan.md). Applicable decisions are
 [ADR-09 API](../adr/adr-09-api-consistency.md),
 [ADR-10 retention/recovery](../adr/adr-10-retention-recovery.md),
 [ADR-11 security](../adr/adr-11-security-baseline.md).
@@ -22,7 +21,7 @@ approval/security tests yet. Documents:
 - Staff refresh/session revocation, mobile issuer/audience/expiry, key separation,
   binding proof, proxy/origin/resource/rate policy are part of the baseline.
 
-## Verified code evidence and limits
+## Initial source assessment on November 2
 
 | Evidence | Meaning / caveat |
 | --- | --- |
@@ -37,9 +36,20 @@ approval/security tests yet. Documents:
 | middleware/audit.go | Trusted-peer/XFF guards already exist; default private ranges are too broad to count as an exact production proxy inventory |
 | Existing FK/compose/Makefile | Cascades and dev volumes are visible; this does not establish whether company backups exist outside the repo |
 
-This review is source-only. No VIEWER account was used to perform
-mutations, no credentials were read, no roles/passwords were changed, and no restore/purge or
-production/live-provider tests were performed. M02a subsequently closed C21 with actual local API/DB/Kafka evidence, beyond design alone; other findings/gates are not automatically closed.
+Subsequent local work closed the operation bypass, introduced current DB session
+families and purpose-specific key rings, and authenticated exact gateway peers.
+Staff mutations now lock current authority through the protected write and audit.
+The local suites cover cross-project routes, rollback, revocation, grant expiry
+and recovery. These findings apply to the mounted backend routes.
+[Staff sessions](../specs/staff-sessions.md) · [Gateway](../specs/m02-gateway.md) · [Contracts](../contracts/README.md)
+
+Retention now has explicit holds and expiring grants for spent origin nonces,
+receipt request markers and terminal send keys. Physical and logical restore
+fixtures verify missing WAL, stale sessions, post-backup Kafka ambiguity and
+sealing. A read-only erasure preview inventories local dependencies using the
+exact project, issuer namespace and subject, and identifies unresolved scope. Corporate identity, business lifetimes, archive read semantics,
+consumer erasure, off-host backup custody and access-owner sign-off remain open.
+[Retention](../runbooks/retention.md) · [Erasure preview](../runbooks/subject-erasure.md) · [Recovery](../runbooks/physical-pitr.md)
 
 ## Outstanding requirement / evidence gates
 
@@ -47,7 +57,7 @@ production/live-provider tests were performed. M02a subsequently closed C21 with
 | --- | --- | --- |
 | A01 contract ownership | Existing caller inventory, OpenAPI/API version map, PATCH/status/auth compatibility | SPEC accepted |
 | A02 transactional correctness | Safe error/serialization, list/filter snapshot, audit rollback and CAS tests | Implementation accepted |
-| A03 role matrix | Business role matrix confirmed by the user on 2026-11-02; scoped SPEC M02a available. Schedule durability/delegation implementation and operational step-up remain pending | M02a role enforcement locally verified; remaining authorization/security gates are not closed |
+| A03 role matrix | Business role matrix confirmed by the user on 2026-11-02; scoped SPEC M02a available. Backend schedule authorization and durable handoff have local evidence. Target privileged-access policy and step-up remain pending | M02a role enforcement locally verified; remaining authorization/security gates are not closed |
 | D01 retention matrix | Owner/purpose/lifetime/action for each class; explicit pending-work exclusions | Retention/erasure SPEC accepted |
 | D02 RPO/RTO | Allowed lost-data interval and safe-service restoration time, DB/storage failure domains | Backup/restore design accepted |
 | D03 recovery proof | Base/WAL/key continuity, sealed restore, erasure/revocation replay, epoch/ID/consumer/provider reconciliation | Production go/no-go |
@@ -76,8 +86,4 @@ already accepted by FCM. A passing scanner does not replace policy sign-off.
 5. Revocation/ownership rolled back by restore must be reconciled before
    API/delivery access reopens, separately from postgres restore merely finishing.
 
-Step 14 is complete as minimum documentation. Step 15 results are recorded in the
-[consistency review](adr-01-11-consistency-review.md): CR1–CR9 were revised at
-the design level; external gates G2–G7 remain open. Next, step 16
-builds the dependency/milestone map. SPEC/implementation starts only for parts whose contracts are sufficiently
-clear and verified; this does not require treating the entire proposal as accepted.
+The [consistency review](adr-01-11-consistency-review.md) records CR1–CR9 and the external G2–G7 gates. The [readiness plan](production-readiness-plan.md) tracks the subsequent implementation and target evidence.

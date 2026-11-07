@@ -45,8 +45,10 @@ Small CI runs use a shorter bound based on pace and wave count.
 The ordinary Go test suite does not launch this experiment.
 
 Fixture setup seeds one user and binding per device, then inserts a scoped
-QUEUED campaign and calls the real set-wise preparer. It enables ACTIVE in the
-disposable schema as the other acceptance fixtures do. HTTP send acceptance,
+QUEUED campaign and calls the real set-wise preparer. The current fixture installs the ownership finalizer and application lifecycle guard,
+then activates enrollment through separate issuer and executor logins. The operator
+applies one grant per binding. Two further reviewed grants release the synthetic
+pilot and then full dispatch before the timed campaign. HTTP send acceptance,
 mobile enrollment calls, admission from the Kafka send topic and actual mobile
 receipt arrival are outside the timed path. All burst campaigns are prepared
 before worker startup. Soak mode waits for the preceding wave's completed
@@ -91,13 +93,10 @@ The November 7, 2026 UTC runs used Linux ARM64 containers, an 8-vCPU Docker
 with temporary filesystem storage and a single Kafka 4.3.1 broker/partition.
 The healthy case allocated 400 physical starts/s to one project and ran one
 20,000-device campaign. These are individual observations on a shared
-development machine. To exercise the original worker again, place the current
-`compose.delivery-load.yml`, `scripts/delivery-load.{sh,go}` and
-`scripts/integration-provider.go` in a disposable checkout of `cfe165c`.
-Use the default two DB connections and the same healthy 400-start/s command.
-That revision contains the original outbox selector and exclusive campaign
-locks. Repeat on a fresh fixture with the dispatch changes in `cef371c` for the final
-design.
+development machine. The historical baseline used the driver and schema from before the route grant
+migrations. The current driver requires the managed application and binding
+tables. Commit `173a34f` preserves the historical measurement harness;
+`cef371c` contains the selector and lock changes.
 
 With the original selector and 10,439 due updates, a rolled-back
 `EXPLAIN (ANALYZE, BUFFERS, TIMING OFF)` of the scoped selection read all
@@ -263,3 +262,35 @@ memory was 47,524 kB. The 48.845 s result above predates per-binding authorizati
 With the route checks enabled this trial exceeded the proposed 60 s threshold
 by 4.363 s. These are single-host synthetic measurements. Actual authorized
 provider capacity and target end-to-end timings are still required.
+
+## Managed application and dispatch release
+
+The managed fixture activates enrollment through the installed lifecycle guard,
+approves all 20,000 binding routes with a separate operator, and then applies
+distinct pilot and full dispatch grants. All grants and provider credentials
+are synthetic. The clock starts when the campaign is durably queued, after
+these setup operations. It includes preparation and worker startup. The run
+uses the 1,000 starts/s allocation, 16 in-flight slots and 10 ms active
+polling from the indexed comparison. The last trial changes only the worker
+connection budget from eight to sixteen.
+
+| Trial | Preparation | Last provider reply | Last durable result | Result p95 / p99 | Kafka drain | Peak sampled outbox |
+| --- | ---: | ---: | ---: | --- | ---: | ---: |
+| Intermediate managed build | 9.107 s | 59.628 s | 59.629 s | 57.677 / 59.256 s | 70.616 s | 3,501 |
+| Final guard, 8 DB connections, concurrent verification | 10.202 s | 78.205 s | 78.210 s | 74.189 / 77.398 s | 84.215 s | 4,093 |
+| Final guard, 8 DB connections, separate run | 9.069 s | 61.947 s | 61.948 s | 59.598 / 61.556 s | 65.076 s | 1,329 |
+| Final guard, 16 DB connections, separate run | 9.023 s | 61.845 s | 61.847 s | 59.233 / 61.290 s | 66.543 s | 1,909 |
+
+Each trial ended with exactly 20,000 distinct accepted provider calls, charges,
+SENT rows and Kafka delivery IDs, and an empty outbox. Peak worker resident
+memory was 47,524 KiB on the intermediate build, 49,236 KiB during concurrent
+verification, 49,104 KiB on the separate eight-connection run and 47,892 KiB
+on the sixteen-connection run. The final guard freezes the
+pilot cohort on preparation and denies dispatch to older workers throughout
+the pilot. A targeted integration drill shared the host during the 78.210 s run.
+With other checks finished, the same eight-connection budget recorded all
+results 1.948 s over the proposed target. Increasing the worker budget to
+sixteen connections yielded 61.847 s, still 1.847 s over the proposal, and a
+longer Kafka drain. Peak provider arrivals/s were 427, 466 and 456 across the
+three final runs. These individual observations do not establish target
+capacity or headroom. [Managed release procedure](../runbooks/application-dispatch.md).

@@ -2,7 +2,7 @@
 
 **Version:** 1.7
 
-**Last Updated:** 2026-11-03
+**Last Updated:** 2026-11-08
 
 **Scope:** Full codebase audit conducted during the Godoc documentation pass  
 **Coverage:** `cmd/`, `internal/`, `pkg/` — every non-test, non-generated `.go` file
@@ -11,7 +11,16 @@
 
 ## Overview
 
-This is a live inventory of bugs, security gaps, correctness issues, and design weaknesses. The original audit was drawn from the Godoc pass; later targeted reviews verify implementation and pinned dependency behavior directly. Older rows/checklists are not a reconciled list of still-open defects. Findings H47/H48/M48 remain open. C21 was remediated and locally verified in M02a on 2026-11-02; see its row/evidence. Proposed ADRs alone do not fix runtime behavior.
+This is a live inventory of bugs, security gaps, correctness issues, and design weaknesses. The original audit was drawn from the Godoc pass; later targeted reviews verify implementation and pinned dependency behavior directly. Older rows/checklists are not a reconciled list of still-open defects. Findings H47/H48/M48 still describe the earlier, unmounted notification module. The protected daemon uses the scoped Kafka transport described below. C21 was remediated and locally verified in M02a on 2026-11-02; see its row/evidence. Proposed ADRs alone do not fix runtime behavior.
+
+The November 8 mount review traced `cmd/server` to the auth, applications,
+staff and profile modules and to the configured installation/receipt routes.
+The older user device-token handlers (C3/C4) and legacy notification processor
+are outside that route inventory. The worker, scheduler and replay commands use
+the scoped Kafka client with hashed keys, explicit broker addresses, a bounded
+write and a single-record batch. The six-node drill exercised replica loss and
+reader/writer failover. Reassess the historical findings before remounting any
+legacy module. [Mounted contracts](docs/contracts/README.md) · [Kafka drill](docs/runbooks/kafka-replication-drill.md)
 
 The findings are grouped by severity rather than by file, so that remediation can be prioritised without having to open every source file. A cross-cutting section follows the itemised lists and identifies patterns that recur across multiple features.
 
@@ -162,7 +171,7 @@ Crashes, security bypasses, data corruption, or issues that affect every user of
 
 | # | Location | Issue | Impact |
 |---|----------|-------|--------|
-| C1 | `internal/middleware/api_key.go` | API key compared with `!=` rather than `crypto/subtle.ConstantTimeCompare` | Timing side-channel — an attacker with network access can recover the shared key byte-by-byte |
+| C1 | `internal/middleware/api_key.go` | Fixed. The mounted middleware rejects empty keys and uses `subtle.ConstantTimeCompare`. | Protected deployment also authenticates the gateway peer. |
 | C2 | `internal/features/auth/service.go` — `RefreshToken` | **Original finding superseded by existing correct code:** role lookup uses staff.RoleID and ignores the stale token role | M02e real-DB regression with staff ID 700001/current ADMIN/stale VIEWER refresh claim returns ADMIN access. This slice verifies the existing fix; it does not introduce session rotation. |
 | C3 | `internal/features/users/device_tokens_handler.go` — `Register` | `user_id` taken from request body; only the shared API key gates the endpoint | Any caller with the API key can register a device for any user |
 | C4 | `internal/features/users/device_tokens_handler.go` — `Delete` | No ownership check — deletes any device token by ID | Any caller with the API key can remove any device registration |
@@ -176,8 +185,8 @@ Crashes, security bypasses, data corruption, or issues that affect every user of
 
 | # | Location | Issue | Impact |
 |---|----------|-------|--------|
-| C9 | `internal/token/jwt.go` — `ParseAccessToken` | `token.Claims.(*AccessClaims)` type assertion runs before the `err` check | Panic on malformed input where the JWT library returns a nil token |
-| C10 | `internal/token/jwt.go` — `ParseRefreshToken` | Single-value type assertion on `parsedToken.Claims` | Panic on every parse failure path |
+| C9 | `internal/token/jwt.go` — `ParseAccessToken` | Fixed. Parsing uses typed destination claims and checks the parser result before use. | Malformed, wrong-key and wrong-token-type tests pass. |
+| C10 | `internal/token/jwt.go` — `ParseRefreshToken` | Fixed. Parsing into typed refresh claims returns a domain error on malformed input. | Malformed, wrong-key and wrong-token-type tests pass. |
 | C11 | `internal/features/notifications/mock_provider.go` — `Send` | Slices `token.PushToken[:8]` without a length guard | Panic for any push token shorter than 8 bytes |
 
 ### Data Correctness (High Blast Radius)
@@ -272,8 +281,8 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 |---|----------|-------|
 | H43 | `cmd/server/main.go` | **Fixed, locally tested 2026-11-08.** SIGINT/SIGTERM stop acceptance, allow active HTTP work to drain and then cancel overdue requests. The pool closes after handler exit. A hard-stop deadline reports failure when a handler remains unresponsive. See [process lifecycle](docs/specs/process-lifecycle.md). |
 | H44 | `internal/features/notifications/module.go` | The Kafka producer created in the module constructor is never closed |
-| H45 | `internal/kafka/producer.go` — `NewProducer` | `AllowAutoTopicCreation: true` means a typo in the configured topic name silently creates a new topic that no consumer reads |
-| H46 | `internal/kafka/producer.go` — `NewProducer` | `RequiredAcks: RequireOne` — a leader failure immediately after acknowledgement can lose the message |
+| H45 | Kafka topic provisioning | Fixed. The legacy writer disables automatic topic creation and the protected writer requires pre-provisioned topics. The local replicated cluster denies unauthorized writes. |
+| H46 | Kafka durability | Fixed. Both producer paths configure `RequireAll`. The isolated replicated-cluster drill rejects a write when only one replica remains in sync. Target replication and failure domains require verification. |
 | H47 | `internal/kafka/producer.go` — `NewProducer` | **Open, verified 2026-11-02:** `kafka.LeastBytes` does not hash message keys, contradicting the claimed per-notification partition affinity. Pinned kafka-go v0.4.51 source and a local six-message probe over three partitions show the same key routed to 0/1/2. Preserve key bytes, use an explicit tested hash partitioner and review the mapping transition; ADR-07 is proposed only. |
 | H48 | `internal/kafka/producer.go` — `NewProducer`; `notifications/processor.go` — delivery publish loop | **Open, source-verified 2026-11-02:** synchronous per-delivery publishes inherit kafka-go's default BatchSize=100 and BatchTimeout=1s. A serial caller cannot fill its own batch while waiting for ack; sparse publishes can accumulate batch waits and delay campaign finalization/update propagation. Broker latency has not been benchmarked. Explicit low-latency batching and bounded timeout/retry behavior are required for ADR-03/05 dispatchers. |
 
