@@ -100,6 +100,7 @@ locally verified; production gates remain open. See
 | ID | Severity | Finding and remediation |
 | --- | --- | --- |
 | ER1 | P2 | Separate clock_timestamp evaluations for reserved-at and retry floor could persist a floor one microsecond shorter than the required interval because UPDATE assignment evaluation order is unspecified. A PostgreSQL regression observed 9.999999s for a 10s floor. Fixed by one materialized reservation-clock value for both persisted timestamps, retaining fresh DB-clock lease/deadline guards. |
+| ER2 | P2 — fixed | Independent device reservations, submission checks and results took the same exclusive campaign lock. At eight worker DB connections, 3,364 of 4,800 observations waited on it in a 20k trial. These readers now share-lock campaign state. Lease writes and finalization still take the exclusive lock. A PostgreSQL regression holds one reservation through a sibling's provider call and checks that a campaign mutation remains blocked. |
 
 Narrow independent review checked constraints, parent/child lock order,
 DB-clock fencing, takeover and acknowledged-commit proof issuance. It found no
@@ -122,6 +123,7 @@ fixtures now unwind migration 000030 before dropping their dependent intent tabl
 | ID | Severity | Finding and remediation |
 | --- | --- | --- |
 | UP1 | P2 — fixed | A due current-lineage successor blocked by a retained foreign-lineage predecessor was indistinguishable from an idle queue. Such work now reports Held and retains both rows for coordinated reconciliation; it never silently bypasses/deletes old evidence. A mixed-epoch regression covers the policy. |
+| UP2 | P2 — fixed | At a 10,439-row outbox backlog, selecting one scoped event joined 20,000 delivery intents and spilled a 9,448 kB sort. The selector now locks the oldest eligible event before reading its intent and application. The shared 20k fixture checks buffer work and temp writes for one selection. See the [load experiment](docs/analysis/delivery-load.md). |
 
 Review found no additional concrete same-lineage ordering, ack/delete atomicity,
 JSON ambiguity or malformed-envelope fairness defect. Actual producer-owned late

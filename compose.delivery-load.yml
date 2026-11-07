@@ -1,0 +1,14 @@
+# Local-only override for scripts/delivery-load.sh. Nothing is published to the host.
+services:
+  postgres:
+    ports: !reset []
+    networks: !override [delivery]
+  kafka:
+    ports: !reset []
+    networks: !override [delivery]
+  provider-fixture:
+    environment:
+      HELLO_PROVIDER_LOAD: synthetic
+  worker-fixture:
+    volumes:
+      - '${HELLO_INTEGRATION_CERTS_DIR:?fixture certificates required}:/load-tls:ro'
