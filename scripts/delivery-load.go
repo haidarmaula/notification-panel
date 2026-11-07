@@ -23,13 +23,18 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	broker "github.com/segmentio/kafka-go"
+	"hello/internal/database/sqlc"
 	"hello/internal/dispatch"
+	"hello/internal/features/applications"
 	"hello/internal/installation"
 	"hello/internal/kafka"
+	"hello/internal/middleware"
+	"hello/internal/token"
 )
 
 const dsn = "postgresql://integration:integration_only@postgres:5432/notification_integration?sslmode=verify-full&connect_timeout=3&sslrootcert=/etc/hello/ca.crt"
 const topic = "notification.delivery.updated"
+const sendTopic = "notification.send.requested"
 const cluster = "MkU3OEVBNTcwNTJENDM2Qk"
 const namespace = "load-fixture"
 const concurrency = 16
@@ -147,6 +152,7 @@ func (e *experiment) seed() {
 	t := time.Now()
 	check(e.db.QueryRow(e.ctx, "SELECT id,public_id::text FROM applications WHERE key='load-fixture' AND status='ACTIVE'").Scan(&e.app, &e.public))
 	check(e.db.QueryRow(e.ctx, "INSERT INTO staff_users(role_id,name,email,password_hash) SELECT id,'Load','load@fixture.invalid','fixture' FROM roles WHERE name='ADMIN' RETURNING id").Scan(&e.staff))
+	e.exec("INSERT INTO application_staff_grants(application_id,staff_id) VALUES($1,$2)", e.app, e.staff)
 	e.exec("INSERT INTO users(application_id,external_id) SELECT $1,'load-'||n FROM generate_series(1,$2::int) n", e.app, e.devices)
 	e.exec("INSERT INTO mobile_installations(application_id,owner_user_id,proof_verifier) SELECT application_id,id,decode(repeat('11',32),'hex') FROM users WHERE application_id=$1", e.app)
 	protector, err := installation.NewProtector(1, map[int32][]byte{1: bytes.Repeat([]byte{1}, 32)}, bytes.Repeat([]byte{2}, 32))
@@ -187,16 +193,34 @@ func (e *experiment) bind(batch [][]any) {
 	verify(n == int64(len(batch)), "incomplete address batch")
 }
 
-func (e *experiment) prepare() {
-	t := time.Now()
+func (e *experiment) prepare(outbox *dispatch.Outbox, requests *broker.Conn) {
 	payload, err := json.Marshal(map[string]string{"fixture": "worker-load", "load_mode": e.mode})
 	check(err)
-	var event kafka.ScopedSendRequested
-	event.SchemaVersion, event.ApplicationID = 1, e.public
-	check(e.db.QueryRow(e.ctx, `INSERT INTO notifications(application_id,title,body,payload,created_by,status,queued_at,deadline_at,origin_epoch,source_epoch)
-		SELECT $1,'Load','Synthetic',$3::jsonb,$2,'QUEUED',clock_timestamp(),clock_timestamp()+interval '55 minutes',origin_epoch,source_epoch FROM notification_runtime
-		RETURNING id,queued_at,deadline_at,origin_epoch::text,source_epoch::text`, e.app, e.staff, payload).Scan(&event.NotificationID, &event.RequestedAt, &event.DeadlineAt, &event.OriginEpoch, &event.SourceEpoch))
-	e.exec("INSERT INTO notification_targets(application_id,notification_id,target_type) VALUES($1,$2,'BROADCAST')", e.app, event.NotificationID)
+	var campaign int64
+	check(e.db.QueryRow(e.ctx, `INSERT INTO notifications(application_id,title,body,payload,created_by)
+		VALUES($1,'Load','Synthetic',$3::jsonb,$2) RETURNING id`, e.app, e.staff, payload).Scan(&campaign))
+	e.exec("INSERT INTO notification_targets(application_id,notification_id,target_type) VALUES($1,$2,'BROADCAST')", e.app, campaign)
+	var project pgtype.UUID
+	check(project.Scan(e.public))
+	actor := context.WithValue(e.ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: e.staff})
+	service := applications.NewService(sqlc.New(e.db), e.db)
+	t := time.Now()
+	_, replayed, err := service.AcceptCampaign(actor, project, campaign, "")
+	check(err)
+	verify(!replayed, "new synthetic campaign was replayed")
+	log.Printf("accepted campaign=%d devices=%d elapsed=%s", campaign, e.devices, time.Since(t))
+	t = time.Now()
+	outcome, err := outbox.DrainOne(e.ctx)
+	check(err)
+	verify(outcome == dispatch.Published, "send outbox did not publish")
+	check(requests.SetReadDeadline(time.Now().Add(5 * time.Second)))
+	record, err := requests.ReadMessage(1 << 20)
+	check(err)
+	event, err := kafka.DecodeScopedSend(record.Key, record.Value)
+	check(err)
+	verify(event.ApplicationID == e.public && event.NotificationID == campaign, "unexpected scoped send record")
+	log.Printf("published campaign=%d elapsed=%s", campaign, time.Since(t))
+	t = time.Now()
 	p, err := dispatch.NewPreparer(e.db)
 	check(err)
 	result, err := p.Prepare(e.ctx, event)
@@ -291,6 +315,15 @@ func stats(ctx context.Context) providerStats {
 func (e *experiment) run(waves int, shape string) {
 	e.seed()
 	e.policy()
+	publisher := kafka.NewScopedProducer("kafka:9094", sendTopic)
+	defer publisher.Close()
+	outbox, err := dispatch.NewOutbox(e.db, publisher)
+	check(err)
+	requests, err := broker.DialLeader(e.ctx, "tcp", "kafka:9094", sendTopic, 0)
+	check(err)
+	defer requests.Close()
+	_, err = requests.Seek(0, broker.SeekStart)
+	check(err)
 	before := offset(e.ctx)
 	started := time.Now()
 	prepared := 1
@@ -298,7 +331,7 @@ func (e *experiment) run(waves int, shape string) {
 		prepared = waves
 	}
 	for range prepared {
-		e.prepare()
+		e.prepare(outbox, requests)
 	}
 	w := exec.Command("/fixture-bin/worker")
 	w.Env = []string{"PATH=/usr/bin:/bin"}
@@ -352,10 +385,10 @@ func (e *experiment) run(waves int, shape string) {
 		if prepared == waves {
 			break
 		}
-		e.prepare()
+		e.prepare(outbox, requests)
 		prepared++
 	}
-	elapsed := time.Since(started)
+	drainedAt := time.Now()
 	total := e.devices * waves
 	s := stats(e.ctx)
 	events := offset(e.ctx) - before
@@ -374,6 +407,7 @@ func (e *experiment) run(waves int, shape string) {
         round(extract(epoch FROM percentile_disc(0.99) WITHIN GROUP(ORDER BY d.attempt_resolved_at-n.queued_at))*1000)::bigint
 		FROM notification_delivery_intents d JOIN notifications n ON n.id=d.notification_id`).Scan(&queued, &recordedMS, &p95MS, &p99MS))
 	providerMS := s.LastResponseUTC.Sub(queued).Milliseconds()
+	elapsed := drainedAt.Sub(queued)
 	verify(providerMS > 0, "missing provider response timing")
 	log.Printf("drained devices=%d campaigns=%d shape=%s mode=%s charged=%d broker_updates=%d sent=%d version_one=%d outbox=%d sampled_peak_outbox=%d peak_deferred_uncharged=%d",
 		e.devices, waves, shape, e.mode, p.Charged, events, p.Sent, p.Versions, p.Outbox, maxDepth, peakDeferred)

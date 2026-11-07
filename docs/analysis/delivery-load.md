@@ -44,15 +44,18 @@ driver caps the run, including setup inside the container, at 50 minutes.
 Small CI runs use a shorter bound based on pace and wave count.
 The ordinary Go test suite does not launch this experiment.
 
-Fixture setup seeds one user and binding per device, then inserts a scoped
-QUEUED campaign and calls the real set-wise preparer. The current fixture installs the ownership finalizer and application lifecycle guard,
-then activates enrollment through separate issuer and executor logins. The operator
-applies one grant per binding. Two further reviewed grants release the synthetic
-pilot and then full dispatch before the timed campaign. HTTP send acceptance,
-mobile enrollment calls, admission from the Kafka send topic and actual mobile
-receipt arrival are outside the timed path. All burst campaigns are prepared
-before worker startup. Soak mode waits for the preceding wave's completed
-campaign and empty update outbox before preparing the next one.
+Fixture setup seeds one user and binding per device. It installs the ownership
+finalizer and application lifecycle guard, then activates enrollment through
+separate issuer and executor logins. The operator applies one grant per binding.
+Two further reviewed grants release the synthetic pilot and then full dispatch.
+The fixture inserts a DRAFT and invokes the normal database-authorized send
+acceptance service. The send outbox publishes the persisted request to Kafka.
+The driver decodes that record and invokes the same set-wise preparer that the
+admission worker uses. The fixture reports acceptance, outbox handoff and
+preparation separately. HTTP authentication, mobile enrollment requests,
+consumer-group checkpoints and real device receipt arrival are outside this
+measurement. All burst campaigns are prepared before worker startup. Soak mode
+waits for the preceding campaign and empty outbox before preparing the next wave.
 
 ## Measurements and assertions
 
@@ -83,8 +86,10 @@ completion of its response handler. PostgreSQL's attempt-resolution timestamp
 comes from the transaction that persisted the result. The runner reads the
 committed rows and reports p95/p99 per-device latency, as well as time from
 the first queue record to the last result. It samples outbox depth and drain
-every 500 ms. The drain stopwatch starts just before inserting the first queue
-row and stops after observing committed completion and an empty outbox. The worker memory field is its kernel-reported peak resident set.
+every 500 ms. The current drain measurement uses the first persisted queue
+timestamp and the observation of committed completion with an empty outbox.
+Earlier runs started the drain stopwatch just before inserting the queue row.
+The worker memory field is its kernel-reported peak resident set.
 
 ## Local baseline and selector diagnosis
 
@@ -294,3 +299,41 @@ sixteen connections yielded 61.847 s, still 1.847 s over the proposal, and a
 longer Kafka drain. Peak provider arrivals/s were 427, 466 and 456 across the
 three final runs. These individual observations do not establish target
 capacity or headroom. [Managed release procedure](../runbooks/application-dispatch.md).
+
+## Owner-indexed acceptance and bounded preparation
+
+A rolled-back execution plan on the freshly enrolled 20,000-device fixture
+showed two costs in the previous preparation statement. PostgreSQL rescanned
+the project's installation index once per eligible user and then rescanned the
+materialized binding list per user to prove coverage. Without fresh planner
+statistics, preparation took 8.857 s and touched 2,879,641 shared buffers. The
+acceptance statement separately took 3.667 s and touched 3,041,075 shared
+buffers. Adding the active binding owner index reduced measured acceptance to
+75 ms on the same fixture shape.
+
+Preparation now computes eligible owner IDs once, verifies each candidate
+binding against its exact current installation, and checks coverage with the
+distinct eligible owner count. The scale regression uses the generated query
+and checks actual per-node row visits. The scope, current route revisions,
+pilot eligibility and atomic snapshot rules still apply.
+
+Two isolated runs used eight worker database connections, sixteen concurrent
+submissions, 10 ms active polling and a synthetic allocation of 1,000 starts/s.
+
+| Run | Send acceptance | Kafka request handoff and preparation | Last durable result | Result p95 / p99 | Kafka update drain |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| First | 64 ms | 657 ms | 49.424 s | 47.331 / 49.053 s | 50.241 s |
+| Repeat | 66 ms | 644 ms | 51.450 s | 49.293 / 51.059 s | 54.163 s |
+
+The repeat spent 12 ms on Kafka request handoff and 632 ms on preparation.
+Both runs recorded 20,000 accepted physical requests, 20,000 charges and
+20,000 distinct Kafka delivery IDs with an empty outbox. Both met the
+proposed local 60-second target. The Step 41 release gate still requires
+representative staging storage and networking, approved provider quota and
+measured headroom and soak behavior.
+
+The updated fixture also ran two sequential 64-device campaigns at eight
+starts/s with one injected HTTP 429. The first retry followed after 60.077 s.
+During the hold, 63 other devices remained pending with zero charges.
+The worker recorded 128 SENT outcomes and 129 physical requests, verified
+128 distinct delivery updates in Kafka, and emptied the outbox.

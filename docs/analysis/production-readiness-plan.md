@@ -2,7 +2,7 @@
 
 Updated 2026-11-08 (Asia/Jakarta). Step 23 is complete. The current phase is pre-production acceptance. Production dispatch remains on hold.
 
-The first unchecked roadmap item is Step 05. Its measurement definitions are recorded below and its numeric targets await owner approval. Step 40 is the staging device gate. The Step 41 capacity evidence remains available for Step 05 review.
+The first unchecked roadmap item is Step 05. Its measurement definitions are recorded below and its numeric targets await owner approval. Independent implementation and verification may proceed in parallel. Step 40 remains the staging device gate, and Step 41 capacity evidence informs the Step 05 decisions.
 
 The [cutover evidence register](cutover-readiness.md) records the outstanding device, provider, operations and approval gates. The [capacity report](delivery-load.md) records the measured results for the current authorization path.
 
@@ -297,7 +297,7 @@ work on unchecked rows has started, as noted.
 - [ ] 25. M04 atomic send idempotency + claim + outbox, promotion/expiry, and bounded dispatcher pass locally; the scheduler binary now uses protected source-bound durable handoff locally. Production policy/activation and target-environment evidence remain open.
 - [ ] 26. Atomic versioned outbox insertion and predecessor-safe publication pass local tests. The delivery worker drains its scoped outbox. A PostgreSQL reference consumer passes duplicate, version gap, conflict, restart and restored-source tests against the published v2 record. Rollout evidence from actual downstream owners remains open. See the [consumer contract](../specs/m06-delivery-consumer.md).
 - [x] 27. Bounded pages and provider concurrency, process and fleet allocations, memory measurements and 429 backpressure pass the isolated [load experiments](delivery-load.md).
-- [ ] 28. Local tests cover rollback, ambiguous commits, stale owners/offsets, broker rebalance, provider timeout, 429 and 503. The [load fixture](delivery-load.md) checks charges, deferrals and exact update IDs. Target failure and migration drills remain open.
+- [ ] 28. Local tests cover rollback, ambiguous commits, stale owners/offsets, broker rebalance, provider timeout, 429 and 503. The [load fixture](delivery-load.md) checks charges, deferrals and exact update IDs. A PostgreSQL regression verifies that a failed preparation leaves its campaign retryable while later due campaigns continue. Target failure and migration drills remain open.
 
 ### Phase 5 — contracts and security
 
@@ -319,7 +319,7 @@ work on unchecked rows has started, as noted.
 ### Phase 7 — production evidence
 
 - [ ] 40. Staging end-to-end tests with real Android/iOS devices and relevant application states.
-- [ ] 41. [Measured synthetic 20,000-device trials, quota holds and multi-campaign bursts](delivery-load.md). Target storage, network, provider quota and agreed headroom/soak profile remain open.
+- [ ] 41. [Measured synthetic 20,000-device trials, quota holds and multi-campaign bursts](delivery-load.md). The latest isolated 20,000-device trials recorded all results in 49.424 s and 51.450 s. Target storage, network, provider quota and agreed headroom/soak profile remain open.
 - [ ] 42. Local failure drills cover controller/broker elections, lost ISR, gaps, DB rollback, ambiguous publication, expired leases, duplicate/replay and provider timeout/429/503. Repeat in the approved failure domains with independent monitoring.
 - [ ] 43. Logical and physical recovery, post-backup revocations, missing WAL and guarded downgrade refusal pass locally. Target restore, compatible image rollback, off-site recovery keys and cutover rehearsal remain open.
 - [ ] 44. Security/operational readiness review; all release blockers closed.

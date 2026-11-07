@@ -77,6 +77,8 @@ for migration in db/migrations/*.up.sql; do
   "${compose[@]}" exec -T postgres psql -Xq -v ON_ERROR_STOP=1 -1 -U integration -d notification_integration < "$migration"
 done
 source scripts/fixtures/load-application.sh
-"${compose[@]}" exec -T kafka /opt/kafka/bin/kafka-topics.sh \
-  --bootstrap-server kafka:9094 --create --topic notification.delivery.updated --partitions 1 --replication-factor 1
+for topic in notification.send.requested notification.delivery.updated; do
+  "${compose[@]}" exec -T kafka /opt/kafka/bin/kafka-topics.sh \
+    --bootstrap-server kafka:9094 --create --topic "$topic" --partitions 1 --replication-factor 1
+done
 "${compose[@]}" exec -T worker-fixture /fixture-bin/load "$count" "$waves" "$mode" "$shape" "$pace" "$pool_size" "$active_ms"

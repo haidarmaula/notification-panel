@@ -33,6 +33,17 @@ The selected target was 1.117 s behind source shutdown. Restoration through
 sealed verification took 3.259 s in this small fixture. Deployed RPO and RTO
 remain open. [Physical recovery drill](../runbooks/physical-pitr.md).
 
+## Migration 40 and queued recovery verification
+
+All 40 migrations passed up, down and up. The race-enabled PostgreSQL and
+Kafka suite took 159.587 s and the FCM suite took 7.235 s. The simulator
+recorded 76 Firebase SDK HTTP requests. The 20,000-device preparation
+regression verified bounded row visits against the generated SQL. The queued
+recovery regression verified that a failed campaign remained retryable while
+the next campaign prepared. Logical sealed restore passed, and the independent
+encrypted recovery drill on schema 40 again rejected a wrong key and missing
+WAL. [Capacity evidence](delivery-load.md).
+
 ## Rerunning
 
 Tested prerequisites: Go 1.26.10, Docker 28.1.1 with a running daemon, Compose
