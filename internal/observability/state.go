@@ -27,19 +27,20 @@ type dbSample struct {
 // State is one daemon's private registry. Readiness and scrape handlers use
 // cached state only. Loop names come from the process composition root.
 type State struct {
-	mu         sync.RWMutex
-	db         dbSample
-	loops      map[string]loopState
-	draining   bool
-	queues     bool
-	accessLogs bool
-	registry   *prometheus.Registry
-	httpCount  *prometheus.CounterVec
-	latency    *prometheus.HistogramVec
-	loopTime   *prometheus.GaugeVec
-	operations *prometheus.CounterVec
-	dropped    prometheus.Counter
-	logs       chan Request
+	mu              sync.RWMutex
+	db              dbSample
+	loops           map[string]loopState
+	draining        bool
+	queues          bool
+	accessLogs      bool
+	registry        *prometheus.Registry
+	httpCount       *prometheus.CounterVec
+	latency         *prometheus.HistogramVec
+	loopTime        *prometheus.GaugeVec
+	operations      *prometheus.CounterVec
+	dropped         prometheus.Counter
+	transportErrors prometheus.Counter
+	logs            chan Request
 }
 
 func gauge(b bool) float64 {
@@ -63,7 +64,8 @@ func New(names ...string) *State {
 	s.loopTime = prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "hello_loop_heartbeat_timestamp_seconds", Help: "Last actual loop phase transition."}, []string{"loop"})
 	s.operations = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "hello_loop_operations_total", Help: "Polling and supervision outcomes, including retries."}, []string{"loop", "outcome"})
 	s.dropped = prometheus.NewCounter(prometheus.CounterOpts{Name: "hello_telemetry_dropped_total", Help: "Diagnostic records dropped at the access buffer or its output sink."})
-	s.registry.MustRegister(s.httpCount, s.latency, s.loopTime, s.operations, s.dropped,
+	s.transportErrors = prometheus.NewCounter(prometheus.CounterOpts{Name: "hello_http_server_errors_total", Help: "HTTP server transport diagnostics, including rejected TLS handshakes."})
+	s.registry.MustRegister(s.transportErrors, s.httpCount, s.latency, s.loopTime, s.operations, s.dropped,
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "hello_role_ready", Help: "One when dependencies and required local loops are ready."}, func() float64 { return gauge(s.reason(time.Now()) == "ready") }),
 		prometheus.NewGaugeFunc(prometheus.GaugeOpts{Name: "hello_db_last_check_timestamp_seconds", Help: "Time of the last completed schema and database check."}, func() float64 {
 			s.mu.RLock()
@@ -194,7 +196,7 @@ func (s *State) Run(parent context.Context, admin *Admin, pool *pgxpool.Pool, lo
 	defer stopPrivate()
 	var adminErr error
 	if admin != nil {
-		l, err := admin.listen(ctx)
+		l, err := admin.Listen(ctx)
 		if err != nil {
 			return err
 		}

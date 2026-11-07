@@ -56,7 +56,7 @@ func TestHTTPDrain(t *testing.T) {
 			case "hard stop":
 				force = 30 * time.Millisecond
 			}
-			go func() { served <- serveHTTP(ctx, listener, handler, grace, force) }()
+			go func() { served <- serveHTTP(ctx, listener, handler, nil, grace, force) }()
 			request := make(chan int, 1)
 			client := &http.Client{Timeout: 4 * time.Second}
 			defer client.CloseIdleConnections()

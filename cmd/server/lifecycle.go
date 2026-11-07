@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"log"
 	"net"
 	"net/http"
 	"sync"
@@ -14,13 +15,15 @@ var errHandlersBusy = errors.New("HTTP handlers did not stop after forced shutdo
 // serveHTTP owns the listener. On shutdown it allows active requests to finish
 // before cancelling their contexts and closing their sockets. A forced drain
 // is reported even when all interrupted handlers subsequently exit.
-func serveHTTP(ctx context.Context, listener net.Listener, handler http.Handler, grace, force time.Duration) error {
+func serveHTTP(ctx context.Context, listener net.Listener, handler http.Handler, errorLog *log.Logger, grace, force time.Duration) error {
 	requests, cancelRequests := context.WithCancel(context.WithoutCancel(ctx))
 	defer cancelRequests()
 	active := &httpHandlers{handler: handler, idle: make(chan struct{})}
 	server := &http.Server{
 		Handler:           active,
+		ErrorLog:          errorLog,
 		BaseContext:       func(net.Listener) context.Context { return requests },
+		MaxHeaderBytes:    32 << 10,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
 		WriteTimeout:      30 * time.Second,

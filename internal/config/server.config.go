@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	"hello/internal/ingress"
 	"hello/internal/observability"
 )
 
@@ -16,6 +17,7 @@ import (
 // triggers an immediate notification send. Delivery-provider credentials
 // (OneSignal) are deliberately absent — only the worker talks to OneSignal.
 type ServerConfig struct {
+	Gateway          *ingress.Gateway
 	Monitoring       *observability.Admin
 	mobilePolicyFile string
 

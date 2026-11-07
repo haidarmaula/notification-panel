@@ -163,7 +163,7 @@ Crashes, security bypasses, data corruption, or issues that affect every user of
 | C2 | `internal/features/auth/service.go` — `RefreshToken` | **Original finding superseded by existing correct code:** role lookup uses staff.RoleID and ignores the stale token role | M02e real-DB regression with staff ID 700001/current ADMIN/stale VIEWER refresh claim returns ADMIN access. This slice verifies the existing fix; it does not introduce session rotation. |
 | C3 | `internal/features/users/device_tokens_handler.go` — `Register` | `user_id` taken from request body; only the shared API key gates the endpoint | Any caller with the API key can register a device for any user |
 | C4 | `internal/features/users/device_tokens_handler.go` — `Delete` | No ownership check — deletes any device token by ID | Any caller with the API key can remove any device registration |
-| C5 | `internal/middleware/audit.go` — `extractClientIP` | Trusts `X-Forwarded-For` without verifying a trusted proxy terminates the request | IP spoofing in audit trail if the service is ever exposed directly |
+| C5 | Protected staff audit | **Fixed locally.** Only an exact mTLS-authenticated gateway peer may supply a single client address. | Deployment firewall and gateway header replacement require target validation. |
 | C6 | `internal/features/staff` — administrative authority | **Remediated in M02b, locally verified 2026-11-03:** all seven routes and public service methods require active current-DB SUPER_ADMIN via `staff.manage`; JWT role gate removed from server wiring | [Evidence](docs/analysis/m02b-verification.md): four-role/seven-route matrix, stale JWT/committed demotion, direct-service fail-closed checks. Statement snapshots, not transactional revocation; not deployed. |
 | C7 | `internal/features/staff/service.go` — `UpdatePassword` | **Original claim superseded:** actor password confirmation and 8–72-byte reset bounds already existed; M02b preserves them and adds shared current-authority checks plus fail-closed actor lookup | Reset success/rejection and actor lookup failures pass unit tests; real-DB reset and wrong-password tests pass. Migration 000033 now advances the staff authentication generation on password reset. Password creation policy is separate. |
 | C8 | `internal/middleware/jwt.go` — `JWTMiddleware` | **Original finding superseded:** middleware checks IsActive before the handler; inactive/deleted accounts are denied | M02a/b current-authority and committed lifecycle tests pass. M42 adds a current database session and generation check to each staff request. |
@@ -358,7 +358,7 @@ Design inconsistencies, duplication, contract drift, and maintainability hazards
 | M42 | `internal/token/jwt.go`, staff auth, migration 000033 | Fixed locally. Single-use refresh rotation detects replay, logout revokes a family, and credential/role/activity changes invalidate its staff generation. [Session contract and recovery](docs/specs/staff-sessions.md). |
 | M43 | `internal/features/auth` | **Partially fixed in M02d:** login/refresh use the 64KiB full-body limit with safe 413/400; real-module rejection tests pass locally. Content-Type enforcement remains open for compatibility. |
 | M44 | All 16 JSON input handlers, including profile | **Fixed in local code, M02d:** 64KiB small JSON / 1MiB campaign limits, complete bounded reads and single-value decoding. [Evidence](docs/analysis/m02d-verification.md): boundary/direct-handler/real-DB route tests; no rejected mutation or Kafka event. Other abuse controls remain open. |
-| M45 | HTTP layer | No rate limiting on `/api/v1/auth/login` |
+| M45 | Protected HTTP API | **Fixed locally.** Login, refresh and logout share per-IP and aggregate authentication budgets before reaching the handler. [Gateway contract](docs/specs/m02-gateway.md). |
 | M46 | HTTP layer | No CORS configuration for the admin portal |
 | M47 | `internal/features/mobile/service.go` — `verifyJWT` | Correctly enforces HMAC signing — but `internal/token` does not apply the same hardening |
 
@@ -526,7 +526,7 @@ Focus: design consistency and maintainability.
 
 Focus: operational readiness.
 
-- [ ] M45 — add rate limiting to the login endpoint
+- [x] M45 — enforce protected authentication request budgets
 - [ ] M46 — configure CORS for the admin portal
 - [ ] M38 — add Prometheus metrics and OpenTelemetry tracing
 - [ ] L1 — rename the audit constants to `MixedCaps`

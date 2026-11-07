@@ -2,6 +2,7 @@ package observability
 
 import (
 	"io"
+	"log"
 	"time"
 )
 
@@ -27,4 +28,17 @@ func (o *output) Write(data []byte) (int, error) {
 		o.failed()
 	}
 	return n, err
+}
+
+// TransportLog counts HTTP server diagnostics. net/http includes remote addresses
+// and arbitrary handshake data in its messages, so only the count is exported.
+func (s *State) TransportLog() *log.Logger {
+	return log.New(transportLog{s}, "", 0)
+}
+
+type transportLog struct{ state *State }
+
+func (w transportLog) Write(data []byte) (int, error) {
+	w.state.transportErrors.Inc()
+	return len(data), nil
 }

@@ -1,12 +1,18 @@
 package config
 
 import (
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
+	"math/big"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"hello/internal/deployment"
 )
@@ -29,7 +35,7 @@ func TestEscapedDatabaseCredentials(t *testing.T) {
 func TestProtectedServerDatabaseAndMobilePolicy(t *testing.T) {
 	clearDeploymentEnv(t)
 	const dbURL = "postgres://svc:p%40ss@db.example.test:5432/app?sslmode=verify-full"
-	p := map[string]any{"database_url": dbURL, "api_key": strings.Repeat("a", 32), "access_secret": strings.Repeat("b", 32),
+	p := map[string]any{"ingress": fixtureIngress(t), "database_url": dbURL, "api_key": strings.Repeat("a", 32), "access_secret": strings.Repeat("b", 32),
 		"refresh_secret": strings.Repeat("c", 32), "mobile_policy_file": ""}
 	parse := func() (*ServerConfig, error) {
 		b, err := json.Marshal(p)
@@ -99,4 +105,24 @@ func clearDeploymentEnv(t *testing.T) {
 			t.Setenv(name, "")
 		}
 	}
+}
+
+func fixtureIngress(t *testing.T) map[string]any {
+	t.Helper()
+	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cert := &x509.Certificate{SerialNumber: big.NewInt(1), NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign}
+	der, err := x509.CreateCertificate(rand.Reader, cert, cert, pub, priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := x509.MarshalPKCS8PrivateKey(priv)
+	if err != nil {
+		t.Fatal(err)
+	}
+	certPEM := string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+	keyPEM := string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: key}))
+	return map[string]any{"endpoint": map[string]string{"listen": "127.0.0.1:8080", "client_ca_pem": certPEM, "server_certificate_pem": certPEM, "server_key_pem": keyPEM}, "gateway_ips": []string{"127.0.0.1"}, "ip_per_minute": 120, "auth_ip_per_minute": 10, "auth_total_per_minute": 60, "concurrent_requests": 8}
 }

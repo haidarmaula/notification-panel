@@ -92,13 +92,20 @@ func runServer(ctx context.Context, cfg *config.ServerConfig) (err error) {
 	state := observability.New()
 	logger := slog.New(slog.NewJSONHandler(observability.BoundedOutput(os.Stderr, state.Dropped), nil)).With("component", "server")
 	return state.Run(ctx, cfg.Monitoring, db, logger, func(ctx context.Context) error {
-		var lc net.ListenConfig
-		listener, err := lc.Listen(ctx, "tcp", ":8080")
+		var listener net.Listener
+		var handler http.Handler = mux
+		if cfg.Gateway != nil {
+			listener, err = cfg.Gateway.Listener.Listen(ctx)
+			handler = cfg.Gateway.Protect(mux)
+		} else {
+			var lc net.ListenConfig
+			listener, err = lc.Listen(ctx, "tcp", ":8080")
+		}
 		if err != nil {
 			return errors.New("server listener startup failed")
 		}
-		log.Println("server running :8080")
-		return serveHTTP(ctx, listener, observability.Access(mux, state.Observe), 10*time.Second, 5*time.Second)
+		logger.InfoContext(ctx, "public API listener started")
+		return serveHTTP(ctx, listener, observability.Access(handler, state.Observe), state.TransportLog(), 10*time.Second, 5*time.Second)
 	})
 }
 
@@ -107,6 +114,9 @@ func serverRoutes(queries *sqlc.Queries, db applications.Transactor, cfg *config
 	apiKeyMW := middleware.NewAPIKeyMiddleware(cfg.APIKey)
 	jwtMW := middleware.NewJWTMiddleware(tokenManager, repository.NewStaffUserRepository(queries))
 	auditMW := middleware.NewAuditMiddleware()
+	if cfg.Gateway != nil {
+		auditMW = &middleware.AuditMiddleware{VerifiedClientIP: cfg.Gateway.ClientIP}
+	}
 
 	mux := http.NewServeMux()
 	auth.NewAuthModule(queries, tokenManager, apiKeyMW.Use).RegisterRoutes(mux)

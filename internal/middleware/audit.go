@@ -56,6 +56,9 @@ const AuditUserAgentKey auditContextKey = "audit_user_agent"
 // The middleware is stateless after construction apart from its IPHeader
 // and TrustedProxies configuration fields and is safe for concurrent use.
 type AuditMiddleware struct {
+	// VerifiedClientIP uses the authenticated API gateway policy when deployed.
+	VerifiedClientIP func(*http.Request) string
+
 	// IPHeader is the name of the HTTP header from which the client IP is
 	// read. It is exported so that deployments with a non-standard proxy
 	// configuration can override the default without editing this package.
@@ -167,7 +170,12 @@ func DefaultTrustedProxies() []*net.IPNet {
 // receiver and does not share mutable state across requests.
 func (m *AuditMiddleware) Use(next http.HandlerFunc) http.HandlerFunc {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		ip := extractClientIP(r, m.IPHeader, m.TrustedProxies)
+		var ip string
+		if m.VerifiedClientIP != nil {
+			ip = m.VerifiedClientIP(r)
+		} else {
+			ip = extractClientIP(r, m.IPHeader, m.TrustedProxies)
+		}
 		ctx := context.WithValue(r.Context(), AuditIPKey, ip)
 		ctx = context.WithValue(ctx, AuditUserAgentKey, r.UserAgent())
 		r = r.WithContext(ctx)
