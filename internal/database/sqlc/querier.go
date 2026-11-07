@@ -14,8 +14,10 @@ type Querier interface {
 	AbandonExpiredReplayAttempt(ctx context.Context, arg AbandonExpiredReplayAttemptParams) (int64, error)
 	AcquireExecutionLease(ctx context.Context, arg AcquireExecutionLeaseParams) (AcquireExecutionLeaseRow, error)
 	AdvanceMobileInstallation(ctx context.Context, arg AdvanceMobileInstallationParams) (MobileInstallation, error)
+	ApplyDeliveryObservation(ctx context.Context, arg ApplyDeliveryObservationParams) (NotificationDeliveryIntent, error)
 	CampaignAcceptanceReady(ctx context.Context, arg CampaignAcceptanceReadyParams) (bool, error)
 	CampaignHasProtectedChildren(ctx context.Context, arg CampaignHasProtectedChildrenParams) (bool, error)
+	CheckScopedObservedRead(ctx context.Context, arg CheckScopedObservedReadParams) (bool, error)
 	ClaimReplayControl(ctx context.Context, arg ClaimReplayControlParams) (int64, error)
 	ClearFinishedReplayClaim(ctx context.Context, arg ClearFinishedReplayClaimParams) (int64, error)
 	ClearScopedCampaignTargets(ctx context.Context, arg ClearScopedCampaignTargetsParams) error
@@ -251,6 +253,7 @@ type Querier interface {
 	// GET
 	// ==========================================
 	GetAuditLogByID(ctx context.Context, id int64) (GetAuditLogByIDRow, error)
+	GetCampaignStatistics(ctx context.Context, arg GetCampaignStatisticsParams) (GetCampaignStatisticsRow, error)
 	GetCompletePreparation(ctx context.Context, arg GetCompletePreparationParams) (NotificationPreparation, error)
 	// ==========================================
 	// GET
@@ -269,6 +272,7 @@ type Querier interface {
 	// ==========================================
 	GetNotificationDeliveryByID(ctx context.Context, id int64) (GetNotificationDeliveryByIDRow, error)
 	GetNotificationStatistics(ctx context.Context, notificationID int64) (GetNotificationStatisticsRow, error)
+	GetReceiptFingerprint(ctx context.Context, arg GetReceiptFingerprintParams) ([]byte, error)
 	GetReplayAttempt(ctx context.Context, arg GetReplayAttemptParams) (NotificationReplayAttempt, error)
 	// ==========================================
 	// GET
@@ -439,8 +443,10 @@ type Querier interface {
 	LockNextDeliveryUpdate(ctx context.Context, arg LockNextDeliveryUpdateParams) (LockNextDeliveryUpdateRow, error)
 	LockNextScopedSendOutbox(ctx context.Context, arg LockNextScopedSendOutboxParams) (LockNextScopedSendOutboxRow, error)
 	LockNotificationRuntime(ctx context.Context) (LockNotificationRuntimeRow, error)
+	LockObservationDelivery(ctx context.Context, arg LockObservationDeliveryParams) (LockObservationDeliveryRow, error)
 	LockPreparationCampaign(ctx context.Context, arg LockPreparationCampaignParams) (LockPreparationCampaignRow, error)
 	LockReceiptDelivery(ctx context.Context, arg LockReceiptDeliveryParams) (LockReceiptDeliveryRow, error)
+	LockReceiptIdentity(ctx context.Context, arg LockReceiptIdentityParams) (int64, error)
 	LockRecoverableDelivery(ctx context.Context, arg LockRecoverableDeliveryParams) (LockRecoverableDeliveryRow, error)
 	LockRecoveryBindingRetirement(ctx context.Context, arg LockRecoveryBindingRetirementParams) (pgtype.Timestamptz, error)
 	LockRecoveryDeliveryUser(ctx context.Context, arg LockRecoveryDeliveryUserParams) (LockRecoveryDeliveryUserRow, error)
@@ -468,6 +474,9 @@ type Querier interface {
 	MarkNotificationSent(ctx context.Context, id int64) error
 	PromoteScopedCampaign(ctx context.Context, arg PromoteScopedCampaignParams) (PromoteScopedCampaignRow, error)
 	QueueScopedCampaign(ctx context.Context, arg QueueScopedCampaignParams) (QueueScopedCampaignRow, error)
+	RecordObservationFact(ctx context.Context, arg RecordObservationFactParams) (int64, error)
+	RecordObservedRead(ctx context.Context, arg RecordObservedReadParams) (int64, error)
+	RegisterReceiptRequest(ctx context.Context, arg RegisterReceiptRequestParams) (int64, error)
 	ReleaseExecutionLease(ctx context.Context, arg ReleaseExecutionLeaseParams) (int64, error)
 	// Caller holds application lock and handles matching no-op before this CAS.
 	RenameApplication(ctx context.Context, arg RenameApplicationParams) (Application, error)

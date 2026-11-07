@@ -41,6 +41,9 @@ func main() {
 			log.Fatal("invalid mobile policy configuration")
 		}
 		applications.RegisterMobileLifecycle(mux, runtime)
+		if err := applications.RegisterMobileReceipts(mux, runtime, db); err != nil {
+			log.Fatal("invalid receipt configuration")
+		}
 	}
 
 	server := &http.Server{

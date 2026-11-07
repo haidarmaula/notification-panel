@@ -814,3 +814,14 @@ describes the claim boundary. [Publication/recovery verification](analysis/m05-r
 now covers the unwired execution libraries: outcome/control/audit commit together,
 expired cleanup releases only the exact token, and no evidence is deleted.
 Runtime/CLI/source lifecycle gates remain open.
+
+### Scoped receipt requests and facts (M07)
+
+Migration 000031 keys request fingerprints by application, mobile user and
+client event ID. It retains the committed capability expiry for maintenance.
+The original delivery foreign key preserves application attribution. Each
+delivery has at most one fact per event type. Device facts, ledger timestamps,
+the first OPENED user read and a full versioned update commit together.
+Server time controls projection ordering. The optional client observation time
+is stored separately. Rollback refuses to drop retained request or fact rows.
+See the [receipt contract](api/mobile-receipts.md).

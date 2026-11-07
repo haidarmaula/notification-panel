@@ -299,13 +299,13 @@ work on unchecked rows has started, as noted.
 - [x] 23. Per-device retries use bounded exponential backoff and preserve charged attempts after lease expiry. The worker recovers eligible devices and finalizes deliveries that exhaust their deadline or budget. Verified with PostgreSQL, Kafka and a synthetic FCM endpoint in the [isolated worker deployment](../runbooks/delivery-worker.md#acceptance).
 - [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; replay registration/inspection/claim/publication and expired-claim cleanup libraries also pass locally. Replay CLI/configuration and PostgreSQL verified-TLS/Kafka mTLS command tests also pass locally. Production issuer/incarnation approval, supervised drain/handoff and runtime deployment remain pending.
 - [ ] 25. M04 atomic send idempotency + claim + outbox, promotion/expiry, and bounded dispatcher pass locally; the scheduler binary now uses protected source-bound durable handoff locally. Production policy/activation and target-environment evidence remain open.
-- [ ] 26. Atomic versioned outbox insertion and predecessor-safe publication pass local tests. The delivery worker drains its scoped outbox. Consumer dedup/version acceptance remains open.
+- [ ] 26. Atomic versioned outbox insertion and predecessor-safe publication pass local tests. The delivery worker drains its scoped outbox. A PostgreSQL reference consumer passes duplicate, version gap, conflict, restart and restored-source tests against the published v2 record. Rollout evidence from actual downstream owners remains open. See the [consumer contract](../specs/m06-delivery-consumer.md).
 - [ ] 27. Bounded concurrency, page/chunk memory limits, provider rate limits, and backpressure.
 - [ ] 28. Acceptance/audit rollback, ack-before-commit, preparation/quarantine commit failure, coordinator unsafe-offset, and broker rebalance pass locally; provider and other failure windows/deployment are pending.
 
 ### Phase 5 — contracts and security
 
-- [ ] 29. Receipts and statistics with explicit status semantics.
+- [x] 29. Scoped mobile receipts and staff campaign statistics are implemented. PostgreSQL and HTTP fixtures verify account and key changes, expiry, duplicate requests, early and late observations, atomic rollback and snapshot counts. See the [M07 contract](../specs/m07-receipts-statistics.md).
 - [ ] 30. Mobile token refresh, login/logout/account switch, multi-device, and migration tests.
 - [ ] 31. Close in-scope correctness findings; do not assume the old code-review checklist is accurate without verification.
 - [ ] 32. Authorization/ownership, JWT claim validation, rate/body limits, trusted proxies, and secrets.

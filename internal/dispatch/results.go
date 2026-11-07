@@ -111,7 +111,7 @@ func (s *Execution) RecordResult(ctx context.Context, result *SubmissionResult) 
 			recorded.DispatchHeld = true
 		}
 		if changed {
-			if err := enqueueDeliveryUpdate(ctx, q, lease, updated, row.RecordedAt); err != nil {
+			if err := enqueueDeliveryUpdate(ctx, q, lease.deliverySource(), "submission", updated, row.RecordedAt); err != nil {
 				return err
 			}
 		}
@@ -264,13 +264,19 @@ func eventTextPointer(t pgtype.Text) *string {
 	return &v
 }
 
+type deliverySource struct{ application, origin, source pgtype.UUID }
+
+func (lease *ExecutionLease) deliverySource() deliverySource {
+	return deliverySource{application: lease.application, origin: lease.origin, source: lease.source}
+}
+
 // enqueueDeliveryUpdate stores the complete projection in the ledger mutation's transaction.
-func enqueueDeliveryUpdate(ctx context.Context, q *sqlc.Queries, lease *ExecutionLease, row sqlc.NotificationDeliveryIntent, at pgtype.Timestamptz) error {
+func enqueueDeliveryUpdate(ctx context.Context, q *sqlc.Queries, source deliverySource, kind string, row sqlc.NotificationDeliveryIntent, at pgtype.Timestamptz) error {
 	id, err := newReplayClaimToken()
 	if err != nil {
 		return err
 	}
-	event := deliveryProjection(lease, row, id, at.Time)
+	event := deliveryProjection(source, kind, row, id, at.Time)
 	if event.Validate() != nil {
 		return ErrExecutionHeld
 	}
@@ -279,15 +285,15 @@ func enqueueDeliveryUpdate(ctx context.Context, q *sqlc.Queries, lease *Executio
 		return err
 	}
 	return q.InsertDeliveryUpdate(ctx, sqlc.InsertDeliveryUpdateParams{
-		EventID: id, ApplicationID: lease.applicationID, NotificationID: lease.notificationID,
-		DeliveryID: row.ID, DeliveryVersion: row.DeliveryVersion, OriginEpoch: lease.origin,
-		SourceEpoch: lease.source, Payload: payload, OccurredAt: at,
+		EventID: id, ApplicationID: row.ApplicationID, NotificationID: row.NotificationID,
+		DeliveryID: row.ID, DeliveryVersion: row.DeliveryVersion, OriginEpoch: source.origin,
+		SourceEpoch: source.source, Payload: payload, OccurredAt: at,
 	})
 }
 
-func deliveryProjection(lease *ExecutionLease, row sqlc.NotificationDeliveryIntent, id pgtype.UUID, at time.Time) kafka.ScopedDeliveryUpdated {
+func deliveryProjection(source deliverySource, kind string, row sqlc.NotificationDeliveryIntent, id pgtype.UUID, at time.Time) kafka.ScopedDeliveryUpdated {
 	opened := row.ObservedOpenedAt.Valid || row.Status == "OPENED"
 	delivered := opened || row.ObservedDeliveredAt.Valid || row.Status == "DELIVERED"
-	return kafka.ScopedDeliveryUpdated{SchemaVersion: 2, ApplicationID: lease.application.String(), OriginEpoch: lease.origin.String(), SourceEpoch: lease.source.String(), EventID: id.String(), DeliveryID: row.ID.String(), DeliveryVersion: row.DeliveryVersion, EventKind: "submission", NotificationID: lease.notificationID, UserID: row.OwnerUserID, Provider: "FCM", Status: row.Status,
+	return kafka.ScopedDeliveryUpdated{SchemaVersion: 2, ApplicationID: source.application.String(), OriginEpoch: source.origin.String(), SourceEpoch: source.source.String(), EventID: id.String(), DeliveryID: row.ID.String(), DeliveryVersion: row.DeliveryVersion, EventKind: kind, NotificationID: row.NotificationID, UserID: row.OwnerUserID, Provider: "FCM", Status: row.Status,
 		ProviderMessageID: eventTextPointer(row.ProviderMessageID), ProviderAcceptedAt: eventTimePointer(row.ProviderAcceptedAt), ObservedDelivered: delivered, ObservedDeliveredAt: eventTimePointer(row.ObservedDeliveredAt), ObservedOpened: opened, ObservedOpenedAt: eventTimePointer(row.ObservedOpenedAt), FailedAt: eventTimePointer(row.FailedAt), Reason: eventTextPointer(row.TerminalReason), OccurredAt: at.UTC().Truncate(time.Microsecond)}
 }

@@ -1,6 +1,9 @@
 package receipt
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Policy explicitly selects metadata for new deliveries. It supplies no default
 // production observation window; existing frozen deliveries retain their values.
@@ -40,4 +43,13 @@ func (s *Signer) SignMaterial(material Material) (Capability, error) {
 		return Capability{}, ErrInvalid
 	}
 	return s.Sign(material.KeyID, material.Scope)
+}
+
+// VerifyMaterial checks the specific environment and key frozen on the delivery,
+// including when another overlapping public key is valid for the same scope.
+func (v *Verifier) VerifyMaterial(token string, m Material, now time.Time) error {
+	if v == nil || !m.Valid() || v.environment != m.Environment || !strings.HasPrefix(token, "r1."+m.KeyID+".") {
+		return ErrInvalid
+	}
+	return v.Verify(token, m.Scope, now)
 }

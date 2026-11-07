@@ -3,6 +3,7 @@ package installation
 import (
 	"bytes"
 	"encoding/json"
+	"hello/internal/jsonobject"
 	"io"
 
 	"github.com/jackc/pgx/v5/pgtype"
@@ -18,6 +19,7 @@ type RuntimeStore interface {
 type Runtime struct {
 	Authority *MobileAuthority
 	Lifecycle *Lifecycle
+	receipts  map[pgtype.UUID]ReceiptPolicy
 	routes    map[pgtype.UUID]map[[2]string]Route
 }
 
@@ -29,15 +31,16 @@ type policyFile struct {
 		Key     []byte `json:"key"`
 	} `json:"encryption_keys"`
 	Projects []struct {
-		AppID           string `json:"app_id"`
-		Issuer          string `json:"issuer"`
-		Audience        string `json:"audience"`
-		Purpose         string `json:"purpose"`
-		Namespace       string `json:"namespace"`
-		VerificationKey []byte `json:"verification_key"`
-		OriginIssuer    string `json:"origin_issuer"`
-		OriginAudience  string `json:"origin_audience"`
-		OriginKey       []byte `json:"origin_key"`
+		Receipts        *receiptConfig `json:"receipts"`
+		AppID           string         `json:"app_id"`
+		Issuer          string         `json:"issuer"`
+		Audience        string         `json:"audience"`
+		Purpose         string         `json:"purpose"`
+		Namespace       string         `json:"namespace"`
+		VerificationKey []byte         `json:"verification_key"`
+		OriginIssuer    string         `json:"origin_issuer"`
+		OriginAudience  string         `json:"origin_audience"`
+		OriginKey       []byte         `json:"origin_key"`
 		Routes          []struct {
 			Platform          string `json:"platform"`
 			AddressType       string `json:"address_type"`
@@ -53,7 +56,7 @@ type policyFile struct {
 func LoadRuntime(source io.Reader, store RuntimeStore, db Transactor) (*Runtime, error) {
 	const limit = 1 << 20
 	data, err := io.ReadAll(io.LimitReader(source, limit+1))
-	if err != nil || len(data) > limit {
+	if err != nil || len(data) > limit || !jsonobject.UniqueLowercaseFields(data) {
 		return nil, ErrConfiguration
 	}
 	var file policyFile
@@ -82,6 +85,7 @@ func LoadRuntime(source io.Reader, store RuntimeStore, db Transactor) (*Runtime,
 	}
 	policies := make(map[pgtype.UUID]MobilePolicy, len(file.Projects))
 	routes := make(map[pgtype.UUID]map[[2]string]Route, len(file.Projects))
+	receipts := make(map[pgtype.UUID]ReceiptPolicy)
 	for _, project := range file.Projects {
 		var id pgtype.UUID
 		if err := id.Scan(project.AppID); err != nil || !id.Valid || id.String() != project.AppID || bytes.Equal(project.VerificationKey, project.OriginKey) {
@@ -89,6 +93,13 @@ func LoadRuntime(source io.Reader, store RuntimeStore, db Transactor) (*Runtime,
 		}
 		if _, exists := policies[id]; exists || len(project.Routes) == 0 {
 			return nil, ErrConfiguration
+		}
+		if project.Receipts != nil {
+			policy, err := project.Receipts.policy(project.VerificationKey, project.OriginKey)
+			if err != nil {
+				return nil, err
+			}
+			receipts[id] = policy
 		}
 		origin, err := NewSignedOrigin(store, project.OriginIssuer, project.OriginAudience, project.OriginKey)
 		if err != nil {
@@ -109,7 +120,7 @@ func LoadRuntime(source io.Reader, store RuntimeStore, db Transactor) (*Runtime,
 	if err != nil {
 		return nil, err
 	}
-	return &Runtime{Authority: authority, Lifecycle: lifecycle, routes: routes}, nil
+	return &Runtime{Authority: authority, Lifecycle: lifecycle, routes: routes, receipts: receipts}, nil
 }
 
 // Route resolves an exact project, platform and address type to server-owned provider policy.

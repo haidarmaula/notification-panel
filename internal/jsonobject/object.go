@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"strings"
 	"unicode/utf8"
 )
 
@@ -58,4 +59,55 @@ func Decode(data []byte, fields map[string]any) error {
 		return ErrInvalid
 	}
 	return nil
+}
+
+// UniqueLowercaseFields rejects duplicate or case-aliased policy names anywhere
+// in a nested document. Typed decoding subsequently validates values and schema.
+func UniqueLowercaseFields(data []byte) bool {
+	if !utf8.Valid(data) {
+		return false
+	}
+	d := json.NewDecoder(bytes.NewReader(data))
+	var value func(int) bool
+	value = func(depth int) bool {
+		if depth > 16 {
+			return false
+		}
+		token, err := d.Token()
+		if err != nil {
+			return false
+		}
+		switch token {
+		case json.Delim('{'):
+			names := make(map[string]bool)
+			for d.More() {
+				key, err := d.Token()
+				name, ok := key.(string)
+				if err != nil || !ok || names[name] || name != strings.ToLower(name) {
+					return false
+				}
+				names[name] = true
+				if !value(depth + 1) {
+					return false
+				}
+			}
+			end, err := d.Token()
+			return err == nil && end == json.Delim('}')
+		case json.Delim('['):
+			for d.More() {
+				if !value(depth + 1) {
+					return false
+				}
+			}
+			end, err := d.Token()
+			return err == nil && end == json.Delim(']')
+		default:
+			return true
+		}
+	}
+	if !value(0) {
+		return false
+	}
+	_, err := d.Token()
+	return err == io.EOF
 }

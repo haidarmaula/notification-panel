@@ -200,6 +200,7 @@ is implemented. [Fenced results and atomic update insertion](m06-results-verific
 are implemented. [Ordered update publication](m06-update-publication-verification.md)
 also passes focused local Kafka tests. The [delivery worker](../runbooks/delivery-worker.md)
 polls abandoned work, closes campaigns and publishes updates for its application.
+[M07 receipts and statistics](../specs/m07-receipts-statistics.md) now record scoped device evidence and expose the preparation snapshot to authorized staff. The [v2 reference consumer](../specs/m06-delivery-consumer.md) exercises restart, replay and version conflicts against PostgreSQL.
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,
 preparation cancellation during rebalance, redelivery, offset fencing, and durable

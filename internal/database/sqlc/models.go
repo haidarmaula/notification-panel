@@ -196,6 +196,14 @@ type NotificationLogSource struct {
 	CreatedAt        pgtype.Timestamptz `db:"created_at"`
 }
 
+type NotificationObservation struct {
+	ApplicationID int64              `db:"application_id"`
+	DeliveryID    pgtype.UUID        `db:"delivery_id"`
+	Event         string             `db:"event"`
+	ReceivedAt    pgtype.Timestamptz `db:"received_at"`
+	ObservedAt    pgtype.Timestamptz `db:"observed_at"`
+}
+
 type NotificationPreparation struct {
 	NotificationID      int64              `db:"notification_id"`
 	ApplicationID       int64              `db:"application_id"`
@@ -223,6 +231,15 @@ type NotificationReceiptMetadatum struct {
 	Environment   string             `db:"environment"`
 	ExpiresUnix   int64              `db:"expires_unix"`
 	CreatedAt     pgtype.Timestamptz `db:"created_at"`
+}
+
+type NotificationReceiptRequest struct {
+	ApplicationID int64       `db:"application_id"`
+	UserID        int64       `db:"user_id"`
+	ClientEventID pgtype.UUID `db:"client_event_id"`
+	DeliveryID    pgtype.UUID `db:"delivery_id"`
+	Fingerprint   []byte      `db:"fingerprint"`
+	ExpiresUnix   int64       `db:"expires_unix"`
 }
 
 type NotificationReplayAttempt struct {

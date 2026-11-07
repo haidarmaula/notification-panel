@@ -67,7 +67,7 @@ func (s *Execution) RecoverDelivery(ctx context.Context, lease *ExecutionLease, 
 		if err != nil {
 			return executionMissing(err)
 		}
-		if err := enqueueDeliveryUpdate(ctx, q, lease, updated, delivery.RecordedAt); err != nil {
+		if err := enqueueDeliveryUpdate(ctx, q, lease.deliverySource(), "submission", updated, delivery.RecordedAt); err != nil {
 			return err
 		}
 		changed = true

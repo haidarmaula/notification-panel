@@ -308,12 +308,16 @@ func lockExecutionCampaign(ctx context.Context, q *sqlc.Queries, appID, notifica
 	return nil
 }
 func (s *Execution) transaction(ctx context.Context, run func(context.Context, *sqlc.Queries) error) error {
+	return ledgerTransaction(ctx, s.db, run)
+}
+
+func ledgerTransaction(ctx context.Context, db Transactor, run func(context.Context, *sqlc.Queries) error) error {
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	tx, err := db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return err
 	}

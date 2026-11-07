@@ -49,7 +49,7 @@ storage. Update the stored version and epoch only from a successful response.
 Use the same proof and current version for refresh and logout. For an account
 switch, use the destination account's project JWT together with the installation
 proof and version. Keep historical receipt attribution separate from the new
-owner state. Receipt submission is covered by the later receipt milestone.
+owner state. The [receipt endpoint](mobile-receipts.md) verifies the original payload and current owner.
 
 The backend's local consumer test runs two separate HTTP clients against
 PostgreSQL for Android and iOS with the same subject in different projects.

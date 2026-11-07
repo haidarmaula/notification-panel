@@ -2,7 +2,7 @@
 
 Date: 2026-11-05. Status: signer/verifier, payload builder and atomic metadata
 freeze are implemented and locally tested. Transport/composition remain open;
-no delivery or receipt route is enabled. See [verification](../analysis/m06-receipt-payload-verification.md).
+the delivery worker and [receipt endpoint](../api/mobile-receipts.md) require explicit per-application policy. See [verification](../analysis/m06-receipt-payload-verification.md).
 Related: [M06](m06-execution.md), [ADR-05](../adr/adr-05-receipt-ingestion.md).
 
 ## Capability version 1

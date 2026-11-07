@@ -91,61 +91,63 @@ type mobileClaims struct {
 // Authenticate verifies the project JWT and resolves its subject to an active user.
 // It does not verify app origin and cannot establish enrollment authority by itself.
 func (a *MobileAuthority) Authenticate(ctx context.Context, project pgtype.UUID, credential string) (Principal, error) {
-	return a.authenticate(ctx, project, credential, nil)
+	session, err := a.AuthenticateSession(ctx, project, credential)
+	return session.Principal(), err
 }
 
 // AuthenticateEnrollment also verifies origin evidence bound to the authenticated JWT.
 // The configured verifier owns replay protection; consumed evidence may need replacement
 // if the subsequent enrollment fails.
 func (a *MobileAuthority) AuthenticateEnrollment(ctx context.Context, project pgtype.UUID, credential, evidence string) (Principal, error) {
-	return a.authenticate(ctx, project, credential, &evidence)
+	session, err := a.authenticate(ctx, project, credential, &evidence)
+	return session.Principal(), err
 }
 
-func (a *MobileAuthority) authenticate(ctx context.Context, project pgtype.UUID, credential string, evidence *string) (Principal, error) {
+func (a *MobileAuthority) authenticate(ctx context.Context, project pgtype.UUID, credential string, evidence *string) (MobileSession, error) {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	policy, ok := a.policies[project]
 	if !ok || len(credential) == 0 || len(credential) > 8192 {
-		return Principal{}, ErrMobileCredential
+		return MobileSession{}, ErrMobileCredential
 	}
 	var claims mobileClaims
 	parsed, err := jwt.ParseWithClaims(credential, &claims, func(_ *jwt.Token) (any, error) {
 		return policy.VerificationKey, nil
 	}, jwt.WithValidMethods([]string{"EdDSA"}), jwt.WithIssuer(policy.Issuer), jwt.WithAudience(policy.Audience), jwt.WithExpirationRequired(), jwt.WithStrictDecoding())
 	if err != nil || !parsed.Valid || len(claims.Audience) != 1 || claims.Purpose != policy.Purpose || !validIdentityText(claims.Subject) {
-		return Principal{}, ErrMobileCredential
+		return MobileSession{}, ErrMobileCredential
 	}
 	app, err := a.store.GetApplicationByPublicID(ctx, project)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Principal{}, ErrMobileCredential
+		return MobileSession{}, ErrMobileCredential
 	}
 	if err != nil {
-		return Principal{}, err
+		return MobileSession{}, err
 	}
 	if app.ID <= 0 || app.PublicID != project {
-		return Principal{}, ErrMobileCredential
+		return MobileSession{}, ErrMobileCredential
 	}
 	if app.Status != "ACTIVE" {
-		return Principal{}, ErrProjectInactive
+		return MobileSession{}, ErrProjectInactive
 	}
 	userID, err := a.store.ResolveMobileIdentity(ctx, sqlc.ResolveMobileIdentityParams{ApplicationID: app.ID, IdentityNamespace: policy.Namespace, Subject: claims.Subject})
 	if errors.Is(err, pgx.ErrNoRows) {
-		return Principal{}, ErrMobileCredential
+		return MobileSession{}, ErrMobileCredential
 	}
 	if err != nil {
-		return Principal{}, err
+		return MobileSession{}, err
 	}
 	if userID <= 0 {
-		return Principal{}, ErrMobileCredential
+		return MobileSession{}, ErrMobileCredential
 	}
 	if evidence != nil {
 		if len(*evidence) == 0 || len(*evidence) > 16384 {
-			return Principal{}, ErrMobileOrigin
+			return MobileSession{}, ErrMobileOrigin
 		}
 		binding := OriginContext{ProjectID: project, Namespace: policy.Namespace, Subject: claims.Subject, CredentialDigest: sha256.Sum256([]byte(credential))}
 		if err := policy.Origin.VerifyOrigin(ctx, binding, *evidence); err != nil {
-			return Principal{}, err
+			return MobileSession{}, err
 		}
 	}
-	return Principal{ApplicationID: app.ID, UserID: userID}, nil
+	return MobileSession{actor: Principal{ApplicationID: app.ID, UserID: userID}, project: project, namespace: policy.Namespace, subject: claims.Subject, expires: claims.ExpiresAt.Time}, nil
 }
