@@ -1,0 +1,60 @@
+x-runtime: &runtime
+  image: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
+  networks: [private]
+  volumes:
+    - '${HELLO_KAFKA_DRILL_DIR:?fixture directory required}/node:/fixture:ro'
+  restart: "no"
+
+x-settings: &settings
+  CLUSTER_ID: Dcmb26P1T4e2cIx3oqEd8w
+  KAFKA_CONTROLLER_QUORUM_VOTERS: 101@c1:9093,102@c2:9093,103@c3:9093
+  KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+  KAFKA_INTER_BROKER_LISTENER_NAME: BROKER
+  KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: BROKER:SSL,CONTROLLER:SSL
+  KAFKA_AUTHORIZER_CLASS_NAME: org.apache.kafka.metadata.authorizer.StandardAuthorizer
+  KAFKA_ALLOW_EVERYONE_IF_NO_ACL_FOUND: 'false'
+  KAFKA_SUPER_USERS: 'User:CN=fixture-node;User:CN=fixture-admin'
+  KAFKA_SSL_CLIENT_AUTH: required
+  KAFKA_SSL_KEYSTORE_TYPE: PEM
+  KAFKA_SSL_KEYSTORE_LOCATION: /fixture/node.pem
+  KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+  KAFKA_SSL_TRUSTSTORE_LOCATION: /fixture/ca.crt
+  KAFKA_AUTO_CREATE_TOPICS_ENABLE: 'false'
+  KAFKA_UNCLEAN_LEADER_ELECTION_ENABLE: 'false'
+  KAFKA_MIN_INSYNC_REPLICAS: 2
+  KAFKA_DEFAULT_REPLICATION_FACTOR: 3
+  KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 3
+  KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: 3
+  KAFKA_OFFSETS_RETENTION_MINUTES: 43200
+  KAFKA_LOG_DIRS: /tmp/fixture-log
+  KAFKA_HEAP_OPTS: '-Xms128m -Xmx192m -XX:ActiveProcessorCount=2'
+  KAFKA_NUM_IO_THREADS: 2
+  KAFKA_NUM_NETWORK_THREADS: 2
+
+services:
+  c1:
+    <<: *runtime
+    environment: {<<: *settings, KAFKA_NODE_ID: 101, KAFKA_PROCESS_ROLES: controller, KAFKA_LISTENERS: 'CONTROLLER://:9093'}
+  c2:
+    <<: *runtime
+    environment: {<<: *settings, KAFKA_NODE_ID: 102, KAFKA_PROCESS_ROLES: controller, KAFKA_LISTENERS: 'CONTROLLER://:9093'}
+  c3:
+    <<: *runtime
+    environment: {<<: *settings, KAFKA_NODE_ID: 103, KAFKA_PROCESS_ROLES: controller, KAFKA_LISTENERS: 'CONTROLLER://:9093'}
+  b1:
+    <<: *runtime
+    environment: {<<: *settings, KAFKA_NODE_ID: 1, KAFKA_BROKER_RACK: rack-1, KAFKA_PROCESS_ROLES: broker, KAFKA_LISTENERS: 'BROKER://:9092', KAFKA_ADVERTISED_LISTENERS: 'BROKER://b1:9092'}
+  b2:
+    <<: *runtime
+    environment: {<<: *settings, KAFKA_NODE_ID: 2, KAFKA_BROKER_RACK: rack-2, KAFKA_PROCESS_ROLES: broker, KAFKA_LISTENERS: 'BROKER://:9092', KAFKA_ADVERTISED_LISTENERS: 'BROKER://b2:9092'}
+  b3:
+    <<: *runtime
+    environment: {<<: *settings, KAFKA_NODE_ID: 3, KAFKA_BROKER_RACK: rack-3, KAFKA_PROCESS_ROLES: broker, KAFKA_LISTENERS: 'BROKER://:9092', KAFKA_ADVERTISED_LISTENERS: 'BROKER://b3:9092'}
+  probe:
+    <<: *runtime
+    entrypoint: [sleep, infinity]
+    volumes:
+      - '${HELLO_KAFKA_DRILL_DIR:?fixture directory required}/clients:/fixture:ro'
+      - '${HELLO_KAFKA_DRILL_DIR:?fixture directory required}/probe:/probe:ro'
+networks:
+  private: {internal: true}

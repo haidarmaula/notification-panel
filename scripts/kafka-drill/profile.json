@@ -1,0 +1,24 @@
+{
+  "environment": "isolated-kafka-drill",
+  "cluster_id": "Dcmb26P1T4e2cIx3oqEd8w",
+  "topics": ["notification.send.requested", "notification.delivery.updated"],
+  "config": {
+    "min.insync.replicas": "2",
+    "cleanup.policy": "delete",
+    "retention.ms": "604800000",
+    "retention.bytes": "-1",
+    "message.timestamp.type": "LogAppendTime",
+    "max.message.bytes": "131072",
+    "unclean.leader.election.enable": "false"
+  },
+  "replicas": [[1,2,3],[2,3,1],[3,1,2]],
+  "acls": [
+    ["scheduler","Topic","notification.send.requested","Write"],
+    ["requeue","Topic","notification.send.requested","Write"],
+    ["admission","Topic","notification.send.requested","Read"],
+    ["admission","Group","fixture-admission","Read"],
+    ["delivery","Topic","notification.delivery.updated","Write"],
+    ["analytics","Topic","notification.delivery.updated","Read"],
+    ["analytics","Group","fixture-analytics","Read"]
+  ]
+}
