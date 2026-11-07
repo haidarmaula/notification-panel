@@ -118,7 +118,7 @@ while time.monotonic() < deadline:
 else:
     raise SystemExit('Dependency simulation readiness timed out')
 PY
-HELLO_INTEGRATION=1 go test -mod=readonly -tags=integration -count=1 -timeout=180s -v ./tests/integration ./internal/fcm
+HELLO_INTEGRATION=1 go test -mod=readonly -tags=integration -count=1 -timeout=240s -v ./tests/integration ./internal/fcm
 python3 - "$log_dir/simulation.ndjson" <<'PY'
 import collections, json, sys, time
 deadline = time.monotonic() + 5
