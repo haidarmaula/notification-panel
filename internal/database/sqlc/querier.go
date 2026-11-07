@@ -13,6 +13,8 @@ import (
 type Querier interface {
 	AbandonExpiredReplayAttempt(ctx context.Context, arg AbandonExpiredReplayAttemptParams) (int64, error)
 	AcquireExecutionLease(ctx context.Context, arg AcquireExecutionLeaseParams) (AcquireExecutionLeaseRow, error)
+	// The worker has no authority to transfer installation ownership.
+	AdvanceInvalidatedInstallation(ctx context.Context, arg AdvanceInvalidatedInstallationParams) (int64, error)
 	AdvanceMobileInstallation(ctx context.Context, arg AdvanceMobileInstallationParams) (MobileInstallation, error)
 	ApplyDeliveryObservation(ctx context.Context, arg ApplyDeliveryObservationParams) (NotificationDeliveryIntent, error)
 	CampaignAcceptanceReady(ctx context.Context, arg CampaignAcceptanceReadyParams) (bool, error)
@@ -98,7 +100,7 @@ type Querier interface {
 	// ==========================================
 	// CREATE
 	// ==========================================
-	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error)
+	CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) error
 	// ==========================================
 	// CREATE
 	// ==========================================
@@ -440,7 +442,7 @@ type Querier interface {
 	LockDeviceExecutionCampaign(ctx context.Context, arg LockDeviceExecutionCampaignParams) (LockDeviceExecutionCampaignRow, error)
 	LockExecutionApplication(ctx context.Context, applicationPublicID pgtype.UUID) (LockExecutionApplicationRow, error)
 	LockExecutionBinding(ctx context.Context, arg LockExecutionBindingParams) (InstallationBinding, error)
-	LockExecutionInstallation(ctx context.Context, arg LockExecutionInstallationParams) (MobileInstallation, error)
+	LockExecutionInstallation(ctx context.Context, arg LockExecutionInstallationParams) (LockExecutionInstallationRow, error)
 	LockExecutionSubmission(ctx context.Context, arg LockExecutionSubmissionParams) (LockExecutionSubmissionRow, error)
 	LockInstallationProject(ctx context.Context, applicationID int64) (string, error)
 	LockInstallationUser(ctx context.Context, arg LockInstallationUserParams) (int64, error)
@@ -458,6 +460,8 @@ type Querier interface {
 	LockRecoveryBindingRetirement(ctx context.Context, arg LockRecoveryBindingRetirementParams) (pgtype.Timestamptz, error)
 	LockRecoveryDeliveryUser(ctx context.Context, arg LockRecoveryDeliveryUserParams) (LockRecoveryDeliveryUserRow, error)
 	LockRecoveryInstallationOwner(ctx context.Context, arg LockRecoveryInstallationOwnerParams) (LockRecoveryInstallationOwnerRow, error)
+	// Cleanup only locks the source position. It never inspects quarantined bytes.
+	LockReplayCleanupEvidence(ctx context.Context, arg LockReplayCleanupEvidenceParams) (int64, error)
 	LockReplayCleanupGrant(ctx context.Context, arg LockReplayCleanupGrantParams) (pgtype.UUID, error)
 	LockReplayControl(ctx context.Context, arg LockReplayControlParams) (NotificationReplayControl, error)
 	LockReplayEvidence(ctx context.Context, arg LockReplayEvidenceParams) (NotificationSendDeadLetter, error)
@@ -465,7 +469,7 @@ type Querier interface {
 	LockReplayRequest(ctx context.Context, arg LockReplayRequestParams) (NotificationReplayRequest, error)
 	LockResultBinding(ctx context.Context, arg LockResultBindingParams) (InstallationBinding, error)
 	LockResultDelivery(ctx context.Context, arg LockResultDeliveryParams) (LockResultDeliveryRow, error)
-	LockResultInstallation(ctx context.Context, arg LockResultInstallationParams) (MobileInstallation, error)
+	LockResultInstallation(ctx context.Context, arg LockResultInstallationParams) (LockResultInstallationRow, error)
 	LockResultPolicy(ctx context.Context, applicationID int64) (ApplicationDispatchPolicy, error)
 	LockScopedCampaign(ctx context.Context, arg LockScopedCampaignParams) (string, error)
 	LockScopedCampaignTemplate(ctx context.Context, arg LockScopedCampaignTemplateParams) (string, error)

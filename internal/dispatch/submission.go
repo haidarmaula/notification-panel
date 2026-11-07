@@ -135,7 +135,7 @@ func (s *Submitter) SubmitReserved(ctx context.Context, reservation *AttemptRese
 type submissionSnapshot struct {
 	campaign     sqlc.LockExecutionSubmissionRow
 	binding      sqlc.InstallationBinding
-	installation sqlc.MobileInstallation
+	installation sqlc.LockExecutionInstallationRow
 	until        time.Time
 }
 

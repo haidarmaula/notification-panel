@@ -2,10 +2,16 @@
 SELECT * FROM application_dispatch_policy WHERE application_id=sqlc.arg(application_id)::bigint FOR UPDATE;
 
 -- name: HoldResultDispatch :exec
-UPDATE application_dispatch_policy SET hold_new=true WHERE application_id=sqlc.arg(application_id)::bigint;
+SELECT hold_delivery_dispatch(sqlc.arg(application_id)::bigint);
 
 -- name: LockResultInstallation :one
-SELECT * FROM mobile_installations WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(installation_id)::bigint FOR UPDATE;
+SELECT owner_user_id,owner_epoch,version FROM mobile_installations WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(installation_id)::bigint FOR UPDATE;
+
+-- The worker has no authority to transfer installation ownership.
+-- name: AdvanceInvalidatedInstallation :one
+UPDATE mobile_installations SET version=version+1,last_seen_at=now()
+WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(id)::bigint
+  AND version=sqlc.arg(expected_version)::bigint RETURNING version;
 
 -- name: LockResultBinding :one
 SELECT * FROM installation_bindings WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(binding_id)::bigint FOR UPDATE;

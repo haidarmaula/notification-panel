@@ -1,5 +1,5 @@
 -- name: LockPreparationCampaign :one
-SELECT *,coalesce(deadline_at<=clock_timestamp(),false)::boolean AS expired FROM notifications
+SELECT id,status,queued_at,scheduled_at,deadline_at,origin_epoch,source_epoch,coalesce(deadline_at<=clock_timestamp(),false)::boolean AS expired FROM notifications
 WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(notification_id)::bigint FOR UPDATE;
 
 -- name: GetCompletePreparation :one

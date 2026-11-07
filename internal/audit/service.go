@@ -116,7 +116,7 @@ func (s *AuditService) Log(ctx context.Context, params LogParams) error {
 	}
 
 	staffID, ipAddress, userAgent, _ := GetAuditContext(ctx)
-	_, err = s.repo.Create(ctx, sqlc.CreateAuditLogParams{
+	err = s.repo.Create(ctx, sqlc.CreateAuditLogParams{
 		ActorUserID:   staffID,
 		ApplicationID: pgtype.Int8{Int64: params.ApplicationID, Valid: params.ApplicationID > 0},
 		Action:        params.Action,

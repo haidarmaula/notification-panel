@@ -6,6 +6,8 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -319,6 +321,27 @@ func grantRowsUTC(rows []sqlc.ApplicationStaffGrant) []sqlc.ApplicationStaffGran
 	return out
 }
 
+// Rewind the empty, transaction-isolated fixture using every dependent down file.
+func rollbackFixtureAfter(t *testing.T, ctx context.Context, tx pgx.Tx, version int) {
+	t.Helper()
+	files, err := filepath.Glob("../../db/migrations/*.down.sql")
+	require.NoError(t, err)
+	require.NotEmpty(t, files)
+	for i := len(files) - 1; i >= 0; i-- {
+		prefix, _, ok := strings.Cut(filepath.Base(files[i]), "_")
+		require.True(t, ok)
+		n, err := strconv.Atoi(prefix)
+		require.NoError(t, err)
+		if n <= version {
+			break
+		}
+		data, err := os.ReadFile(files[i])
+		require.NoError(t, err)
+		_, err = tx.Exec(ctx, string(data))
+		require.NoError(t, err, files[i])
+	}
+}
+
 // Exercises the actual paired SQL on a transaction-isolated fixture, including
 // an old global audit row and a legacy entity-label collision that must fail closed.
 func TestApplicationRegistryMigrationRoundTrip(t *testing.T) {
@@ -330,71 +353,7 @@ func TestApplicationRegistryMigrationRoundTrip(t *testing.T) {
 	tx, err := pool.Begin(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(context.Background())
-	sessionDown, err := os.ReadFile("../../db/migrations/000033_create_staff_sessions.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(sessionDown))
-	require.NoError(t, err)
-	retentionDown, err := os.ReadFile("../../db/migrations/000032_create_retention_jobs.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(retentionDown))
-	require.NoError(t, err)
-	observationDown, err := os.ReadFile("../../db/migrations/000031_create_receipt_observations.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(observationDown))
-	require.NoError(t, err)
-	resultDown, err := os.ReadFile("../../db/migrations/000030_create_delivery_results.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(resultDown))
-	require.NoError(t, err)
-	receiptDown, err := os.ReadFile("../../db/migrations/000029_create_receipt_metadata.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(receiptDown))
-	require.NoError(t, err)
-	executionDown, err := os.ReadFile("../../db/migrations/000028_create_execution_claims.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(executionDown))
-	require.NoError(t, err)
-	dispositionDown, err := os.ReadFile("../../db/migrations/000027_add_replay_resolved_disposition.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(dispositionDown))
-	require.NoError(t, err)
-	grantDown, err := os.ReadFile("../../db/migrations/000026_create_replay_operational_grants.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(grantDown))
-	require.NoError(t, err)
-	replayDown, err := os.ReadFile("../../db/migrations/000025_create_replay_persistence.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(replayDown))
-	require.NoError(t, err)
-	quarantineDown, err := os.ReadFile("../../db/migrations/000024_create_send_quarantine.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(quarantineDown))
-	require.NoError(t, err)
-	preparationDown, err := os.ReadFile("../../db/migrations/000023_create_durable_preparation.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(preparationDown))
-	require.NoError(t, err)
-	acceptanceDown, err := os.ReadFile("../../db/migrations/000022_create_durable_acceptance.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(acceptanceDown))
-	require.NoError(t, err)
-	originDown, err := os.ReadFile("../../db/migrations/000021_create_mobile_origin_uses.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(originDown))
-	require.NoError(t, err)
-	identityDown, err := os.ReadFile("../../db/migrations/000020_create_mobile_identities.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(identityDown))
-	require.NoError(t, err)
-	bindingDown, err := os.ReadFile("../../db/migrations/000018_create_installation_bindings.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(bindingDown))
-	require.NoError(t, err)
-	// Roll back dependent expansion first, inside this rollback-only fixture.
-	expansionDown, err := os.ReadFile("../../db/migrations/000017_expand_business_application_scope.down.sql")
-	require.NoError(t, err)
-	_, err = tx.Exec(ctx, string(expansionDown))
-	require.NoError(t, err)
+	rollbackFixtureAfter(t, ctx, tx, 16)
 	up, err := os.ReadFile("../../db/migrations/000016_create_application_registry.up.sql")
 	require.NoError(t, err)
 	down, err := os.ReadFile("../../db/migrations/000016_create_application_registry.down.sql")

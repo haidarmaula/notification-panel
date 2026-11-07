@@ -21,10 +21,10 @@ type auditQueries struct {
 	err    error
 }
 
-func (q *auditQueries) CreateAuditLog(_ context.Context, p sqlc.CreateAuditLogParams) (sqlc.AuditLog, error) {
+func (q *auditQueries) CreateAuditLog(_ context.Context, p sqlc.CreateAuditLogParams) error {
 	q.calls++
 	q.params = p
-	return sqlc.AuditLog{}, q.err
+	return q.err
 }
 
 type forbiddenMarshaler struct{ called *bool }

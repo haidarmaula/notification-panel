@@ -11,16 +11,8 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-const abandonExpiredReplayAttempt = `-- name: AbandonExpiredReplayAttempt :execrows
-UPDATE notification_replay_attempts SET outcome='abandoned_unknown',finished_at=clock_timestamp()
-WHERE application_id=$1::bigint AND request_id=$2::uuid
-    AND log_source_id=$3::uuid AND original_partition=$4::integer
-    AND original_offset=$5::bigint AND claim_token=$6::uuid
-    AND outcome='started' AND lease_expires_at<=clock_timestamp()
-    AND EXISTS(SELECT 1 FROM notification_replay_controls c
-        WHERE c.log_source_id=$3::uuid AND c.original_partition=$4::integer
-        AND c.original_offset=$5::bigint AND c.active_application_id=$1::bigint
-        AND c.active_request_id=$2::uuid AND c.active_claim_token=$6::uuid)
+const abandonExpiredReplayAttempt = `-- name: AbandonExpiredReplayAttempt :one
+SELECT abandon_expired_replay_attempt($1::bigint,$2::uuid,$3::uuid,$4::integer,$5::bigint,$6::uuid)::bigint AS affected
 `
 
 type AbandonExpiredReplayAttemptParams struct {
@@ -33,7 +25,7 @@ type AbandonExpiredReplayAttemptParams struct {
 }
 
 func (q *Queries) AbandonExpiredReplayAttempt(ctx context.Context, arg AbandonExpiredReplayAttemptParams) (int64, error) {
-	result, err := q.db.Exec(ctx, abandonExpiredReplayAttempt,
+	row := q.db.QueryRow(ctx, abandonExpiredReplayAttempt,
 		arg.ApplicationID,
 		arg.RequestID,
 		arg.LogSourceID,
@@ -41,10 +33,9 @@ func (q *Queries) AbandonExpiredReplayAttempt(ctx context.Context, arg AbandonEx
 		arg.OriginalOffset,
 		arg.ClaimToken,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	var affected int64
+	err := row.Scan(&affected)
+	return affected, err
 }
 
 const claimReplayControl = `-- name: ClaimReplayControl :execrows
@@ -83,40 +74,31 @@ func (q *Queries) ClaimReplayControl(ctx context.Context, arg ClaimReplayControl
 	return result.RowsAffected(), nil
 }
 
-const clearFinishedReplayClaim = `-- name: ClearFinishedReplayClaim :execrows
-UPDATE notification_replay_controls SET active_application_id=NULL,active_request_id=NULL,active_claim_token=NULL
-WHERE log_source_id=$1::uuid AND original_partition=$2::integer
-    AND original_offset=$3::bigint AND active_application_id=$4::bigint
-    AND active_request_id=$5::uuid AND active_claim_token=$6::uuid
-    AND EXISTS(SELECT 1 FROM notification_replay_attempts a
-        WHERE a.application_id=$4::bigint AND a.request_id=$5::uuid
-        AND a.log_source_id=$1::uuid AND a.original_partition=$2::integer
-        AND a.original_offset=$3::bigint AND a.claim_token=$6::uuid
-        AND a.outcome IN ('held','rejected','expired','reconciliation_required','publish_unconfirmed','abandoned_unknown'))
+const clearFinishedReplayClaim = `-- name: ClearFinishedReplayClaim :one
+SELECT clear_finished_replay_claim($1::bigint,$2::uuid,$3::uuid,$4::integer,$5::bigint,$6::uuid)::bigint AS affected
 `
 
 type ClearFinishedReplayClaimParams struct {
+	ApplicationID     int64       `db:"application_id"`
+	RequestID         pgtype.UUID `db:"request_id"`
 	LogSourceID       pgtype.UUID `db:"log_source_id"`
 	OriginalPartition int32       `db:"original_partition"`
 	OriginalOffset    int64       `db:"original_offset"`
-	ApplicationID     int64       `db:"application_id"`
-	RequestID         pgtype.UUID `db:"request_id"`
 	ClaimToken        pgtype.UUID `db:"claim_token"`
 }
 
 func (q *Queries) ClearFinishedReplayClaim(ctx context.Context, arg ClearFinishedReplayClaimParams) (int64, error) {
-	result, err := q.db.Exec(ctx, clearFinishedReplayClaim,
+	row := q.db.QueryRow(ctx, clearFinishedReplayClaim,
+		arg.ApplicationID,
+		arg.RequestID,
 		arg.LogSourceID,
 		arg.OriginalPartition,
 		arg.OriginalOffset,
-		arg.ApplicationID,
-		arg.RequestID,
 		arg.ClaimToken,
 	)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+	var affected int64
+	err := row.Scan(&affected)
+	return affected, err
 }
 
 const finishReplayAttempt = `-- name: FinishReplayAttempt :execrows
@@ -348,6 +330,25 @@ func (q *Queries) ListExpiredReplayClaims(ctx context.Context, pageSize int32) (
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockReplayCleanupEvidence = `-- name: LockReplayCleanupEvidence :one
+SELECT original_offset FROM notification_send_dead_letters WHERE log_source_id=$1::uuid
+    AND original_partition=$2::integer AND original_offset=$3::bigint FOR UPDATE
+`
+
+type LockReplayCleanupEvidenceParams struct {
+	LogSourceID       pgtype.UUID `db:"log_source_id"`
+	OriginalPartition int32       `db:"original_partition"`
+	OriginalOffset    int64       `db:"original_offset"`
+}
+
+// Cleanup only locks the source position. It never inspects quarantined bytes.
+func (q *Queries) LockReplayCleanupEvidence(ctx context.Context, arg LockReplayCleanupEvidenceParams) (int64, error) {
+	row := q.db.QueryRow(ctx, lockReplayCleanupEvidence, arg.LogSourceID, arg.OriginalPartition, arg.OriginalOffset)
+	var original_offset int64
+	err := row.Scan(&original_offset)
+	return original_offset, err
 }
 
 const lockReplayCleanupGrant = `-- name: LockReplayCleanupGrant :one

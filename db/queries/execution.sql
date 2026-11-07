@@ -63,7 +63,7 @@ SELECT installation_id,binding_id,owner_user_id,owner_epoch FROM notification_de
 WHERE application_id=sqlc.arg(application_id)::bigint AND notification_id=sqlc.arg(notification_id)::bigint AND id=sqlc.arg(delivery_id);
 
 -- name: LockExecutionInstallation :one
-SELECT * FROM mobile_installations WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(installation_id)::bigint FOR SHARE;
+SELECT id,public_id,owner_user_id,owner_epoch FROM mobile_installations WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(installation_id)::bigint FOR SHARE;
 
 -- name: LockExecutionBinding :one
 SELECT * FROM installation_bindings WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(binding_id)::bigint FOR SHARE;

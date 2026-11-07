@@ -174,7 +174,7 @@ func (q *Queries) InsertPreparationIntents(ctx context.Context, arg InsertPrepar
 }
 
 const lockPreparationCampaign = `-- name: LockPreparationCampaign :one
-SELECT id, template_id, template_name, title, body, payload, priority, status, scheduled_at, published_at, completed_at, created_by, created_at, updated_at, application_id, queued_at, deadline_at, origin_epoch, source_epoch, lifecycle_reason, preparation_hold_reason, preparation_next_attempt_at, lease_owner, lease_generation, lease_until,coalesce(deadline_at<=clock_timestamp(),false)::boolean AS expired FROM notifications
+SELECT id,status,queued_at,scheduled_at,deadline_at,origin_epoch,source_epoch,coalesce(deadline_at<=clock_timestamp(),false)::boolean AS expired FROM notifications
 WHERE application_id=$1::bigint AND id=$2::bigint FOR UPDATE
 `
 
@@ -184,32 +184,14 @@ type LockPreparationCampaignParams struct {
 }
 
 type LockPreparationCampaignRow struct {
-	ID                       int64              `db:"id"`
-	TemplateID               pgtype.Int8        `db:"template_id"`
-	TemplateName             pgtype.Text        `db:"template_name"`
-	Title                    string             `db:"title"`
-	Body                     string             `db:"body"`
-	Payload                  []byte             `db:"payload"`
-	Priority                 string             `db:"priority"`
-	Status                   string             `db:"status"`
-	ScheduledAt              pgtype.Timestamptz `db:"scheduled_at"`
-	PublishedAt              pgtype.Timestamptz `db:"published_at"`
-	CompletedAt              pgtype.Timestamptz `db:"completed_at"`
-	CreatedBy                int64              `db:"created_by"`
-	CreatedAt                pgtype.Timestamptz `db:"created_at"`
-	UpdatedAt                pgtype.Timestamptz `db:"updated_at"`
-	ApplicationID            pgtype.Int8        `db:"application_id"`
-	QueuedAt                 pgtype.Timestamptz `db:"queued_at"`
-	DeadlineAt               pgtype.Timestamptz `db:"deadline_at"`
-	OriginEpoch              pgtype.UUID        `db:"origin_epoch"`
-	SourceEpoch              pgtype.UUID        `db:"source_epoch"`
-	LifecycleReason          pgtype.Text        `db:"lifecycle_reason"`
-	PreparationHoldReason    pgtype.Text        `db:"preparation_hold_reason"`
-	PreparationNextAttemptAt pgtype.Timestamptz `db:"preparation_next_attempt_at"`
-	LeaseOwner               pgtype.UUID        `db:"lease_owner"`
-	LeaseGeneration          int64              `db:"lease_generation"`
-	LeaseUntil               pgtype.Timestamptz `db:"lease_until"`
-	Expired                  bool               `db:"expired"`
+	ID          int64              `db:"id"`
+	Status      string             `db:"status"`
+	QueuedAt    pgtype.Timestamptz `db:"queued_at"`
+	ScheduledAt pgtype.Timestamptz `db:"scheduled_at"`
+	DeadlineAt  pgtype.Timestamptz `db:"deadline_at"`
+	OriginEpoch pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch pgtype.UUID        `db:"source_epoch"`
+	Expired     bool               `db:"expired"`
 }
 
 func (q *Queries) LockPreparationCampaign(ctx context.Context, arg LockPreparationCampaignParams) (LockPreparationCampaignRow, error) {
@@ -217,30 +199,12 @@ func (q *Queries) LockPreparationCampaign(ctx context.Context, arg LockPreparati
 	var i LockPreparationCampaignRow
 	err := row.Scan(
 		&i.ID,
-		&i.TemplateID,
-		&i.TemplateName,
-		&i.Title,
-		&i.Body,
-		&i.Payload,
-		&i.Priority,
 		&i.Status,
-		&i.ScheduledAt,
-		&i.PublishedAt,
-		&i.CompletedAt,
-		&i.CreatedBy,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.ApplicationID,
 		&i.QueuedAt,
+		&i.ScheduledAt,
 		&i.DeadlineAt,
 		&i.OriginEpoch,
 		&i.SourceEpoch,
-		&i.LifecycleReason,
-		&i.PreparationHoldReason,
-		&i.PreparationNextAttemptAt,
-		&i.LeaseOwner,
-		&i.LeaseGeneration,
-		&i.LeaseUntil,
 		&i.Expired,
 	)
 	return i, err

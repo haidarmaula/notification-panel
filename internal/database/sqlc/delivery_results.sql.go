@@ -11,8 +11,28 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const advanceInvalidatedInstallation = `-- name: AdvanceInvalidatedInstallation :one
+UPDATE mobile_installations SET version=version+1,last_seen_at=now()
+WHERE application_id=$1::bigint AND id=$2::bigint
+  AND version=$3::bigint RETURNING version
+`
+
+type AdvanceInvalidatedInstallationParams struct {
+	ApplicationID   int64 `db:"application_id"`
+	ID              int64 `db:"id"`
+	ExpectedVersion int64 `db:"expected_version"`
+}
+
+// The worker has no authority to transfer installation ownership.
+func (q *Queries) AdvanceInvalidatedInstallation(ctx context.Context, arg AdvanceInvalidatedInstallationParams) (int64, error) {
+	row := q.db.QueryRow(ctx, advanceInvalidatedInstallation, arg.ApplicationID, arg.ID, arg.ExpectedVersion)
+	var version int64
+	err := row.Scan(&version)
+	return version, err
+}
+
 const holdResultDispatch = `-- name: HoldResultDispatch :exec
-UPDATE application_dispatch_policy SET hold_new=true WHERE application_id=$1::bigint
+SELECT hold_delivery_dispatch($1::bigint)
 `
 
 func (q *Queries) HoldResultDispatch(ctx context.Context, applicationID int64) error {
@@ -182,7 +202,7 @@ func (q *Queries) LockResultDelivery(ctx context.Context, arg LockResultDelivery
 }
 
 const lockResultInstallation = `-- name: LockResultInstallation :one
-SELECT id, public_id, application_id, owner_user_id, proof_verifier, version, owner_epoch, created_at, last_seen_at FROM mobile_installations WHERE application_id=$1::bigint AND id=$2::bigint FOR UPDATE
+SELECT owner_user_id,owner_epoch,version FROM mobile_installations WHERE application_id=$1::bigint AND id=$2::bigint FOR UPDATE
 `
 
 type LockResultInstallationParams struct {
@@ -190,20 +210,16 @@ type LockResultInstallationParams struct {
 	InstallationID int64 `db:"installation_id"`
 }
 
-func (q *Queries) LockResultInstallation(ctx context.Context, arg LockResultInstallationParams) (MobileInstallation, error) {
+type LockResultInstallationRow struct {
+	OwnerUserID pgtype.Int8 `db:"owner_user_id"`
+	OwnerEpoch  int64       `db:"owner_epoch"`
+	Version     int64       `db:"version"`
+}
+
+func (q *Queries) LockResultInstallation(ctx context.Context, arg LockResultInstallationParams) (LockResultInstallationRow, error) {
 	row := q.db.QueryRow(ctx, lockResultInstallation, arg.ApplicationID, arg.InstallationID)
-	var i MobileInstallation
-	err := row.Scan(
-		&i.ID,
-		&i.PublicID,
-		&i.ApplicationID,
-		&i.OwnerUserID,
-		&i.ProofVerifier,
-		&i.Version,
-		&i.OwnerEpoch,
-		&i.CreatedAt,
-		&i.LastSeenAt,
-	)
+	var i LockResultInstallationRow
+	err := row.Scan(&i.OwnerUserID, &i.OwnerEpoch, &i.Version)
 	return i, err
 }
 

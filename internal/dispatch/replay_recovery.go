@@ -157,7 +157,7 @@ func (r *ReplayRecovery) recoverOne(ctx context.Context, candidate sqlc.ListExpi
 	if control.ActiveApplicationID.Int64 != app.ID || control.ActiveRequestID != candidate.RequestID || control.ActiveClaimToken != candidate.ClaimToken {
 		return false, nil
 	}
-	if _, err := q.LockReplayEvidence(ctx, sqlc.LockReplayEvidenceParams{
+	if _, err := q.LockReplayCleanupEvidence(ctx, sqlc.LockReplayCleanupEvidenceParams{
 		LogSourceID: candidate.LogSourceID, OriginalPartition: candidate.OriginalPartition, OriginalOffset: candidate.OriginalOffset,
 	}); err != nil {
 		return false, err

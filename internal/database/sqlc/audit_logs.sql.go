@@ -27,7 +27,7 @@ func (q *Queries) CountAuditLogs(ctx context.Context) (int64, error) {
 	return count, err
 }
 
-const createAuditLog = `-- name: CreateAuditLog :one
+const createAuditLog = `-- name: CreateAuditLog :exec
 
 INSERT INTO audit_logs (
     actor_user_id,
@@ -53,7 +53,6 @@ VALUES (
     $9,
     $10
 )
-RETURNING id, actor_user_id, action, entity_type, entity_name, entity_id, before_json, after_json, ip_address, user_agent, created_at, application_id
 `
 
 type CreateAuditLogParams struct {
@@ -72,8 +71,8 @@ type CreateAuditLogParams struct {
 // ==========================================
 // CREATE
 // ==========================================
-func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) (AuditLog, error) {
-	row := q.db.QueryRow(ctx, createAuditLog,
+func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) error {
+	_, err := q.db.Exec(ctx, createAuditLog,
 		arg.ActorUserID,
 		arg.ApplicationID,
 		arg.Action,
@@ -85,22 +84,7 @@ func (q *Queries) CreateAuditLog(ctx context.Context, arg CreateAuditLogParams) 
 		arg.IpAddress,
 		arg.UserAgent,
 	)
-	var i AuditLog
-	err := row.Scan(
-		&i.ID,
-		&i.ActorUserID,
-		&i.Action,
-		&i.EntityType,
-		&i.EntityName,
-		&i.EntityID,
-		&i.BeforeJson,
-		&i.AfterJson,
-		&i.IpAddress,
-		&i.UserAgent,
-		&i.CreatedAt,
-		&i.ApplicationID,
-	)
-	return i, err
+	return err
 }
 
 const getAuditLogByID = `-- name: GetAuditLogByID :one

@@ -68,16 +68,14 @@ func (r *AuditLogRepository) Count(ctx context.Context) (int64, error) {
 	return r.q.CountAuditLogs(ctx)
 }
 
-// Create inserts a new audit log row and returns the persisted record,
-// including database-generated fields such as the primary key and creation
-// timestamp.
+// Create appends an audit row without requiring access to the audit history.
 //
 // The caller is expected to have already serialised any before/after
 // snapshots to JSON — this method performs no encoding. It is a straight
 // insert with no conflict handling: if the underlying table has unique
 // constraints, a duplicate will surface as a pgx error from the driver and
 // must be handled by the caller.
-func (r *AuditLogRepository) Create(ctx context.Context, params sqlc.CreateAuditLogParams) (sqlc.AuditLog, error) {
+func (r *AuditLogRepository) Create(ctx context.Context, params sqlc.CreateAuditLogParams) error {
 	return r.q.CreateAuditLog(ctx, params)
 }
 

@@ -60,11 +60,8 @@ func acceptanceFixture(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	for _, file := range files {
 		data, err := os.ReadFile(file)
 		require.NoError(t, err)
-		// The privileged retention routine pins every relation to its schema.
-		// Bind it to this disposable schema instead of the shared public tables.
-		if filepath.Base(file) == "000032_create_retention_jobs.up.sql" {
-			data = bytes.ReplaceAll(data, []byte("public."), []byte(identifier+"."))
-		}
+		// Rebind schema-qualified privileged routines to this disposable schema.
+		data = bytes.ReplaceAll(data, []byte("public."), []byte(identifier+"."))
 		_, err = pool.Exec(ctx, string(data))
 		require.NoError(t, err, file)
 	}

@@ -19,6 +19,11 @@ ON CONFLICT(log_source_id,original_partition,original_offset) DO NOTHING;
 SELECT * FROM notification_replay_controls WHERE log_source_id=sqlc.arg(log_source_id)::uuid
     AND original_partition=sqlc.arg(original_partition)::integer AND original_offset=sqlc.arg(original_offset)::bigint FOR UPDATE;
 
+-- Cleanup only locks the source position. It never inspects quarantined bytes.
+-- name: LockReplayCleanupEvidence :one
+SELECT original_offset FROM notification_send_dead_letters WHERE log_source_id=sqlc.arg(log_source_id)::uuid
+    AND original_partition=sqlc.arg(original_partition)::integer AND original_offset=sqlc.arg(original_offset)::bigint FOR UPDATE;
+
 -- name: LockReplayEvidence :one
 SELECT * FROM notification_send_dead_letters WHERE log_source_id=sqlc.arg(log_source_id)::uuid
     AND original_partition=sqlc.arg(original_partition)::integer AND original_offset=sqlc.arg(original_offset)::bigint FOR UPDATE;
@@ -60,27 +65,11 @@ WHERE application_id=sqlc.arg(application_id)::bigint AND request_id=sqlc.arg(re
         AND c.original_offset=sqlc.arg(original_offset)::bigint AND c.active_application_id=sqlc.arg(application_id)::bigint
         AND c.active_request_id=sqlc.arg(request_id)::uuid AND c.active_claim_token=sqlc.arg(claim_token)::uuid);
 
--- name: AbandonExpiredReplayAttempt :execrows
-UPDATE notification_replay_attempts SET outcome='abandoned_unknown',finished_at=clock_timestamp()
-WHERE application_id=sqlc.arg(application_id)::bigint AND request_id=sqlc.arg(request_id)::uuid
-    AND log_source_id=sqlc.arg(log_source_id)::uuid AND original_partition=sqlc.arg(original_partition)::integer
-    AND original_offset=sqlc.arg(original_offset)::bigint AND claim_token=sqlc.arg(claim_token)::uuid
-    AND outcome='started' AND lease_expires_at<=clock_timestamp()
-    AND EXISTS(SELECT 1 FROM notification_replay_controls c
-        WHERE c.log_source_id=sqlc.arg(log_source_id)::uuid AND c.original_partition=sqlc.arg(original_partition)::integer
-        AND c.original_offset=sqlc.arg(original_offset)::bigint AND c.active_application_id=sqlc.arg(application_id)::bigint
-        AND c.active_request_id=sqlc.arg(request_id)::uuid AND c.active_claim_token=sqlc.arg(claim_token)::uuid);
+-- name: AbandonExpiredReplayAttempt :one
+SELECT abandon_expired_replay_attempt(sqlc.arg(application_id)::bigint,sqlc.arg(request_id)::uuid,sqlc.arg(log_source_id)::uuid,sqlc.arg(original_partition)::integer,sqlc.arg(original_offset)::bigint,sqlc.arg(claim_token)::uuid)::bigint AS affected;
 
--- name: ClearFinishedReplayClaim :execrows
-UPDATE notification_replay_controls SET active_application_id=NULL,active_request_id=NULL,active_claim_token=NULL
-WHERE log_source_id=sqlc.arg(log_source_id)::uuid AND original_partition=sqlc.arg(original_partition)::integer
-    AND original_offset=sqlc.arg(original_offset)::bigint AND active_application_id=sqlc.arg(application_id)::bigint
-    AND active_request_id=sqlc.arg(request_id)::uuid AND active_claim_token=sqlc.arg(claim_token)::uuid
-    AND EXISTS(SELECT 1 FROM notification_replay_attempts a
-        WHERE a.application_id=sqlc.arg(application_id)::bigint AND a.request_id=sqlc.arg(request_id)::uuid
-        AND a.log_source_id=sqlc.arg(log_source_id)::uuid AND a.original_partition=sqlc.arg(original_partition)::integer
-        AND a.original_offset=sqlc.arg(original_offset)::bigint AND a.claim_token=sqlc.arg(claim_token)::uuid
-        AND a.outcome IN ('held','rejected','expired','reconciliation_required','publish_unconfirmed','abandoned_unknown'));
+-- name: ClearFinishedReplayClaim :one
+SELECT clear_finished_replay_claim(sqlc.arg(application_id)::bigint,sqlc.arg(request_id)::uuid,sqlc.arg(log_source_id)::uuid,sqlc.arg(original_partition)::integer,sqlc.arg(original_offset)::bigint,sqlc.arg(claim_token)::uuid)::bigint AS affected;
 
 -- name: ResolveReplayControl :execrows
 UPDATE notification_replay_controls SET active_application_id=NULL,active_request_id=NULL,active_claim_token=NULL,

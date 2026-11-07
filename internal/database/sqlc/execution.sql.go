@@ -290,7 +290,7 @@ func (q *Queries) LockExecutionBinding(ctx context.Context, arg LockExecutionBin
 }
 
 const lockExecutionInstallation = `-- name: LockExecutionInstallation :one
-SELECT id, public_id, application_id, owner_user_id, proof_verifier, version, owner_epoch, created_at, last_seen_at FROM mobile_installations WHERE application_id=$1::bigint AND id=$2::bigint FOR SHARE
+SELECT id,public_id,owner_user_id,owner_epoch FROM mobile_installations WHERE application_id=$1::bigint AND id=$2::bigint FOR SHARE
 `
 
 type LockExecutionInstallationParams struct {
@@ -298,19 +298,21 @@ type LockExecutionInstallationParams struct {
 	InstallationID int64 `db:"installation_id"`
 }
 
-func (q *Queries) LockExecutionInstallation(ctx context.Context, arg LockExecutionInstallationParams) (MobileInstallation, error) {
+type LockExecutionInstallationRow struct {
+	ID          int64       `db:"id"`
+	PublicID    pgtype.UUID `db:"public_id"`
+	OwnerUserID pgtype.Int8 `db:"owner_user_id"`
+	OwnerEpoch  int64       `db:"owner_epoch"`
+}
+
+func (q *Queries) LockExecutionInstallation(ctx context.Context, arg LockExecutionInstallationParams) (LockExecutionInstallationRow, error) {
 	row := q.db.QueryRow(ctx, lockExecutionInstallation, arg.ApplicationID, arg.InstallationID)
-	var i MobileInstallation
+	var i LockExecutionInstallationRow
 	err := row.Scan(
 		&i.ID,
 		&i.PublicID,
-		&i.ApplicationID,
 		&i.OwnerUserID,
-		&i.ProofVerifier,
-		&i.Version,
 		&i.OwnerEpoch,
-		&i.CreatedAt,
-		&i.LastSeenAt,
 	)
 	return i, err
 }

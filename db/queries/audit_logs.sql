@@ -22,7 +22,7 @@ LIMIT 1;
 -- CREATE
 -- ==========================================
 
--- name: CreateAuditLog :one
+-- name: CreateAuditLog :exec
 INSERT INTO audit_logs (
     actor_user_id,
     application_id,
@@ -46,8 +46,7 @@ VALUES (
     sqlc.arg('after_json'),
     sqlc.arg('ip_address'),
     sqlc.arg('user_agent')
-)
-RETURNING *;
+);
 
 -- ==========================================
 -- LIST

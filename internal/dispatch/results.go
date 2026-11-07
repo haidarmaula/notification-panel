@@ -98,7 +98,7 @@ func (s *Execution) RecordResult(ctx context.Context, result *SubmissionResult) 
 			if n != 1 {
 				return ErrExecutionUnavailable
 			}
-			_, err = q.AdvanceMobileInstallation(ctx, sqlc.AdvanceMobileInstallationParams{ApplicationID: lease.applicationID, ID: r.installationID, OwnerUserID: installation.OwnerUserID, OwnerEpoch: installation.OwnerEpoch, ExpectedVersion: installation.Version})
+			_, err = q.AdvanceInvalidatedInstallation(ctx, sqlc.AdvanceInvalidatedInstallationParams{ApplicationID: lease.applicationID, ID: r.installationID, ExpectedVersion: installation.Version})
 			if err != nil {
 				return executionMissing(err)
 			}
