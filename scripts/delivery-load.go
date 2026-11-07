@@ -7,7 +7,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
-	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -21,6 +20,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
 	broker "github.com/segmentio/kafka-go"
 	"hello/internal/dispatch"
@@ -59,13 +59,93 @@ func (e *experiment) exec(query string, args ...any) {
 	check(err)
 }
 
-//go:embed fixtures/active-binding-routes.sql
-var syntheticRouteDecisions string
+const fixtureCohort = "7a000000-0000-4000-8000-000000000001"
+
+func (e *experiment) fixtureLogin(name string) *pgx.Conn {
+	cfg := e.db.Config().ConnConfig.Copy()
+	cfg.User, cfg.Password = name, "fixture-only"
+	conn, err := pgx.ConnectConfig(e.ctx, cfg)
+	check(err)
+	return conn
+}
+
+// Approve each synthetic binding through the real operator routine before the
+// timed campaign. Batches bound the number of per-binding decisions in one tx.
+func (e *experiment) approveBindings() {
+	issuer := e.fixtureLogin("load_binding_reviewer")
+	defer issuer.Close(e.ctx)
+	operator := e.fixtureLogin("load_binding_executor")
+	defer operator.Close(e.ctx)
+	var origin, source pgtype.UUID
+	check(e.db.QueryRow(e.ctx, "SELECT origin_epoch,source_epoch FROM notification_runtime WHERE singleton").Scan(&origin, &source))
+	rows, err := e.db.Query(e.ctx, "SELECT id,gen_random_uuid() FROM installation_bindings WHERE application_id=$1 AND retired_at IS NULL ORDER BY id", e.app)
+	check(err)
+	defer rows.Close()
+	bindings := make([]int64, 0, 250)
+	grants := make([]pgtype.UUID, 0, 250)
+	apply := func() {
+		if len(grants) == 0 {
+			return
+		}
+		tag, err := issuer.Exec(e.ctx, `INSERT INTO binding_route_grants(id,application_id,binding_id,operator_role,origin_epoch,source_epoch,
+            expected_revision,destination,cohort_id,evidence_id,reason,expires_at)
+            SELECT grant_id,$3,binding,'load_binding_executor'::regrole,$4,$5,0,'FCM_ACTIVE',$6,gen_random_uuid(),'pilot',clock_timestamp()+interval '1 hour'
+            FROM unnest($1::uuid[],$2::bigint[]) AS page(grant_id,binding)`, grants, bindings, e.app, origin, source, fixtureCohort)
+		check(err)
+		verify(tag.RowsAffected() == int64(len(grants)), "missing synthetic route approvals")
+		var applied int
+		check(operator.QueryRow(e.ctx, `SELECT count(*) FILTER (WHERE apply_binding_route(id,$2)=1) FROM unnest($1::uuid[]) AS page(id)`, grants, e.public).Scan(&applied))
+		verify(applied == len(grants), "missing applied route decisions")
+		grants, bindings = grants[:0], bindings[:0]
+	}
+	for rows.Next() {
+		var binding int64
+		var id pgtype.UUID
+		check(rows.Scan(&binding, &id))
+		bindings, grants = append(bindings, binding), append(grants, id)
+		if len(grants) == cap(grants) {
+			apply()
+		}
+	}
+	check(rows.Err())
+	apply()
+}
+
+// Release the synthetic cohort and then the full audience using separate
+// grants. Evidence digests represent only this isolated experiment.
+func (e *experiment) releaseDispatch() {
+	issuer := e.fixtureLogin("load_dispatch_reviewer")
+	defer issuer.Close(e.ctx)
+	operator := e.fixtureLogin("load_dispatch_executor")
+	defer operator.Close(e.ctx)
+	for _, transition := range []struct{ from, to, reason string }{
+		{"HELD", "PILOT", "pilot"},
+		{"PILOT", "FULL", "full_coverage"},
+	} {
+		var id, origin, source pgtype.UUID
+		var appRevision, policyRevision, applied int64
+		var mode string
+		check(e.db.QueryRow(e.ctx, `SELECT gen_random_uuid(),r.origin_epoch,r.source_epoch,a.revision,p.dispatch_revision,p.dispatch_mode
+			FROM applications a JOIN application_dispatch_policy p ON p.application_id=a.id
+			CROSS JOIN notification_runtime r WHERE a.id=$1 AND r.singleton`, e.app).
+			Scan(&id, &origin, &source, &appRevision, &policyRevision, &mode))
+		verify(mode == transition.from, "unexpected dispatch mode before release")
+		_, err := issuer.Exec(e.ctx, `INSERT INTO application_dispatch_grants
+			(id,project_id,operator_role,application_revision,expected_revision,previous_mode,destination,cohort_id,
+			 origin_epoch,source_epoch,reason,legacy_evidence,consent_evidence,coverage_evidence,quota_evidence,expires_at)
+			VALUES ($1,$2,'load_dispatch_executor'::regrole,$3,$4,$5,$6,$7,$8,$9,$10,
+			    sha256('synthetic legacy fence'),sha256('synthetic consent'),sha256('synthetic coverage'),
+			    sha256('synthetic quota'),clock_timestamp()+interval '1 hour')`,
+			id, e.public, appRevision, policyRevision, mode, transition.to, fixtureCohort, origin, source, transition.reason)
+		check(err)
+		check(operator.QueryRow(e.ctx, "SELECT apply_application_dispatch($1,$2)", id, e.public).Scan(&applied))
+		verify(applied == policyRevision+1, "dispatch grant did not advance the revision")
+	}
+}
 
 func (e *experiment) seed() {
 	t := time.Now()
-	e.exec("ALTER TABLE applications DROP CONSTRAINT applications_status_check")
-	check(e.db.QueryRow(e.ctx, "INSERT INTO applications(key,name,status) VALUES('load-fixture','Load fixture','ACTIVE') RETURNING id,public_id::text").Scan(&e.app, &e.public))
+	check(e.db.QueryRow(e.ctx, "SELECT id,public_id::text FROM applications WHERE key='load-fixture' AND status='ACTIVE'").Scan(&e.app, &e.public))
 	check(e.db.QueryRow(e.ctx, "INSERT INTO staff_users(role_id,name,email,password_hash) SELECT id,'Load','load@fixture.invalid','fixture' FROM roles WHERE name='ADMIN' RETURNING id").Scan(&e.staff))
 	e.exec("INSERT INTO users(application_id,external_id) SELECT $1,'load-'||n FROM generate_series(1,$2::int) n", e.app, e.devices)
 	e.exec("INSERT INTO mobile_installations(application_id,owner_user_id,proof_verifier) SELECT application_id,id,decode(repeat('11',32),'hex') FROM users WHERE application_id=$1", e.app)
@@ -90,10 +170,10 @@ func (e *experiment) seed() {
 	}
 	check(rows.Err())
 	e.bind(batch)
-	e.exec(syntheticRouteDecisions, e.app)
-	verify(n == e.devices, "missing seeded installation")
-	e.exec("INSERT INTO application_dispatch_policy(application_id,hold_new,coverage_approved,push_ttl_seconds,key_ttl_seconds) VALUES($1,false,true,3600,86400)", e.app)
 	e.exec("UPDATE notification_runtime SET sealed=false,migration_hold=false")
+	e.approveBindings()
+	verify(n == e.devices, "missing seeded installation")
+	e.releaseDispatch()
 	check(e.db.QueryRow(e.ctx, "INSERT INTO notification_log_sources(id,topic,cluster_identity,topic_incarnation,active) VALUES(gen_random_uuid(),$1,$2,'load-fixture',true) RETURNING id::text", topic, cluster).Scan(&e.source))
 	log.Printf("encrypted_seed devices=%d elapsed=%s", n, time.Since(t))
 }
