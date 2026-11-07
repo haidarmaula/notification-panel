@@ -1,0 +1,12 @@
+-- psql 17+. Read one compact selection JSON object from protected standard input.
+\set ON_ERROR_STOP on
+\set VERBOSITY terse
+\prompt '' selection
+BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY;
+SET LOCAL search_path=pg_catalog,pg_temp;
+SET LOCAL statement_timeout='3s';
+SET LOCAL lock_timeout='250ms';
+SET LOCAL idle_in_transaction_session_timeout='5s';
+\bind :selection
+\ir subject-erasure-impact.sql
+ROLLBACK;
