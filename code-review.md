@@ -250,7 +250,7 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 | H30 | `internal/features/mobile/service.go` — `Sync` | Platform validation runs **after** the user upsert — an invalid platform produces a 400 with a user row already created or modified |
 | H31 | `internal/features/mobile/service.go` — `registerDeviceToken` | Device tokens are not transferred between users — a device handed to a new owner remains attributed to the original owner |
 | H32 | `internal/features/mobile/service.go` — `registerDeviceToken` | The `Exists → Create` sequence is not transactional — two concurrent syncs with the same push token can both attempt an insert |
-| H33 | `internal/features/profile/service.go` — `UpdateProfile` | TOCTOU between `ExistsByEmail` and `Update` — concurrent updates claiming the same email either produce a unique-violation 500 or duplicate email rows, depending on the schema |
+| H33 | `internal/features/profile/service.go` — `UpdateProfile` | Fixed locally in M34. The profile write enforces the staff email uniqueness constraint and maps a collision to HTTP 409. |
 | H34 | `internal/features/segments/service.go` — `Create`, `Update` | Advisory name-uniqueness check with the same TOCTOU properties |
 | H35 | `internal/features/segments/service.go` — `Delete` | Member-count guard is not atomic with the delete — a concurrent `AddMember` can race past the check |
 | H36 | `internal/features/staff/service.go` — `Create`, `Update` | Fixed locally. The staff create, administrative edit and profile paths map the exact staff email constraint to 409. |

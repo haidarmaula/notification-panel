@@ -28,6 +28,9 @@ func TestStaffBusinessWireContracts(t *testing.T) {
 	var spec struct {
 		Components struct{ Schemas map[string]wireSchema }
 		Paths      map[string]map[string]struct {
+			RequestBody struct {
+				Content map[string]struct{ Schema wireSchema }
+			}
 			Responses map[string]struct {
 				Content map[string]struct {
 					Schema  wireSchema
@@ -39,6 +42,14 @@ func TestStaffBusinessWireContracts(t *testing.T) {
 	data, err := os.ReadFile("../../../docs/contracts/staff-business.openapi.json")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal(data, &spec))
+	inputs := map[string]bool{}
+	for _, methods := range spec.Paths {
+		for _, op := range methods {
+			if ref := op.RequestBody.Content["application/json"].Schema.Ref; ref != "" {
+				inputs[strings.TrimPrefix(ref, "#/components/schemas/")] = true
+			}
+		}
+	}
 	types := map[string]any{
 		"Credentials": auth.LoginResponse{}, "Login": auth.LoginRequest{}, "Refresh": auth.RefreshTokenRequest{},
 		"Staff": staff.StaffResponse{}, "StaffPage": staff.ListStaffResponse{}, "CreateStaff": staff.CreateStaffRequest{},
@@ -89,7 +100,7 @@ func TestStaffBusinessWireContracts(t *testing.T) {
 				ft = ft.Elem()
 				// Input pointers can distinguish a missing required field.
 				// An output pointer without omitempty serializes nil as null.
-				if !strings.HasSuffix(name, "Input") {
+				if !inputs[name] {
 					require.Contains(t, wire, "null", name+"."+tag)
 				}
 			}
