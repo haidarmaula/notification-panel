@@ -2,7 +2,7 @@
 
 Updated 2026-11-08 (Asia/Jakarta). Step 23 is complete. The current phase is pre-production acceptance. Production dispatch remains on hold.
 
-The next deployment gate is Step 40, a staging run with real Android and iOS devices. Step 41 also remains open. The final isolated worker recorded all 20,000 simulated device results in 61.948 s with eight database connections and 61.847 s with sixteen. Both exceeded the proposed 60 s.
+The first unchecked roadmap item is Step 05. Its measurement definitions are recorded below and its numeric targets await owner approval. Step 40 is the staging device gate. The Step 41 capacity evidence remains available for Step 05 review.
 
 The [cutover evidence register](cutover-readiness.md) records the outstanding device, provider, operations and approval gates. The [capacity report](delivery-load.md) records the measured results for the current authorization path.
 
@@ -72,6 +72,17 @@ against a simulated provider; real-provider tests use only test devices with
 appropriate quotas and traffic controls. Simulation results do not establish
 provider capacity or arrival times on phones. Set final targets after
 baseline benchmarks and the pilot; avoid uncontrolled traffic spikes.
+
+### Step 05 decision record
+
+| Decision | What to approve | Evidence available |
+| --- | --- | --- |
+| Service levels | Staff API latency and availability, schedule delay and healthy campaign fan-out. Record the numeric targets, measurement windows, denominators, error budgets and dependency conditions. | The observability ADR defines the measurement boundaries and treatment of sparse traffic. [ADR-08](../adr/adr-08-observability.md#a-6-lifecycle-timing-sparse-traffic-and-slo-evidence) |
+| Recovery objectives | Maximum tolerable data loss (RPO), maximum time to safe service resumption (RTO), and required point-in-time recovery window. Record the failure scenarios and the reconciliation and canary checks that end the recovery clock. | The isolated restore drills verify recovery and fencing. Business and operations owners approve the objectives. [Recovery runbook](../runbooks/physical-pitr.md) |
+| Acceptance thresholds | Healthy fan-out deadline, sustained volume, approved quota and headroom, and pilot pass, pause and rollback criteria. Record the cohort denominator, observation period and treatment of failures, held devices and unknown outcomes. | The proposed 60 seconds measures 20,000 durable provider outcomes from queue acceptance. Local trials provide calibration data. [Load evidence](delivery-load.md) · [Cutover ADR](../adr/adr-06-onesignal-fcm-cutover.md) |
+
+Record each approved value with its owner, date and evidence reference.
+Step 05 remains open until the owners approve all three decisions.
 
 | Open decision | What must be determined | Blocks |
 | --- | --- | --- |
@@ -254,7 +265,7 @@ work on unchecked rows has started, as noted.
 - [x] 02. Create an initial index of ADR, SPEC, backlog, and dependency status (this document).
 - [x] 03. Lock core v1 scope; additional features mentioned by the user are deferred. Localisation is not a v1 promise; input boundaries must be explicit in SPECs.
 - [x] 04. Record user scale requirements: approximately 20,000 devices, 5 campaigns/month, full broadcast. Final sizing awaits benchmarks.
-- [ ] 05. Set SLOs, RPO/RTO, and acceptance thresholds. The 60-second benchmark is only a proposal.
+- [ ] 05. Set SLOs, RPO/RTO, and acceptance thresholds. Measurement boundaries and required approvals are in the [Step 05 decision record](#step-05-decision-record).
 - [ ] 06. Verify mobile/Laravel/token integrations. [First mobile source inspected](mobile-source-checkpoint.md); the current client still uses OneSignal. Laravel issuer, provider project and real device enrollment remain unverified.
 
 ### Phase 2 — design
