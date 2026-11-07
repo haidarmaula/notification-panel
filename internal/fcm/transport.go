@@ -107,7 +107,19 @@ func (t *guardTransport) RoundTrip(request *http.Request) (*http.Response, error
 	r.mu.Lock()
 	r.snapshotValue.calls++
 	r.mu.Unlock()
+	observer := t.client.config.Observer
+	start := time.Now()
+	if observer != nil {
+		observer.PhysicalStart()
+	}
 	response, err := t.base.RoundTrip(cloned)
+	if observer != nil {
+		status := 0
+		if response != nil {
+			status = response.StatusCode
+		}
+		observer.PhysicalFinish(status, time.Since(start))
+	}
 	if err != nil || response == nil {
 		cancelWindow()
 		if response != nil && response.Body != nil {

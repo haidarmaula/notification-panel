@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"hello/internal/deployment"
+	"hello/internal/observability"
 )
 
 // Command runs the compiled process role with its fixed protected policy. Only
@@ -32,7 +33,7 @@ func command(ctx context.Context, role deployment.Component, args []string, stdo
 		_, _ = io.WriteString(stderr, "invalid arguments; use --help\n")
 		return 2
 	}
-	logger := slog.New(slog.NewJSONHandler(stderr, nil)).With("component", string(role))
+	logger := slog.New(slog.NewJSONHandler(observability.BoundedOutput(stderr, nil), nil)).With("component", string(role))
 	if ctx.Err() != nil {
 		return 0
 	}

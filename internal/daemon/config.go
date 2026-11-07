@@ -13,6 +13,7 @@ import (
 	"hello/internal/dispatch"
 	"hello/internal/jsonobject"
 	"hello/internal/kafka"
+	"hello/internal/observability"
 	"hello/internal/runloop"
 	"hello/internal/scheduler"
 )
@@ -22,14 +23,15 @@ var ErrConfiguration = deployment.ErrConfiguration
 
 // Configuration is loaded once and retained privately for one process role.
 type Configuration struct {
-	role      deployment.Component
-	database  *pgxpool.Config
-	source    dispatch.SourceManifest
-	broker    kafka.ScopedProducerConfig
-	admission dispatch.KafkaAdmissionConfig
-	scheduler scheduler.Config
-	retry     runloop.RetryPolicy
-	delivery  *deliveryConfig
+	monitoring *observability.Admin
+	role       deployment.Component
+	database   *pgxpool.Config
+	source     dispatch.SourceManifest
+	broker     kafka.ScopedProducerConfig
+	admission  dispatch.KafkaAdmissionConfig
+	scheduler  scheduler.Config
+	retry      runloop.RetryPolicy
+	delivery   *deliveryConfig
 }
 
 // Load validates a caller-owned trusted policy stream without network I/O.
@@ -44,7 +46,7 @@ func Load(role deployment.Component, reader io.Reader) (*Configuration, error) {
 	}
 	cfg := &Configuration{role: role}
 	var databaseURL, sourceID, groupID, mode string
-	var brokerPolicy, deliveryPolicy json.RawMessage
+	var brokerPolicy, deliveryPolicy, admin json.RawMessage
 	var retryMin, retryMax, poll int64
 	var page int32
 	fields := map[string]any{
@@ -74,7 +76,11 @@ func Load(role deployment.Component, reader io.Reader) (*Configuration, error) {
 		fields["poll_interval_ms"] = &poll
 		fields["page_size"] = &page
 	}
-	if jsonobject.Decode(data, fields) != nil || retryMin < 100 || retryMax < retryMin || retryMax > 300000 {
+	if jsonobject.DecodeOptional(data, fields, map[string]any{"monitoring": &admin}) != nil || retryMin < 100 || retryMax < retryMin || retryMax > 300000 {
+		return nil, ErrConfiguration
+	}
+	cfg.monitoring, err = observability.ParseAdmin(admin)
+	if err != nil {
 		return nil, ErrConfiguration
 	}
 	cfg.retry = runloop.RetryPolicy{MinimumDelay: time.Duration(retryMin) * time.Millisecond, MaximumDelay: time.Duration(retryMax) * time.Millisecond}

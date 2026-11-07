@@ -161,12 +161,14 @@ func decodeKey(encoded string, size int) ([]byte, error) {
 	return key, nil
 }
 
-func (d *deliveryConfig) open(ctx context.Context, db dispatch.Transactor) (*dispatch.DeliveryPoller, *fcm.Client, error) {
+func (d *deliveryConfig) open(ctx context.Context, db dispatch.Transactor, observer fcm.Observer) (*dispatch.DeliveryPoller, *fcm.Client, error) {
 	execution, err := dispatch.NewExecution(db, d.execution)
 	if err != nil {
 		return nil, nil, ErrConfiguration
 	}
-	client, err := fcm.NewFile(ctx, d.transport, d.credential)
+	transport := d.transport
+	transport.Observer = observer
+	client, err := fcm.NewFile(ctx, transport, d.credential)
 	if err != nil {
 		return nil, nil, ErrConfiguration
 	}

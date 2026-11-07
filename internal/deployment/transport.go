@@ -27,25 +27,9 @@ func Broker(data []byte, topic string) (kafka.ScopedProducerConfig, error) {
 	}
 	tlsConfig := &tls.Config{MinVersion: tls.VersionTLS12}
 	if caPEM != "" {
-		pool := x509.NewCertPool()
-		rest := []byte(caPEM)
-		for len(bytes.TrimSpace(rest)) > 0 {
-			if !bytes.HasPrefix(bytes.TrimSpace(rest), []byte("-----BEGIN CERTIFICATE-----")) {
-				return none, ErrConfiguration
-			}
-			block, next := pem.Decode(rest)
-			if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
-				return none, ErrConfiguration
-			}
-			cert, err := x509.ParseCertificate(block.Bytes)
-			if err != nil {
-				return none, ErrConfiguration
-			}
-			pool.AddCert(cert)
-			rest = next
-		}
-		if len(pool.Subjects()) == 0 {
-			return none, ErrConfiguration
+		pool, err := CertificatePool(caPEM)
+		if err != nil {
+			return none, err
 		}
 		tlsConfig.RootCAs = pool
 	}
@@ -72,4 +56,30 @@ func Broker(data []byte, topic string) (kafka.ScopedProducerConfig, error) {
 		return none, ErrConfiguration
 	}
 	return cfg, nil
+}
+
+// CertificatePool reads an explicit PEM trust bundle and rejects trailing garbage.
+func CertificatePool(data string) (*x509.CertPool, error) {
+	pool := x509.NewCertPool()
+	rest := []byte(data)
+	for len(bytes.TrimSpace(rest)) > 0 {
+		if !bytes.HasPrefix(bytes.TrimSpace(rest), []byte("-----BEGIN CERTIFICATE-----")) {
+			return nil, ErrConfiguration
+		}
+		block, next := pem.Decode(rest)
+		if block == nil || block.Type != "CERTIFICATE" || len(block.Headers) != 0 {
+			return nil, ErrConfiguration
+		}
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, ErrConfiguration
+		}
+		pool.AddCert(cert)
+		rest = next
+	}
+	if len(pool.Subjects()) == 0 {
+		return nil, ErrConfiguration
+	}
+
+	return pool, nil
 }

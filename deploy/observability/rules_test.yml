@@ -1,0 +1,56 @@
+rule_files: [rules.yml]
+evaluation_interval: 15s
+tests:
+  - name: eligible outbox fires clears and omits stale replicas
+    interval: 15s
+    input_series:
+      - series: 'hello_outbox_due_age_seconds{environment="test",instance="a",queue="update",job="hello"}'
+        values: '70+0x6 0+0x9'
+      - series: 'hello_outbox_last_success_timestamp_seconds{environment="test",instance="a",job="hello"}'
+        values: '0+15x16'
+      - series: 'hello_outbox_due_age_seconds{environment="test",instance="b",queue="update",job="hello"}'
+        values: '500+0x16'
+      - series: 'hello_outbox_last_success_timestamp_seconds{environment="test",instance="b",job="hello"}'
+        values: '0+0x16'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HelloOutboxDelayed
+        exp_alerts:
+          - exp_labels: {environment: test, queue: update, severity: warning}
+            exp_annotations:
+              summary: An eligible publication has waited over a minute
+              runbook: docs/runbooks/monitoring.md#durable-work
+      - eval_time: 2m
+        alertname: HelloOutboxDelayed
+        exp_alerts: []
+    promql_expr_test:
+      - expr: hello:outbox_due_age_seconds
+        eval_time: 1m
+        exp_samples:
+          - labels: 'hello:outbox_due_age_seconds{environment="test",queue="update"}'
+            value: 70
+  - name: reachable failed role and scrape loss are distinct
+    interval: 15s
+    input_series:
+      - series: 'up{job="hello",instance="worker",environment="test",role="delivery"}'
+        values: '1+0x7 0+0x10 1+0x3'
+      - series: 'hello_role_ready{job="hello",instance="worker",environment="test",role="delivery"}'
+        values: '0+0x17 1+0x3'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HelloRoleUnready
+        exp_alerts:
+          - exp_labels: {job: hello, instance: worker, environment: test, role: delivery, severity: urgent}
+            exp_annotations:
+              summary: Process reachable but unable to serve its role
+              runbook: docs/runbooks/monitoring.md#process-and-database
+      - eval_time: 4m
+        alertname: HelloScrapeMissing
+        exp_alerts:
+          - exp_labels: {job: hello, instance: worker, environment: test, role: delivery, severity: urgent}
+            exp_annotations:
+              summary: Private process scrape failed
+              runbook: docs/runbooks/monitoring.md#process-and-database
+      - eval_time: 5m
+        alertname: HelloScrapeMissing
+        exp_alerts: []

@@ -4,7 +4,11 @@ Date: 2026-11-02. Status: design checklist; no monitoring has been
 implemented/installed/tested by this session.
 Design: [ADR-08](../adr/adr-08-observability.md).
 
-## Existing evidence
+## Local implementation update
+
+The [implementation spec](../specs/adr-08-observability.md) and [runbook](../runbooks/monitoring.md) supersede the original design-only inventory below. The local rule and dashboard validation uses digest-pinned containers. Target receiver, watchdog, broker exporters, access governance, load and SLO evidence remain open.
+
+## Original evidence
 
 - The HTTP logger records only method/path; status/duration/correlation are not yet available.
 - Database ping occurs only at startup; the server does not yet have readiness/graceful drain.

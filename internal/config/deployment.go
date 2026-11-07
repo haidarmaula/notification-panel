@@ -2,11 +2,13 @@ package config
 
 import (
 	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 
 	"hello/internal/deployment"
 	"hello/internal/jsonobject"
+	"hello/internal/observability"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -30,13 +32,18 @@ func ServerForCommand(args []string) (*ServerConfig, error) {
 
 func parseServerDeployment(data []byte) (*ServerConfig, error) {
 	var c ServerConfig
+	var admin json.RawMessage
 	var dsn string
-	err := jsonobject.Decode(data, map[string]any{
+	err := jsonobject.DecodeOptional(data, map[string]any{
 		"database_url": &dsn, "api_key": &c.APIKey, "access_secret": &c.AccessSecret,
 		"refresh_secret": &c.RefreshSecret, "mobile_policy_file": &c.mobilePolicyFile,
-	})
+	}, map[string]any{"monitoring": &admin})
 	if err != nil || len(c.APIKey) < 32 || len(c.AccessSecret) < 32 || len(c.RefreshSecret) < 32 ||
 		c.AccessSecret == c.RefreshSecret || c.APIKey == c.AccessSecret || c.APIKey == c.RefreshSecret {
+		return nil, deployment.ErrConfiguration
+	}
+	c.Monitoring, err = observability.ParseAdmin(admin)
+	if err != nil {
 		return nil, deployment.ErrConfiguration
 	}
 	c.protectedDatabase, err = protectedDatabase(dsn, "hello-server")

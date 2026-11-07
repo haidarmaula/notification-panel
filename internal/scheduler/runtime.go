@@ -17,6 +17,7 @@ import (
 
 // Config is read once; intervals are polling policy, not delivery SLOs.
 type Config struct {
+	Observer runloop.Observer
 	Interval time.Duration
 	PageSize int32
 	Retry    runloop.RetryPolicy
@@ -74,6 +75,7 @@ func (r *Runtime) Run(ctx context.Context) error {
 	}
 	runs := make([]func(context.Context) error, 0, len(tasks))
 	for _, task := range tasks {
+		task.Observer = r.config.Observer
 		task.Interval = r.config.Interval
 		task.Timeout = 30 * time.Second
 		runs = append(runs, func(ctx context.Context) error { return runloop.RunTask(ctx, task, r.config.Retry, r.logger) })

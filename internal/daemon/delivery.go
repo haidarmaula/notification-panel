@@ -12,11 +12,11 @@ import (
 
 // runDelivery joins both loops before the caller drains their FCM and Kafka
 // transports. A broker outage can defer publication while ledger work proceeds.
-func runDelivery(ctx context.Context, logger *slog.Logger, cfg *deliveryConfig, retry runloop.RetryPolicy,
+func runDelivery(ctx context.Context, logger *slog.Logger, cfg *deliveryConfig, retry runloop.RetryPolicy, observer runloop.Observer,
 	poller *dispatch.DeliveryPoller, outbox *dispatch.UpdateOutbox,
 ) error {
 	deliver := runloop.Task{
-		Name: "delivery_recovery", Interval: cfg.poll, Timeout: time.Hour,
+		Observer: observer, Name: "delivery_recovery", Interval: cfg.poll, Timeout: time.Hour,
 		Run: func(ctx context.Context) error {
 			report, err := poller.Tick(ctx)
 			if report.Visited > 0 {
@@ -29,7 +29,7 @@ func runDelivery(ctx context.Context, logger *slog.Logger, cfg *deliveryConfig, 
 		},
 	}
 	publish := runloop.Task{
-		Name: "delivery_updates", Interval: cfg.poll, Timeout: 30 * time.Second,
+		Observer: observer, Name: "delivery_updates", Interval: cfg.poll, Timeout: 30 * time.Second,
 		Run: func(ctx context.Context) error {
 			for range cfg.pageSize {
 				outcome, err := outbox.DrainOne(ctx)

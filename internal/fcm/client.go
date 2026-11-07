@@ -298,6 +298,10 @@ func (p *Permit) send(parent context.Context, request pushpayload.Request, check
 		return Outcome{Disposition: NotSubmitted, Reason: PermitUsed}
 	}
 	s := p.state.client
+	if observer := s.config.Observer; observer != nil {
+		start := time.Now()
+		defer func() { observer.LogicalResult(out.Disposition, out.Reason, time.Since(start)) }()
+	}
 	defer func() {
 		s.breaker.finish(p.state.token, out, time.Now())
 		<-s.sem

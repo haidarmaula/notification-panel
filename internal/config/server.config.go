@@ -3,6 +3,8 @@ package config
 import (
 	"log"
 	"os"
+
+	"hello/internal/observability"
 )
 
 // ServerConfig holds the configuration required by the HTTP API server
@@ -14,6 +16,7 @@ import (
 // triggers an immediate notification send. Delivery-provider credentials
 // (OneSignal) are deliberately absent — only the worker talks to OneSignal.
 type ServerConfig struct {
+	Monitoring       *observability.Admin
 	mobilePolicyFile string
 
 	BaseConfig

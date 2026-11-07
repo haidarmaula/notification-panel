@@ -1,0 +1,24 @@
+# Template for a private scraper. Each role has a separate management endpoint.
+global:
+  scrape_interval: 15s
+  scrape_timeout: 4s
+  evaluation_interval: 15s
+rule_files: [rules.yml]
+scrape_configs:
+  - job_name: hello
+    scheme: https
+    metrics_path: /metrics
+    tls_config:
+      min_version: TLS13
+      ca_file: /etc/hello-monitor/ca.pem
+      cert_file: /etc/hello-monitor/scraper.pem
+      key_file: /etc/hello-monitor/scraper.key
+    static_configs:
+      - targets: [server.management.invalid:9095]
+        labels: {environment: staging, role: server}
+      - targets: [admission.management.invalid:9096]
+        labels: {environment: staging, role: admission}
+      - targets: [delivery.management.invalid:9096]
+        labels: {environment: staging, role: delivery}
+      - targets: [scheduler.management.invalid:9097]
+        labels: {environment: staging, role: scheduler}

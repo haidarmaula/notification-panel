@@ -1,8 +1,6 @@
 # ADR-08 — Process health, delivery visibility and actionable alerting
 
-**Status:** proposed, 2026-11-02. Design only; no endpoint, instrumentation,
-dashboard, scrape or alert has been deployed/tested. NEW companion SPEC:
-`docs/specs/adr-08-observability.md` (not written). Evidence checklist:
+**Status:** proposed, 2026-11-02. The original proposal is preserved below. The [implementation spec](../specs/adr-08-observability.md) records the locally implemented endpoints, telemetry and alert fixtures. Target operations approval remains open. Evidence checklist:
 [observability readiness](../analysis/observability-readiness.md).
 
 **Scope:** shared NEW internal/observability package, HTTP middleware/admin

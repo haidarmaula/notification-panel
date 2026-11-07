@@ -11,6 +11,7 @@ import (
 	"hello/internal/deployment"
 	"hello/internal/dispatch"
 	"hello/internal/kafka"
+	"hello/internal/observability"
 	"hello/internal/runloop"
 	"hello/internal/scheduler"
 )
@@ -59,7 +60,8 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 		return startupFailure(ctx, errBroker)
 	}
 	if c.role == deployment.Worker && c.delivery != nil {
-		poller, client, err := c.delivery.open(startup, pool)
+		state := observability.New("delivery_recovery", "delivery_updates")
+		poller, client, err := c.delivery.open(startup, pool, state.Provider())
 		if err != nil {
 			return startupFailure(ctx, ErrConfiguration)
 		}
@@ -69,7 +71,9 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 			return ErrConfiguration
 		}
 		cancelStartup()
-		return runDelivery(ctx, logger, c.delivery, c.retry, poller, outbox)
+		return state.Run(ctx, c.monitoring, pool, logger, func(ctx context.Context) error {
+			return runDelivery(ctx, logger, c.delivery, c.retry, state, poller, outbox)
+		})
 	}
 	// Startup deadlines must not become the lifetime of a healthy daemon.
 	cancelStartup()
@@ -99,14 +103,20 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 			return ErrConfiguration
 		}
 		logger.WarnContext(ctx, "worker started in admission_only mode", "provider_execution", false)
-		return runloop.Supervise(ctx, "admission", worker.Run, c.retry, logger)
+		state := observability.New("admission")
+		return state.Run(ctx, c.monitoring, pool, logger, func(ctx context.Context) error {
+			return runloop.SuperviseObserved(ctx, "admission", worker.Run, c.retry, logger, state)
+		})
 	case deployment.Scheduler:
-		runtime, err := scheduler.New(pool, sourcePublisher{producer: producer, source: c.source}, c.source, c.scheduler, logger)
+		state := observability.New("schedule_promotion", "send_outbox", "queued_recovery", "replay_cleanup")
+		cfg := c.scheduler
+		cfg.Observer = state
+		runtime, err := scheduler.New(pool, sourcePublisher{producer: producer, source: c.source}, c.source, cfg, logger)
 		if err != nil {
 			return ErrConfiguration
 		}
 		logger.InfoContext(ctx, "durable scheduler started")
-		return runtime.Run(ctx)
+		return state.Run(ctx, c.monitoring, pool, logger, runtime.Run)
 	default:
 		return ErrConfiguration
 	}

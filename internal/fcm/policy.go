@@ -17,8 +17,17 @@ var (
 	ErrDeferred      = errors.New("FCM submission deferred")
 )
 
+// Observer receives bounded local transport evidence. Implementations must return
+// promptly. Neither callback receives provider identifiers, credentials or payloads.
+type Observer interface {
+	LogicalResult(Disposition, Reason, time.Duration)
+	PhysicalStart()
+	PhysicalFinish(int, time.Duration)
+}
+
 // Config is explicit per-project policy; replica/client quota allocation is external.
 type Config struct {
+	Observer          Observer
 	ProjectID         string
 	Environment       string
 	Routes            []pushpayload.Route

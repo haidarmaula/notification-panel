@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"log/slog"
 	"net"
 	"net/http"
 	"os"
@@ -21,6 +22,7 @@ import (
 	"hello/internal/features/staff"
 	"hello/internal/installation"
 	"hello/internal/middleware"
+	"hello/internal/observability"
 	"hello/internal/runloop"
 	"hello/internal/token"
 )
@@ -87,13 +89,17 @@ func runServer(ctx context.Context, cfg *config.ServerConfig) (err error) {
 	if ctx.Err() != nil {
 		return nil
 	}
-	var lc net.ListenConfig
-	listener, err := lc.Listen(ctx, "tcp", ":8080")
-	if err != nil {
-		return errors.New("server listener startup failed")
-	}
-	log.Println("server running :8080")
-	return serveHTTP(ctx, listener, middleware.Logging(mux), 10*time.Second, 5*time.Second)
+	state := observability.New()
+	logger := slog.New(slog.NewJSONHandler(observability.BoundedOutput(os.Stderr, state.Dropped), nil)).With("component", "server")
+	return state.Run(ctx, cfg.Monitoring, db, logger, func(ctx context.Context) error {
+		var lc net.ListenConfig
+		listener, err := lc.Listen(ctx, "tcp", ":8080")
+		if err != nil {
+			return errors.New("server listener startup failed")
+		}
+		log.Println("server running :8080")
+		return serveHTTP(ctx, listener, observability.Access(mux, state.Observe), 10*time.Second, 5*time.Second)
+	})
 }
 
 func serverRoutes(queries *sqlc.Queries, db applications.Transactor, cfg *config.ServerConfig) *http.ServeMux {

@@ -26,10 +26,16 @@ func (p RetryPolicy) Validate() error {
 	return nil
 }
 
+// Observer receives transitions for supervised and polling loops.
+type Observer interface {
+	Phase(name, outcome string, next time.Time)
+}
+
 // Task is a single non-overlapping polling callback. Timeout bounds its context;
 // Run must honor cancellation and finish its cleanup before returning. A timeout
 // wrapper cannot safely abandon an uncooperative callback in another goroutine.
 type Task struct {
+	Observer Observer
 	Name     string
 	Interval time.Duration
 	Timeout  time.Duration
@@ -40,14 +46,26 @@ type Task struct {
 // resources. It never retries an individual transaction or reconstructs an I/O
 // execution proof. Errors are signaled without logging private dependency text.
 func Supervise(ctx context.Context, name string, run func(context.Context) error, policy RetryPolicy, logger *slog.Logger) error {
+	return SuperviseObserved(ctx, name, run, policy, logger, nil)
+}
+
+// SuperviseObserved records generation start, failure and bounded restart waits.
+// A generation may legitimately wait without deliveries for an unlimited time.
+func SuperviseObserved(ctx context.Context, name string, run func(context.Context) error, policy RetryPolicy, logger *slog.Logger, observer Observer) error {
 	if !validName(name) || run == nil || policy.Validate() != nil || logger == nil {
 		return errConfiguration
+	}
+	if observer != nil {
+		defer observer.Phase(name, "stopped", time.Time{})
 	}
 	for failures := 0; ; failures = min(failures+1, 20) {
 		if ctx.Err() != nil {
 			return context.Cause(ctx)
 		}
 		started := time.Now()
+		if observer != nil {
+			observer.Phase(name, "running", time.Time{})
+		}
 		err := run(ctx)
 		if time.Since(started) >= policy.MaximumDelay {
 			failures = 0
@@ -56,6 +74,9 @@ func Supervise(ctx context.Context, name string, run func(context.Context) error
 			return context.Cause(ctx)
 		}
 		delay := retryDelay(policy, failures)
+		if observer != nil {
+			observer.Phase(name, "error", time.Now().Add(delay))
+		}
 		reason := "returned_error"
 		if err == nil {
 			reason = "unexpected_return"
@@ -74,10 +95,16 @@ func RunTask(ctx context.Context, task Task, policy RetryPolicy, logger *slog.Lo
 	if !validName(task.Name) || task.Run == nil || task.Interval < 10*time.Millisecond || task.Timeout <= 0 || task.Timeout > time.Hour || policy.Validate() != nil || logger == nil {
 		return errConfiguration
 	}
+	if task.Observer != nil {
+		defer task.Observer.Phase(task.Name, "stopped", time.Time{})
+	}
 	failures := 0
 	for {
 		if ctx.Err() != nil {
 			return context.Cause(ctx)
+		}
+		if task.Observer != nil {
+			task.Observer.Phase(task.Name, "running", time.Now().Add(task.Timeout))
 		}
 		callCtx, cancel := context.WithTimeout(ctx, task.Timeout)
 		err := task.Run(callCtx)
@@ -96,6 +123,13 @@ func RunTask(ctx context.Context, task Task, policy RetryPolicy, logger *slog.Lo
 			logger.ErrorContext(ctx, "background task failed", "component", task.Name, "attempt", failures, "retry_after", delay)
 		} else {
 			failures = 0
+		}
+		if task.Observer != nil {
+			outcome := "success"
+			if err != nil {
+				outcome = "error"
+			}
+			task.Observer.Phase(task.Name, outcome, time.Now().Add(delay))
 		}
 		if err := wait(ctx, delay); err != nil {
 			return err

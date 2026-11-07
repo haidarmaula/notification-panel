@@ -1,0 +1,72 @@
+groups:
+  - name: hello
+    rules:
+      # Duplicate scheduler replicas read the same durable rows. Use only fresh
+      # successful samples and take the maximum per environment and queue.
+      - record: hello:outbox_due_age_seconds
+        expr: max by (environment,queue) (hello_outbox_due_age_seconds and on(job,instance,environment) (time() - hello_outbox_last_success_timestamp_seconds < 45))
+      - record: hello:work_items
+        expr: max by (environment,family,kind) (hello_work_items and on(job,instance,environment) (time() - hello_work_last_success_timestamp_seconds < 150))
+      - record: hello:work_oldest_seconds
+        expr: max by (environment,kind) (hello_work_oldest_seconds and on(job,instance,environment) (time() - hello_work_last_success_timestamp_seconds < 150))
+      - alert: HelloScrapeMissing
+        expr: up{job="hello"} == 0
+        for: 2m
+        labels: {severity: urgent}
+        annotations:
+          summary: Private process scrape failed
+          runbook: docs/runbooks/monitoring.md#process-and-database
+      - alert: HelloRoleUnready
+        expr: hello_role_ready == 0 and on(job,instance,environment) (up{job="hello"} == 1)
+        for: 1m
+        labels: {severity: urgent}
+        annotations:
+          summary: Process reachable but unable to serve its role
+          runbook: docs/runbooks/monitoring.md#process-and-database
+      - alert: HelloDatabaseSampleStale
+        expr: time() - hello_db_last_check_timestamp_seconds > 45
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: Database readiness sample is stale
+          runbook: docs/runbooks/monitoring.md#process-and-database
+      - alert: HelloOutboxCollectorStale
+        expr: time() - hello_outbox_last_success_timestamp_seconds > 45
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: Scheduler cannot measure durable outbox age
+          runbook: docs/runbooks/monitoring.md#durable-work
+      - alert: HelloWorkloadCollectorStale
+        expr: time() - hello_work_last_success_timestamp_seconds > 150
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: Durable workload inventory is stale
+          runbook: docs/runbooks/monitoring.md#durable-work
+      - alert: HelloOutboxDelayed
+        expr: hello:outbox_due_age_seconds > 60
+        for: 1m
+        labels: {severity: warning}
+        annotations:
+          summary: An eligible publication has waited over a minute
+          runbook: docs/runbooks/monitoring.md#durable-work
+      - alert: HelloExpiredDeliveryPending
+        expr: hello:work_items{family="waiting",kind="expired_delivery"} > 0
+        for: 2m
+        labels: {severity: warning}
+        annotations:
+          summary: Expired delivery remains pending
+          runbook: docs/runbooks/monitoring.md#durable-work
+      - alert: HelloProviderConfiguration
+        expr: sum by(environment,instance,reason) (increase(hello_provider_results_total{reason=~"credentials|apns_credentials|sender_mismatch"}[5m])) > 0
+        labels: {severity: urgent}
+        annotations:
+          summary: Provider rejected application or credential configuration
+          runbook: docs/runbooks/monitoring.md#provider-and-receipts
+      - alert: HelloTelemetryDrops
+        expr: increase(hello_telemetry_dropped_total[5m]) > 0
+        labels: {severity: warning}
+        annotations:
+          summary: HTTP diagnostic records were dropped
+          runbook: docs/runbooks/monitoring.md#diagnostic-output

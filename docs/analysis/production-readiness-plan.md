@@ -315,9 +315,9 @@ work on unchecked rows has started, as noted.
 
 - [ ] 34. Five digest-pinned, non-root process images built and passed offline entrypoint smoke checks with a read-only filesystem. Protected role configuration is implemented. Target resource sizing, image attestation and deployment drills remain open. See the [image runbook](../runbooks/production-images.md).
 - [x] 35. Server, worker, scheduler and one-shot commands now bound startup and join or cancel outstanding work on shutdown. Local tests cover active HTTP drain, forced cancellation, inherited pipes and closing PostgreSQL connections. See the [lifecycle specification](../specs/process-lifecycle.md).
-- [ ] 36. Tested health/readiness, logs, metrics, dashboards, and alerts.
+- [ ] 36. Private mTLS health/readiness, redacted structured HTTP logs, provider/outbox metrics, a provisioned Grafana dashboard and Prometheus firing/recovery fixtures are implemented. Target scrape coverage, notification-path and broker exporter drills remain open. See the [monitoring runbook](../runbooks/monitoring.md).
 - [ ] 37. Retention/purge for delivery/audit/key/outbox/dead-letter and PII deletion.
-- [ ] 38. Backup/restore and outage/requeue/credential-rotation runbooks.
+- [ ] 38. A [sealed restore drill](../runbooks/sealed-restore.md) preserves post-backup Kafka ambiguity and validates fenced recovery locally. Backup/WAL policy, actual recovery objectives, real credential rotation and target recovery remain open.
 - [ ] 39. Service owners, alert escalation, and operator access.
 
 ### Phase 7 — production evidence

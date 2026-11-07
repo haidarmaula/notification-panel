@@ -29,6 +29,12 @@ func Read(reader io.Reader) ([]byte, error) {
 // aliases and trailing values. Nested objects need a separate Decode call with
 // their own schema to enforce the same constraints.
 func Decode(data []byte, fields map[string]any) error {
+	return DecodeOptional(data, fields, nil)
+}
+
+// DecodeOptional also permits listed optional fields when present exactly once.
+// Explicit null, aliases and duplicate names remain invalid.
+func DecodeOptional(data []byte, fields, optional map[string]any) error {
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	start, err := decoder.Token()
 	if err != nil || start != json.Delim('{') {
@@ -43,6 +49,9 @@ func Decode(data []byte, fields map[string]any) error {
 		}
 		target, ok := fields[name]
 		if !ok {
+			target, ok = optional[name]
+		}
+		if !ok {
 			return ErrInvalid
 		}
 		var raw json.RawMessage
@@ -51,8 +60,13 @@ func Decode(data []byte, fields map[string]any) error {
 		}
 		seen[name] = true
 	}
-	if end, err := decoder.Token(); err != nil || end != json.Delim('}') || len(seen) != len(fields) {
+	if end, err := decoder.Token(); err != nil || end != json.Delim('}') {
 		return ErrInvalid
+	}
+	for field := range fields {
+		if !seen[field] {
+			return ErrInvalid
+		}
 	}
 	var extra json.RawMessage
 	if decoder.Decode(&extra) != io.EOF {

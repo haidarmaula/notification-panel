@@ -343,10 +343,10 @@ Design inconsistencies, duplication, contract drift, and maintainability hazards
 
 | # | Location | Issue |
 |---|----------|-------|
-| M35 | `internal/middleware/logger.go` | Uses `fmt.Println` rather than the structured logger already in `go.mod` |
-| M36 | `internal/middleware/logger.go` | Logs method and path only — no status code, duration, client IP, or correlation ID |
-| M37 | `internal/middleware/logger.go` | No panic recovery — a handler panic propagates to `net/http`'s default path |
-| M38 | Entire codebase | No metrics, no distributed tracing, no alerting integration |
+| M35 | `internal/observability/http.go` | **Fixed.** Server access records use structured JSON with bounded logging. |
+| M36 | `internal/observability/http.go` | **Fixed.** Access records include a server-generated request ID, template, committed status, bytes, elapsed time and outcome. Raw client addresses stay out of access logs. |
+| M37 | `internal/observability/http.go` | **Fixed.** A pre-commit panic returns a generic 500. A post-commit panic aborts the partial response. Both paths have regression tests. |
+| M38 | Operations | Private metrics, dashboard and local rules are implemented. Distributed traces and target alert routing remain open. |
 | M39 | `internal/middleware/jwt.go` | Token parse errors are not logged — diagnosing authentication failures requires reproducing them |
 
 ### Security Gaps (Non-Critical)
@@ -520,7 +520,7 @@ Focus: design consistency and maintainability.
 - [x] M43 (body cap), M44 — bounded full-body reads for all 16 JSON inputs, locally verified M02d
 - [ ] M43 — Content-Type enforcement and remaining request/abuse controls
 - [x] H43 — graceful HTTP shutdown, forced cancellation and bounded handler join
-- [ ] M35–M37 — migrate to structured logging with a request ID
+- [x] M35–M37 — migrate to structured logging with a request ID
 
 ### Sprint 4 — Polish
 

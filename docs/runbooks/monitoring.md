@@ -1,0 +1,81 @@
+# Notification service monitoring
+
+## Enable private diagnostics
+
+Add the optional `monitoring` object to the protected JSON policy for each
+server, admission worker, delivery worker and scheduler instance. Set `listen`
+to the instance's private or loopback IP with a nonzero port. Supply PEM strings
+in `server_certificate_pem`, `server_key_pem` and `client_ca_pem`. Use a
+dedicated monitoring client CA, restrict its issuance and firewall the listener
+to the scraper and probes. The server certificate must cover the hostname or IP
+used by the scraper. Certificates load once per process. Roll replacement
+instances with overlapping trusted roots during rotation.
+
+The role listener serves GET /livez, /readyz and /metrics over mutual TLS 1.3.
+Without this optional configuration, there is no diagnostics socket. The public
+API and one-shot jobs have separate entry points. Run the following from the
+management network using a dedicated client identity.
+
+```sh
+curl --fail-with-body --cacert ca.pem --cert scraper.pem --key scraper.key https://server.management.invalid:9095/readyz
+```
+
+Replace each example address in [the scrape configuration](../../deploy/observability/prometheus.yml)
+with the actual inventory, including every replica. Use a distinct environment
+label for each independent data store. Load the rules, choose the approved
+Prometheus data source in the Grafana dashboard and configure the team's
+alert receiver. Replace relative runbook annotations with authenticated links
+in the deployment's rule packaging. The example names under .invalid have no
+route. No company receiver, owner or credentials are configured by this project.
+
+## Process and database
+
+Check target inventory and `up` first. A stopped process, a bad certificate and a
+missing route can all fail the scrape. A reachable process reports its cached
+database/schema check and required loop status through /readyz. The bounded
+reasons are `database_stale`, `database_unavailable`, `loop_unavailable` and
+`draining`. A sealed deployment can serve safe API operations while dispatch
+is held. For a loop failure, inspect the loop's last transition and operation
+totals. For a database failure, check TLS, pool occupancy, the current migration
+and permissions. Confirm recovery with a fresh successful sample and a ready
+role. The probe makes no broker or provider request.
+
+## Durable work
+
+The scheduler samples send and update outbox retry eligibility every 15 seconds.
+The minute workload inventory measures retained campaign/device state and
+the original age of outstanding schedules, expired pending deliveries,
+unresolved quarantine and both outboxes. Inspect a prolonged delay alongside
+dispatch holds, scheduler operations, database headroom and broker health.
+Confirm both backlog age and count return to expected levels using a fresh
+snapshot. During a restore or source incident, keep dispatch sealed while
+reconciling offsets and stable event IDs. Follow the
+[sealed restore](sealed-restore.md) and [replay](operator-replay.md) procedures.
+
+## Provider and receipts
+
+Inspect normalized quota, credential, APNs and sender-mismatch outcomes and
+the number of physical transport calls. Check the current app/project binding,
+credential rotation and authorized quota allocation. A zero rate during an idle
+period is expected. Use campaign statistics for unique provider acceptance,
+device reports and user reads. The receipt HTTP panel counts requests, including
+retries. Avoid resubmitting an entire campaign after an uncertain result.
+
+## Diagnostic output
+
+A slow log pipe can fill the server's 256-record access buffer or exceed its
+250 ms write deadline. Check the local logging driver, disk and collector.
+The access counter still records requests that lost their log entry. A derivative
+alert can be grouped under a confirmed infrastructure outage. Keep deadline risk
+visible, time-limit any silences and record their owner. Test the real escalation
+and independent watchdog with the team's designated receiver before activation.
+
+## Local validation
+
+`bash scripts/check-monitoring.sh` checks scraper syntax, alert rules, firing
+and resolution, freshness across duplicate schedulers, and all dashboard
+expressions. It provisions the dashboard in an isolated Grafana and reads the
+panels back through the HTTP API. Prometheus 3.5.0 and Grafana 12.1.0 are
+digest-pinned verification fixtures. Select supported and patched versions
+for the target monitoring service. The integration suite tests the real mTLS
+listener, healthy sealed database, schema outage, loop failure and drain.
