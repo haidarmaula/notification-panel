@@ -10,15 +10,27 @@ import (
 
 	"hello/internal/dispatch"
 	"hello/internal/requeue"
+	"hello/internal/runloop"
 )
 
-func main() {
+func main() { os.Exit(execute()) }
+
+func execute() int {
+	restore, err := runloop.PrepareCommandOutputs()
+	if err != nil {
+		return 1
+	}
+	defer restore()
+	restoreInput, err := runloop.PrepareCommandInput()
+	if err != nil {
+		return 1
+	}
+	defer restoreInput()
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	// Broken stdout must return a write error so the session can drain its writer.
 	signal.Ignore(syscall.SIGPIPE)
-	code := run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr, openDeploymentSession)
-	stop()
-	os.Exit(code)
+	defer stop()
+	return run(ctx, os.Args[1:], os.Stdin, os.Stdout, os.Stderr, openDeploymentSession)
 }
 
 func openDeploymentSession(ctx context.Context, r dispatch.ReplayRequest, credential string, execute bool) (requeue.Session, error) {
@@ -36,6 +48,9 @@ func run(ctx context.Context, args []string, input, output *os.File, diagnostics
 		// interrupts incomplete input and blocked reports before session shutdown.
 		_ = input.Close()
 		_ = output.Close()
+		if diag, ok := diagnostics.(*os.File); ok {
+			_ = diag.Close()
+		}
 		close(interrupted)
 	})
 	defer func() {

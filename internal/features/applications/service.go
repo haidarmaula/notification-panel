@@ -396,7 +396,11 @@ func (s *Service) attempt(ctx context.Context, fn func(*sqlc.Queries) error) err
 	if tx == nil {
 		return errors.New("application transaction unavailable")
 	}
-	defer tx.Rollback(context.Background())
+	defer func() {
+		cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		_ = tx.Rollback(cleanup)
+	}()
 	if err := fn(sqlc.New(tx)); err != nil {
 		return err
 	}

@@ -313,8 +313,8 @@ work on unchecked rows has started, as noted.
 
 ### Phase 6 — operations
 
-- [ ] 34. Production images, resource sizing, config validation, deployment/migration procedures.
-- [ ] 35. Graceful shutdown/drain and connection lifecycle for all processes.
+- [ ] 34. Five digest-pinned, non-root process images built and passed offline entrypoint smoke checks with a read-only filesystem. Protected role configuration is implemented. Target resource sizing, image attestation and deployment drills remain open. See the [image runbook](../runbooks/production-images.md).
+- [x] 35. Server, worker, scheduler and one-shot commands now bound startup and join or cancel outstanding work on shutdown. Local tests cover active HTTP drain, forced cancellation, inherited pipes and closing PostgreSQL connections. See the [lifecycle specification](../specs/process-lifecycle.md).
 - [ ] 36. Tested health/readiness, logs, metrics, dashboards, and alerts.
 - [ ] 37. Retention/purge for delivery/audit/key/outbox/dead-letter and PII deletion.
 - [ ] 38. Backup/restore and outage/requeue/credential-rotation runbooks.

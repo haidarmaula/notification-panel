@@ -15,6 +15,8 @@ var ErrConfiguration = errors.New("invalid deployment configuration")
 type Component string
 
 const (
+	Server    Component = "server"
+	Bootstrap Component = "bootstrap"
 	Worker    Component = "worker"
 	Scheduler Component = "scheduler"
 	Requeue   Component = "requeue"

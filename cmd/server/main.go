@@ -3,12 +3,16 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
+	"net"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"hello/internal/config"
-	"hello/internal/database"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 	"hello/internal/features/applications"
@@ -17,41 +21,79 @@ import (
 	"hello/internal/features/staff"
 	"hello/internal/installation"
 	"hello/internal/middleware"
+	"hello/internal/runloop"
 	"hello/internal/token"
 )
 
-func main() {
-	cfg := config.LoadServerConfig()
-	db, err := database.New(context.Background(), cfg.GetDatabaseURL())
+func main() { os.Exit(run()) }
+
+func run() int {
+	signal.Ignore(syscall.SIGPIPE)
+	restore, err := runloop.PrepareCommandOutputs()
 	if err != nil {
-		log.Fatal(err)
+		return 1
 	}
-	defer db.Close()
+	defer restore()
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+	defer runloop.InterruptOutputOnCancel(ctx, os.Stdout, os.Stderr)()
+	cfg, err := config.ServerForCommand(os.Args[1:])
+	if err != nil {
+		log.Print("invalid server configuration")
+		return 1
+	}
+	if err := runServer(ctx, cfg); err != nil {
+		log.Print(err)
+		return 1
+	}
+	return 0
+}
+
+func runServer(ctx context.Context, cfg *config.ServerConfig) (err error) {
+	startup, stopStartup := context.WithTimeout(ctx, 15*time.Second)
+	db, err := cfg.OpenDatabase(startup)
+	stopStartup()
+	if err != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
+		return errors.New("server database startup failed")
+	}
+	defer func() {
+		// An uncooperative handler still owns its dependencies. The process
+		// exits nonzero and the OS reclaims them on this last-resort path.
+		if !errors.Is(err, errHandlersBusy) {
+			db.Close()
+		}
+	}()
 
 	queries := sqlc.New(db)
 	mux := serverRoutes(queries, db, cfg)
-	if path := os.Getenv("MOBILE_POLICY_FILE"); path != "" {
-		file, err := os.Open(path)
-		if err != nil {
-			log.Fatal("cannot open mobile policy file")
-		}
-		runtime, err := installation.LoadRuntime(file, queries, db)
-		file.Close()
-		if err != nil {
-			log.Fatal("invalid mobile policy configuration")
+	file, err := cfg.MobilePolicy()
+	if err != nil {
+		return errors.New("cannot open mobile policy file")
+	}
+	if file != nil {
+		runtime, loadErr := installation.LoadRuntime(file, queries, db)
+		closeErr := file.Close()
+		if loadErr != nil || closeErr != nil {
+			return errors.New("invalid mobile policy configuration")
 		}
 		applications.RegisterMobileLifecycle(mux, runtime)
 		if err := applications.RegisterMobileReceipts(mux, runtime, db); err != nil {
-			log.Fatal("invalid receipt configuration")
+			return errors.New("invalid mobile receipt configuration")
 		}
 	}
-
-	server := &http.Server{
-		Addr:    ":8080",
-		Handler: middleware.Logging(mux),
+	if ctx.Err() != nil {
+		return nil
+	}
+	var lc net.ListenConfig
+	listener, err := lc.Listen(ctx, "tcp", ":8080")
+	if err != nil {
+		return errors.New("server listener startup failed")
 	}
 	log.Println("server running :8080")
-	log.Fatal(server.ListenAndServe())
+	return serveHTTP(ctx, listener, middleware.Logging(mux), 10*time.Second, 5*time.Second)
 }
 
 func serverRoutes(queries *sqlc.Queries, db applications.Transactor, cfg *config.ServerConfig) *http.ServeMux {

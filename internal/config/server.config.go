@@ -14,6 +14,8 @@ import (
 // triggers an immediate notification send. Delivery-provider credentials
 // (OneSignal) are deliberately absent — only the worker talks to OneSignal.
 type ServerConfig struct {
+	mobilePolicyFile string
+
 	BaseConfig
 
 	// APIKey is the shared secret expected in the X-API-Key header on every
@@ -74,7 +76,8 @@ func LoadServerConfig() *ServerConfig {
 	base := LoadBaseConfig()
 
 	cfg := &ServerConfig{
-		BaseConfig: *base,
+		BaseConfig:       *base,
+		mobilePolicyFile: os.Getenv("MOBILE_POLICY_FILE"),
 
 		APIKey:          os.Getenv("API_KEY"),
 		AccessSecret:    os.Getenv("ACCESS_SECRET"),

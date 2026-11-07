@@ -39,11 +39,8 @@ import (
 // # Parameters
 //
 //   - ctx: used for both pool construction and the initial Ping. It should
-//     carry a startup-appropriate deadline; the callers in this repository
-//     pass context.Background() and rely on TCP-level timeouts, but a
-//     bounded context (for example, five seconds) is the recommended pattern
-//     for production code so that an unreachable database does not hang a
-//     process during rollout.
+//     carry a startup-appropriate deadline; the API and bootstrap commands
+//     allow up to 15 seconds for the pool to become usable.
 //   - connString: the libpq-style DSN produced by
 //     config.BaseConfig.GetDatabaseURL, of the form
 //     "postgres://user:pass@host:port/name?sslmode=mode". It is passed
@@ -84,7 +81,17 @@ import (
 // without considering PostgreSQL's max_connections limit, since each pool
 // reserves its own set of connections.
 func New(ctx context.Context, connString string) (*pgxpool.Pool, error) {
-	pool, err := pgxpool.New(ctx, connString)
+	cfg, err := pgxpool.ParseConfig(connString)
+	if err != nil {
+		return nil, err
+	}
+	return NewWithConfig(ctx, cfg)
+}
+
+// NewWithConfig opens a caller-configured pool and verifies connectivity.
+// A startup failure releases all partially acquired resources.
+func NewWithConfig(ctx context.Context, cfg *pgxpool.Config) (*pgxpool.Pool, error) {
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 
 	if err != nil {
 		return nil, err

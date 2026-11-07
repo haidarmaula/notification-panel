@@ -1,4 +1,4 @@
-// Package config centralises environment-driven configuration for every
+// Package config supports local environment and protected per-role configuration for every
 // executable in the Notification Panel: the HTTP API server, the Kafka
 // delivery worker, the scheduled-notification processor, and the one-shot
 // bootstrap utility.
@@ -8,9 +8,9 @@
 // Each executable loads exactly one specialised config struct — ServerConfig,
 // WorkerConfig, SchedulerConfig, or BootstrapConfig — each of which embeds
 // the shared BaseConfig and adds the environment variables that matter to
-// that binary. There is no single global config: a running API server has no
-// knowledge of the worker's OneSignal credentials, and vice versa, which
-// keeps each binary's required environment minimal.
+// that binary for local development. Production server/bootstrap commands
+// require protected JSON policy via --deployment. Worker, scheduler and
+// requeue delegate directly to protected per-component deployment loaders.
 //
 // # Fail-fast policy
 //
@@ -28,9 +28,7 @@
 // working directory and injects its values into the process environment
 // without overwriting variables that are already set. Every specialised
 // loader invokes LoadBaseConfig as its first step, so .env is loaded exactly
-// once per process, at the entry point. In production this is typically a
-// no-op — the deployment supplies environment variables directly — but it
-// makes local development and `docker-compose up` work without ceremony.
+// once during local startup. The protected loaders do not read .env.
 //
 // # Concurrency
 //
@@ -42,10 +40,16 @@
 package config
 
 import (
-	"fmt"
+	"context"
 	"log"
+	"net"
+	"net/url"
 	"os"
+	"strings"
 
+	"hello/internal/database"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
 )
 
@@ -61,6 +65,8 @@ import (
 // All fields are populated from environment variables and are validated as
 // non-empty at load time; none of them carries a default.
 type BaseConfig struct {
+	protectedDatabase *pgxpool.Config
+
 	// DBHost is the PostgreSQL host (DB_HOST). May be a hostname, IP, or
 	// Docker service name.
 	DBHost string
@@ -76,16 +82,15 @@ type BaseConfig struct {
 	DBUser string
 
 	// DBPassword is the PostgreSQL password (DB_PASSWORD). Treated as opaque
-	// and never logged. Note that GetDatabaseURL does not URL-escape this
-	// value — see the method documentation for the consequences.
+	// and never logged. GetDatabaseURL escapes it as URL user information.
 	DBPassword string
 
 	// DBName is the target database name (DB_NAME).
 	DBName string
 
 	// DBSSLMode is the sslmode parameter passed to PostgreSQL (DB_SSLMODE).
-	// Typical values are "disable" for local development and "require" or
-	// "verify-full" in production.
+	// Local development may use "disable". Protected deployment requires
+	// "verify-full" in the role's database URL.
 	DBSSLMode string
 }
 
@@ -153,41 +158,28 @@ func LoadBaseConfig() *BaseConfig {
 	return cfg
 }
 
-// GetDatabaseURL assembles a PostgreSQL connection URL from the receiver's
-// fields, in the form expected by pgx and lib/pq:
-//
-//	postgres://<user>:<password>@<host>:<port>/<name>?sslmode=<sslmode>
-//
-// # Escaping
-//
-// The method uses fmt.Sprintf rather than net/url to build the DSN, which
-// means no percent-encoding is applied to any component. A password
-// containing characters with special meaning in a URL — most commonly "@",
-// ":", "/", "?", or "#" — will produce a malformed DSN and the driver will
-// fail to parse it. Passwords for this application are expected to be
-// alphanumeric; if that assumption ever changes, this method must be
-// revisited before the change is deployed.
-//
-// # Failure modes
-//
-// GetDatabaseURL never returns an error and never panics: it will happily
-// format a URL from any combination of field values, including empty ones.
-// Validation of the underlying fields is the responsibility of LoadBaseConfig,
-// not of this accessor.
-//
-// # Concurrency
-//
-// The method reads the receiver's fields and performs no mutation, so it is
-// safe to call from multiple goroutines provided the receiver is not being
-// mutated concurrently — which, per the package-level contract, it never is.
+// GetDatabaseURL builds an escaped PostgreSQL URL. Its return value contains
+// a password and must never be logged.
 func (c *BaseConfig) GetDatabaseURL() string {
-	return fmt.Sprintf(
-		"postgres://%s:%s@%s:%s/%s?sslmode=%s",
-		c.DBUser,
-		c.DBPassword,
-		c.DBHost,
-		c.DBPort,
-		c.DBName,
-		c.DBSSLMode,
-	)
+	if c.protectedDatabase != nil {
+		return c.protectedDatabase.ConnString()
+	}
+	host := c.DBHost
+	if strings.HasPrefix(host, "[") && strings.HasSuffix(host, "]") {
+		host = host[1 : len(host)-1]
+	}
+	u := url.URL{
+		Scheme: "postgres", Host: net.JoinHostPort(host, c.DBPort), User: url.UserPassword(c.DBUser, c.DBPassword),
+		Path: "/" + c.DBName, RawQuery: url.Values{"sslmode": {c.DBSSLMode}}.Encode(),
+	}
+	return u.String()
+}
+
+// OpenDatabase uses the protected policy's verified TLS settings when present.
+// The caller owns the returned pool.
+func (c *BaseConfig) OpenDatabase(ctx context.Context) (*pgxpool.Pool, error) {
+	if c.protectedDatabase != nil {
+		return database.NewWithConfig(ctx, c.protectedDatabase.Copy())
+	}
+	return database.New(ctx, c.GetDatabaseURL())
 }

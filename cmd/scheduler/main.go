@@ -9,6 +9,7 @@ import (
 
 	"hello/internal/daemon"
 	"hello/internal/deployment"
+	"hello/internal/runloop"
 )
 
 func main() {
@@ -17,6 +18,11 @@ func main() {
 
 func run() int {
 	signal.Ignore(syscall.SIGPIPE)
+	restore, err := runloop.PrepareCommandOutputs()
+	if err != nil {
+		return 1
+	}
+	defer restore()
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	return daemon.Process(ctx, deployment.Scheduler, os.Args[1:], os.Stdout, os.Stderr)

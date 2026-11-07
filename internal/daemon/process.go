@@ -4,6 +4,8 @@ import (
 	"context"
 	"os"
 
+	"hello/internal/runloop"
+
 	"hello/internal/deployment"
 )
 
@@ -14,16 +16,6 @@ func Process(ctx context.Context, role deployment.Component, args []string, stdo
 	if stdout == nil || stderr == nil {
 		return 2
 	}
-	interrupted := make(chan struct{})
-	stop := context.AfterFunc(ctx, func() {
-		_ = stdout.Close()
-		_ = stderr.Close()
-		close(interrupted)
-	})
-	defer func() {
-		if !stop() {
-			<-interrupted
-		}
-	}()
+	defer runloop.InterruptOutputOnCancel(ctx, stdout, stderr)()
 	return Command(ctx, role, args, stdout, stderr)
 }

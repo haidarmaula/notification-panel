@@ -267,7 +267,7 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 
 | # | Location | Issue |
 |---|----------|-------|
-| H43 | `cmd/server/main.go` | No graceful shutdown — SIGTERM terminates in-flight requests immediately |
+| H43 | `cmd/server/main.go` | **Fixed, locally tested 2026-11-08.** SIGINT/SIGTERM stop acceptance, allow active HTTP work to drain and then cancel overdue requests. The pool closes after handler exit. A hard-stop deadline reports failure when a handler remains unresponsive. See [process lifecycle](docs/specs/process-lifecycle.md). |
 | H44 | `internal/features/notifications/module.go` | The Kafka producer created in the module constructor is never closed |
 | H45 | `internal/kafka/producer.go` — `NewProducer` | `AllowAutoTopicCreation: true` means a typo in the configured topic name silently creates a new topic that no consumer reads |
 | H46 | `internal/kafka/producer.go` — `NewProducer` | `RequiredAcks: RequireOne` — a leader failure immediately after acknowledgement can lose the message |
@@ -382,7 +382,7 @@ Cosmetic issues, minor divergences, and code smells.
 | L4 | `internal/bootstrap/bootstrap.go` | No transaction wrapping the role lookup and staff insert |
 | L5 | `internal/database/db.go` | No connection pool sizing configuration |
 | L6 | `internal/config/scheduler.config.go` | `SchedulerInterval` is the only field with a non-empty default — asymmetric with the rest of the config surface |
-| L7 | `internal/config/base.config.go` — `GetDatabaseURL` | Password is not URL-escaped — `@`, `:`, `#`, and `/` in the password produce a malformed DSN |
+| L7 | `internal/config/base.config.go` — `GetDatabaseURL` | **Fixed.** DB credentials, database names and SSL mode are encoded as separate URL components. Tests round-trip reserved characters and IPv6 hosts. |
 | L8 | `README.md` | Claimed versions (`Go 1.26.4`, `Kafka 4.3.1`) do not match released versions |
 | L9 | `README.md` | Claims the worker emits `NotificationDeliveryUpdated` events — contradicted by C13 |
 | L10 | `internal/features/notifications/dto.go` — `Pagination` | The `Limit` field silently reflects the clamped value, not the client's request |
@@ -519,7 +519,7 @@ Focus: design consistency and maintainability.
 - [ ] M15–M27 — reconcile the divergent contracts and naming conventions
 - [x] M43 (body cap), M44 — bounded full-body reads for all 16 JSON inputs, locally verified M02d
 - [ ] M43 — Content-Type enforcement and remaining request/abuse controls
-- [ ] H43 — add graceful shutdown to the API server
+- [x] H43 — graceful HTTP shutdown, forced cancellation and bounded handler join
 - [ ] M35–M37 — migrate to structured logging with a request ID
 
 ### Sprint 4 — Polish

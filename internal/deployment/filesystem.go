@@ -13,7 +13,9 @@ import (
 // Read loads a fixed root-owned component policy. No argv/environment path
 // override exists. Symlinks, extended ACLs and unsafe ownership/modes fail closed.
 func Read(component Component) ([]byte, error) {
-	if component != Requeue && component != Worker && component != Scheduler {
+	switch component {
+	case Requeue, Worker, Scheduler, Server, Bootstrap:
+	default:
 		return nil, ErrConfiguration
 	}
 	path := "/etc/hello/" + string(component) + ".json"

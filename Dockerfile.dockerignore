@@ -1,0 +1,13 @@
+**
+!go.mod
+!go.sum
+!cmd
+!cmd/**/
+!cmd/**/*.go
+!internal
+!internal/**/
+!internal/**/*.go
+!pkg
+!pkg/**/
+!pkg/**/*.go
+**/*_test.go
