@@ -863,3 +863,10 @@ binding. Delivery intents persist the audience route revision and reject later
 rewrites. Existing intents without a revision remain fenced. The protected
 transition function binds each change to its login, reviewed cohort, epochs
 and initial revision. [Binding cutover](runbooks/binding-route-cutover.md)
+
+Migration 000038 adds application lifecycle grants bound to the project,
+database login OIDs, expected status/revision, runtime epochs, expiry and
+three reviewed evidence digests. A partial unique index permits one applied
+grant per project revision. The offline installer enables lifecycle states
+only after the ownership finalizer. The project and its dispatch hold change
+in one transaction. [Application enrollment and retirement](runbooks/application-lifecycle.md).

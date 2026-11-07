@@ -27,6 +27,26 @@ type ApplicationDispatchPolicy struct {
 	KeyTtlSeconds    int32 `db:"key_ttl_seconds"`
 }
 
+type ApplicationLifecycleGrant struct {
+	ID                  pgtype.UUID        `db:"id"`
+	ProjectID           pgtype.UUID        `db:"project_id"`
+	OperatorRole        pgtype.Uint32      `db:"operator_role"`
+	IssuerRole          pgtype.Uint32      `db:"issuer_role"`
+	OriginEpoch         pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch         pgtype.UUID        `db:"source_epoch"`
+	ExpectedRevision    int64              `db:"expected_revision"`
+	PreviousStatus      string             `db:"previous_status"`
+	Destination         string             `db:"destination"`
+	OwnershipEvidence   []byte             `db:"ownership_evidence"`
+	WriterFenceEvidence []byte             `db:"writer_fence_evidence"`
+	CohortFenceEvidence []byte             `db:"cohort_fence_evidence"`
+	RetiredWriterRoles  []string           `db:"retired_writer_roles"`
+	IssuedAt            pgtype.Timestamptz `db:"issued_at"`
+	ExpiresAt           pgtype.Timestamptz `db:"expires_at"`
+	RevokedAt           pgtype.Timestamptz `db:"revoked_at"`
+	AppliedAt           pgtype.Timestamptz `db:"applied_at"`
+}
+
 type ApplicationStaffGrant struct {
 	ApplicationID int64              `db:"application_id"`
 	StaffID       int64              `db:"staff_id"`

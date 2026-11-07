@@ -3,7 +3,7 @@
   "info": {
     "title": "Application registry and staff grants \u2014 M03a",
     "version": "0.1.0",
-    "description": "Implemented and locally verified M03a.3 registry HTTP API. Canonical behavior: docs/specs/m03a-application-registry.md. M03a metadata remains PROVISIONING; no business data, activation, credentials or provider send."
+    "description": "Implemented and locally verified M03a.3 registry HTTP API. Canonical behavior: docs/specs/m03a-application-registry.md. New projects start PROVISIONING. Read responses expose the current offline lifecycle state. Registry endpoints manage metadata and staff grants."
   },
   "x-implementation-status": "implemented-m03a3-local-verified",
   "security": [
@@ -609,7 +609,8 @@
             "description": "Trimmed nonempty name, maximum 128 UTF-8 bytes; maxLength alone is not byte validation."
           },
           "status": {
-            "const": "PROVISIONING"
+            "type": "string",
+            "enum": ["PROVISIONING", "ACTIVE", "HELD", "RETIRED"]
           },
           "revision": {
             "type": "string",

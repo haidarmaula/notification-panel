@@ -1,9 +1,9 @@
 # Application registry API
 
-M03a exposes provisioning project metadata and explicit staff grants. All projects
-remain `PROVISIONING`; these endpoints do not enable mobile enrollment or isolate
-the legacy notification pipeline. See the [OpenAPI contract](../contracts/application-registry.openapi.json),
-[exact SPEC](../specs/m03a-application-registry.md), and [local verification](../analysis/m03a3-verification.md).
+New projects start in `PROVISIONING`. The registry manages metadata and staff grants.
+An independent offline operation may move a project to `ACTIVE`, `HELD` or
+`RETIRED`. Metadata reads expose its current status and revision.
+[Registry contract](../contracts/application-registry.openapi.json) · [Offline activation](../runbooks/application-lifecycle.md).
 
 Every operation requires `X-API-Key` and a staff `Authorization: Bearer ...` token.
 Current active staff and DB role are checked at the route and service. Token role
