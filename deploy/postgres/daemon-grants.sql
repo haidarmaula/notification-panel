@@ -76,6 +76,10 @@ SELECT to_regclass('public.current_binding_routes') IS NOT NULL AS has_binding_r
 \if :has_binding_routes
 \ir daemon-grants-m37.sql
 \endif
+SELECT to_regprocedure('public.application_lifecycle_managed()') IS NOT NULL AS has_dispatch_release \gset
+\if :has_dispatch_release
+\ir daemon-grants-m39.sql
+\endif
 
 CREATE TEMP TABLE daemon_profiles(profile text PRIMARY KEY, role_name name UNIQUE NOT NULL) ON COMMIT DROP;
 INSERT INTO daemon_profiles VALUES ('s','hello_scheduler'),('a','hello_admission'),('d','hello_delivery');

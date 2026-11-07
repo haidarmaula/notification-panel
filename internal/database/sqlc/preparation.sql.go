@@ -13,9 +13,9 @@ import (
 
 const completeCampaignPreparation = `-- name: CompleteCampaignPreparation :one
 INSERT INTO notification_preparations(application_id,notification_id,origin_epoch,source_epoch,
-    resolved_user_count,eligible_user_count,eligible_device_count)
+    resolved_user_count,eligible_user_count,eligible_device_count,prepared_pilot_cohort)
 VALUES($1,$2,$3,$4,
-    $5,$6,$7) RETURNING notification_id, application_id, origin_epoch, source_epoch, completed_at, resolved_user_count, eligible_user_count, eligible_device_count
+    $5,$6,$7,$8::uuid) RETURNING notification_id, application_id, origin_epoch, source_epoch, completed_at, resolved_user_count, eligible_user_count, eligible_device_count, prepared_pilot_cohort
 `
 
 type CompleteCampaignPreparationParams struct {
@@ -26,6 +26,7 @@ type CompleteCampaignPreparationParams struct {
 	ResolvedUsers   int64       `db:"resolved_users"`
 	EligibleUsers   int64       `db:"eligible_users"`
 	EligibleDevices int64       `db:"eligible_devices"`
+	PilotCohort     pgtype.UUID `db:"pilot_cohort"`
 }
 
 func (q *Queries) CompleteCampaignPreparation(ctx context.Context, arg CompleteCampaignPreparationParams) (NotificationPreparation, error) {
@@ -37,6 +38,7 @@ func (q *Queries) CompleteCampaignPreparation(ctx context.Context, arg CompleteC
 		arg.ResolvedUsers,
 		arg.EligibleUsers,
 		arg.EligibleDevices,
+		arg.PilotCohort,
 	)
 	var i NotificationPreparation
 	err := row.Scan(
@@ -48,6 +50,7 @@ func (q *Queries) CompleteCampaignPreparation(ctx context.Context, arg CompleteC
 		&i.ResolvedUserCount,
 		&i.EligibleUserCount,
 		&i.EligibleDeviceCount,
+		&i.PreparedPilotCohort,
 	)
 	return i, err
 }
@@ -69,7 +72,7 @@ func (q *Queries) ExpireUnpreparedCampaign(ctx context.Context, arg ExpireUnprep
 }
 
 const getCompletePreparation = `-- name: GetCompletePreparation :one
-SELECT notification_id, application_id, origin_epoch, source_epoch, completed_at, resolved_user_count, eligible_user_count, eligible_device_count FROM notification_preparations WHERE application_id=$1::bigint
+SELECT notification_id, application_id, origin_epoch, source_epoch, completed_at, resolved_user_count, eligible_user_count, eligible_device_count, prepared_pilot_cohort FROM notification_preparations WHERE application_id=$1::bigint
     AND notification_id=$2::bigint
 `
 
@@ -90,6 +93,7 @@ func (q *Queries) GetCompletePreparation(ctx context.Context, arg GetCompletePre
 		&i.ResolvedUserCount,
 		&i.EligibleUserCount,
 		&i.EligibleDeviceCount,
+		&i.PreparedPilotCohort,
 	)
 	return i, err
 }
@@ -124,13 +128,13 @@ WITH targets AS MATERIALIZED (
     SELECT id FROM resolved WHERE status='ACTIVE'
 ), bindings AS MATERIALIZED (
     SELECT b.application_id,b.id,b.installation_id,b.owner_user_id,b.owner_epoch,
-        CASE WHEN r.destination='FCM_ACTIVE' AND (r.origin_epoch,r.source_epoch)=(runtime.origin_epoch,runtime.source_epoch) THEN r.revision END AS route_revision
+        CASE WHEN r.destination='FCM_ACTIVE' AND (r.origin_epoch,r.source_epoch)=(runtime.origin_epoch,runtime.source_epoch) AND ($3::uuid IS NULL OR r.cohort_id=$3::uuid) THEN r.revision END AS route_revision
     FROM installation_bindings b JOIN mobile_installations i
       ON i.application_id=b.application_id AND i.id=b.installation_id
       AND i.owner_user_id=b.owner_user_id AND i.owner_epoch=b.owner_epoch
     JOIN eligible e ON e.id=b.owner_user_id
     CROSS JOIN notification_runtime runtime
-    LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch FROM current_binding_routes cr
+    LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch,cohort_id FROM current_binding_routes cr
         WHERE (cr.application_id,cr.binding_id)=(b.application_id,b.id) LIMIT 1) r ON true
     WHERE runtime.singleton AND b.application_id=$2::bigint AND b.retired_at IS NULL
 ), assessment AS MATERIALIZED (
@@ -139,7 +143,9 @@ WITH targets AS MATERIALIZED (
           OR NOT ((target_type='BROADCAST' AND user_id IS NULL AND segment_id IS NULL AND upload_batch_id IS NULL)
               OR (target_type='SEGMENT' AND user_id IS NULL AND segment_id IS NOT NULL AND upload_batch_id IS NULL)
               OR (target_type='INDIVIDUAL' AND user_id IS NOT NULL AND segment_id IS NULL AND upload_batch_id IS NULL))))::boolean AS supported,
-      (NOT EXISTS(SELECT 1 FROM bindings WHERE route_revision IS NULL) AND NOT EXISTS(SELECT 1 FROM eligible e WHERE NOT EXISTS(SELECT 1 FROM bindings b WHERE b.owner_user_id=e.id)
+      (($3::uuid IS NULL OR (EXISTS(SELECT 1 FROM eligible)
+          AND NOT EXISTS(SELECT 1 FROM targets WHERE target_type='BROADCAST')))
+       AND NOT EXISTS(SELECT 1 FROM bindings WHERE route_revision IS NULL) AND NOT EXISTS(SELECT 1 FROM eligible e WHERE NOT EXISTS(SELECT 1 FROM bindings b WHERE b.owner_user_id=e.id)
           OR EXISTS(SELECT 1 FROM device_tokens d WHERE d.user_id=e.id AND d.is_active)))::boolean AS covered
 ), inserted AS (
     INSERT INTO notification_delivery_intents(application_id,notification_id,installation_id,binding_id,owner_user_id,owner_epoch,audience_route_revision)
@@ -153,8 +159,9 @@ FROM assessment a
 `
 
 type InsertPreparationIntentsParams struct {
-	NotificationID int64 `db:"notification_id"`
-	ApplicationID  int64 `db:"application_id"`
+	NotificationID int64       `db:"notification_id"`
+	ApplicationID  int64       `db:"application_id"`
+	PilotCohort    pgtype.UUID `db:"pilot_cohort"`
 }
 
 type InsertPreparationIntentsRow struct {
@@ -166,7 +173,7 @@ type InsertPreparationIntentsRow struct {
 }
 
 func (q *Queries) InsertPreparationIntents(ctx context.Context, arg InsertPreparationIntentsParams) (InsertPreparationIntentsRow, error) {
-	row := q.db.QueryRow(ctx, insertPreparationIntents, arg.NotificationID, arg.ApplicationID)
+	row := q.db.QueryRow(ctx, insertPreparationIntents, arg.NotificationID, arg.ApplicationID, arg.PilotCohort)
 	var i InsertPreparationIntentsRow
 	err := row.Scan(
 		&i.Supported,

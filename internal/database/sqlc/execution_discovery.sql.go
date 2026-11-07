@@ -62,6 +62,7 @@ SELECT n.id, a.public_id AS application_public_id, n.origin_epoch, n.source_epoc
 FROM notifications n
 JOIN applications a ON a.id=n.application_id
 JOIN application_dispatch_policy ap ON ap.application_id=a.id
+CROSS JOIN (SELECT application_lifecycle_managed()::boolean AS managed) management
 JOIN notification_runtime r ON r.singleton AND NOT r.sealed AND NOT r.migration_hold
     AND r.origin_epoch=n.origin_epoch AND r.source_epoch=n.source_epoch
 JOIN notification_preparations p ON p.application_id=a.id AND p.notification_id=n.id
@@ -74,7 +75,11 @@ WHERE n.status='PROCESSING' AND n.deadline_at IS NOT NULL AND n.id>$3::bigint
         OR EXISTS (SELECT 1 FROM notification_delivery_intents d WHERE d.notification_id=n.id AND d.status='PENDING'
             AND (n.deadline_at<=clock_timestamp() OR d.next_attempt_at>=n.deadline_at
                 OR d.attempt_count>=$4::integer
-                OR (d.next_attempt_at<=clock_timestamp() AND a.status='ACTIVE' AND ap.coverage_approved AND NOT ap.hold_new))))
+                OR (d.next_attempt_at<=clock_timestamp() AND a.status='ACTIVE' AND NOT ap.hold_new
+                    AND ((NOT management.managed AND ap.coverage_approved)
+                        OR (management.managed AND (ap.dispatch_origin_epoch,ap.dispatch_source_epoch)=(r.origin_epoch,r.source_epoch)
+                            AND ((ap.dispatch_mode='FULL' AND ap.coverage_approved)
+                                OR (ap.dispatch_mode='PILOT' AND ap.dispatch_cohort=p.prepared_pilot_cohort))))))))
 ORDER BY n.id LIMIT $5::integer
 `
 

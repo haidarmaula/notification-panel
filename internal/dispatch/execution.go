@@ -63,7 +63,7 @@ type AttemptReservation struct {
 	lease                                              *ExecutionLease
 	deliveryID, attemptID                              pgtype.UUID
 	bindingID, installationID, ownerUserID, ownerEpoch int64
-	routeRevision                                      int64
+	routeRevision, dispatchRevision                    int64
 	material                                           receipt.Material
 	use                                                *atomic.Bool
 }
@@ -234,7 +234,7 @@ func (s *Execution) Reserve(ctx context.Context, lease *ExecutionLease, delivery
 		if err != nil {
 			return executionMissing(err)
 		}
-		provisional = &AttemptReservation{lease: lease, deliveryID: deliveryID, attemptID: attemptID, bindingID: identity.BindingID, installationID: identity.InstallationID, ownerUserID: identity.OwnerUserID, ownerEpoch: identity.OwnerEpoch, routeRevision: identity.AuthorizationRevision, material: material, use: new(atomic.Bool)}
+		provisional = &AttemptReservation{lease: lease, deliveryID: deliveryID, attemptID: attemptID, bindingID: identity.BindingID, installationID: identity.InstallationID, ownerUserID: identity.OwnerUserID, ownerEpoch: identity.OwnerEpoch, routeRevision: identity.AuthorizationRevision, dispatchRevision: identity.DispatchRevision, material: material, use: new(atomic.Bool)}
 		return nil
 	})
 	if err != nil {

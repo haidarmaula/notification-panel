@@ -147,10 +147,16 @@ func (q *Queries) FinalizeExecutionCampaign(ctx context.Context, arg FinalizeExe
 
 const getExecutionIntentIdentity = `-- name: GetExecutionIntentIdentity :one
 SELECT d.installation_id,d.binding_id,d.owner_user_id,d.owner_epoch,
+    coalesce(CASE WHEN management.managed THEN p.dispatch_revision END,0)::bigint AS dispatch_revision,
     coalesce(CASE WHEN r.destination='FCM_ACTIVE' AND (r.origin_epoch,r.source_epoch)=(runtime.origin_epoch,runtime.source_epoch)
+        AND (NOT management.managed OR p.dispatch_mode='FULL' OR (p.dispatch_mode='PILOT' AND r.cohort_id=p.dispatch_cohort
+            AND prepared.prepared_pilot_cohort=p.dispatch_cohort))
         AND (r.revision=d.audience_route_revision OR r.resume_from=d.audience_route_revision) THEN r.revision END,0)::bigint AS authorization_revision
 FROM notification_delivery_intents d CROSS JOIN notification_runtime runtime
-LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch,resume_from FROM current_binding_routes cr
+CROSS JOIN (SELECT application_lifecycle_managed()::boolean AS managed) management
+LEFT JOIN application_dispatch_policy p ON p.application_id=d.application_id
+LEFT JOIN notification_preparations prepared ON (prepared.application_id,prepared.notification_id)=(d.application_id,d.notification_id)
+LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch,resume_from,cohort_id FROM current_binding_routes cr
         WHERE (cr.application_id,cr.binding_id)=(d.application_id,d.binding_id) LIMIT 1) r ON true
 WHERE runtime.singleton AND d.application_id=$1::bigint AND d.notification_id=$2::bigint AND d.id=$3
 `
@@ -166,6 +172,7 @@ type GetExecutionIntentIdentityRow struct {
 	BindingID             int64 `db:"binding_id"`
 	OwnerUserID           int64 `db:"owner_user_id"`
 	OwnerEpoch            int64 `db:"owner_epoch"`
+	DispatchRevision      int64 `db:"dispatch_revision"`
 	AuthorizationRevision int64 `db:"authorization_revision"`
 }
 
@@ -177,6 +184,7 @@ func (q *Queries) GetExecutionIntentIdentity(ctx context.Context, arg GetExecuti
 		&i.BindingID,
 		&i.OwnerUserID,
 		&i.OwnerEpoch,
+		&i.DispatchRevision,
 		&i.AuthorizationRevision,
 	)
 	return i, err

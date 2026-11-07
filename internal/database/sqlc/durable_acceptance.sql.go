@@ -13,17 +13,19 @@ import (
 
 const campaignAcceptanceReady = `-- name: CampaignAcceptanceReady :one
 WITH targets AS (
-    SELECT id, notification_id, target_type, segment_id, user_id, upload_batch_id, created_at, application_id FROM notification_targets WHERE notification_id=$2::bigint
+    SELECT id, notification_id, target_type, segment_id, user_id, upload_batch_id, created_at, application_id FROM notification_targets WHERE notification_id=$3::bigint
 ), eligible AS (
     SELECT u.id FROM users u
-    WHERE u.application_id=$1::bigint AND u.status='ACTIVE'
+    WHERE u.application_id=$2::bigint AND u.status='ACTIVE'
     AND EXISTS(SELECT 1 FROM targets t WHERE t.application_id=u.application_id AND
         (t.target_type='BROADCAST' OR (t.target_type='INDIVIDUAL' AND t.user_id=u.id)
          OR (t.target_type='SEGMENT' AND EXISTS(SELECT 1 FROM segment_members sm
              WHERE sm.application_id=u.application_id AND sm.segment_id=t.segment_id AND sm.user_id=u.id))))
 )
 SELECT (EXISTS(SELECT 1 FROM targets)
-    AND NOT EXISTS(SELECT 1 FROM targets WHERE application_id IS DISTINCT FROM $1::bigint
+    AND ($1::uuid IS NULL OR (EXISTS(SELECT 1 FROM eligible)
+        AND NOT EXISTS(SELECT 1 FROM targets WHERE target_type='BROADCAST')))
+    AND NOT EXISTS(SELECT 1 FROM targets WHERE application_id IS DISTINCT FROM $2::bigint
         OR NOT ((target_type='BROADCAST' AND user_id IS NULL AND segment_id IS NULL AND upload_batch_id IS NULL)
             OR (target_type='SEGMENT' AND user_id IS NULL AND segment_id IS NOT NULL AND upload_batch_id IS NULL)
             OR (target_type='INDIVIDUAL' AND user_id IS NOT NULL AND segment_id IS NULL AND upload_batch_id IS NULL)))
@@ -31,23 +33,25 @@ SELECT (EXISTS(SELECT 1 FROM targets)
         NOT EXISTS(SELECT 1 FROM installation_bindings b JOIN mobile_installations i
             ON i.application_id=b.application_id AND i.id=b.installation_id
             AND i.owner_user_id=b.owner_user_id AND i.owner_epoch=b.owner_epoch
-            WHERE b.application_id=$1::bigint AND b.owner_user_id=e.id AND b.retired_at IS NULL)
+            WHERE b.application_id=$2::bigint AND b.owner_user_id=e.id AND b.retired_at IS NULL)
         OR EXISTS(SELECT 1 FROM installation_bindings b CROSS JOIN notification_runtime runtime
-            LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch FROM current_binding_routes cr
+            LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch,cohort_id FROM current_binding_routes cr
         WHERE (cr.application_id,cr.binding_id)=(b.application_id,b.id) LIMIT 1) r ON true
-            WHERE runtime.singleton AND b.application_id=$1::bigint AND b.owner_user_id=e.id AND b.retired_at IS NULL
-                AND (r.destination IS DISTINCT FROM 'FCM_ACTIVE' OR (r.origin_epoch,r.source_epoch) IS DISTINCT FROM (runtime.origin_epoch,runtime.source_epoch)))
+            WHERE runtime.singleton AND b.application_id=$2::bigint AND b.owner_user_id=e.id AND b.retired_at IS NULL
+                AND (r.destination IS DISTINCT FROM 'FCM_ACTIVE' OR (r.origin_epoch,r.source_epoch) IS DISTINCT FROM (runtime.origin_epoch,runtime.source_epoch)
+                    OR ($1::uuid IS NOT NULL AND r.cohort_id IS DISTINCT FROM $1::uuid)))
         OR EXISTS(SELECT 1 FROM device_tokens d WHERE d.user_id=e.id AND d.is_active))
 )::boolean AS ready
 `
 
 type CampaignAcceptanceReadyParams struct {
-	ApplicationID int64 `db:"application_id"`
-	CampaignID    int64 `db:"campaign_id"`
+	PilotCohort   pgtype.UUID `db:"pilot_cohort"`
+	ApplicationID int64       `db:"application_id"`
+	CampaignID    int64       `db:"campaign_id"`
 }
 
 func (q *Queries) CampaignAcceptanceReady(ctx context.Context, arg CampaignAcceptanceReadyParams) (bool, error) {
-	row := q.db.QueryRow(ctx, campaignAcceptanceReady, arg.ApplicationID, arg.CampaignID)
+	row := q.db.QueryRow(ctx, campaignAcceptanceReady, arg.PilotCohort, arg.ApplicationID, arg.CampaignID)
 	var ready bool
 	err := row.Scan(&ready)
 	return ready, err
@@ -103,18 +107,38 @@ func (q *Queries) ExpireScopedSchedule(ctx context.Context, arg ExpireScopedSche
 }
 
 const getApplicationDispatchPolicy = `-- name: GetApplicationDispatchPolicy :one
-SELECT application_id, hold_new, coverage_approved, push_ttl_seconds, key_ttl_seconds FROM application_dispatch_policy WHERE application_id=$1::bigint FOR SHARE
+SELECT coalesce(p.hold_new OR (management.managed AND
+        (p.dispatch_mode NOT IN ('PILOT','FULL') OR (p.dispatch_mode='PILOT' AND p.dispatch_cohort IS NULL)
+         OR (p.dispatch_origin_epoch,p.dispatch_source_epoch) IS DISTINCT FROM (r.origin_epoch,r.source_epoch))),true)::boolean AS hold_new,
+    coalesce(p.coverage_approved OR (management.managed AND NOT p.hold_new AND p.dispatch_mode='PILOT'
+        AND p.dispatch_cohort IS NOT NULL AND (p.dispatch_origin_epoch,p.dispatch_source_epoch)=(r.origin_epoch,r.source_epoch)),false)::boolean AS coverage_approved,
+    p.push_ttl_seconds,p.key_ttl_seconds,management.managed,
+    (CASE WHEN management.managed AND p.dispatch_mode='PILOT' THEN p.dispatch_cohort END)::uuid AS pilot_cohort
+FROM application_dispatch_policy p CROSS JOIN notification_runtime r
+CROSS JOIN (SELECT application_lifecycle_managed()::boolean AS managed) management
+WHERE r.singleton AND p.application_id=$1::bigint FOR SHARE OF p
 `
 
-func (q *Queries) GetApplicationDispatchPolicy(ctx context.Context, applicationID int64) (ApplicationDispatchPolicy, error) {
+type GetApplicationDispatchPolicyRow struct {
+	HoldNew          bool        `db:"hold_new"`
+	CoverageApproved bool        `db:"coverage_approved"`
+	PushTtlSeconds   int32       `db:"push_ttl_seconds"`
+	KeyTtlSeconds    int32       `db:"key_ttl_seconds"`
+	Managed          bool        `db:"managed"`
+	PilotCohort      pgtype.UUID `db:"pilot_cohort"`
+}
+
+// The M38-managed path treats seed/legacy flags as insufficient for release.
+func (q *Queries) GetApplicationDispatchPolicy(ctx context.Context, applicationID int64) (GetApplicationDispatchPolicyRow, error) {
 	row := q.db.QueryRow(ctx, getApplicationDispatchPolicy, applicationID)
-	var i ApplicationDispatchPolicy
+	var i GetApplicationDispatchPolicyRow
 	err := row.Scan(
-		&i.ApplicationID,
 		&i.HoldNew,
 		&i.CoverageApproved,
 		&i.PushTtlSeconds,
 		&i.KeyTtlSeconds,
+		&i.Managed,
+		&i.PilotCohort,
 	)
 	return i, err
 }

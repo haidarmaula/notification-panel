@@ -226,7 +226,7 @@ func (q *Queries) LockResultInstallation(ctx context.Context, arg LockResultInst
 }
 
 const lockResultPolicy = `-- name: LockResultPolicy :one
-SELECT application_id, hold_new, coverage_approved, push_ttl_seconds, key_ttl_seconds FROM application_dispatch_policy WHERE application_id=$1::bigint FOR UPDATE
+SELECT application_id, hold_new, coverage_approved, push_ttl_seconds, key_ttl_seconds, dispatch_revision, dispatch_mode, dispatch_cohort, dispatch_origin_epoch, dispatch_source_epoch FROM application_dispatch_policy WHERE application_id=$1::bigint FOR UPDATE
 `
 
 func (q *Queries) LockResultPolicy(ctx context.Context, applicationID int64) (ApplicationDispatchPolicy, error) {
@@ -238,6 +238,11 @@ func (q *Queries) LockResultPolicy(ctx context.Context, applicationID int64) (Ap
 		&i.CoverageApproved,
 		&i.PushTtlSeconds,
 		&i.KeyTtlSeconds,
+		&i.DispatchRevision,
+		&i.DispatchMode,
+		&i.DispatchCohort,
+		&i.DispatchOriginEpoch,
+		&i.DispatchSourceEpoch,
 	)
 	return i, err
 }

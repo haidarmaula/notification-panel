@@ -83,9 +83,9 @@ func lockAcceptanceScope(ctx context.Context, q *sqlc.Queries, id pgtype.UUID, p
 	return runtime, app, scope, err
 }
 
-func acceptancePolicy(ctx context.Context, q *sqlc.Queries, runtime sqlc.LockNotificationRuntimeRow, applicationID int64) (sqlc.ApplicationDispatchPolicy, error) {
+func acceptancePolicy(ctx context.Context, q *sqlc.Queries, runtime sqlc.LockNotificationRuntimeRow, applicationID int64) (sqlc.GetApplicationDispatchPolicyRow, error) {
 	if runtime.Sealed || runtime.MigrationHold {
-		return sqlc.ApplicationDispatchPolicy{}, errSendHeld
+		return sqlc.GetApplicationDispatchPolicyRow{}, errSendHeld
 	}
 	policy, err := q.GetApplicationDispatchPolicy(ctx, applicationID)
 	if errors.Is(err, pgx.ErrNoRows) {
@@ -158,7 +158,7 @@ func (s *Service) AcceptCampaign(ctx context.Context, id pgtype.UUID, campaignID
 		if campaign.Status != "DRAFT" {
 			return errCampaignNotDraft
 		}
-		ready, err := q.CampaignAcceptanceReady(ctx, sqlc.CampaignAcceptanceReadyParams{ApplicationID: app.ID, CampaignID: campaignID})
+		ready, err := q.CampaignAcceptanceReady(ctx, sqlc.CampaignAcceptanceReadyParams{ApplicationID: app.ID, CampaignID: campaignID, PilotCohort: policy.PilotCohort})
 		if err != nil {
 			return err
 		}
@@ -206,6 +206,15 @@ func (s *Service) ScheduleCampaign(ctx context.Context, id pgtype.UUID, campaign
 		}
 		if campaign.Status != "DRAFT" {
 			return errCampaignNotDraft
+		}
+		if policy.Managed {
+			ready, err := q.CampaignAcceptanceReady(ctx, sqlc.CampaignAcceptanceReadyParams{ApplicationID: app.ID, CampaignID: campaignID, PilotCohort: policy.PilotCohort})
+			if err != nil {
+				return err
+			}
+			if !ready {
+				return errAudienceNotReady
+			}
 		}
 		row, err := q.ScheduleScopedCampaign(ctx, sqlc.ScheduleScopedCampaignParams{ApplicationID: app.ID, CampaignID: campaignID, ScheduledAt: pgtype.Timestamptz{Time: at, Valid: true}, PushTtlSeconds: policy.PushTtlSeconds, OriginEpoch: runtime.OriginEpoch, SourceEpoch: runtime.SourceEpoch})
 		if errors.Is(err, pgx.ErrNoRows) {

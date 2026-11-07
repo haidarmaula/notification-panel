@@ -39,8 +39,10 @@ for _ in {1..80}; do
 done
 for migration in db/migrations/*.up.sql; do sql postgres < "$migration"; done
 # The unused migration may roll back safely before any evidence is written.
+sql postgres < db/migrations/000039_application_dispatch_control.down.sql
 sql postgres < db/migrations/000038_application_lifecycle.down.sql
 sql postgres < db/migrations/000038_application_lifecycle.up.sql
+sql postgres < db/migrations/000039_application_dispatch_control.up.sql
 sql postgres <<'SQL'
 CREATE ROLE hello_application_lifecycle_issuer;
 CREATE ROLE hello_application_lifecycle_operator;
@@ -90,9 +92,7 @@ deny 42501 apply 1  # reviewed legacy login still enabled
 sql postgres -c 'ALTER ROLE retired_writer NOLOGIN; GRANT retired_writer TO runtime_fixture'
 deny 42501 apply 1  # login still inherits the retired writer
 sql postgres -c 'REVOKE retired_writer FROM runtime_fixture'
-sql postgres -c "UPDATE application_dispatch_policy SET coverage_approved=true WHERE application_id=(SELECT id FROM applications WHERE public_id='$project')"
-deny 42501 apply 1
-sql postgres -c "UPDATE application_dispatch_policy SET coverage_approved=false WHERE application_id=(SELECT id FROM applications WHERE public_id='$project')"
+deny 42501 sql postgres -c "UPDATE application_dispatch_policy SET coverage_approved=true,hold_new=false WHERE application_id=(SELECT id FROM applications WHERE public_id='$project')"
 issue 2 1 PROVISIONING ACTIVE "$source_epoch"
 deny 42501 apply 2
 issue 3 2 PROVISIONING ACTIVE
@@ -131,8 +131,8 @@ INSERT INTO binding_route_grants(id,application_id,binding_id,operator_role,orig
     reason,issued_at,expires_at,applied_at)
 SELECT gen_random_uuid(),b.application_id,b.id,'operator_a'::regrole,r.origin_epoch,r.source_epoch,0,'FCM_ACTIVE',gen_random_uuid(),gen_random_uuid(),
     'pilot',now()-interval '1 second',now()+interval '1 day',now() FROM installation_bindings b CROSS JOIN notification_runtime r;
-UPDATE application_dispatch_policy SET hold_new=false,coverage_approved=true WHERE application_id=(SELECT id FROM applications WHERE key='project-a');
 SQL
+source scripts/fixtures/application-dispatch.sh
 issue 6 2 ACTIVE HELD
 [[ "$(apply 6)" == 3 ]]
 [[ "$(sql postgres -c "SELECT status,revision,hold_new,coverage_approved FROM applications a JOIN application_dispatch_policy p ON p.application_id=a.id WHERE public_id='$project'")" == 'HELD|3|t|f' ]]

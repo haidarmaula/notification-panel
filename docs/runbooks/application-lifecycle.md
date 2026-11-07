@@ -100,3 +100,6 @@ three committed application transitions. The other project stays at
 PROVISIONING revision one. The runtime remains sealed and migration-held.
 Deployment acceptance requires the actual reviewed writer and cohort
 inventory, login grants, recovery rehearsal and target policy.
+
+A separate reviewed grant is required before an enrolled project can submit
+a pilot or full campaign. [Dispatch release and rollback](application-dispatch.md).

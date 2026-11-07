@@ -29,13 +29,13 @@ WITH targets AS MATERIALIZED (
     SELECT id FROM resolved WHERE status='ACTIVE'
 ), bindings AS MATERIALIZED (
     SELECT b.application_id,b.id,b.installation_id,b.owner_user_id,b.owner_epoch,
-        CASE WHEN r.destination='FCM_ACTIVE' AND (r.origin_epoch,r.source_epoch)=(runtime.origin_epoch,runtime.source_epoch) THEN r.revision END AS route_revision
+        CASE WHEN r.destination='FCM_ACTIVE' AND (r.origin_epoch,r.source_epoch)=(runtime.origin_epoch,runtime.source_epoch) AND (sqlc.narg(pilot_cohort)::uuid IS NULL OR r.cohort_id=sqlc.narg(pilot_cohort)::uuid) THEN r.revision END AS route_revision
     FROM installation_bindings b JOIN mobile_installations i
       ON i.application_id=b.application_id AND i.id=b.installation_id
       AND i.owner_user_id=b.owner_user_id AND i.owner_epoch=b.owner_epoch
     JOIN eligible e ON e.id=b.owner_user_id
     CROSS JOIN notification_runtime runtime
-    LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch FROM current_binding_routes cr
+    LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch,cohort_id FROM current_binding_routes cr
         WHERE (cr.application_id,cr.binding_id)=(b.application_id,b.id) LIMIT 1) r ON true
     WHERE runtime.singleton AND b.application_id=sqlc.arg(application_id)::bigint AND b.retired_at IS NULL
 ), assessment AS MATERIALIZED (
@@ -44,7 +44,9 @@ WITH targets AS MATERIALIZED (
           OR NOT ((target_type='BROADCAST' AND user_id IS NULL AND segment_id IS NULL AND upload_batch_id IS NULL)
               OR (target_type='SEGMENT' AND user_id IS NULL AND segment_id IS NOT NULL AND upload_batch_id IS NULL)
               OR (target_type='INDIVIDUAL' AND user_id IS NOT NULL AND segment_id IS NULL AND upload_batch_id IS NULL))))::boolean AS supported,
-      (NOT EXISTS(SELECT 1 FROM bindings WHERE route_revision IS NULL) AND NOT EXISTS(SELECT 1 FROM eligible e WHERE NOT EXISTS(SELECT 1 FROM bindings b WHERE b.owner_user_id=e.id)
+      ((sqlc.narg(pilot_cohort)::uuid IS NULL OR (EXISTS(SELECT 1 FROM eligible)
+          AND NOT EXISTS(SELECT 1 FROM targets WHERE target_type='BROADCAST')))
+       AND NOT EXISTS(SELECT 1 FROM bindings WHERE route_revision IS NULL) AND NOT EXISTS(SELECT 1 FROM eligible e WHERE NOT EXISTS(SELECT 1 FROM bindings b WHERE b.owner_user_id=e.id)
           OR EXISTS(SELECT 1 FROM device_tokens d WHERE d.user_id=e.id AND d.is_active)))::boolean AS covered
 ), inserted AS (
     INSERT INTO notification_delivery_intents(application_id,notification_id,installation_id,binding_id,owner_user_id,owner_epoch,audience_route_revision)
@@ -58,9 +60,9 @@ FROM assessment a;
 
 -- name: CompleteCampaignPreparation :one
 INSERT INTO notification_preparations(application_id,notification_id,origin_epoch,source_epoch,
-    resolved_user_count,eligible_user_count,eligible_device_count)
+    resolved_user_count,eligible_user_count,eligible_device_count,prepared_pilot_cohort)
 VALUES(sqlc.arg(application_id),sqlc.arg(notification_id),sqlc.arg(origin_epoch),sqlc.arg(source_epoch),
-    sqlc.arg(resolved_users),sqlc.arg(eligible_users),sqlc.arg(eligible_devices)) RETURNING *;
+    sqlc.arg(resolved_users),sqlc.arg(eligible_users),sqlc.arg(eligible_devices),sqlc.narg(pilot_cohort)::uuid) RETURNING *;
 
 -- name: MarkCampaignPrepared :exec
 UPDATE notifications SET status=CASE WHEN sqlc.arg(empty_audience)::boolean THEN 'COMPLETED' ELSE 'PROCESSING' END,

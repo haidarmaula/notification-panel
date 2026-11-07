@@ -252,7 +252,8 @@ type Querier interface {
 	// No authorization/permission/status decision is implied by this data lookup.
 	GetApplicationAuthority(ctx context.Context, arg GetApplicationAuthorityParams) (GetApplicationAuthorityRow, error)
 	GetApplicationByPublicID(ctx context.Context, publicID pgtype.UUID) (Application, error)
-	GetApplicationDispatchPolicy(ctx context.Context, applicationID int64) (ApplicationDispatchPolicy, error)
+	// The M38-managed path treats seed/legacy flags as insufficient for release.
+	GetApplicationDispatchPolicy(ctx context.Context, applicationID int64) (GetApplicationDispatchPolicyRow, error)
 	GetApplicationStaffGrant(ctx context.Context, arg GetApplicationStaffGrantParams) (ApplicationStaffGrant, error)
 	// ==========================================
 	// GET

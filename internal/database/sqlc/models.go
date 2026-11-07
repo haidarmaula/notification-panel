@@ -19,12 +19,40 @@ type Application struct {
 	UpdatedAt pgtype.Timestamptz `db:"updated_at"`
 }
 
+type ApplicationDispatchGrant struct {
+	ID                  pgtype.UUID        `db:"id"`
+	ProjectID           pgtype.UUID        `db:"project_id"`
+	OperatorRole        pgtype.Uint32      `db:"operator_role"`
+	IssuerRole          pgtype.Uint32      `db:"issuer_role"`
+	ApplicationRevision int64              `db:"application_revision"`
+	ExpectedRevision    int64              `db:"expected_revision"`
+	PreviousMode        string             `db:"previous_mode"`
+	Destination         string             `db:"destination"`
+	CohortID            pgtype.UUID        `db:"cohort_id"`
+	OriginEpoch         pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch         pgtype.UUID        `db:"source_epoch"`
+	Reason              string             `db:"reason"`
+	LegacyEvidence      []byte             `db:"legacy_evidence"`
+	ConsentEvidence     []byte             `db:"consent_evidence"`
+	CoverageEvidence    []byte             `db:"coverage_evidence"`
+	QuotaEvidence       []byte             `db:"quota_evidence"`
+	IssuedAt            pgtype.Timestamptz `db:"issued_at"`
+	ExpiresAt           pgtype.Timestamptz `db:"expires_at"`
+	RevokedAt           pgtype.Timestamptz `db:"revoked_at"`
+	AppliedAt           pgtype.Timestamptz `db:"applied_at"`
+}
+
 type ApplicationDispatchPolicy struct {
-	ApplicationID    int64 `db:"application_id"`
-	HoldNew          bool  `db:"hold_new"`
-	CoverageApproved bool  `db:"coverage_approved"`
-	PushTtlSeconds   int32 `db:"push_ttl_seconds"`
-	KeyTtlSeconds    int32 `db:"key_ttl_seconds"`
+	ApplicationID       int64       `db:"application_id"`
+	HoldNew             bool        `db:"hold_new"`
+	CoverageApproved    bool        `db:"coverage_approved"`
+	PushTtlSeconds      int32       `db:"push_ttl_seconds"`
+	KeyTtlSeconds       int32       `db:"key_ttl_seconds"`
+	DispatchRevision    int64       `db:"dispatch_revision"`
+	DispatchMode        string      `db:"dispatch_mode"`
+	DispatchCohort      pgtype.UUID `db:"dispatch_cohort"`
+	DispatchOriginEpoch pgtype.UUID `db:"dispatch_origin_epoch"`
+	DispatchSourceEpoch pgtype.UUID `db:"dispatch_source_epoch"`
 }
 
 type ApplicationLifecycleGrant struct {
@@ -265,6 +293,7 @@ type NotificationPreparation struct {
 	ResolvedUserCount   int64              `db:"resolved_user_count"`
 	EligibleUserCount   int64              `db:"eligible_user_count"`
 	EligibleDeviceCount int64              `db:"eligible_device_count"`
+	PreparedPilotCohort pgtype.UUID        `db:"prepared_pilot_cohort"`
 }
 
 type NotificationRead struct {

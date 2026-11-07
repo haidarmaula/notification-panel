@@ -163,7 +163,7 @@ func (p *Preparer) prepareOnce(ctx context.Context, event kafka.ScopedSendReques
 	if !policy.CoverageApproved {
 		return hold("audience_not_ready", ErrAdmissionHeld)
 	}
-	counts, err := q.InsertPreparationIntents(ctx, sqlc.InsertPreparationIntentsParams{ApplicationID: app.ID, NotificationID: campaign.ID})
+	counts, err := q.InsertPreparationIntents(ctx, sqlc.InsertPreparationIntentsParams{ApplicationID: app.ID, NotificationID: campaign.ID, PilotCohort: policy.PilotCohort})
 	if err != nil {
 		return PreparationResult{}, err
 	}
@@ -175,7 +175,7 @@ func (p *Preparer) prepareOnce(ctx context.Context, event kafka.ScopedSendReques
 	}
 	complete, err = q.CompleteCampaignPreparation(ctx, sqlc.CompleteCampaignPreparationParams{ApplicationID: app.ID, NotificationID: campaign.ID,
 		OriginEpoch: campaign.OriginEpoch, SourceEpoch: campaign.SourceEpoch, ResolvedUsers: counts.ResolvedUsers,
-		EligibleUsers: counts.EligibleUsers, EligibleDevices: counts.EligibleDevices})
+		EligibleUsers: counts.EligibleUsers, EligibleDevices: counts.EligibleDevices, PilotCohort: policy.PilotCohort})
 	if err != nil {
 		return PreparationResult{}, err
 	}

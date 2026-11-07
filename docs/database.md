@@ -870,3 +870,10 @@ three reviewed evidence digests. A partial unique index permits one applied
 grant per project revision. The offline installer enables lifecycle states
 only after the ownership finalizer. The project and its dispatch hold change
 in one transaction. [Application enrollment and retirement](runbooks/application-lifecycle.md).
+
+Migration 000039 adds the dispatch generation, mode, optional pilot cohort and
+authorized epochs to the per-project dispatch policy. The dedicated operator
+grant ledger retains immutable scope and four evidence digests. A provider
+hold advances the same generation as an operator rollback. The managed policy
+cannot be deleted and recreated to reuse a previous generation. [Dispatch
+release and rollback](runbooks/application-dispatch.md).
