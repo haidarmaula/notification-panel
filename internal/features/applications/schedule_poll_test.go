@@ -12,22 +12,22 @@ import (
 
 type dueScheduleQueries struct {
 	sqlc.Querier
-	list func(context.Context, int32) ([]sqlc.ListDueScopedSchedulesRow, error)
+	list func(context.Context, sqlc.ListDueScopedSchedulesParams) ([]sqlc.ListDueScopedSchedulesRow, error)
 }
 
-func (q dueScheduleQueries) ListDueScopedSchedules(ctx context.Context, page int32) ([]sqlc.ListDueScopedSchedulesRow, error) {
+func (q dueScheduleQueries) ListDueScopedSchedules(ctx context.Context, page sqlc.ListDueScopedSchedulesParams) ([]sqlc.ListDueScopedSchedulesRow, error) {
 	return q.list(ctx, page)
 }
 
 func TestPromoteDueSchedulesBoundsDiscovery(t *testing.T) {
 	stopped := errors.New("fixture discovery failure")
 	calls := 0
-	service := NewService(dueScheduleQueries{list: func(ctx context.Context, page int32) ([]sqlc.ListDueScopedSchedulesRow, error) {
+	service := NewService(dueScheduleQueries{list: func(ctx context.Context, page sqlc.ListDueScopedSchedulesParams) ([]sqlc.ListDueScopedSchedulesRow, error) {
 		calls++
 		deadline, ok := ctx.Deadline()
 		require.True(t, ok)
 		require.LessOrEqual(t, time.Until(deadline), 5*time.Second)
-		require.EqualValues(t, 10, page)
+		require.EqualValues(t, 10, page.PageSize)
 		return nil, stopped
 	}}, panicDB{})
 	report, err := service.PromoteDueSchedules(context.Background(), 10)
@@ -36,7 +36,7 @@ func TestPromoteDueSchedulesBoundsDiscovery(t *testing.T) {
 	require.Equal(t, 1, calls)
 }
 func TestPromoteDueSchedulesRejectsInvalidOrCanceledInput(t *testing.T) {
-	service := NewService(dueScheduleQueries{list: func(context.Context, int32) ([]sqlc.ListDueScopedSchedulesRow, error) {
+	service := NewService(dueScheduleQueries{list: func(context.Context, sqlc.ListDueScopedSchedulesParams) ([]sqlc.ListDueScopedSchedulesRow, error) {
 		t.Fatal("invalid/canceled discovery reached queries")
 		return nil, nil
 	}}, panicDB{})
@@ -53,7 +53,7 @@ func TestPromoteDueSchedulesPreservesEarlierDeadline(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	want, _ := ctx.Deadline()
-	service := NewService(dueScheduleQueries{list: func(ctx context.Context, _ int32) ([]sqlc.ListDueScopedSchedulesRow, error) {
+	service := NewService(dueScheduleQueries{list: func(ctx context.Context, _ sqlc.ListDueScopedSchedulesParams) ([]sqlc.ListDueScopedSchedulesRow, error) {
 		deadline, ok := ctx.Deadline()
 		require.True(t, ok)
 		require.Equal(t, want, deadline)

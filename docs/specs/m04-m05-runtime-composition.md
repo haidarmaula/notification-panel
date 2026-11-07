@@ -49,9 +49,13 @@ Expired accepted schedules remain eligible for terminalization. Migration holds
 are not a discovery filter: existing accepted schedules may become QUEUED while
 preparation/provider eligibility remains held. Each candidate calls the existing
 five-second `PromoteSchedule` transaction and rechecks runtime -> app -> campaign.
-No deadline/epoch is restamped. Counts retain acknowledged changes when a later
-candidate fails; the sweep stops rather than replaying its already committed
-prefix. Stale/restored work stays intact for reviewed reconciliation.
+The original deadline and epochs stay with the campaign. A sweep visits rows
+by scheduled time and ID, and retains its cursor across ticks until it has
+scanned up to the campaign ID horizon captured at the start of the pass.
+A failed promotion leaves the campaign scheduled and returns the acknowledged
+progress. The next sweep starts after the failed row, and a new pass revisits
+it after the suffix has had a turn. A process restart starts a fresh pass.
+Stale or restored work stays available for reviewed reconciliation.
 
 ## Queued preparation recovery
 

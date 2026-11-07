@@ -220,24 +220,45 @@ func (q *Queries) InsertSendOutbox(ctx context.Context, arg InsertSendOutboxPara
 }
 
 const listDueScopedSchedules = `-- name: ListDueScopedSchedules :many
-SELECT n.application_id,n.id,a.public_id AS application_public_id
+WITH horizon AS (
+    SELECT coalesce(nullif($4::bigint,0),(SELECT max(id) FROM notifications),0)::bigint AS pass_end
+)
+SELECT n.application_id,n.id,n.scheduled_at,a.public_id AS application_public_id,horizon.pass_end
 FROM notifications n
 JOIN applications a ON a.id=n.application_id
 JOIN notification_runtime r ON r.singleton
+CROSS JOIN horizon
 WHERE n.status='SCHEDULED' AND n.scheduled_at<=clock_timestamp()
   AND n.deadline_at IS NOT NULL AND NOT r.sealed
   AND n.origin_epoch=r.origin_epoch AND n.source_epoch=r.source_epoch
-ORDER BY n.scheduled_at,n.id LIMIT $1::integer
+  AND n.id<=horizon.pass_end
+  AND ($1::timestamptz IS NULL
+       OR (n.scheduled_at,n.id)>($1::timestamptz,$2::bigint))
+ORDER BY n.scheduled_at,n.id LIMIT $3::integer
 `
 
-type ListDueScopedSchedulesRow struct {
-	ApplicationID       pgtype.Int8 `db:"application_id"`
-	ID                  int64       `db:"id"`
-	ApplicationPublicID pgtype.UUID `db:"application_public_id"`
+type ListDueScopedSchedulesParams struct {
+	AfterScheduledAt pgtype.Timestamptz `db:"after_scheduled_at"`
+	AfterID          int64              `db:"after_id"`
+	PageSize         int32              `db:"page_size"`
+	ThroughID        int64              `db:"through_id"`
 }
 
-func (q *Queries) ListDueScopedSchedules(ctx context.Context, pageSize int32) ([]ListDueScopedSchedulesRow, error) {
-	rows, err := q.db.Query(ctx, listDueScopedSchedules, pageSize)
+type ListDueScopedSchedulesRow struct {
+	ApplicationID       pgtype.Int8        `db:"application_id"`
+	ID                  int64              `db:"id"`
+	ScheduledAt         pgtype.Timestamptz `db:"scheduled_at"`
+	ApplicationPublicID pgtype.UUID        `db:"application_public_id"`
+	PassEnd             int64              `db:"pass_end"`
+}
+
+func (q *Queries) ListDueScopedSchedules(ctx context.Context, arg ListDueScopedSchedulesParams) ([]ListDueScopedSchedulesRow, error) {
+	rows, err := q.db.Query(ctx, listDueScopedSchedules,
+		arg.AfterScheduledAt,
+		arg.AfterID,
+		arg.PageSize,
+		arg.ThroughID,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +266,13 @@ func (q *Queries) ListDueScopedSchedules(ctx context.Context, pageSize int32) ([
 	items := []ListDueScopedSchedulesRow{}
 	for rows.Next() {
 		var i ListDueScopedSchedulesRow
-		if err := rows.Scan(&i.ApplicationID, &i.ID, &i.ApplicationPublicID); err != nil {
+		if err := rows.Scan(
+			&i.ApplicationID,
+			&i.ID,
+			&i.ScheduledAt,
+			&i.ApplicationPublicID,
+			&i.PassEnd,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

@@ -104,13 +104,20 @@ WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(campaign_i
   AND status='SCHEDULED' AND deadline_at<=clock_timestamp();
 
 -- name: ListDueScopedSchedules :many
-SELECT n.application_id,n.id,a.public_id AS application_public_id
+WITH horizon AS (
+    SELECT coalesce(nullif(sqlc.arg(through_id)::bigint,0),(SELECT max(id) FROM notifications),0)::bigint AS pass_end
+)
+SELECT n.application_id,n.id,n.scheduled_at,a.public_id AS application_public_id,horizon.pass_end
 FROM notifications n
 JOIN applications a ON a.id=n.application_id
 JOIN notification_runtime r ON r.singleton
+CROSS JOIN horizon
 WHERE n.status='SCHEDULED' AND n.scheduled_at<=clock_timestamp()
   AND n.deadline_at IS NOT NULL AND NOT r.sealed
   AND n.origin_epoch=r.origin_epoch AND n.source_epoch=r.source_epoch
+  AND n.id<=horizon.pass_end
+  AND (sqlc.narg(after_scheduled_at)::timestamptz IS NULL
+       OR (n.scheduled_at,n.id)>(sqlc.narg(after_scheduled_at)::timestamptz,sqlc.arg(after_id)::bigint))
 ORDER BY n.scheduled_at,n.id LIMIT sqlc.arg(page_size)::integer;
 
 -- name: LockAcceptanceStaff :one

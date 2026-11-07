@@ -348,7 +348,7 @@ type Querier interface {
 	// ==========================================
 	ListDeviceTokensByUser(ctx context.Context, arg ListDeviceTokensByUserParams) ([]DeviceToken, error)
 	ListDeviceTokensByUserIDs(ctx context.Context, userIds []int64) ([]DeviceToken, error)
-	ListDueScopedSchedules(ctx context.Context, pageSize int32) ([]ListDueScopedSchedulesRow, error)
+	ListDueScopedSchedules(ctx context.Context, arg ListDueScopedSchedulesParams) ([]ListDueScopedSchedulesRow, error)
 	// Metadata only: a later acquisition rechecks the marker, epochs and live lease.
 	ListExecutionRecoveryCampaigns(ctx context.Context, arg ListExecutionRecoveryCampaignsParams) ([]ListExecutionRecoveryCampaignsRow, error)
 	// Healthy due devices can be returned as advisory IDs without locking every

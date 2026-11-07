@@ -26,6 +26,8 @@ type Transactor interface {
 type Service struct {
 	q  sqlc.Querier
 	db Transactor
+
+	promotion scheduleCursor
 }
 
 func NewService(q sqlc.Querier, db Transactor) *Service {

@@ -5,12 +5,14 @@ package integration
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/stretchr/testify/require"
+	"hello/internal/database/sqlc"
 	"hello/internal/features/applications"
 )
 
@@ -31,19 +33,19 @@ func TestScheduledDiscoverySkipsOldLineageAndKeepsExpiry(t *testing.T) {
 	seed(runtime.OriginEpoch, replayUUID(t, ctx, f.pool), now.Add(-2*time.Hour), now.Add(time.Hour))
 	live := seed(runtime.OriginEpoch, runtime.SourceEpoch, now.Add(-time.Hour), now.Add(time.Hour))
 	expired := seed(runtime.OriginEpoch, runtime.SourceEpoch, now.Add(-30*time.Minute), now.Add(-10*time.Minute))
-	rows, err := f.q.ListDueScopedSchedules(ctx, 1)
+	rows, err := f.q.ListDueScopedSchedules(ctx, sqlc.ListDueScopedSchedulesParams{PageSize: 1})
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	require.Equal(t, live, rows[0].ID, "stale lineage must not consume the first discovery page")
 	_, err = f.pool.Exec(ctx, "UPDATE notification_runtime SET migration_hold=true")
 	require.NoError(t, err)
-	rows, err = f.q.ListDueScopedSchedules(ctx, 100)
+	rows, err = f.q.ListDueScopedSchedules(ctx, sqlc.ListDueScopedSchedulesParams{PageSize: 100})
 	require.NoError(t, err)
 	require.Len(t, rows, 2)
 	require.Equal(t, expired, rows[1].ID, "expired accepted work still needs terminalization during a migration hold")
 	_, err = f.pool.Exec(ctx, "UPDATE notification_runtime SET sealed=true")
 	require.NoError(t, err)
-	rows, err = f.q.ListDueScopedSchedules(ctx, 100)
+	rows, err = f.q.ListDueScopedSchedules(ctx, sqlc.ListDueScopedSchedulesParams{PageSize: 100})
 	require.NoError(t, err)
 	require.Empty(t, rows)
 }
@@ -95,4 +97,37 @@ func TestScheduleSweepRetainsPartialProgressAndRetriesOnlyPending(t *testing.T) 
 	report, err = applications.NewService(f.q, f.pool).PromoteDueSchedules(ctx, 100)
 	require.NoError(t, err)
 	require.Equal(t, applications.PromotionReport{}, report)
+}
+
+func TestScheduleSweepRevisitsFailedHeadAfterPromotingSuffix(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
+	defer cancel()
+	f := newReplayRegistrationFixture(t, ctx)
+	due := time.Now().Add(-time.Minute)
+	var first, second int64
+	for _, id := range []*int64{&first, &second} {
+		require.NoError(t, f.pool.QueryRow(ctx, `INSERT INTO notifications(application_id,title,body,created_by,status,scheduled_at,deadline_at,origin_epoch,source_epoch)
+			SELECT $1,'Sweep','Fixture',$2,'SCHEDULED',$3::timestamptz,clock_timestamp()+interval '1 hour',origin_epoch,source_epoch
+			FROM notification_runtime RETURNING id`, f.app, f.staff, due).Scan(id))
+	}
+	_, err := f.pool.Exec(ctx, fmt.Sprintf("ALTER TABLE notifications ADD CONSTRAINT blocked_schedule CHECK (id<>%d OR status<>'QUEUED')", first))
+	require.NoError(t, err)
+	promoter := applications.NewService(f.q, f.pool)
+	report, err := promoter.PromoteDueSchedules(ctx, 2)
+	require.ErrorContains(t, err, "blocked_schedule")
+	require.Equal(t, applications.PromotionReport{Visited: 1}, report)
+	report, err = promoter.PromoteDueSchedules(ctx, 2)
+	require.NoError(t, err)
+	require.Equal(t, applications.PromotionReport{Visited: 1, Changed: 1}, report)
+	var outboxID int64
+	require.NoError(t, f.pool.QueryRow(ctx, "SELECT notification_id FROM notification_send_outbox").Scan(&outboxID))
+	require.Equal(t, second, outboxID)
+	_, err = f.pool.Exec(ctx, "ALTER TABLE notifications DROP CONSTRAINT blocked_schedule")
+	require.NoError(t, err)
+	report, err = promoter.PromoteDueSchedules(ctx, 2)
+	require.NoError(t, err)
+	require.Equal(t, applications.PromotionReport{Visited: 1, Changed: 1}, report)
+	var outboxes int
+	require.NoError(t, f.pool.QueryRow(ctx, "SELECT count(*) FROM notification_send_outbox").Scan(&outboxes))
+	require.Equal(t, 2, outboxes)
 }
