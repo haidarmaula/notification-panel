@@ -66,15 +66,19 @@ func (q *Queries) HasLineageBlockedDeliveryUpdate(ctx context.Context, arg HasLi
 }
 
 const lockNextDeliveryUpdate = `-- name: LockNextDeliveryUpdate :one
-SELECT o.event_id, o.application_id, o.notification_id, o.delivery_id, o.delivery_version, o.origin_epoch, o.source_epoch, o.payload, o.occurred_at, o.attempts, o.next_attempt_at,a.public_id AS application_public_id,d.owner_user_id
-FROM notification_update_outbox o JOIN applications a ON a.id=o.application_id
-JOIN notification_delivery_intents d ON d.application_id=o.application_id AND d.id=o.delivery_id
-WHERE o.next_attempt_at<=clock_timestamp()
-    AND ($1::uuid IS NULL OR a.public_id=$1::uuid)
-    AND o.origin_epoch=$2::uuid AND o.source_epoch=$3::uuid
-    AND NOT EXISTS(SELECT 1 FROM notification_update_outbox predecessor
-        WHERE predecessor.delivery_id=o.delivery_id AND predecessor.delivery_version<o.delivery_version)
-ORDER BY o.next_attempt_at,o.event_id LIMIT 1 FOR UPDATE OF o SKIP LOCKED
+WITH picked AS MATERIALIZED (
+    SELECT o.event_id, o.application_id, o.notification_id, o.delivery_id, o.delivery_version, o.origin_epoch, o.source_epoch, o.payload, o.occurred_at, o.attempts, o.next_attempt_at FROM notification_update_outbox o
+    WHERE o.next_attempt_at<=statement_timestamp()
+        AND ($1::uuid IS NULL OR o.application_id=(
+            SELECT a.id FROM applications a WHERE a.public_id=$1::uuid))
+        AND o.origin_epoch=$2::uuid AND o.source_epoch=$3::uuid
+        AND NOT EXISTS(SELECT 1 FROM notification_update_outbox predecessor
+            WHERE predecessor.delivery_id=o.delivery_id AND predecessor.delivery_version<o.delivery_version)
+    ORDER BY o.next_attempt_at,o.event_id LIMIT 1 FOR UPDATE OF o SKIP LOCKED
+)
+SELECT picked.event_id, picked.application_id, picked.notification_id, picked.delivery_id, picked.delivery_version, picked.origin_epoch, picked.source_epoch, picked.payload, picked.occurred_at, picked.attempts, picked.next_attempt_at,a.public_id AS application_public_id,d.owner_user_id
+FROM picked JOIN applications a ON a.id=picked.application_id
+JOIN notification_delivery_intents d ON d.application_id=picked.application_id AND d.id=picked.delivery_id
 `
 
 type LockNextDeliveryUpdateParams struct {
@@ -99,6 +103,8 @@ type LockNextDeliveryUpdateRow struct {
 	OwnerUserID         int64              `db:"owner_user_id"`
 }
 
+// Pick and lock one eligible event in due order before fetching its delivery.
+// The foreign keys guarantee that its application and intent both exist.
 func (q *Queries) LockNextDeliveryUpdate(ctx context.Context, arg LockNextDeliveryUpdateParams) (LockNextDeliveryUpdateRow, error) {
 	row := q.db.QueryRow(ctx, lockNextDeliveryUpdate, arg.ApplicationPublicID, arg.OriginEpoch, arg.SourceEpoch)
 	var i LockNextDeliveryUpdateRow

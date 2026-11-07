@@ -51,4 +51,7 @@ func TestAtomicPreparationTwentyThousandDevices(t *testing.T) {
 	require.NoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM notification_delivery_intents WHERE notification_id=$1", campaignID).Scan(&intents))
 	require.EqualValues(t, 20000, intents)
 	t.Logf("local 20k-user/20k-device atomic preparation: %s; excludes enrollment, encryption, Kafka, FCM and production load", elapsed)
+	t.Run("bounded scoped update selection", func(t *testing.T) {
+		checkScopedOutboxSelection(t, ctx, pool, event)
+	})
 }

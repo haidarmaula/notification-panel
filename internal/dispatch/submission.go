@@ -157,7 +157,7 @@ func (s *Execution) loadSubmission(parent context.Context, r *AttemptReservation
 		if _, err = q.LockInstallationUser(ctx, sqlc.LockInstallationUserParams{ApplicationID: lease.applicationID, UserID: r.ownerUserID}); err != nil {
 			return executionMissing(err)
 		}
-		if err = lockExecutionCampaign(ctx, q, lease.applicationID, lease.notificationID, sqlc.LockNotificationRuntimeRow{OriginEpoch: lease.origin, SourceEpoch: lease.source}); err != nil {
+		if err = lockDeviceExecutionCampaign(ctx, q, lease); err != nil {
 			return err
 		}
 		snapshot.installation, err = q.LockExecutionInstallation(ctx, sqlc.LockExecutionInstallationParams{ApplicationID: lease.applicationID, InstallationID: r.installationID})

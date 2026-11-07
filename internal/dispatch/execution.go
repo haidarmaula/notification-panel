@@ -191,8 +191,7 @@ func (s *Execution) Reserve(ctx context.Context, lease *ExecutionLease, delivery
 		if _, err = q.LockInstallationUser(ctx, sqlc.LockInstallationUserParams{ApplicationID: lease.applicationID, UserID: identity.OwnerUserID}); err != nil {
 			return executionMissing(err)
 		}
-		runtime := sqlc.LockNotificationRuntimeRow{OriginEpoch: lease.origin, SourceEpoch: lease.source}
-		if err := lockExecutionCampaign(ctx, q, lease.applicationID, lease.notificationID, runtime); err != nil {
+		if err := lockDeviceExecutionCampaign(ctx, q, lease); err != nil {
 			return err
 		}
 		installation, err := q.LockExecutionInstallation(ctx, sqlc.LockExecutionInstallationParams{ApplicationID: lease.applicationID, InstallationID: identity.InstallationID})
@@ -289,6 +288,27 @@ func lockExecutionCampaign(ctx context.Context, q *sqlc.Queries, appID, notifica
 	if err != nil {
 		return executionMissing(err)
 	}
+	state := sqlc.LockDeviceExecutionCampaignRow{
+		Status: campaign.Status, DeadlineAt: campaign.DeadlineAt,
+		OriginEpoch: campaign.OriginEpoch, SourceEpoch: campaign.SourceEpoch,
+	}
+	return validateLockedExecutionCampaign(ctx, q, appID, notificationID, state, runtime)
+}
+
+// Reservation, submission validation and result writes read the campaign.
+// They retain their own intent locks and exact lease/time checks.
+func lockDeviceExecutionCampaign(ctx context.Context, q *sqlc.Queries, lease *ExecutionLease) error {
+	row, err := q.LockDeviceExecutionCampaign(ctx, sqlc.LockDeviceExecutionCampaignParams{ApplicationID: lease.applicationID, NotificationID: lease.notificationID})
+	if err != nil {
+		return executionMissing(err)
+	}
+	runtime := sqlc.LockNotificationRuntimeRow{OriginEpoch: lease.origin, SourceEpoch: lease.source}
+	return validateLockedExecutionCampaign(ctx, q, lease.applicationID, lease.notificationID, row, runtime)
+}
+
+func validateLockedExecutionCampaign(ctx context.Context, q *sqlc.Queries, appID, notificationID int64,
+	campaign sqlc.LockDeviceExecutionCampaignRow, runtime sqlc.LockNotificationRuntimeRow,
+) error {
 	if campaign.OriginEpoch != runtime.OriginEpoch || campaign.SourceEpoch != runtime.SourceEpoch {
 		return ErrExecutionHeld
 	}

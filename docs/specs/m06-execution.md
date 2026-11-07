@@ -52,7 +52,10 @@ application/provider route. Reservation locks runtime -> application -> policy -
 active user -> campaign -> installation -> immutable binding -> delivery. Discovery
 of immutable delivery identity takes no child lock; every identity/current owner is
 rechecked under locks. Registry/lifecycle mutations lock application exclusively;
-execution holds it for share. FKs do not cause a later acquisition of an earlier
+execution holds it for share. Reservation, submission validation and result
+persistence also hold the campaign for share since they mutate per-device state.
+Lease mutation and finalization retain the exclusive campaign lock. FKs do not
+cause a later acquisition of an earlier
 parent lock. Each operation is bounded to five seconds with independent rollback
 cleanup, and no automatic transaction retry.
 

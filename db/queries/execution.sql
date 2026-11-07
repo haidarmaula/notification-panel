@@ -51,6 +51,13 @@ WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(notificati
     AND origin_epoch=sqlc.arg(origin_epoch) AND source_epoch=sqlc.arg(source_epoch)
     AND lease_owner=sqlc.arg(owner) AND lease_generation=sqlc.arg(generation)::bigint AND lease_until>clock_timestamp();
 
+-- name: LockDeviceExecutionCampaign :one
+-- Per-device operations read campaign state. Hold it stable against updates
+-- while allowing other deliveries in that campaign to perform their checks.
+SELECT n.status,n.deadline_at,n.origin_epoch,n.source_epoch FROM notifications n
+WHERE n.application_id=sqlc.arg(application_id)::bigint AND n.id=sqlc.arg(notification_id)::bigint
+FOR SHARE OF n;
+
 -- name: GetExecutionIntentIdentity :one
 SELECT installation_id,binding_id,owner_user_id,owner_epoch FROM notification_delivery_intents
 WHERE application_id=sqlc.arg(application_id)::bigint AND notification_id=sqlc.arg(notification_id)::bigint AND id=sqlc.arg(delivery_id);

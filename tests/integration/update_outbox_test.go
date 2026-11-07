@@ -307,3 +307,37 @@ func TestUpdateOutboxCancellationRetainsEvidenceAndReleasesLocks(t *testing.T) {
 	_, err = f.pool.Exec(check, `UPDATE notification_update_outbox SET attempts=attempts`)
 	require.NoError(t, err)
 }
+
+func TestUpdateOutboxUnknownScopeNeverFallsBackToAllApplications(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	f, source := newUpdateFixture(t, ctx)
+	other := seedOtherWorkerEvent(t, ctx, f.executionFixture)
+	// Give the foreign event priority in global due order.
+	executionSQL(t, ctx, f.executionFixture, "UPDATE notification_update_outbox SET next_attempt_at=statement_timestamp()-interval '1 hour' WHERE event_id=$1", other)
+	var sent []string
+	publisher := updatePublishFunc(func(_ context.Context, value []byte) error {
+		e, err := kafka.DecodeScopedDelivery(value)
+		if err == nil {
+			sent = append(sent, e.ApplicationID)
+		}
+		return err
+	})
+	unknown, err := dispatch.NewApplicationUpdateOutbox(f.db, publisher, source, replayUUID(t, ctx, f.pool))
+	require.NoError(t, err)
+	scoped, err := dispatch.NewApplicationUpdateOutbox(f.db, publisher, source, f.project)
+	require.NoError(t, err)
+	global := updateService(t, f, source, publisher)
+	outcome, err := unknown.DrainOne(ctx)
+	require.NoError(t, err)
+	require.Equal(t, dispatch.Idle, outcome)
+	outcome, err = scoped.DrainOne(ctx)
+	require.NoError(t, err)
+	require.Equal(t, dispatch.Published, outcome)
+	require.Equal(t, []string{f.project.String()}, sent)
+	outcome, err = global.DrainOne(ctx)
+	require.NoError(t, err)
+	require.Equal(t, dispatch.Published, outcome)
+	require.Len(t, sent, 2)
+	require.NotEqual(t, sent[0], sent[1])
+}

@@ -208,6 +208,38 @@ func (q *Queries) GetExecutionProviderRoute(ctx context.Context, arg GetExecutio
 	return i, err
 }
 
+const lockDeviceExecutionCampaign = `-- name: LockDeviceExecutionCampaign :one
+SELECT n.status,n.deadline_at,n.origin_epoch,n.source_epoch FROM notifications n
+WHERE n.application_id=$1::bigint AND n.id=$2::bigint
+FOR SHARE OF n
+`
+
+type LockDeviceExecutionCampaignParams struct {
+	ApplicationID  int64 `db:"application_id"`
+	NotificationID int64 `db:"notification_id"`
+}
+
+type LockDeviceExecutionCampaignRow struct {
+	Status      string             `db:"status"`
+	DeadlineAt  pgtype.Timestamptz `db:"deadline_at"`
+	OriginEpoch pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch pgtype.UUID        `db:"source_epoch"`
+}
+
+// Per-device operations read campaign state. Hold it stable against updates
+// while allowing other deliveries in that campaign to perform their checks.
+func (q *Queries) LockDeviceExecutionCampaign(ctx context.Context, arg LockDeviceExecutionCampaignParams) (LockDeviceExecutionCampaignRow, error) {
+	row := q.db.QueryRow(ctx, lockDeviceExecutionCampaign, arg.ApplicationID, arg.NotificationID)
+	var i LockDeviceExecutionCampaignRow
+	err := row.Scan(
+		&i.Status,
+		&i.DeadlineAt,
+		&i.OriginEpoch,
+		&i.SourceEpoch,
+	)
+	return i, err
+}
+
 const lockExecutionApplication = `-- name: LockExecutionApplication :one
 SELECT id,status FROM applications WHERE public_id=$1 FOR SHARE
 `

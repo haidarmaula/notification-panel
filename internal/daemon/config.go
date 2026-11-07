@@ -112,6 +112,9 @@ func Load(role deployment.Component, reader io.Reader) (*Configuration, error) {
 	if err != nil {
 		return nil, ErrConfiguration
 	}
+	if cfg.delivery != nil && cfg.delivery.databaseMaxConns > 0 {
+		cfg.database.MaxConns = cfg.delivery.databaseMaxConns
+	}
 	return cfg, nil
 }
 

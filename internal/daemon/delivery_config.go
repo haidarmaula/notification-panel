@@ -21,25 +21,27 @@ import (
 // The protected worker policy supplies installation and receipt key rings.
 // Only the FCM credential factory reads a separate managed secret.
 type deliveryConfig struct {
-	application pgtype.UUID
-	poll        time.Duration
-	pageSize    int32
-	renew       time.Duration
-	execution   dispatch.ExecutionPolicy
-	transport   fcm.Config
-	credential  fcm.FileCredentialPolicy
-	signer      *receipt.Signer
-	protector   *installation.Protector
+	databaseMaxConns int32
+	application      pgtype.UUID
+	poll             time.Duration
+	pageSize         int32
+	renew            time.Duration
+	execution        dispatch.ExecutionPolicy
+	transport        fcm.Config
+	credential       fcm.FileCredentialPolicy
+	signer           *receipt.Signer
+	protector        *installation.Protector
 }
 
 func parseDelivery(raw json.RawMessage) (*deliveryConfig, error) {
 	var d deliveryConfig
 	var application, fingerprint string
 	var routes, encryption, signing []json.RawMessage
+	var databasePool json.RawMessage
 	var pollMS, lease, renew, request, retry, observation, cooldown int32
 	var version, projectRate, replicas int32
 	p := &d.execution.Receipt
-	err := jsonobject.Decode(raw, map[string]any{
+	err := jsonobject.DecodeOptional(raw, map[string]any{
 		"application_id": &application, "environment": &p.Environment,
 		"project_id": &d.transport.ProjectID, "routes": &routes,
 		"service_account_file": &d.credential.Path, "credential_project_id": &d.credential.CredentialProjectID,
@@ -53,7 +55,7 @@ func parseDelivery(raw json.RawMessage) (*deliveryConfig, error) {
 		"poll_interval_ms": &pollMS, "page_size": &d.pageSize,
 		"current_key_version": &version, "fingerprint_key": &fingerprint, "encryption_keys": &encryption,
 		"signing_keys": &signing,
-	})
+	}, map[string]any{"database_pool": &databasePool})
 	if err != nil || d.application.Scan(application) != nil || d.application.String() != application ||
 		!d.application.Valid || d.application.Bytes == [16]byte{} {
 		return nil, ErrConfiguration
@@ -89,6 +91,13 @@ func parseDelivery(raw json.RawMessage) (*deliveryConfig, error) {
 		pollMS < 100 || pollMS > 60000 || d.pageSize < 1 || d.pageSize > 100 ||
 		!filepath.IsAbs(d.credential.Path) || filepath.Clean(d.credential.Path) != d.credential.Path || d.credential.Path == "/" {
 		return nil, ErrConfiguration
+	}
+	if len(databasePool) > 0 {
+		var budget int32
+		if jsonobject.Decode(databasePool, map[string]any{"max_connections_per_replica": &d.databaseMaxConns, "deployment_connection_budget": &budget}) != nil ||
+			d.databaseMaxConns < 2 || d.databaseMaxConns > 32 || d.databaseMaxConns > budget/replicas {
+			return nil, ErrConfiguration
+		}
 	}
 	d.protector, d.signer, err = deliveryKeys(*p, version, fingerprint, encryption, signing)
 	if err != nil {

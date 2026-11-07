@@ -44,7 +44,7 @@ func (s *Execution) RecordResult(ctx context.Context, result *SubmissionResult) 
 		if err := s.lockResultBase(ctx, q, lease, configurationFailure(out)); err != nil {
 			return err
 		}
-		if err := lockExecutionCampaign(ctx, q, lease.applicationID, lease.notificationID, sqlc.LockNotificationRuntimeRow{OriginEpoch: lease.origin, SourceEpoch: lease.source}); err != nil {
+		if err := lockDeviceExecutionCampaign(ctx, q, lease); err != nil {
 			return err
 		}
 		installation, err := q.LockResultInstallation(ctx, sqlc.LockResultInstallationParams{ApplicationID: lease.applicationID, InstallationID: r.installationID})

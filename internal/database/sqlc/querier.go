@@ -433,6 +433,9 @@ type Querier interface {
 	LockActiveInstallationBinding(ctx context.Context, arg LockActiveInstallationBindingParams) (InstallationBinding, error)
 	LockApplicationByPublicID(ctx context.Context, publicID pgtype.UUID) (Application, error)
 	LockCampaignAcceptance(ctx context.Context, arg LockCampaignAcceptanceParams) (LockCampaignAcceptanceRow, error)
+	// Per-device operations read campaign state. Hold it stable against updates
+	// while allowing other deliveries in that campaign to perform their checks.
+	LockDeviceExecutionCampaign(ctx context.Context, arg LockDeviceExecutionCampaignParams) (LockDeviceExecutionCampaignRow, error)
 	LockExecutionApplication(ctx context.Context, applicationPublicID pgtype.UUID) (LockExecutionApplicationRow, error)
 	LockExecutionBinding(ctx context.Context, arg LockExecutionBindingParams) (InstallationBinding, error)
 	LockExecutionInstallation(ctx context.Context, arg LockExecutionInstallationParams) (MobileInstallation, error)
