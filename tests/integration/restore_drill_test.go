@@ -140,6 +140,7 @@ func TestSealedBackupRestoreDrill(t *testing.T) {
 	require.NoError(t, err)
 	restoreStart := time.Now()
 	target := strings.TrimSpace(string(requireRestoreDocker(t, ctx, nil, "create", "--pull=never", "--network", "none",
+		"--label", "hello.integration.restore="+filepath.Base(filepath.Dir(probe)),
 		"--tmpfs", "/var/lib/postgresql/data", "-v", probe+":/restore-probe.test:ro", "-v", down+":/retained-receipts.down.sql:ro",
 		"-e", "POSTGRES_HOST_AUTH_METHOD=trust", "-e", "POSTGRES_USER=integration", "-e", "POSTGRES_DB=restore_drill", image)))
 	require.Regexp(t, `^[0-9a-f]{64}$`, target)
