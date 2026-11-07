@@ -84,9 +84,11 @@ exercise, including all reconciliation and canary time.
   restore permissions and independent key-recovery evidence. Restrict archive
   access, monitor gaps and freshness, and test recovery of the required historical
   keys with their owners. Recovery records contain identifiers and measurements
-  only. The local logical backup covers a single committed snapshot. Production
-  PITR, off-host retrieval, archival retention and key recovery require their own
-  tests.
+  only. The local logical backup covers a single committed snapshot. A separate
+  fixture exercises physical base backups, encrypted archived WAL, and sealed
+  session reconciliation. Target PITR, off-host retrieval, archival retention
+  and key recovery still require deployment-specific tests.
+  [Physical PITR drill](physical-pitr.md)
 - **Containment.** Platform and security owners fence the former writer, disable
   scheduler, admission, replay and outbox drain, and deny provider and broker
   egress outside the restored database before restoring any bytes. Record
