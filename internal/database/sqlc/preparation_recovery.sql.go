@@ -12,15 +12,26 @@ import (
 )
 
 const listRecoverableQueuedCampaigns = `-- name: ListRecoverableQueuedCampaigns :many
-SELECT n.id,a.public_id AS application_public_id,n.queued_at,n.scheduled_at,n.deadline_at,n.origin_epoch,n.source_epoch
+WITH horizon AS (
+    SELECT coalesce(nullif($3::bigint,0),(SELECT max(id) FROM notifications),0)::bigint AS pass_end
+)
+SELECT n.id,a.public_id AS application_public_id,n.queued_at,n.scheduled_at,n.deadline_at,n.origin_epoch,n.source_epoch,horizon.pass_end
 FROM notifications n JOIN applications a ON a.id=n.application_id
 JOIN notification_runtime r ON r.singleton AND NOT r.sealed
   AND n.origin_epoch=r.origin_epoch AND n.source_epoch=r.source_epoch
+CROSS JOIN horizon
 WHERE n.status='QUEUED' AND n.queued_at IS NOT NULL AND n.deadline_at IS NOT NULL
+  AND n.id>$1::bigint AND n.id<=horizon.pass_end
   AND (n.preparation_next_attempt_at IS NULL OR n.preparation_next_attempt_at<=clock_timestamp())
-ORDER BY coalesce(n.preparation_next_attempt_at,n.queued_at),n.id
-LIMIT $1::integer
+ORDER BY n.id
+LIMIT $2::integer
 `
+
+type ListRecoverableQueuedCampaignsParams struct {
+	AfterID   int64 `db:"after_id"`
+	PageSize  int32 `db:"page_size"`
+	ThroughID int64 `db:"through_id"`
+}
 
 type ListRecoverableQueuedCampaignsRow struct {
 	ID                  int64              `db:"id"`
@@ -30,10 +41,11 @@ type ListRecoverableQueuedCampaignsRow struct {
 	DeadlineAt          pgtype.Timestamptz `db:"deadline_at"`
 	OriginEpoch         pgtype.UUID        `db:"origin_epoch"`
 	SourceEpoch         pgtype.UUID        `db:"source_epoch"`
+	PassEnd             int64              `db:"pass_end"`
 }
 
-func (q *Queries) ListRecoverableQueuedCampaigns(ctx context.Context, pageSize int32) ([]ListRecoverableQueuedCampaignsRow, error) {
-	rows, err := q.db.Query(ctx, listRecoverableQueuedCampaigns, pageSize)
+func (q *Queries) ListRecoverableQueuedCampaigns(ctx context.Context, arg ListRecoverableQueuedCampaignsParams) ([]ListRecoverableQueuedCampaignsRow, error) {
+	rows, err := q.db.Query(ctx, listRecoverableQueuedCampaigns, arg.AfterID, arg.PageSize, arg.ThroughID)
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +61,7 @@ func (q *Queries) ListRecoverableQueuedCampaigns(ctx context.Context, pageSize i
 			&i.DeadlineAt,
 			&i.OriginEpoch,
 			&i.SourceEpoch,
+			&i.PassEnd,
 		); err != nil {
 			return nil, err
 		}

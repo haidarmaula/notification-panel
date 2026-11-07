@@ -376,7 +376,7 @@ type Querier interface {
 	// ==========================================
 	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error)
 	ListNotificationsWithFilters(ctx context.Context, arg ListNotificationsWithFiltersParams) ([]ListNotificationsWithFiltersRow, error)
-	ListRecoverableQueuedCampaigns(ctx context.Context, pageSize int32) ([]ListRecoverableQueuedCampaignsRow, error)
+	ListRecoverableQueuedCampaigns(ctx context.Context, arg ListRecoverableQueuedCampaignsParams) ([]ListRecoverableQueuedCampaignsRow, error)
 	// ==========================================
 	// LIST
 	// ==========================================

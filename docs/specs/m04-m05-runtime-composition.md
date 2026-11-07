@@ -53,6 +53,17 @@ No deadline/epoch is restamped. Counts retain acknowledged changes when a later
 candidate fails; the sweep stops rather than replaying its already committed
 prefix. Stale/restored work stays intact for reviewed reconciliation.
 
+## Queued preparation recovery
+
+Each scan visits due campaigns in ascending ID order up to the highest
+campaign ID observed at the start of the pass. It retains an in-memory cursor
+across ticks and advances it before attempting each preparation. A failed
+transaction remains due while the next tick can visit the following campaign.
+Completing the finite pass resets the cursor so skipped or failed work can be
+retried. A process restart starts a new pass. The canonical preparation
+transaction and immutable completion marker still determine whether work is
+already complete.
+
 ## Scheduler and process-loop ownership
 
 `internal/scheduler.Runtime` constructs promotion, source-bound outbox, QUEUED

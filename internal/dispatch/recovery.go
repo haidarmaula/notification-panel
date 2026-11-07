@@ -3,6 +3,7 @@ package dispatch
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"time"
 
 	"hello/internal/database/sqlc"
@@ -22,8 +23,11 @@ type RecoveryReport struct {
 // QueuedRecovery discovers current-lineage QUEUED campaigns for bounded preparation.
 // It does not publish messages or recover PROCESSING provider work.
 type QueuedRecovery struct {
-	q        *sqlc.Queries
-	preparer *Preparer
+	q         *sqlc.Queries
+	preparer  *Preparer
+	busy      atomic.Bool
+	afterID   int64
+	throughID int64
 }
 
 // NewQueuedRecovery requires discovery queries and the canonical campaign preparer.
@@ -42,9 +46,15 @@ func (r *QueuedRecovery) Tick(ctx context.Context, pageSize int32) (RecoveryRepo
 	if pageSize < 1 || pageSize > 100 {
 		return report, errors.New("recovery page size must be between 1 and 100")
 	}
+	if !r.busy.CompareAndSwap(false, true) {
+		return report, errors.New("queued recovery tick already running")
+	}
+	defer r.busy.Store(false)
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
-	rows, err := r.q.ListRecoverableQueuedCampaigns(ctx, pageSize)
+	rows, err := r.q.ListRecoverableQueuedCampaigns(ctx, sqlc.ListRecoverableQueuedCampaignsParams{
+		AfterID: r.afterID, ThroughID: r.throughID, PageSize: pageSize,
+	})
 	if err != nil {
 		return report, err
 	}
@@ -52,6 +62,9 @@ func (r *QueuedRecovery) Tick(ctx context.Context, pageSize int32) (RecoveryRepo
 		if err := ctx.Err(); err != nil {
 			return report, err
 		}
+		// Advance before attempting the transaction so a rolled-back head
+		// cannot consume every tick. The finite pass revisits it on wrap.
+		r.afterID, r.throughID = row.ID, row.PassEnd
 		event := kafka.ScopedSendRequested{SchemaVersion: 1, ApplicationID: row.ApplicationPublicID.String(),
 			NotificationID: row.ID, RequestedAt: row.QueuedAt.Time, DeadlineAt: row.DeadlineAt.Time,
 			OriginEpoch: row.OriginEpoch.String(), SourceEpoch: row.SourceEpoch.String()}
@@ -73,6 +86,9 @@ func (r *QueuedRecovery) Tick(ctx context.Context, pageSize int32) (RecoveryRepo
 		default:
 			report.Terminal++
 		}
+	}
+	if len(rows) < int(pageSize) || r.afterID >= r.throughID {
+		r.afterID, r.throughID = 0, 0
 	}
 	return report, nil
 }
