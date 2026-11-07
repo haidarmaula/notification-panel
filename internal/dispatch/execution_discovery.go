@@ -14,25 +14,31 @@ type RecoveryCampaign struct {
 	ApplicationID  pgtype.UUID
 	NotificationID int64
 	origin, source pgtype.UUID
+	passEnd        int64
 }
 
 // DiscoverCampaigns scans unowned, complete PROCESSING campaigns in stable ID
 // order. Start at zero; pass the last visited ID to continue, and wrap at the
 // end on the next poll. Holds suppress new sends while deadlines continue.
 func (s *Execution) DiscoverCampaigns(ctx context.Context, after int64, limit int32) ([]RecoveryCampaign, error) {
+	return s.discoverCampaigns(ctx, pgtype.UUID{}, after, 0, limit)
+}
+
+func (s *Execution) discoverCampaigns(ctx context.Context, application pgtype.UUID, after, through int64, limit int32) ([]RecoveryCampaign, error) {
 	if s == nil || s.db == nil || after < 0 || limit < 1 || limit > 100 {
 		return nil, ErrExecutionInput
 	}
 	var page []RecoveryCampaign
 	err := s.transaction(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		rows, err := q.ListExecutionRecoveryCampaigns(ctx, sqlc.ListExecutionRecoveryCampaignsParams{
-			AfterID: after, PageSize: limit, MaxAttempts: s.policy.MaxAttempts,
+			ApplicationPublicID: application, AfterID: after, ThroughID: through, PageSize: limit, MaxAttempts: s.policy.MaxAttempts,
 		})
 		if err != nil {
 			return err
 		}
 		for _, row := range rows {
-			page = append(page, RecoveryCampaign{ApplicationID: row.ApplicationPublicID, NotificationID: row.ID, origin: row.OriginEpoch, source: row.SourceEpoch})
+			page = append(page, RecoveryCampaign{ApplicationID: row.ApplicationPublicID, NotificationID: row.ID,
+				origin: row.OriginEpoch, source: row.SourceEpoch, passEnd: row.PassEnd})
 		}
 		return nil
 	})
@@ -61,6 +67,9 @@ type DeviceRecoveryPage struct {
 	After             pgtype.UUID
 	More              bool
 	CampaignFinalized bool
+	// A polled sweep may skip a failing row until the next wrap. After
+	// remains the last successful visit for callers retrying the same page.
+	failedDevice pgtype.UUID
 }
 
 // RecoverPage retires no-send work in bounded, independent transactions. Start
@@ -103,6 +112,7 @@ func (s *Execution) RecoverPage(ctx context.Context, lease *ExecutionLease, afte
 		if row.NeedsRecovery {
 			retired, err := s.RecoverDelivery(ctx, lease, row.ID)
 			if err != nil {
+				page.failedDevice = row.ID
 				return page, err
 			}
 			if retired {

@@ -59,7 +59,19 @@ for port in (15432, 19092, 19095, 14010):
 PY
 log_dir="$(mktemp -d "${TMPDIR:-/tmp}/hello-integration.XXXXXX")"
 export HELLO_INTEGRATION_CERTS_DIR="$log_dir/tls"
+export HELLO_INTEGRATION_BIN_DIR="$log_dir/bin"
+mkdir "$HELLO_INTEGRATION_BIN_DIR"
 GOFLAGS= go run ./scripts/integration-certs.go "$HELLO_INTEGRATION_CERTS_DIR"
+case "$(docker info --format '{{.Architecture}}')" in
+  aarch64|arm64) fixture_arch=arm64 ;;
+  x86_64|amd64) fixture_arch=amd64 ;;
+  *) echo 'Unsupported integration container architecture' >&2; exit 1 ;;
+esac
+build_fixture() {
+  GOOS=linux GOARCH="$fixture_arch" CGO_ENABLED=0 GOFLAGS= go build -mod=readonly -trimpath -o "$HELLO_INTEGRATION_BIN_DIR/$1" "$2"
+}
+build_fixture worker ./cmd/worker
+build_fixture provider ./scripts/integration-provider.go
 "${compose[@]}" config --quiet
 if [[ -n "$("${compose[@]}" ps -a -q)" ]]; then
   printf 'Refusing to reuse existing hello-integration containers. Inspect them first.\n' >&2
@@ -67,6 +79,11 @@ if [[ -n "$("${compose[@]}" ps -a -q)" ]]; then
 fi
 owns_compose=true
 "${compose[@]}" up -d --wait --wait-timeout 120
+[[ "$(docker network inspect --format '{{.Internal}}' hello-integration_delivery)" == true ]]
+for service in worker-fixture provider-fixture; do
+  container=$("${compose[@]}" ps -q "$service")
+  [[ "$(docker inspect --format '{{range $name, $_ := .NetworkSettings.Networks}}{{$name}}{{end}}' "$container")" == hello-integration_delivery ]]
+done
 
 db_url='postgres://integration:integration_only@127.0.0.1:15432/notification_integration?sslmode=disable&connect_timeout=5&statement_timeout=10000&lock_timeout=5000'
 # Only the freshly created fixture DB is migrated down; never accept a user DSN.

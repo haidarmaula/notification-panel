@@ -61,7 +61,7 @@ func TestLoadRejectsRoleConfusionAndUnsafeOptions(t *testing.T) {
 		role   deployment.Component
 		change func(map[string]any)
 	}{
-		{"worker delivery mode not implemented", deployment.Worker, func(p map[string]any) { p["mode"] = "delivery" }},
+		{"unknown worker mode", deployment.Worker, func(p map[string]any) { p["mode"] = "delivery" }},
 		{"worker group invalid", deployment.Worker, func(p map[string]any) { p["group_id"] = "forged\ngroup" }},
 		{"worker cannot configure scheduler", deployment.Worker, func(p map[string]any) { p["page_size"] = 10 }},
 		{"scheduler cannot configure consumer", deployment.Scheduler, func(p map[string]any) { p["group_id"] = "group" }},

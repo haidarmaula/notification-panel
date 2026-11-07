@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 	"hello/internal/database/sqlc"
 	"hello/internal/kafka"
 )
@@ -20,9 +21,10 @@ type UpdatePublisher interface {
 // UpdateOutbox owns no goroutines and drains one predecessor-eligible row per
 // call. The polling owner bounds calls/backoff and closes its publisher separately.
 type UpdateOutbox struct {
-	db        Transactor
-	publisher UpdatePublisher
-	source    SourceManifest
+	db          Transactor
+	publisher   UpdatePublisher
+	source      SourceManifest
+	application pgtype.UUID
 }
 
 // NewUpdateOutbox requires an explicit reviewed source; construction performs no
@@ -32,6 +34,20 @@ func NewUpdateOutbox(db Transactor, publisher UpdatePublisher, source SourceMani
 		return nil, ErrQuarantineSource
 	}
 	return &UpdateOutbox{db: db, publisher: publisher, source: source}, nil
+}
+
+// NewApplicationUpdateOutbox limits a delivery worker to the application
+// bound to its FCM routes and Kafka destination.
+func NewApplicationUpdateOutbox(db Transactor, publisher UpdatePublisher, source SourceManifest, application pgtype.UUID) (*UpdateOutbox, error) {
+	if !executionUUID(application) {
+		return nil, ErrExecutionInput
+	}
+	outbox, err := NewUpdateOutbox(db, publisher, source)
+	if err != nil {
+		return nil, err
+	}
+	outbox.application = application
+	return outbox, nil
 }
 
 // DrainOne never retries a transaction that performed broker I/O. Ack/commit
@@ -63,9 +79,13 @@ func (o *UpdateOutbox) DrainOne(parent context.Context) (Outcome, error) {
 	if !approved {
 		return Held, nil
 	}
-	row, err := q.LockNextDeliveryUpdate(ctx, sqlc.LockNextDeliveryUpdateParams{OriginEpoch: runtime.OriginEpoch, SourceEpoch: runtime.SourceEpoch})
+	row, err := q.LockNextDeliveryUpdate(ctx, sqlc.LockNextDeliveryUpdateParams{
+		ApplicationPublicID: o.application, OriginEpoch: runtime.OriginEpoch, SourceEpoch: runtime.SourceEpoch,
+	})
 	if errors.Is(err, pgx.ErrNoRows) {
-		blocked, err := q.HasLineageBlockedDeliveryUpdate(ctx, sqlc.HasLineageBlockedDeliveryUpdateParams{OriginEpoch: runtime.OriginEpoch, SourceEpoch: runtime.SourceEpoch})
+		blocked, err := q.HasLineageBlockedDeliveryUpdate(ctx, sqlc.HasLineageBlockedDeliveryUpdateParams{
+			ApplicationPublicID: o.application, OriginEpoch: runtime.OriginEpoch, SourceEpoch: runtime.SourceEpoch,
+		})
 		if err != nil {
 			return "", err
 		}

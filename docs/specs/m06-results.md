@@ -1,6 +1,7 @@
 # M06 fenced results and delivery update outbox
 
-Date: 2026-11-05. Status: implemented and locally tested; worker delivery remains disabled.
+The application-scoped delivery worker records provider results and publishes
+versioned updates. See the [worker runbook](../runbooks/delivery-worker.md).
 
 Execution.RecordResult accepts only opaque SubmissionResult evidence from its own
 acknowledged reservation. Match application, original lineage, campaign owner and
@@ -24,8 +25,9 @@ transferred binding remains intact. Credential/APNs/sender configuration failure
 also hold new application dispatch atomically; never purge tokens for them.
 
 Transient, uncertain and aborted outcomes resolve the attempt while retaining
-PENDING within budget/deadline. Schedule at least max(reserved floor, DB now + 10s,
-provider retry hint), or 60s for quota. Round eligible retry times up to database
+PENDING within budget/deadline. Schedule the latest of the reserved floor,
+the current claim’s exponential backoff from DB time, and the provider retry
+hint. Quota also requires at least 60 seconds. Round eligible retry times up to database
 microsecond precision before checking the deadline. If budget/deadline cannot allow another
 attempt, finalize PENDING as FAILED with retry_budget_exhausted or ttl_expired.
 Do not refund attempts. Last attempt disposition/reason/fingerprint are internal
@@ -52,6 +54,6 @@ delivery_<notification_id>, stable event bytes/ID, predecessor ordering and
 ack-before-delete. Consumer dedup/version acceptance remains required.
 
 [Recovery and finalization](m06-recovery.md) now handle abandoned attempts and
-close campaigns. Delivery-worker composition, v2 consumer acceptance, receipts
+close campaigns. The [worker](../runbooks/delivery-worker.md) polls these services. V2 consumer acceptance, receipts
 and statistics remain open. No production activation or external exactly-once
 guarantee is implied.

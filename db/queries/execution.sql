@@ -65,7 +65,7 @@ SELECT * FROM installation_bindings WHERE application_id=sqlc.arg(application_id
 WITH reservation_clock AS MATERIALIZED (SELECT clock_timestamp() AS reserved_at)
 UPDATE notification_delivery_intents d SET attempt_count=d.attempt_count+1,attempt_id=sqlc.arg(attempt_id),
     claim_generation=sqlc.arg(generation)::bigint,last_attempt_at=reservation_clock.reserved_at,attempt_resolved_at=NULL,
-    next_attempt_at=reservation_clock.reserved_at+make_interval(secs=>sqlc.arg(retry_floor_seconds)::integer)
+    next_attempt_at=reservation_clock.reserved_at+interval '1 microsecond'*sqlc.arg(retry_floor_micros)::bigint
 FROM reservation_clock
 WHERE d.application_id=sqlc.arg(application_id)::bigint AND d.notification_id=sqlc.arg(notification_id)::bigint
     AND d.id=sqlc.arg(delivery_id) AND d.status='PENDING' AND d.attempt_count<sqlc.arg(max_attempts)::integer

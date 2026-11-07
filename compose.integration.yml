@@ -24,7 +24,7 @@ services:
       interval: 2s
       timeout: 3s
       retries: 30
-    networks: [integration]
+    networks: [integration, delivery]
 
   kafka:
     image: apache/kafka:4.3.1@sha256:77e3df9054047a88b520d0cc46e16696d3b22022e1d580aeccd2632df6532837
@@ -32,9 +32,9 @@ services:
       CLUSTER_ID: MkU3OEVBNTcwNTJENDM2Qk
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: broker,controller
-      KAFKA_LISTENERS: HOST://0.0.0.0:9092,SECURE://0.0.0.0:9095,INTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093
-      KAFKA_ADVERTISED_LISTENERS: HOST://127.0.0.1:19092,SECURE://127.0.0.1:19095,INTERNAL://kafka:9094
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: HOST:PLAINTEXT,SECURE:SSL,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_LISTENERS: HOST://0.0.0.0:9092,SECURE://0.0.0.0:9095,DELIVERY://0.0.0.0:9096,INTERNAL://0.0.0.0:9094,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: HOST://127.0.0.1:19092,SECURE://127.0.0.1:19095,DELIVERY://kafka:9096,INTERNAL://kafka:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: HOST:PLAINTEXT,SECURE:SSL,DELIVERY:SSL,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT
       KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
@@ -62,8 +62,50 @@ services:
       timeout: 5s
       retries: 30
       start_period: 10s
-    networks: [integration]
+    networks: [integration, delivery]
+
+  provider-fixture:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    entrypoint: [/fixture-bin/provider]
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?fixture binary directory required}:/fixture-bin:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?fixture certificate directory required}/oauth-public.pem:/fixtures/oauth-public.pem:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?fixture certificate directory required}/provider.key:/fixtures/provider.key:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?fixture certificate directory required}/provider.crt:/fixtures/provider.crt:ro'
+    healthcheck:
+      test: [CMD, test, -f, /tmp/provider-ready]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    networks:
+      delivery:
+        aliases: [oauth2.googleapis.com, fcm.googleapis.com]
+
+  worker-fixture:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    entrypoint: [bash, -ec]
+    command:
+      - |
+        install -d -m 0750 /etc/hello
+        install -m 0640 /fixture-input/account.json /etc/hello/service-account.json
+        install -m 0644 /fixture-input/ca.crt /etc/hello/ca.crt
+        install -m 0644 /fixture-input/ca.crt /etc/ssl/certs/ca-certificates.crt
+        exec sleep infinity
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?fixture binary directory required}:/fixture-bin:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?fixture certificate directory required}/service-account.json:/fixture-input/account.json:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?fixture certificate directory required}/ca.crt:/fixture-input/ca.crt:ro'
+    tmpfs: [/etc/ssl/certs]
+    healthcheck:
+      test: [CMD, test, -f, /etc/ssl/certs/ca-certificates.crt]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+    networks: [delivery]
 
 networks:
   integration:
     driver: bridge
+  delivery:
+    driver: bridge
+    internal: true

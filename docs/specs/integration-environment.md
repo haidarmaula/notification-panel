@@ -2,8 +2,9 @@
 
 Status: step 19 test infrastructure; not an implementation of ADR-01–11.
 Scope: real PostgreSQL migrations and Kafka round trips, plus real Firebase SDK
-HTTP calls against a local FCM-shaped Postman stand-in. No application binaries,
-real provider credentials, live device tokens, auth server or mobile app.
+HTTP calls against a local FCM-shaped Postman stand-in. The delivery-worker
+case also starts the production Linux binary using synthetic credentials and
+an isolated HTTPS provider.
 
 The runner uses a dedicated Compose project/network, disposable
 storage and fixed loopback-only host ports. It explicitly disables Compose
@@ -21,13 +22,13 @@ no automatic test skip. It must not stop unrelated containers or Docker Desktop.
 
 The HTTP fixture models documented send response/error envelopes and SDK
 serialization. Fixture address names select responses, not real FCM behavior.
-ADC/OAuth/APNs, provider quotas, retry timing and production adapter wiring are
-outside the evidence. Unsupported provider operations return 501. Calls are
-restricted to the local simulation by a test-only transport and no-auth SDK
-configuration. Production provider code/config is not changed for a test bypass.
-The bridge is not an outbound firewall; safety also depends on starting no
-application workers and the fixture-only HTTP transport. Docker Desktop does
-not publish host ports for the internal-network profile tested in this session.
+The Postman error scenarios use a loopback test transport. A separate binary
+test runs the production worker and its HTTPS fixture on an internal-only Docker
+network. The runner checks both containers' network attachment. PostgreSQL and
+Kafka expose authenticated TLS listeners on that network. The worker trusts
+the disposable CA and reads root-owned policy and service-account files. The
+HTTPS fixture verifies the synthetic account's OAuth assertion and accepts the
+scoped FCM request. See the [worker runbook](../runbooks/delivery-worker.md).
 
 ## Acceptance cases
 
@@ -44,6 +45,7 @@ not publish host ports for the internal-network profile tested in this session.
 | Fixture 429 / 503 | SDK identifies quota/unavailable; contexts bound any SDK retry | Typed SDK error |
 | Fixture response slower than request deadline | Caller stops by deadline | Context timeout |
 | Nonlocal SDK URL / redirect | Test transport rejects request before external I/O | Local transport error |
+| Delivery worker with an expired lease and one eligible device | Publishes FAILED and SENT, makes one synthetic FCM send, finalizes the campaign, and exits cleanly on SIGTERM | None |
 | Ordinary go test ./... | Integration smoke is not run implicitly | None |
 
 Failure-window/rebalance/lease/outbox/receipt integration coverage belongs to

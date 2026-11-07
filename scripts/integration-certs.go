@@ -9,8 +9,10 @@ import (
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
+	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -47,7 +49,7 @@ func generate(directory string) error {
 	if err := os.WriteFile(filepath.Join(directory, "ca.crt"), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootDER}), 0644); err != nil {
 		return err
 	}
-	for i, name := range []string{"server", "client"} {
+	for i, name := range []string{"server", "client", "provider"} {
 		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
 			return err
@@ -56,6 +58,10 @@ func generate(directory string) error {
 		if name == "server" {
 			cert.DNSNames = []string{"localhost", "kafka", "postgres"}
 			cert.IPAddresses = []net.IP{net.ParseIP("127.0.0.1")}
+			cert.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+		}
+		if name == "provider" {
+			cert.DNSNames = []string{"oauth2.googleapis.com", "fcm.googleapis.com"}
 			cert.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
 		}
 		der, err := x509.CreateCertificate(rand.Reader, cert, root, &key.PublicKey, rootKey)
@@ -74,5 +80,29 @@ func generate(directory string) error {
 			}
 		}
 	}
-	return nil
+	return generateAccount(directory)
+}
+
+func generateAccount(directory string) error {
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+	private, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		return err
+	}
+	data, err := json.Marshal(map[string]string{
+		"type": "service_account", "project_id": "integration-fixture", "private_key_id": "worker-fixture",
+		"client_email": "fixture@integration-fixture.iam.gserviceaccount.com", "token_uri": "https://oauth2.googleapis.com/token",
+		"private_key": string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: private})),
+	})
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(directory, "service-account.json"), data, 0600); err != nil {
+		return err
+	}
+	public := pem.EncodeToMemory(&pem.Block{Type: "RSA PUBLIC KEY", Bytes: x509.MarshalPKCS1PublicKey(&key.PublicKey)})
+	return os.WriteFile(filepath.Join(directory, "oauth-public.pem"), public, 0644)
 }

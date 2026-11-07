@@ -35,6 +35,6 @@ producer-owned I/O after cancellation may also reorder arrival; consumers still
 must deduplicate event_id and retain highest version within approved source/delivery
 scope. Stop new calls and Close/drain producer before source handoff/restore.
 This library creates no goroutines and proves neither exactly-once publication
-nor consumer compatibility. Consumer acceptance, live deployment credentials/ACLs,
-and worker composition remain separate gates. [Recovery and finalization](m06-recovery.md)
+nor consumer compatibility. The [delivery worker](../runbooks/delivery-worker.md) drains the outbox for its configured application.
+Consumer acceptance and live deployment credentials/ACLs remain separate gates. [Recovery and finalization](m06-recovery.md)
 now operate on the durable ledger.

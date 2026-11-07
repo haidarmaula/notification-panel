@@ -1,6 +1,10 @@
 -- name: ListExecutionRecoveryCampaigns :many
 -- Metadata only: a later acquisition rechecks the marker, epochs and live lease.
-SELECT n.id, a.public_id AS application_public_id, n.origin_epoch, n.source_epoch
+SELECT n.id, a.public_id AS application_public_id, n.origin_epoch, n.source_epoch,
+    CASE WHEN sqlc.narg(application_public_id)::uuid IS NULL THEN 0
+         WHEN sqlc.arg(through_id)::bigint > 0 THEN sqlc.arg(through_id)::bigint
+         ELSE (SELECT max(last_n.id) FROM notifications last_n WHERE last_n.application_id=a.id)
+    END::bigint AS pass_end
 FROM notifications n
 JOIN applications a ON a.id=n.application_id
 JOIN application_dispatch_policy ap ON ap.application_id=a.id
@@ -9,6 +13,8 @@ JOIN notification_runtime r ON r.singleton AND NOT r.sealed AND NOT r.migration_
 JOIN notification_preparations p ON p.application_id=a.id AND p.notification_id=n.id
     AND p.origin_epoch=n.origin_epoch AND p.source_epoch=n.source_epoch
 WHERE n.status='PROCESSING' AND n.deadline_at IS NOT NULL AND n.id>sqlc.arg(after_id)::bigint
+    AND (sqlc.narg(application_public_id)::uuid IS NULL OR a.public_id=sqlc.narg(application_public_id)::uuid)
+    AND (sqlc.arg(through_id)::bigint=0 OR n.id<=sqlc.arg(through_id)::bigint)
     AND (n.lease_until IS NULL OR n.lease_until<=clock_timestamp())
     AND (NOT EXISTS (SELECT 1 FROM notification_delivery_intents d WHERE d.notification_id=n.id AND d.status='PENDING')
         OR EXISTS (SELECT 1 FROM notification_delivery_intents d WHERE d.notification_id=n.id AND d.status='PENDING'
@@ -36,3 +42,14 @@ WHERE d.application_id=sqlc.arg(application_id)::bigint AND d.notification_id=sq
     AND n.lease_owner=sqlc.arg(owner) AND n.lease_generation=sqlc.arg(generation)::bigint AND n.lease_until>clock_timestamp()
     AND n.status='PROCESSING' AND n.origin_epoch=sqlc.arg(origin_epoch) AND n.source_epoch=sqlc.arg(source_epoch)
 ORDER BY d.id LIMIT sqlc.arg(page_size)::integer;
+
+-- name: DeferUnchargedDelivery :execrows
+UPDATE notification_delivery_intents d
+SET next_attempt_at=greatest(d.next_attempt_at, sqlc.arg(retry_at)::timestamptz)
+FROM notifications n
+WHERE n.application_id=sqlc.arg(application_id)::bigint AND n.id=sqlc.arg(notification_id)::bigint
+    AND n.status='PROCESSING' AND n.origin_epoch=sqlc.arg(origin_epoch) AND n.source_epoch=sqlc.arg(source_epoch)
+    AND n.lease_owner=sqlc.arg(owner) AND n.lease_generation=sqlc.arg(generation)::bigint AND n.lease_until>clock_timestamp()
+    AND d.application_id=n.application_id AND d.notification_id=n.id AND d.id=sqlc.arg(delivery_id)
+    AND d.status='PENDING' AND d.attempt_count<sqlc.arg(max_attempts)::integer
+    AND (d.attempt_id IS NULL OR d.attempt_resolved_at IS NOT NULL OR d.claim_generation<n.lease_generation);

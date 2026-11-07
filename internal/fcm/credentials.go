@@ -35,11 +35,22 @@ type FileCredentialPolicy struct {
 	CrossProjectApproved bool
 }
 
+// ValidateIdentity checks the planned Google principal and target before
+// opening the protected file. NewFile separately verifies the file contents.
+func (p FileCredentialPolicy) ValidateIdentity(target string) error {
+	if !projectLabel(target) || !projectLabel(p.CredentialProjectID) ||
+		!serviceEmail(p.ServiceAccountEmail, p.CredentialProjectID) ||
+		(target != p.CredentialProjectID && !p.CrossProjectApproved) {
+		return ErrConfiguration
+	}
+	return nil
+}
+
 // NewFile constructs a client from a protected service-account key. It performs
 // local validation only, owns credential HTTP resources and never discovers ADC.
 // Close cancels and joins refresh work as part of the client's active sends.
 func NewFile(ctx context.Context, config Config, policy FileCredentialPolicy) (*Client, error) {
-	if config.validate() != nil || ctx.Err() != nil {
+	if config.Validate() != nil || policy.ValidateIdentity(config.ProjectID) != nil || ctx.Err() != nil {
 		return nil, ErrConfiguration
 	}
 	data, err := deployment.ReadSecret(policy.Path)
@@ -76,8 +87,7 @@ type serviceAccount struct {
 
 func parseServiceAccount(data []byte, target string, policy FileCredentialPolicy) (serviceAccount, error) {
 	var key serviceAccount
-	if len(data) > 64*1024 || !utf8.Valid(data) || !projectLabel(target) || !projectLabel(policy.CredentialProjectID) ||
-		policy.ServiceAccountEmail == "" || (target != policy.CredentialProjectID && !policy.CrossProjectApproved) {
+	if len(data) > 64*1024 || !utf8.Valid(data) || policy.ValidateIdentity(target) != nil {
 		return key, ErrConfiguration
 	}
 	fields := map[string]any{
@@ -106,7 +116,7 @@ func parseServiceAccount(data []byte, target string, policy FileCredentialPolicy
 	// Decode rechecks duplicates, exact case, nulls and trailing objects. The first
 	// map decode selects optional fields only; it does not authorize the document.
 	if jsonobject.Decode(data, selected) != nil || key.Type != "service_account" || key.ProjectID != policy.CredentialProjectID ||
-		key.ClientEmail != policy.ServiceAccountEmail || !serviceEmail(key.ClientEmail, key.ProjectID) ||
+		key.ClientEmail != policy.ServiceAccountEmail ||
 		!opaqueToken(key.PrivateKeyID) || len(key.PrivateKeyID) > 255 || key.TokenURI != oauthEndpoint ||
 		(key.UniverseDomain != "" && key.UniverseDomain != "googleapis.com") || !validRSAKey(key.PrivateKey) {
 		return serviceAccount{}, ErrConfiguration
@@ -161,7 +171,7 @@ type fileTokenSource struct {
 
 func fileSource(config Config, policy FileCredentialPolicy, data []byte, testTransport http.RoundTripper) (*fileTokenSource, func(), error) {
 	key, err := parseServiceAccount(data, config.ProjectID, policy)
-	if config.validate() != nil || err != nil {
+	if config.Validate() != nil || err != nil {
 		return nil, nil, ErrConfiguration
 	}
 	var closeHTTP func()

@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"hello/internal/database/sqlc"
 	"hello/internal/fcm"
 )
@@ -43,5 +44,28 @@ func TestResultStateAndRetryPolicy(t *testing.T) {
 				t.Fatal("retry floor shortened")
 			}
 		})
+	}
+}
+
+func TestDeliveryRetryDelayUsesAttemptWindowAndStableJitter(t *testing.T) {
+	var low, high pgtype.UUID
+	high.Bytes[15] = 99
+	for _, tc := range []struct {
+		count          int32
+		floor, ceiling time.Duration
+	}{
+		{1, 10 * time.Second, 10 * time.Second},
+		{2, 10 * time.Second, 20 * time.Second},
+		{3, 20 * time.Second, 40 * time.Second},
+		{6, 150 * time.Second, 5 * time.Minute},
+		{100, 150 * time.Second, 5 * time.Minute},
+	} {
+		a, b := deliveryRetryDelay(tc.count, low), deliveryRetryDelay(tc.count, high)
+		if a != tc.floor || b < tc.floor || b > tc.ceiling || b != deliveryRetryDelay(tc.count, high) {
+			t.Fatalf("attempt %d produced delays %s and %s", tc.count, a, b)
+		}
+		if tc.count > 1 && a == b {
+			t.Fatalf("attempt %d had no jitter for distinct claims", tc.count)
+		}
 	}
 }

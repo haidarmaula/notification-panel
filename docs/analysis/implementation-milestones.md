@@ -187,10 +187,9 @@ supervised producer drain/handoff remain gates. The
 [runtime foundation](../specs/m04-m05-runtime-composition.md) now passes local tests
 for mTLS group handoff, source-bound publication, bounded schedule polling and
 joined scheduler/worker composition. Protected per-process policy and actual
-worker/scheduler entry points now run this pipeline locally; the worker remains
-explicitly admission-only. M06 [lease/reservation foundations](m06-execution-verification.md)
-now pass focused local tests; DB-proof-aware submission, results/recovery/outbox
-and execution composition remain open. The [receipt signer/payload boundary](m06-receipt-payload-verification.md)
+worker/scheduler entry points now run this pipeline locally. The Kafka admission
+process uses its own worker mode. M06 [lease/reservation foundations](m06-execution-verification.md)
+pass focused local tests. The [receipt signer/payload boundary](m06-receipt-payload-verification.md)
 is now locally tested, including [atomic metadata freeze](m06-receipt-metadata-verification.md).
 The [route-bound FCM transport](m06-fcm-transport-verification.md) now passes local
 SDK simulation/race tests, including one physical request per permit.
@@ -199,7 +198,8 @@ OAuth/SDK and offline protected-file tests. Deployment credential selection rema
 open; ADC composition is conditional on selecting keyless deployment. [DB-authorized single-use submission](m06-submission-verification.md)
 is implemented. [Fenced results and atomic update insertion](m06-results-verification.md)
 are implemented. [Ordered update publication](m06-update-publication-verification.md)
-also passes focused local Kafka tests. [Recovery and finalization](../specs/m06-recovery.md) now page abandoned work and close campaigns. Composing this path into the delivery worker remains open. See [runtime verification](runtime-composition-verification.md).
+also passes focused local Kafka tests. The [delivery worker](../runbooks/delivery-worker.md)
+polls abandoned work, closes campaigns and publishes updates for its application.
 
 The generation-bound adapter passes local Kafka tests with two partitions/consumers,
 preparation cancellation during rebalance, redelivery, offset fencing, and durable

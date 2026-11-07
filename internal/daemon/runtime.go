@@ -24,8 +24,7 @@ var (
 
 // Run opens one pool, verifies source/transport readiness and joins all process
 // work before draining its producer and closing the pool. Startup failure closes
-// everything acquired. Configuration and credentials remain immutable; no live
-// role, epoch, application activation or provider execution override is supplied.
+// everything acquired. The protected worker mode selects admission or delivery.
 func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error) {
 	if c == nil || !daemonRole(c.role) || c.database == nil || logger == nil || !deployment.EnvironmentAllowed() {
 		return ErrConfiguration
@@ -58,6 +57,19 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 	}
 	if producer.VerifyClusterTopic(startup, c.source.ClusterID, c.source.PartitionCount) != nil {
 		return startupFailure(ctx, errBroker)
+	}
+	if c.role == deployment.Worker && c.delivery != nil {
+		poller, client, err := c.delivery.open(startup, pool)
+		if err != nil {
+			return startupFailure(ctx, ErrConfiguration)
+		}
+		defer client.Close()
+		outbox, err := dispatch.NewApplicationUpdateOutbox(pool, sourcePublisher{producer, c.source}, c.source, c.delivery.application)
+		if err != nil {
+			return ErrConfiguration
+		}
+		cancelStartup()
+		return runDelivery(ctx, logger, c.delivery, c.retry, poller, outbox)
 	}
 	// Startup deadlines must not become the lifetime of a healthy daemon.
 	cancelStartup()
@@ -110,6 +122,13 @@ func (p sourcePublisher) PublishScopedSend(ctx context.Context, event kafka.Scop
 		return err
 	}
 	return p.producer.PublishScopedSend(ctx, event)
+}
+
+func (p sourcePublisher) PublishScopedDelivery(ctx context.Context, payload []byte) error {
+	if err := p.producer.VerifyClusterTopic(ctx, p.source.ClusterID, p.source.PartitionCount); err != nil {
+		return err
+	}
+	return p.producer.PublishScopedDelivery(ctx, payload)
 }
 func startupFailure(ctx context.Context, failure error) error {
 	if ctx.Err() != nil {

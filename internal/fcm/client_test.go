@@ -291,8 +291,8 @@ func TestRetryAdviceAndBreakerGenerations(t *testing.T) {
 	if !ok {
 		t.Fatal("missing half-open probe")
 	}
-	if _, _, ok := b.acquire(now.Add(31 * time.Second)); ok {
-		t.Fatal("parallel half-open probes")
+	if _, retry, ok := b.acquire(now.Add(31 * time.Second)); ok || !retry.After(now.Add(31*time.Second)) {
+		t.Fatal("a concurrent half-open probe must receive a future retry time")
 	}
 	b.finish(probe, Outcome{}, now.Add(31*time.Second))
 	probe, _, ok = b.acquire(now.Add(31 * time.Second))

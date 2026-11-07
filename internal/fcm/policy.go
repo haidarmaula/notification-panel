@@ -29,17 +29,21 @@ type Config struct {
 	BreakerCooldown   time.Duration
 }
 
-func (c Config) validate() error {
+// Validate checks the project's pacing, concurrency, timeout and breaker bounds
+// together with the allowlisted routes, without allocating a client.
+func (c Config) Validate() error {
 	if !projectLabel(c.ProjectID) || c.Environment == "" || len(c.Routes) < 1 || len(c.Routes) > 64 ||
 		c.RequestsPerSecond < 1 || c.RequestsPerSecond > 10000 || c.Concurrency < 1 || c.Concurrency > 128 ||
 		c.RequestTimeout < 10*time.Second || c.RequestTimeout > 30*time.Second || c.BreakerThreshold < 1 || c.BreakerThreshold > 100 ||
 		c.BreakerCooldown < 10*time.Second || c.BreakerCooldown > time.Hour {
 		return ErrConfiguration
 	}
+	seen := make(map[pushpayload.Route]bool, len(c.Routes))
 	for _, r := range c.Routes {
-		if r.Environment != c.Environment {
+		if _, err := pushpayload.New(r); err != nil || r.Environment != c.Environment || seen[r] {
 			return ErrConfiguration
 		}
+		seen[r] = true
 	}
 	return nil
 }
@@ -108,8 +112,13 @@ func (b *breaker) acquire(now time.Time) (breakerToken, time.Time, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if !b.until.IsZero() {
-		if now.Before(b.until) || b.probe {
+		if now.Before(b.until) {
 			return breakerToken{}, b.until, false
+		}
+		if b.probe {
+			// A half-open probe is still running. The original cooldown has
+			// elapsed, so persist a future recheck for other due deliveries.
+			return breakerToken{}, now.Add(time.Second), false
 		}
 		b.probe = true
 		return breakerToken{generation: b.generation, probe: true}, time.Time{}, true

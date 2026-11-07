@@ -21,7 +21,6 @@ import (
 var ErrConfiguration = deployment.ErrConfiguration
 
 // Configuration is loaded once and retained privately for one process role.
-// Worker mode is explicitly admission_only until M06 provider execution exists.
 type Configuration struct {
 	role      deployment.Component
 	database  *pgxpool.Config
@@ -30,6 +29,7 @@ type Configuration struct {
 	admission dispatch.KafkaAdmissionConfig
 	scheduler scheduler.Config
 	retry     runloop.RetryPolicy
+	delivery  *deliveryConfig
 }
 
 // Load validates a caller-owned trusted policy stream without network I/O.
@@ -44,7 +44,7 @@ func Load(role deployment.Component, reader io.Reader) (*Configuration, error) {
 	}
 	cfg := &Configuration{role: role}
 	var databaseURL, sourceID, groupID, mode string
-	var brokerPolicy json.RawMessage
+	var brokerPolicy, deliveryPolicy json.RawMessage
 	var retryMin, retryMax, poll int64
 	var page int32
 	fields := map[string]any{
@@ -53,7 +53,22 @@ func Load(role deployment.Component, reader io.Reader) (*Configuration, error) {
 		"kafka": &brokerPolicy, "retry_min_ms": &retryMin, "retry_max_ms": &retryMax,
 	}
 	if role == deployment.Worker {
-		fields["group_id"] = &groupID
+		// Select the schema only. Decode below still rejects duplicate mode
+		// fields, case aliases, unknown members and missing policy.
+		var selector struct {
+			Mode string `json:"mode"`
+		}
+		if json.Unmarshal(data, &selector) != nil {
+			return nil, ErrConfiguration
+		}
+		switch selector.Mode {
+		case "admission_only":
+			fields["group_id"] = &groupID
+		case "delivery_only":
+			fields["delivery"] = &deliveryPolicy
+		default:
+			return nil, ErrConfiguration
+		}
 		fields["mode"] = &mode
 	} else {
 		fields["poll_interval_ms"] = &poll
@@ -70,15 +85,18 @@ func Load(role deployment.Component, reader io.Reader) (*Configuration, error) {
 	if err != nil {
 		return nil, ErrConfiguration
 	}
-	if role == deployment.Worker {
-		if mode != "admission_only" {
-			return nil, ErrConfiguration
-		}
+	switch {
+	case mode == "admission_only":
 		cfg.admission = dispatch.KafkaAdmissionConfig{Brokers: cfg.broker.Brokers, GroupID: groupID, SourceID: cfg.source.ID, ClusterID: cfg.source.ClusterID, Topic: cfg.source.Topic, Incarnation: cfg.source.Incarnation, PartitionCount: cfg.source.PartitionCount, TLS: cfg.broker.TLS, SASL: cfg.broker.SASL}
 		if cfg.admission.Validate() != nil {
 			return nil, ErrConfiguration
 		}
-	} else {
+	case mode == "delivery_only":
+		cfg.delivery, err = parseDelivery(deliveryPolicy)
+		if err != nil {
+			return nil, ErrConfiguration
+		}
+	default:
 		if poll < 100 || poll > 60000 || page < 1 || page > 100 {
 			return nil, ErrConfiguration
 		}

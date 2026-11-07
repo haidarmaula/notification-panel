@@ -2,8 +2,8 @@
 
 Date: 2026-11-05. Status: authenticated admission, source-bound publication,
 scheduler composition and protected per-process worker/scheduler entry points are
-implemented and locally tested. The worker explicitly runs `admission_only`; M06
-provider execution is not implemented. No production source/application is
+implemented and locally tested. The admission worker runs `admission_only`. M06 adds a dedicated
+[`delivery_only` worker](../runbooks/delivery-worker.md). No production source/application is
 enabled. See [local verification](../analysis/runtime-composition-verification.md).
 
 ## Authenticated admission
@@ -98,13 +98,14 @@ Common required fields are `database_url`, `log_source_id`, `cluster_identity`,
 `retry_max_ms`. The broker object has the same exact fields as the
 [replay policy](m05-replay-command.md). Retry minimum is at least 100ms and maximum
 at most 300,000ms, with maximum no smaller than minimum. Worker additionally
-requires `mode: "admission_only"` and `group_id`; any delivery mode fails closed.
+requires `mode: "admission_only"` and `group_id` for Kafka admission, or
+`mode: "delivery_only"` and an application-scoped delivery policy for FCM execution.
 Scheduler additionally requires `poll_interval_ms` (100–60,000) and `page_size`
 (1–100). These bounds are implementation limits, not production tuning approval.
 
 Startup has a 15-second parent budget. Each daemon opens one two-connection pool,
 pings verified DB TLS, checks unsealed runtime/active source registration and live
-broker identity/topic/partition metadata. Worker preflights metadata without a
+broker identity/topic/partition metadata. The admission worker preflights metadata without a
 Produce request, closes that temporary transport and starts its supervised group.
 Scheduler retains its producer and rechecks metadata before publication. Startup
 preflight does not replace transaction-time authority/epoch/source gates.
@@ -116,6 +117,6 @@ drain failures exit 1; invalid arguments exit 2. Logs contain static failure
 messages and no raw dependency errors/policy values. Shutdown must be supervised:
 SDK-owned I/O may outlive call cancellation until producer Close finishes.
 
-Provider execution/recovery remains M06. Real issuer integration, source
+The dedicated M06 worker polls the delivery ledger and publishes its updates. Real issuer integration, source
 incarnation/ACL review, HA, restore/backpressure, capacity and production acceptance
 remain release gates. There is no automatic source/application activation.

@@ -207,6 +207,13 @@ func (s *Execution) Reserve(ctx context.Context, lease *ExecutionLease, delivery
 			binding.RetiredAt.Valid || binding.InstallationID != identity.InstallationID || binding.OwnerUserID != identity.OwnerUserID || binding.OwnerEpoch != identity.OwnerEpoch {
 			return ErrExecutionUnavailable
 		}
+		delivery, err := q.LockReceiptDelivery(ctx, sqlc.LockReceiptDeliveryParams{ApplicationID: lease.applicationID, NotificationID: lease.notificationID, DeliveryID: deliveryID})
+		if err != nil {
+			return executionMissing(err)
+		}
+		if delivery.Status != "PENDING" || delivery.AttemptCount >= s.policy.MaxAttempts {
+			return ErrExecutionUnavailable
+		}
 		material, err := s.freezeReceipt(ctx, q, lease, deliveryID, identity, installation.PublicID)
 		if err != nil {
 			return err
@@ -215,9 +222,12 @@ func (s *Execution) Reserve(ctx context.Context, lease *ExecutionLease, delivery
 		if err != nil {
 			return err
 		}
+		// Commit the backoff with the charge so a crash before RecordResult
+		// cannot shorten the next attempt's delay.
+		retryDelay := max(s.policy.RetryFloor, deliveryRetryDelay(delivery.AttemptCount+1, attemptID))
 		_, err = q.ReserveExecutionAttempt(ctx, sqlc.ReserveExecutionAttemptParams{ApplicationID: lease.applicationID, NotificationID: lease.notificationID, DeliveryID: deliveryID,
 			AttemptID: attemptID, Owner: s.owner, Generation: lease.generation, OriginEpoch: lease.origin, SourceEpoch: lease.source,
-			MaxAttempts: s.policy.MaxAttempts, RetryFloorSeconds: int32(s.policy.RetryFloor / time.Second)})
+			MaxAttempts: s.policy.MaxAttempts, RetryFloorMicros: retryDelay.Microseconds()})
 		if err != nil {
 			return executionMissing(err)
 		}
@@ -328,13 +338,6 @@ func (r *AttemptReservation) ReceiptMaterial() (receipt.Material, bool) {
 }
 func (s *Execution) freezeReceipt(ctx context.Context, q *sqlc.Queries, lease *ExecutionLease, deliveryID pgtype.UUID, identity sqlc.GetExecutionIntentIdentityRow, installationPublicID pgtype.UUID) (receipt.Material, error) {
 	none := receipt.Material{}
-	delivery, err := q.LockReceiptDelivery(ctx, sqlc.LockReceiptDeliveryParams{ApplicationID: lease.applicationID, NotificationID: lease.notificationID, DeliveryID: deliveryID})
-	if err != nil {
-		return none, executionMissing(err)
-	}
-	if delivery.Status != "PENDING" {
-		return none, ErrExecutionUnavailable
-	}
 	if err := q.FreezeReceiptMetadata(ctx, sqlc.FreezeReceiptMetadataParams{ApplicationID: lease.applicationID, NotificationID: lease.notificationID, DeliveryID: deliveryID,
 		KeyID: s.policy.Receipt.KeyID, Environment: s.policy.Receipt.Environment, WindowSeconds: int64(s.policy.Receipt.ObservationWindow / time.Second)}); err != nil {
 		return none, err

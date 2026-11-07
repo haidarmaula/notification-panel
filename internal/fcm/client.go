@@ -102,7 +102,7 @@ func verifiedHTTP(config Config) (*http.Transport, error) {
 }
 
 func newClient(config Config, tokens auth.TokenProvider, base http.RoundTripper, closeHTTP func()) (*Client, error) {
-	if config.validate() != nil || tokens == nil || base == nil || closeHTTP == nil {
+	if config.Validate() != nil || tokens == nil || base == nil || closeHTTP == nil {
 		return nil, ErrConfiguration
 	}
 	ctx, cancel := context.WithCancel(context.Background())

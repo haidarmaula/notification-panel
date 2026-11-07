@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/json"
 	"math"
 	"time"
@@ -200,9 +201,9 @@ func resultMutation(row sqlc.LockResultDeliveryRow, out fcm.Outcome, maxAttempts
 		if permanent {
 			reason = string(out.Reason)
 		} else {
-			floor := 10 * time.Second
+			floor := deliveryRetryDelay(row.AttemptCount, row.AttemptID)
 			if out.Reason == fcm.Quota {
-				floor = time.Minute
+				floor = max(floor, time.Minute)
 			}
 			next := row.RecordedAt.Time.Add(floor)
 			if row.NextAttemptAt.Time.After(next) {
@@ -232,6 +233,18 @@ func resultMutation(row sqlc.LockResultDeliveryRow, out fcm.Outcome, maxAttempts
 	changed := desired.Status != row.Status || desired.ProviderMessageID != row.ProviderMessageID || desired.ProviderAcceptedAt != row.ProviderAcceptedAt || desired.FailedAt != row.FailedAt || desired.TerminalReason != row.TerminalReason
 	return desired, changed
 }
+
+// The random attempt ID makes jitter stable if persistence is retried after
+// an uncertain commit. Neither a provider floor nor a reservation is capped.
+func deliveryRetryDelay(count int32, attempt pgtype.UUID) time.Duration {
+	shift := min(max(count, 1)-1, 5)
+	window := min((10*time.Second)<<shift, 5*time.Minute)
+	lower := max(window/2, 10*time.Second)
+	steps := uint64((window-lower)/time.Microsecond) + 1
+	jitter := binary.BigEndian.Uint64(attempt.Bytes[8:]) % steps
+	return lower + time.Duration(jitter)*time.Microsecond
+}
+
 func resultText(s string) pgtype.Text { return pgtype.Text{String: s, Valid: true} }
 func resultTime(t time.Time) pgtype.Timestamptz {
 	return pgtype.Timestamptz{Time: t.UTC().Truncate(time.Microsecond), Valid: true}

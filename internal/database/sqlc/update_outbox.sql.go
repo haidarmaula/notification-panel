@@ -43,21 +43,23 @@ func (q *Queries) DeletePublishedDeliveryUpdate(ctx context.Context, eventID pgt
 }
 
 const hasLineageBlockedDeliveryUpdate = `-- name: HasLineageBlockedDeliveryUpdate :one
-SELECT EXISTS(SELECT 1 FROM notification_update_outbox o
+SELECT EXISTS(SELECT 1 FROM notification_update_outbox o JOIN applications a ON a.id=o.application_id
 WHERE o.next_attempt_at<=clock_timestamp()
-    AND o.origin_epoch=$1::uuid AND o.source_epoch=$2::uuid
+    AND ($1::uuid IS NULL OR a.public_id=$1::uuid)
+    AND o.origin_epoch=$2::uuid AND o.source_epoch=$3::uuid
     AND EXISTS(SELECT 1 FROM notification_update_outbox predecessor
         WHERE predecessor.delivery_id=o.delivery_id AND predecessor.delivery_version<o.delivery_version
             AND (predecessor.origin_epoch<>o.origin_epoch OR predecessor.source_epoch<>o.source_epoch)))::boolean
 `
 
 type HasLineageBlockedDeliveryUpdateParams struct {
-	OriginEpoch pgtype.UUID `db:"origin_epoch"`
-	SourceEpoch pgtype.UUID `db:"source_epoch"`
+	ApplicationPublicID pgtype.UUID `db:"application_public_id"`
+	OriginEpoch         pgtype.UUID `db:"origin_epoch"`
+	SourceEpoch         pgtype.UUID `db:"source_epoch"`
 }
 
 func (q *Queries) HasLineageBlockedDeliveryUpdate(ctx context.Context, arg HasLineageBlockedDeliveryUpdateParams) (bool, error) {
-	row := q.db.QueryRow(ctx, hasLineageBlockedDeliveryUpdate, arg.OriginEpoch, arg.SourceEpoch)
+	row := q.db.QueryRow(ctx, hasLineageBlockedDeliveryUpdate, arg.ApplicationPublicID, arg.OriginEpoch, arg.SourceEpoch)
 	var column_1 bool
 	err := row.Scan(&column_1)
 	return column_1, err
@@ -68,15 +70,17 @@ SELECT o.event_id, o.application_id, o.notification_id, o.delivery_id, o.deliver
 FROM notification_update_outbox o JOIN applications a ON a.id=o.application_id
 JOIN notification_delivery_intents d ON d.application_id=o.application_id AND d.id=o.delivery_id
 WHERE o.next_attempt_at<=clock_timestamp()
-    AND o.origin_epoch=$1::uuid AND o.source_epoch=$2::uuid
+    AND ($1::uuid IS NULL OR a.public_id=$1::uuid)
+    AND o.origin_epoch=$2::uuid AND o.source_epoch=$3::uuid
     AND NOT EXISTS(SELECT 1 FROM notification_update_outbox predecessor
         WHERE predecessor.delivery_id=o.delivery_id AND predecessor.delivery_version<o.delivery_version)
 ORDER BY o.next_attempt_at,o.event_id LIMIT 1 FOR UPDATE OF o SKIP LOCKED
 `
 
 type LockNextDeliveryUpdateParams struct {
-	OriginEpoch pgtype.UUID `db:"origin_epoch"`
-	SourceEpoch pgtype.UUID `db:"source_epoch"`
+	ApplicationPublicID pgtype.UUID `db:"application_public_id"`
+	OriginEpoch         pgtype.UUID `db:"origin_epoch"`
+	SourceEpoch         pgtype.UUID `db:"source_epoch"`
 }
 
 type LockNextDeliveryUpdateRow struct {
@@ -96,7 +100,7 @@ type LockNextDeliveryUpdateRow struct {
 }
 
 func (q *Queries) LockNextDeliveryUpdate(ctx context.Context, arg LockNextDeliveryUpdateParams) (LockNextDeliveryUpdateRow, error) {
-	row := q.db.QueryRow(ctx, lockNextDeliveryUpdate, arg.OriginEpoch, arg.SourceEpoch)
+	row := q.db.QueryRow(ctx, lockNextDeliveryUpdate, arg.ApplicationPublicID, arg.OriginEpoch, arg.SourceEpoch)
 	var i LockNextDeliveryUpdateRow
 	err := row.Scan(
 		&i.EventID,

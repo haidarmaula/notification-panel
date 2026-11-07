@@ -205,3 +205,29 @@ func TestRecoverDeliveryDeadlineAndOutboxCommit(t *testing.T) {
 	require.Equal(t, 1, events)
 	require.Zero(t, executionAttempts(t, ctx, f))
 }
+
+func TestAbandonedClaimsPersistIncreasingRetryWindow(t *testing.T) {
+	ctx := t.Context()
+	f := newExecutionFixture(t, ctx)
+	s := executionService(t, f.pool)
+	device := f.deliveries[0]
+	for charge := 1; charge <= 3; charge++ {
+		lease, err := s.Acquire(ctx, f.project, f.campaign)
+		require.NoError(t, err)
+		_, err = s.Reserve(ctx, lease, device)
+		require.NoError(t, err)
+		var attempts int
+		var delay float64
+		require.NoError(t, f.pool.QueryRow(ctx, `SELECT attempt_count, extract(epoch FROM next_attempt_at - last_attempt_at)::float8
+			FROM notification_delivery_intents WHERE id=$1`, device).Scan(&attempts, &delay))
+		require.Equal(t, charge, attempts)
+		floors := [...]float64{10, 10, 20}
+		require.GreaterOrEqual(t, delay, floors[charge-1])
+		require.LessOrEqual(t, delay, float64(int64(10)<<(charge-1)))
+		// Simulate an expired owner and elapsed retry window without provider I/O.
+		if charge < 3 {
+			executionSQL(t, ctx, f, "UPDATE notifications SET lease_until=clock_timestamp()-interval '1 second' WHERE id=$1", f.campaign)
+			executionSQL(t, ctx, f, "UPDATE notification_delivery_intents SET next_attempt_at=clock_timestamp() WHERE id=$1", device)
+		}
+	}
+}

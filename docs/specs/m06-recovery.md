@@ -3,7 +3,7 @@
 The dispatch library recovers a prepared PROCESSING campaign from PostgreSQL
 without its original Kafka message or an in-memory reservation. Recovery uses
 the existing ledger, marker, lease and outbox; it needs no migration. The
-admission worker does not run this library yet.
+worker runs these operations in [delivery_only mode](../runbooks/delivery-worker.md).
 
 ## Polling contract
 
@@ -19,7 +19,10 @@ admission worker does not run this library yet.
    cursor while `More` is true. Each page considers at most 100 devices, has
    a 30-second deadline, and returns acknowledged progress even if a later
    retirement fails. A database error does not permanently fail a delivery.
-   Rows that become due behind the cursor are visible on the next pass.
+   The worker can send earlier ready IDs and continue past a failed retirement.
+   It reports the database failure and retries that device on a later sweep.
+   The worker fixes the maximum campaign ID for each device sweep so new
+   campaigns cannot keep earlier devices waiting indefinitely.
 4. `Ready` contains advisory IDs. Reading a page neither reserves an attempt
    nor contacts FCM. Submit these IDs through `Submitter.Send` and persist its
    result through `RecordResult`; both recheck their own authority. A replacement
@@ -74,6 +77,6 @@ race suite (PostgreSQL/Kafka integration: 110.663s; FCM: 3.319s), including
 the migration up/down/up cycle. Unit race tests, build, vet, formatting and
 module verification passed. No production credentials or devices were used.
 
-Periodic delivery-worker composition, deployment policy, consumer acceptance,
+Target-deployment policy, consumer acceptance,
 and real-device delivery are separate gates. An unknown provider outcome can
 still lead to another physical send after the retry floor.

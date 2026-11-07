@@ -157,6 +157,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeferDeliveryUpdate(ctx context.Context, arg DeferDeliveryUpdateParams) (int64, error)
 	DeferSendOutbox(ctx context.Context, arg DeferSendOutboxParams) error
+	DeferUnchargedDelivery(ctx context.Context, arg DeferUnchargedDeliveryParams) (int64, error)
 	// ==========================================
 	// DELETE
 	// ==========================================

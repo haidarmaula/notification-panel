@@ -1,4 +1,4 @@
-// Command worker runs the scoped admission-only worker.
+// Command worker runs the admission or delivery role selected by protected policy.
 package main
 
 import (

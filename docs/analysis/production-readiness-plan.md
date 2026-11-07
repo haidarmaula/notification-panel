@@ -242,7 +242,7 @@ now include authenticated admission, source-bound publication, bounded due-sched
 polling and four joined scheduler tasks, with a composed local TLS pipeline test.
 The [verification record](runtime-composition-verification.md) covers this boundary.
 Trusted per-process configuration and actual worker/scheduler entry points are
-now wired and locally verified. The worker explicitly runs admission-only; M06
+now wired and locally verified. Kafka admission runs in its own worker mode. M06
 [lease/reservation foundations](m06-execution-verification.md) now pass focused
 local tests. Dedicated [receipt signing and scoped payload libraries](m06-receipt-payload-verification.md)
 now also pass local tests. Atomic [capability metadata persistence](m06-receipt-metadata-verification.md)
@@ -255,7 +255,7 @@ deployment. [Single-use DB-authorized submission](m06-submission-verification.md
 is implemented with final checks after credential/rate waits.
 [Fenced result persistence/outbox insertion](m06-results-verification.md) is implemented.
 [Ordered update publication](m06-update-publication-verification.md) passes focused
-local Kafka tests. [Execution recovery and campaign finalization](../specs/m06-recovery.md) are implemented; delivery runtime composition remains open. Production
+local Kafka tests. [Execution recovery and campaign finalization](../specs/m06-recovery.md) are implemented. The [delivery worker](../runbooks/delivery-worker.md) polls its configured application. Production
 activation and acceptance stay open.
 
 ## 5. Execution checklist
@@ -295,11 +295,11 @@ work on unchecked rows has started, as noted.
 ### Phase 4 — delivery pipeline
 
 - [ ] 21. Scoped FCM transport/errors, file credentials, DB-authorized single-use submission, fenced results and conditional invalid-token handling pass local tests. Selected deployment credential policy and delivery activation remain open.
-- [ ] 22. M05 atomic fan-out/device snapshots pass locally, including 20k intents. M06 leases, per-device claims, submission and fenced results also pass locally; recovery and finalization are implemented; delivery runtime activation remains open.
-- [ ] 23. The recovery library preserves charged attempts and retry floors after lease expiry and finalizes TTL/budget exhaustion. Delivery worker polling and end-to-end deployment acceptance remain open.
+- [ ] 22. M05 atomic fan-out/device snapshots pass locally, including 20k intents. M06 leases, per-device claims, submission and fenced results also pass locally; recovery and finalization are implemented; target-environment activation remains open.
+- [x] 23. Per-device retries use bounded exponential backoff and preserve charged attempts after lease expiry. The worker recovers eligible devices and finalizes deliveries that exhaust their deadline or budget. Verified with PostgreSQL, Kafka and a synthetic FCM endpoint in the [isolated worker deployment](../runbooks/delivery-worker.md#acceptance).
 - [ ] 24. Decoder, source-aware dead-letter, serial coordinator, and generation-bound adapter pass locally, including Kafka rebalance with two partitions/consumers; replay registration/inspection/claim/publication and expired-claim cleanup libraries also pass locally. Replay CLI/configuration and PostgreSQL verified-TLS/Kafka mTLS command tests also pass locally. Production issuer/incarnation approval, supervised drain/handoff and runtime deployment remain pending.
 - [ ] 25. M04 atomic send idempotency + claim + outbox, promotion/expiry, and bounded dispatcher pass locally; the scheduler binary now uses protected source-bound durable handoff locally. Production policy/activation and target-environment evidence remain open.
-- [ ] 26. Atomic versioned outbox insertion and predecessor-safe publication pass local tests. Consumer dedup/version acceptance and delivery runtime composition remain open.
+- [ ] 26. Atomic versioned outbox insertion and predecessor-safe publication pass local tests. The delivery worker drains its scoped outbox. Consumer dedup/version acceptance remains open.
 - [ ] 27. Bounded concurrency, page/chunk memory limits, provider rate limits, and backpressure.
 - [ ] 28. Acceptance/audit rollback, ack-before-commit, preparation/quarantine commit failure, coordinator unsafe-offset, and broker rebalance pass locally; provider and other failure windows/deployment are pending.
 

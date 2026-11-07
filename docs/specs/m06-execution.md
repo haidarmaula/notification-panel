@@ -4,8 +4,8 @@ Date: 2026-11-05. Status: lease/reservation persistence and service are implemen
 and locally tested. [Single-use submission](m06-submission.md) is implemented;
 [Fenced result persistence and outbox insertion](m06-results.md) are implemented;
 [recovery/finalization](m06-recovery.md) and [ordered publication](m06-update-publication.md)
-are implemented. Delivery runtime remains
-disabled. See [verification](../analysis/m06-execution-verification.md).
+are implemented. The [dedicated worker](../runbooks/delivery-worker.md) runs them
+under a protected per-application policy. See [verification](../analysis/m06-execution-verification.md).
 Dependencies: [ADR-01](../adr/adr-01-provider-retry.md),
 [ADR-04](../adr/adr-04-provider-selection.md),
 [ADR-05](../adr/adr-05-receipt-ingestion.md), and
@@ -43,13 +43,11 @@ TTL or accepted deadline is never extended by lease acquisition/renewal/recovery
 Lease policy is explicit and copied at construction: lease duration 30s–5m,
 unknown-attempt retry floor 10s–24h, per-device budget 1–100 and an explicit
 [receipt metadata policy](m06-receipt-payload.md#committed-signing-metadata). These are defensive
-implementation bounds, not approved production values. The full executor must
-add request/renewal safety validation and calibrated rate/replica allocation before
-configuration can enable delivery. Proposed values remain lease 60s, renewal 15s,
-request timeout 10s; no process currently enables this path.
+implementation bounds. Worker startup validates the renewal/request margin and
+declared replica rate allocation. Operators must calibrate the deployment budget.
 
-A candidate read is advisory and consumes no budget. Before reservation, the future
-executor must obtain concurrency, rate and breaker permits and verify its configured
+A candidate read is advisory and consumes no budget. Before reservation, the
+executor obtains concurrency, rate and breaker permits and verifies its configured
 application/provider route. Reservation locks runtime -> application -> policy ->
 active user -> campaign -> installation -> immutable binding -> delivery. Discovery
 of immutable delivery identity takes no child lock; every identity/current owner is

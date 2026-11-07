@@ -11,8 +11,54 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const deferUnchargedDelivery = `-- name: DeferUnchargedDelivery :execrows
+UPDATE notification_delivery_intents d
+SET next_attempt_at=greatest(d.next_attempt_at, $1::timestamptz)
+FROM notifications n
+WHERE n.application_id=$2::bigint AND n.id=$3::bigint
+    AND n.status='PROCESSING' AND n.origin_epoch=$4 AND n.source_epoch=$5
+    AND n.lease_owner=$6 AND n.lease_generation=$7::bigint AND n.lease_until>clock_timestamp()
+    AND d.application_id=n.application_id AND d.notification_id=n.id AND d.id=$8
+    AND d.status='PENDING' AND d.attempt_count<$9::integer
+    AND (d.attempt_id IS NULL OR d.attempt_resolved_at IS NOT NULL OR d.claim_generation<n.lease_generation)
+`
+
+type DeferUnchargedDeliveryParams struct {
+	RetryAt        pgtype.Timestamptz `db:"retry_at"`
+	ApplicationID  int64              `db:"application_id"`
+	NotificationID int64              `db:"notification_id"`
+	OriginEpoch    pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch    pgtype.UUID        `db:"source_epoch"`
+	Owner          pgtype.UUID        `db:"owner"`
+	Generation     int64              `db:"generation"`
+	DeliveryID     pgtype.UUID        `db:"delivery_id"`
+	MaxAttempts    int32              `db:"max_attempts"`
+}
+
+func (q *Queries) DeferUnchargedDelivery(ctx context.Context, arg DeferUnchargedDeliveryParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deferUnchargedDelivery,
+		arg.RetryAt,
+		arg.ApplicationID,
+		arg.NotificationID,
+		arg.OriginEpoch,
+		arg.SourceEpoch,
+		arg.Owner,
+		arg.Generation,
+		arg.DeliveryID,
+		arg.MaxAttempts,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const listExecutionRecoveryCampaigns = `-- name: ListExecutionRecoveryCampaigns :many
-SELECT n.id, a.public_id AS application_public_id, n.origin_epoch, n.source_epoch
+SELECT n.id, a.public_id AS application_public_id, n.origin_epoch, n.source_epoch,
+    CASE WHEN $1::uuid IS NULL THEN 0
+         WHEN $2::bigint > 0 THEN $2::bigint
+         ELSE (SELECT max(last_n.id) FROM notifications last_n WHERE last_n.application_id=a.id)
+    END::bigint AS pass_end
 FROM notifications n
 JOIN applications a ON a.id=n.application_id
 JOIN application_dispatch_policy ap ON ap.application_id=a.id
@@ -20,20 +66,24 @@ JOIN notification_runtime r ON r.singleton AND NOT r.sealed AND NOT r.migration_
     AND r.origin_epoch=n.origin_epoch AND r.source_epoch=n.source_epoch
 JOIN notification_preparations p ON p.application_id=a.id AND p.notification_id=n.id
     AND p.origin_epoch=n.origin_epoch AND p.source_epoch=n.source_epoch
-WHERE n.status='PROCESSING' AND n.deadline_at IS NOT NULL AND n.id>$1::bigint
+WHERE n.status='PROCESSING' AND n.deadline_at IS NOT NULL AND n.id>$3::bigint
+    AND ($1::uuid IS NULL OR a.public_id=$1::uuid)
+    AND ($2::bigint=0 OR n.id<=$2::bigint)
     AND (n.lease_until IS NULL OR n.lease_until<=clock_timestamp())
     AND (NOT EXISTS (SELECT 1 FROM notification_delivery_intents d WHERE d.notification_id=n.id AND d.status='PENDING')
         OR EXISTS (SELECT 1 FROM notification_delivery_intents d WHERE d.notification_id=n.id AND d.status='PENDING'
             AND (n.deadline_at<=clock_timestamp() OR d.next_attempt_at>=n.deadline_at
-                OR d.attempt_count>=$2::integer
+                OR d.attempt_count>=$4::integer
                 OR (d.next_attempt_at<=clock_timestamp() AND a.status='ACTIVE' AND ap.coverage_approved AND NOT ap.hold_new))))
-ORDER BY n.id LIMIT $3::integer
+ORDER BY n.id LIMIT $5::integer
 `
 
 type ListExecutionRecoveryCampaignsParams struct {
-	AfterID     int64 `db:"after_id"`
-	MaxAttempts int32 `db:"max_attempts"`
-	PageSize    int32 `db:"page_size"`
+	ApplicationPublicID pgtype.UUID `db:"application_public_id"`
+	ThroughID           int64       `db:"through_id"`
+	AfterID             int64       `db:"after_id"`
+	MaxAttempts         int32       `db:"max_attempts"`
+	PageSize            int32       `db:"page_size"`
 }
 
 type ListExecutionRecoveryCampaignsRow struct {
@@ -41,11 +91,18 @@ type ListExecutionRecoveryCampaignsRow struct {
 	ApplicationPublicID pgtype.UUID `db:"application_public_id"`
 	OriginEpoch         pgtype.UUID `db:"origin_epoch"`
 	SourceEpoch         pgtype.UUID `db:"source_epoch"`
+	PassEnd             int64       `db:"pass_end"`
 }
 
 // Metadata only: a later acquisition rechecks the marker, epochs and live lease.
 func (q *Queries) ListExecutionRecoveryCampaigns(ctx context.Context, arg ListExecutionRecoveryCampaignsParams) ([]ListExecutionRecoveryCampaignsRow, error) {
-	rows, err := q.db.Query(ctx, listExecutionRecoveryCampaigns, arg.AfterID, arg.MaxAttempts, arg.PageSize)
+	rows, err := q.db.Query(ctx, listExecutionRecoveryCampaigns,
+		arg.ApplicationPublicID,
+		arg.ThroughID,
+		arg.AfterID,
+		arg.MaxAttempts,
+		arg.PageSize,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -58,6 +115,7 @@ func (q *Queries) ListExecutionRecoveryCampaigns(ctx context.Context, arg ListEx
 			&i.ApplicationPublicID,
 			&i.OriginEpoch,
 			&i.SourceEpoch,
+			&i.PassEnd,
 		); err != nil {
 			return nil, err
 		}
