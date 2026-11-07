@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"errors"
+	"io"
 	"math"
 	"strings"
 	"sync"
@@ -18,6 +19,10 @@ import (
 	"hello/internal/database/sqlc"
 	"hello/internal/kafka"
 )
+
+// ErrAdmissionCheckpoint holds admission until an operator reconciles the
+// broker checkpoint against the reviewed source and retained partition range.
+var ErrAdmissionCheckpoint = errors.New("Kafka admission checkpoint requires reconciliation")
 
 // KafkaAdmissionConfig pins source identity, topology and transport policy.
 // TLS material and SASL implementations must remain immutable; do not log this
@@ -107,6 +112,8 @@ func (r *KafkaAdmission) Run(ctx context.Context) error {
 	group, err := broker.NewConsumerGroup(broker.ConsumerGroupConfig{
 		ID: r.config.GroupID, Brokers: r.config.Brokers, Topics: []string{r.config.Topic},
 		Dialer: r.config.dialer(), Timeout: time.Second,
+		// kafka-go represents a missing commit with this negative sentinel.
+		// VerifySource rejects it before issuing a partition fetch.
 		StartOffset: broker.FirstOffset, WatchPartitionChanges: true,
 	})
 	if err != nil {
@@ -151,7 +158,7 @@ type generationAdmissionReader struct {
 	generationCtx context.Context
 	cancel        context.CancelFunc
 	fetches       chan generationFetch
-	readers       []*broker.Reader
+	transport     *broker.Transport
 	wg            sync.WaitGroup
 }
 
@@ -185,7 +192,7 @@ func (r *generationAdmissionReader) VerifySource(ctx context.Context) error {
 		return err
 	}
 	transport := &broker.Transport{DialTimeout: time.Second, TLS: r.config.TLS, SASL: r.config.SASL, MetadataTopics: []string{r.config.Topic}}
-	defer transport.CloseIdleConnections()
+	r.transport = transport
 	client := &broker.Client{Addr: broker.TCP(r.config.Brokers...), Timeout: 2 * time.Second, Transport: transport}
 	metadata, err := client.Metadata(ctx, &broker.MetadataRequest{Topics: []string{r.config.Topic}})
 	if err != nil {
@@ -213,39 +220,126 @@ func (r *generationAdmissionReader) VerifySource(ctx context.Context) error {
 	if len(partitions) == 0 || len(assigned) > 16 {
 		return ErrQuarantineSource
 	}
-	for _, partition := range assigned {
+	// Read the first batch at the generation's actual numeric checkpoint. The
+	// broker returns the live retained bounds on this same fetch. Validate all
+	// assignments before handing any partition to the serial consumer.
+	initial := make([]*broker.FetchResponse, len(assigned))
+	for i, partition := range assigned {
 		if !partitions[partition.ID] {
 			return ErrQuarantineSource
 		}
+		if partition.Offset < 0 {
+			return ErrAdmissionCheckpoint
+		}
+		initial[i], err = fetchAdmissionBatch(ctx, client, r.config.Topic, partition)
+		if err != nil {
+			return err
+		}
 	}
-	// Fetching outlives VerifySource's short call context, but never the generation.
 	fetchCtx, cancel := context.WithCancel(r.generationCtx)
 	r.cancel = cancel
 	r.fetches = make(chan generationFetch, max(1, len(assigned)))
-	for _, partition := range assigned {
-		reader := broker.NewReader(broker.ReaderConfig{Brokers: r.config.Brokers, Topic: r.config.Topic,
-			Partition: partition.ID, QueueCapacity: 1, MinBytes: 1, MaxBytes: 1 << 20,
-			MaxWait: 100 * time.Millisecond, ReadLagInterval: -1, Dialer: r.config.dialer()})
-		if err := reader.SetOffset(partition.Offset); err != nil {
-			_ = reader.Close()
-			return err
-		}
-		r.readers = append(r.readers, reader)
+	for i, partition := range assigned {
 		r.wg.Go(func() {
-			for {
-				message, err := reader.FetchMessage(fetchCtx)
+			err := r.streamPartition(fetchCtx, client, partition, initial[i])
+			if err != nil {
 				select {
-				case r.fetches <- generationFetch{message: message, err: err}:
+				case r.fetches <- generationFetch{err: err}:
 				case <-fetchCtx.Done():
-					return
-				}
-				if err != nil {
-					return
 				}
 			}
 		})
 	}
 	return nil
+}
+
+func fetchAdmissionBatch(ctx context.Context, client *broker.Client, topic string, position broker.PartitionAssignment) (*broker.FetchResponse, error) {
+	response, err := client.Fetch(ctx, &broker.FetchRequest{
+		Topic: topic, Partition: position.ID, Offset: position.Offset,
+		MinBytes: 1, MaxBytes: 1 << 20, MaxWait: 100 * time.Millisecond,
+	})
+	if err != nil {
+		return nil, err
+	}
+	if errors.Is(response.Error, broker.OffsetOutOfRange) {
+		return nil, ErrAdmissionCheckpoint
+	}
+	if response.Error != nil {
+		return nil, response.Error
+	}
+	if response.Topic != topic || response.Partition != position.ID {
+		return nil, ErrQuarantineSource
+	}
+	if response.LogStartOffset < 0 || position.Offset < response.LogStartOffset || position.Offset > response.HighWatermark {
+		return nil, ErrAdmissionCheckpoint
+	}
+	return response, nil
+}
+
+func (r *generationAdmissionReader) streamPartition(ctx context.Context, client *broker.Client, position broker.PartitionAssignment, batch *broker.FetchResponse) error {
+	for {
+		start := position.Offset
+		for {
+			record, err := batch.Records.ReadRecord()
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			if err != nil {
+				return err
+			}
+			message, err := admissionRecord(record, r.config.Topic, position, start)
+			if err != nil {
+				return err
+			}
+			if message == nil {
+				continue
+			}
+			select {
+			case r.fetches <- generationFetch{message: *message}:
+				position.Offset++
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		if position.Offset == start && start < batch.HighWatermark {
+			return ErrAdmissionCheckpoint
+		}
+		next, err := fetchAdmissionBatch(ctx, client, r.config.Topic, position)
+		if err != nil {
+			return err
+		}
+		batch = next
+	}
+}
+
+// A Kafka batch may include records before the requested offset. Beyond that
+// prefix every record in this delete-only, non-transactional send log must be
+// contiguous. A retention jump or unexpected hole must never advance the group.
+func admissionRecord(record *broker.Record, topic string, position broker.PartitionAssignment, batchStart int64) (*broker.Message, error) {
+	if record.Key != nil {
+		defer record.Key.Close()
+	}
+	if record.Value != nil {
+		defer record.Value.Close()
+	}
+	if record.Offset < batchStart {
+		return nil, nil
+	}
+	if record.Offset != position.Offset || record.Offset == math.MaxInt64 {
+		return nil, ErrAdmissionCheckpoint
+	}
+	if (record.Key != nil && record.Key.Len() > 1<<20) || (record.Value != nil && record.Value.Len() > 1<<20) {
+		return nil, ErrQuarantineInput
+	}
+	key, err := broker.ReadAll(record.Key)
+	if err != nil {
+		return nil, err
+	}
+	value, err := broker.ReadAll(record.Value)
+	if err != nil {
+		return nil, err
+	}
+	return &broker.Message{Topic: topic, Partition: position.ID, Offset: record.Offset, Key: key, Value: value}, nil
 }
 
 // Fetch rechecks database source approval, then returns a message with an
@@ -295,13 +389,13 @@ func (r *generationAdmissionReader) Fetch(ctx context.Context) (AdmissionMessage
 	}
 }
 
-// Close cancels fetching, closes partition readers and joins owned fetchers.
+// Close stops and joins the generation fetchers before closing their transport.
 func (r *generationAdmissionReader) Close() {
 	if r.cancel != nil {
 		r.cancel()
 	}
-	for _, reader := range r.readers {
-		_ = reader.Close()
-	}
 	r.wg.Wait()
+	if r.transport != nil {
+		r.transport.CloseIdleConnections()
+	}
 }

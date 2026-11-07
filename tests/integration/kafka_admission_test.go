@@ -104,27 +104,7 @@ func kafkaAdmissionGenerationHandoff(t *testing.T, authenticated bool) {
 		config.TLS = admissionFixtureTLS(t)
 	}
 
-	// A brand-new broker creates/loads __consumer_offsets on first lookup.
-	require.Eventually(t, func() bool {
-		coordinator, err := client.FindCoordinator(ctx, &broker.FindCoordinatorRequest{Key: config.GroupID, KeyType: broker.CoordinatorKeyTypeConsumer})
-		if err != nil || coordinator.Error != nil || coordinator.Coordinator == nil || coordinator.Coordinator.Host == "" {
-			return false
-		}
-		// Discovery can succeed before the new coordinator serves group offsets.
-		// Exercise the required RPC; do not retry or hide failures of Run itself.
-		offsets, err := client.OffsetFetch(ctx, &broker.OffsetFetchRequest{
-			GroupID: config.GroupID, Topics: map[string][]int{topic: {0, 1}},
-		})
-		if err != nil || offsets.Error != nil || len(offsets.Topics[topic]) != 2 {
-			return false
-		}
-		for _, partition := range offsets.Topics[topic] {
-			if partition.Error != nil {
-				return false
-			}
-		}
-		return true
-	}, 10*time.Second, 100*time.Millisecond)
+	seedAdmissionOffsets(t, ctx, client, config.GroupID, topic, 0, 0)
 	// Choose one key per partition using exactly the production hash balancer.
 	ids := map[int]int64{}
 	hash := &broker.Hash{}

@@ -140,6 +140,7 @@ func TestSchedulerAndAuthenticatedWorkerComposeDurablePipeline(t *testing.T) {
 	}
 	uri := "postgresql://" + role + ":integration_only@127.0.0.1:15432/notification_integration?sslmode=verify-full&connect_timeout=3&sslrootcert=" + url.QueryEscape(filepath.Join(directory, "ca.crt"))
 	groupID := topic + "-group"
+	seedAdmissionOffsets(t, ctx, client, groupID, topic, 0, 0)
 	load := func(role deployment.Component, change func(map[string]any)) *daemon.Configuration {
 		policy := map[string]any{
 			"database_url": uri, "log_source_id": source.ID.String(), "cluster_identity": source.ClusterID, "topic_name": source.Topic, "topic_incarnation": source.Incarnation, "partition_count": 2,
