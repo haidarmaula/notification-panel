@@ -1,4 +1,4 @@
-# Build a single process image with --target server, worker, scheduler, bootstrap, or requeue.
+# Build a single process image using its command name as the target.
 FROM golang:1.26.10-alpine@sha256:87c65a688975c0b1d4585d204874c45ca78354670e3a5f11368c5a492303d696 AS build
 ENV CGO_ENABLED=0 GOTOOLCHAIN=local
 WORKDIR /src
@@ -30,6 +30,10 @@ ENTRYPOINT ["/bootstrap", "--deployment"]
 FROM runtime AS requeue
 COPY --from=build /out/requeue /requeue
 ENTRYPOINT ["/requeue"]
+
+FROM runtime AS retention
+COPY --from=build /out/retention /retention
+ENTRYPOINT ["/retention"]
 
 FROM runtime AS server
 COPY --from=build /out/server /server

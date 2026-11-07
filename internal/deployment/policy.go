@@ -20,6 +20,7 @@ const (
 	Worker    Component = "worker"
 	Scheduler Component = "scheduler"
 	Requeue   Component = "requeue"
+	Retention Component = "retention"
 )
 
 func validPolicyText(value string) bool {

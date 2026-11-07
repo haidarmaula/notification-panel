@@ -1,7 +1,7 @@
 # Building and running the production commands
 
 Build a role locally with `docker build --target server -t hello-server:local .`.
-The same Dockerfile has worker, scheduler, bootstrap and requeue targets. Each
+The same Dockerfile has worker, scheduler, bootstrap, requeue and retention targets. Each
 image contains one static Go executable and the builder's CA bundle. The official
 Go 1.26.10 Alpine builder is pinned by OCI index digest. Its Go toolchain cannot
 auto-upgrade. The build verifies module checksums and compiles in readonly module
@@ -30,12 +30,13 @@ Darwin uses `/private/etc/hello` for protected policies.
 | Worker | `/etc/hello/worker.json` selects admission or application-specific delivery, as described in the [delivery worker runbook](delivery-worker.md). |
 | Scheduler | `/etc/hello/scheduler.json` uses the scheduler's approved send source and authenticated broker policy. |
 | Requeue | The operator job uses its own reviewed [replay policy, grant and execution procedure](operator-replay.md). |
+| Retention | A one-shot job reads `/etc/hello/retention.json` and uses its own database login to run one [authorized retention batch](retention.md). |
 
 Role policies accept exact field names and reject missing, unknown or duplicate
 members. Use explicit PostgreSQL host, port, database, service account and
 percent-escaped credentials with `sslmode=verify-full`. Optional TLS auxiliary
 files must also pass ownership, mode and ACL checks. PG* and TLS trust override
-variables are rejected. The protected DB pool uses two connections per process.
+variables are rejected. The protected DB pool allows up to two connections per process; retention uses one.
 Account for all replicas and other services when comparing DB connection demand
 with PostgreSQL capacity. Select CPU, memory, replica counts, request-rate
 allocations and drain deadlines from staging measurements.

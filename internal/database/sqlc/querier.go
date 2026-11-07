@@ -440,6 +440,8 @@ type Querier interface {
 	LockInstallationProject(ctx context.Context, applicationID int64) (string, error)
 	LockInstallationUser(ctx context.Context, arg LockInstallationUserParams) (int64, error)
 	LockMobileInstallation(ctx context.Context, arg LockMobileInstallationParams) (MobileInstallation, error)
+	// Pick and lock one eligible event in due order before fetching its delivery.
+	// The foreign keys guarantee that its application and intent both exist.
 	LockNextDeliveryUpdate(ctx context.Context, arg LockNextDeliveryUpdateParams) (LockNextDeliveryUpdateRow, error)
 	LockNextScopedSendOutbox(ctx context.Context, arg LockNextScopedSendOutboxParams) (LockNextScopedSendOutboxRow, error)
 	LockNotificationRuntime(ctx context.Context) (LockNotificationRuntimeRow, error)
@@ -493,6 +495,7 @@ type Querier interface {
 	ResolveMobileIdentity(ctx context.Context, arg ResolveMobileIdentityParams) (int64, error)
 	ResolveReplayControl(ctx context.Context, arg ResolveReplayControlParams) (int64, error)
 	RetireInstallationBinding(ctx context.Context, arg RetireInstallationBindingParams) (int64, error)
+	RunRetentionBatch(ctx context.Context, arg RunRetentionBatchParams) (RunRetentionBatchRow, error)
 	ScheduleScopedCampaign(ctx context.Context, arg ScheduleScopedCampaignParams) (ScheduleScopedCampaignRow, error)
 	ScopedSegmentHasReferences(ctx context.Context, segmentID int64) (bool, error)
 	ScopedSegmentNameTaken(ctx context.Context, arg ScopedSegmentNameTakenParams) (bool, error)

@@ -362,6 +362,41 @@ type NotificationUpdateOutbox struct {
 	NextAttemptAt   pgtype.Timestamptz `db:"next_attempt_at"`
 }
 
+type RetentionBatch struct {
+	GrantID      pgtype.UUID        `db:"grant_id"`
+	BatchNo      int32              `db:"batch_no"`
+	PreviewAt    pgtype.Timestamptz `db:"preview_at"`
+	PreviewCount int32              `db:"preview_count"`
+	AppliedAt    pgtype.Timestamptz `db:"applied_at"`
+	RemovedCount pgtype.Int4        `db:"removed_count"`
+	Outcome      string             `db:"outcome"`
+}
+
+type RetentionGrant struct {
+	ID            pgtype.UUID        `db:"id"`
+	ApplicationID int64              `db:"application_id"`
+	RecordClass   string             `db:"record_class"`
+	PolicyVersion pgtype.UUID        `db:"policy_version"`
+	OperatorRole  pgtype.Uint32      `db:"operator_role"`
+	OriginEpoch   pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch   pgtype.UUID        `db:"source_epoch"`
+	CutoffAt      pgtype.Timestamptz `db:"cutoff_at"`
+	IssuedAt      pgtype.Timestamptz `db:"issued_at"`
+	ExpiresAt     pgtype.Timestamptz `db:"expires_at"`
+	BatchSize     int32              `db:"batch_size"`
+	MaxBatches    int32              `db:"max_batches"`
+	AllowApply    bool               `db:"allow_apply"`
+	RevokedAt     pgtype.Timestamptz `db:"revoked_at"`
+}
+
+type RetentionPolicy struct {
+	ApplicationID            int64       `db:"application_id"`
+	RecordClass              string      `db:"record_class"`
+	PolicyVersion            pgtype.UUID `db:"policy_version"`
+	RetainAfterExpirySeconds int32       `db:"retain_after_expiry_seconds"`
+	Held                     bool        `db:"held"`
+}
+
 type Role struct {
 	ID          int64              `db:"id"`
 	Name        string             `db:"name"`

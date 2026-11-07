@@ -12,25 +12,28 @@ import (
 )
 
 const consumeMobileOrigin = `-- name: ConsumeMobileOrigin :execrows
+WITH scope AS MATERIALIZED (
+    SELECT public_id FROM applications WHERE public_id=$4::uuid FOR SHARE
+)
 INSERT INTO mobile_origin_uses (application_public_id, issuer, nonce_digest, expires_at)
-SELECT $1, $2, $3, $4::timestamptz
-WHERE $4::timestamptz > clock_timestamp()
+SELECT scope.public_id, $1, $2, $3::timestamptz FROM scope
+WHERE $3::timestamptz > clock_timestamp()
 ON CONFLICT (application_public_id, issuer, nonce_digest) DO NOTHING
 `
 
 type ConsumeMobileOriginParams struct {
-	ApplicationPublicID pgtype.UUID        `db:"application_public_id"`
 	Issuer              string             `db:"issuer"`
 	NonceDigest         []byte             `db:"nonce_digest"`
 	ExpiresAt           pgtype.Timestamptz `db:"expires_at"`
+	ApplicationPublicID pgtype.UUID        `db:"application_public_id"`
 }
 
 func (q *Queries) ConsumeMobileOrigin(ctx context.Context, arg ConsumeMobileOriginParams) (int64, error) {
 	result, err := q.db.Exec(ctx, consumeMobileOrigin,
-		arg.ApplicationPublicID,
 		arg.Issuer,
 		arg.NonceDigest,
 		arg.ExpiresAt,
+		arg.ApplicationPublicID,
 	)
 	if err != nil {
 		return 0, err
