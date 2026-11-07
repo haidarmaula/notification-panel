@@ -120,7 +120,7 @@ func serverRoutes(queries *sqlc.Queries, db applications.Transactor, cfg *config
 	mux := http.NewServeMux()
 	auth.NewAuthModule(queries, tokenManager, apiKeyMW.Use).RegisterRoutes(mux)
 	applications.NewModule(queries, db, apiKeyMW.Use, jwtMW.Use, auditMW.Use).RegisterRoutes(mux)
-	staff.NewStaffModule(queries, apiKeyMW.Use, jwtMW.Use, auditMW.Use).RegisterRoutes(mux)
-	profile.NewProfileModule(queries, apiKeyMW.Use, jwtMW.Use).RegisterRoutes(mux)
+	staff.NewStaffModule(queries, db, apiKeyMW.Use, jwtMW.Use, auditMW.Use).RegisterRoutes(mux)
+	profile.NewProfileModule(queries, db, apiKeyMW.Use, jwtMW.Use).RegisterRoutes(mux)
 	return mux
 }

@@ -426,6 +426,7 @@
       "patch": {
         "operationId": "updateStaff",
         "summary": "Update staff identity or role",
+        "description": "Removing the final active SUPER_ADMIN returns 409. A successful role or activation change invalidates the affected account’s sessions.",
         "x-required-permission": "staff.manage",
         "parameters": [
           { "$ref": "#/components/parameters/StaffId" }
@@ -503,6 +504,7 @@
       "patch": {
         "operationId": "setStaffStatus",
         "summary": "Set a staff account's active flag",
+        "description": "Removing the final active SUPER_ADMIN returns 409. A successful role or activation change invalidates the affected account’s sessions.",
         "x-required-permission": "staff.manage",
         "parameters": [
           { "$ref": "#/components/parameters/StaffId" }
@@ -518,7 +520,7 @@
         "x-max-body-bytes": 65536,
         "responses": {
           "200": {
-            "description": "For compatibility, an omitted is_active field decodes as false. Send it explicitly.",
+            "description": "The supplied boolean sets the active status of the staff account.",
             "content": {
               "application/json": {
                 "schema": { "$ref": "#/components/schemas/StaffResult" },
@@ -543,6 +545,7 @@
           "401": { "$ref": "#/components/responses/Error401" },
           "403": { "$ref": "#/components/responses/Error403" },
           "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
           "413": { "$ref": "#/components/responses/Error413" },
           "429": { "$ref": "#/components/responses/Error429" },
           "500": { "$ref": "#/components/responses/Error500" },
@@ -2177,7 +2180,9 @@
           "password": {
             "type": "string",
             "format": "password",
-            "writeOnly": true
+            "writeOnly": true,
+            "minLength": 1,
+            "x-max-utf8-bytes": 72
           }
         },
         "required": [
@@ -2208,11 +2213,10 @@
         "type": "object",
         "properties": {
           "is_active": {
-            "type": "boolean",
-            "default": false
+            "type": "boolean"
           }
         },
-        "required": [],
+        "required": ["is_active"],
         "additionalProperties": true
       },
       "ResetStaffPassword": {
@@ -2283,7 +2287,9 @@
           "new_password": {
             "type": "string",
             "format": "password",
-            "writeOnly": true
+            "writeOnly": true,
+            "minLength": 1,
+            "x-max-utf8-bytes": 72
           }
         },
         "required": [

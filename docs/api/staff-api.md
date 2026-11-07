@@ -32,8 +32,11 @@ M02c excludes password material from newly written staff audit snapshots;
 password reset records metadata only. [Historical cleanup](../runbooks/staff-audit-redaction.md)
 is a separate operator operation, not an API endpoint.
 
-Checks are statement snapshots, not locks through mutation; sessions are not
-revoked by a password reset. Existing success statuses/DTOs remain unchanged.
+Administrative writes lock the session lineage, actor and target while they
+recheck authority, apply the change and record the audit entry. A demotion or
+deactivation that would leave zero active `SUPER_ADMIN` accounts returns 409.
+Password, role and activation changes invalidate all sessions for the affected
+account. A new login opens a session with its current authority.
 
 ---
 
@@ -45,7 +48,7 @@ revoked by a password reset. Existing success statuses/DTOs remain unchanged.
 | `401` | Unauthorized | Missing or invalid API Key / JWT |
 | `403` | Forbidden | Insufficient permissions (not SUPER_ADMIN) or self-deletion attempt |
 | `404` | Resource not found | Staff user does not exist |
-| `409` | Conflict | Email already registered |
+| `409` | Conflict | Email already registered or final active super administrator |
 | `500` | Internal server error | Unexpected server error |
 
 ---
@@ -202,6 +205,7 @@ Creates a new staff user. The email must be unique and the role name must exist 
 | Status | Message | Condition |
 |--------|---------|-----------|
 | `400` | missing required fields | Role, name, email, or password missing |
+| `400` | password must not exceed 72 characters | Password exceeds 72 UTF-8 bytes |
 | `400` | invalid request body | Malformed JSON |
 | `400` | invalid role | Role name does not exist |
 | `409` | email already registered | Email is already used by another staff |
@@ -262,6 +266,7 @@ Updates a staff user's role, name, or email. At least one field must be provided
 | `400` | invalid role | Role name does not exist |
 | `404` | staff user not found | Staff does not exist |
 | `409` | email already used by another staff | New email is already taken |
+| `409` | at least one active super administrator is required | The change would remove the final active super administrator |
 | `500` | Internal server error | Database update failed |
 
 ---
@@ -309,6 +314,8 @@ Updates the active status of a staff user (activate or deactivate).
 
 | Status | Message | Condition |
 |--------|---------|-----------|
+| `400` | is_active is required | The body omits the boolean or supplies null |
+| `409` | at least one active super administrator is required | Deactivating the final active super administrator |
 | `400` | invalid id | Invalid ID format |
 | `400` | invalid request body | Malformed JSON |
 | `404` | staff user not found | Staff does not exist |
@@ -332,13 +339,15 @@ Updates the password of a staff user.
 
 ```json
 {
+  "current_password": "current_admin_password",
   "password": "new_secure_password"
 }
 ```
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `password` | string | ✅ | New password (will be hashed) |
+| `password` | string | ✅ | New password, 8–72 UTF-8 bytes |
+| `current_password` | string | ✅ | Acting administrator’s current password |
 
 ### Success Response (200 OK)
 
@@ -353,7 +362,7 @@ Updates the password of a staff user.
 | Status | Message | Condition |
 |--------|---------|-----------|
 | `400` | invalid id | Invalid ID format |
-| `400` | password required | Password field missing or empty |
+| `400` | current password and new password are required | Either password field is missing or empty |
 | `400` | invalid request body | Malformed JSON |
 | `404` | staff user not found | Staff does not exist |
 | `500` | Internal server error | Password update failed |

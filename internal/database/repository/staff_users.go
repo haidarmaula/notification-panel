@@ -196,3 +196,11 @@ func (r *StaffUserRepository) Delete(ctx context.Context, id int64) error {
 func (r *StaffUserRepository) ExistsByEmail(ctx context.Context, email string) (bool, error) {
 	return r.q.ExistsStaffUserByEmail(ctx, email)
 }
+
+// CountMatching counts the same name/email search as Search.
+func (r *StaffUserRepository) CountMatching(ctx context.Context, search string) (int64, error) {
+	if search == "" {
+		return r.Count(ctx)
+	}
+	return r.q.CountMatchingStaff(ctx, search)
+}

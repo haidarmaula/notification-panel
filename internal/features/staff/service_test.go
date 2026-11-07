@@ -129,7 +129,7 @@ func TestStaffService_Create(t *testing.T) {
 
 			tc.mockSetup(mockStaffRepo, mockRoleRepo, mockAudit)
 
-			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
+			service := newOperations(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
 			staff, err := service.Create(ctxWithStaffID(99), tc.params)
 
 			assert.ErrorIs(t, err, tc.expectedError)
@@ -188,7 +188,7 @@ func TestStaffService_GetByID(t *testing.T) {
 
 			tc.mockSetup(mockStaffRepo, mockRoleRepo)
 
-			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
+			service := newOperations(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
 			staff, err := service.GetByID(ctxWithStaffID(99), tc.id)
 
 			assert.ErrorIs(t, err, tc.expectedError)
@@ -230,7 +230,7 @@ func TestStaffService_List(t *testing.T) {
 					{ID: 1, Name: "A", RoleName: "ADMIN"},
 					{ID: 2, Name: "B", RoleName: "ADMIN"},
 				}
-				repo.EXPECT().Count(mock.Anything).Return(int64(2), nil).Once()
+				repo.EXPECT().CountMatching(mock.Anything, "").Return(int64(2), nil).Once()
 				repo.EXPECT().List(mock.Anything, int32(0), int32(10)).Return(rows, nil).Once()
 			},
 			expectedError: nil,
@@ -248,7 +248,7 @@ func TestStaffService_List(t *testing.T) {
 				rows := []sqlc.SearchStaffUsersRow{
 					{ID: 1, Name: "Test User", RoleName: "ADMIN"},
 				}
-				repo.EXPECT().Count(mock.Anything).Return(int64(1), nil).Once()
+				repo.EXPECT().CountMatching(mock.Anything, "test").Return(int64(1), nil).Once()
 				repo.EXPECT().Search(mock.Anything, "test", int32(0), int32(10)).Return(rows, nil).Once()
 			},
 			expectedError: nil,
@@ -269,7 +269,7 @@ func TestStaffService_List(t *testing.T) {
 
 			tc.mockSetup(mockStaffRepo)
 
-			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
+			service := newOperations(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
 			staffs, total, err := service.List(ctxWithStaffID(99), tc.page, tc.limit, tc.search)
 
 			assert.ErrorIs(t, err, tc.expectedError)
@@ -382,7 +382,7 @@ func TestStaffService_Update(t *testing.T) {
 
 			tc.mockSetup(mockStaffRepo, mockRoleRepo, mockAudit)
 
-			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
+			service := newOperations(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
 			staff, err := service.Update(ctxWithStaffID(99), tc.params)
 
 			assert.ErrorIs(t, err, tc.expectedError)
@@ -418,7 +418,7 @@ func TestStaffService_UpdateStatus(t *testing.T) {
 		mockRoleRepo.EXPECT().FindByID(mock.Anything, int64(1)).Return(dummyRole(), nil).Once()
 		mockAudit.EXPECT().Log(mock.Anything, mock.Anything).Return(nil).Once()
 
-		service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
+		service := newOperations(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
 		staff, err := service.UpdateStatus(ctxWithStaffID(99), id, false)
 
 		assert.NoError(t, err)
@@ -435,7 +435,7 @@ func TestStaffService_UpdateStatus(t *testing.T) {
 		id := int64(999)
 		mockStaffRepo.EXPECT().FindByID(mock.Anything, id).Return(sqlc.StaffUser{}, pgx.ErrNoRows).Once()
 
-		service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
+		service := newOperations(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
 		staff, err := service.UpdateStatus(ctxWithStaffID(99), id, false)
 
 		assert.Nil(t, staff)
@@ -496,7 +496,7 @@ func TestStaffService_UpdatePassword(t *testing.T) {
 					}
 				}
 			}
-			service := NewStaffService(repo, roles, audit, testAuthority(tc.role))
+			service := newOperations(repo, roles, audit, testAuthority(tc.role))
 			err := service.UpdatePassword(tc.ctx, 1, tc.currentPassword, tc.newPassword)
 			require.ErrorIs(t, err, tc.expectedError)
 			if tc.expectedError != nil {
@@ -566,7 +566,7 @@ func TestStaffService_Delete(t *testing.T) {
 
 			tc.mockSetup(mockStaffRepo, mockAudit)
 
-			service := NewStaffService(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
+			service := newOperations(mockStaffRepo, mockRoleRepo, mockAudit, testAuthority("SUPER_ADMIN"))
 			err := service.Delete(tc.ctx, tc.targetID)
 
 			assert.ErrorIs(t, err, tc.expectedError)

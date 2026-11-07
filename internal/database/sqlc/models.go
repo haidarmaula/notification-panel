@@ -423,6 +423,10 @@ type SegmentMember struct {
 	ApplicationID pgtype.Int8        `db:"application_id"`
 }
 
+type StaffAdministrationGuard struct {
+	Singleton bool `db:"singleton"`
+}
+
 type StaffSession struct {
 	SessionEpoch     pgtype.UUID        `db:"session_epoch"`
 	ID               pgtype.UUID        `db:"id"`

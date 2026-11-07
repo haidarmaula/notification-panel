@@ -189,7 +189,7 @@ func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, ErrEmailAlreadyRegistered):
 			response.JSON(w, http.StatusConflict, nil, err.Error())
-		case errors.Is(err, ErrInvalidRole):
+		case errors.Is(err, ErrInvalidRole), errors.Is(err, ErrPasswordTooLong):
 			response.JSON(w, http.StatusBadRequest, nil, err.Error())
 		case errors.Is(err, ErrForbidden):
 			response.JSON(w, http.StatusForbidden, nil, err.Error())
@@ -299,37 +299,7 @@ func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, resp, "success")
 }
 
-// Update handles PATCH /api/v1/staff/{id}.
-// It updates a staff user's role, name, or email.
-// Returns 200 OK with updated staff data, 404 if not found, 400 for invalid input.
-//
-// # Validation
-//
-// The handler decodes the body and rejects a request where all three of
-// Role, Name, and Email are empty. Because the DTO's fields are plain
-// strings, an empty value for one field means "leave that field
-// unchanged" at the service layer — a client that supplies only Role
-// leaves Name and Email untouched. A client that wants to change a field
-// to the empty string cannot do so through this API.
-//
-// # Responses
-//
-//   - 400 Bad Request: a malformed id, a JSON decode failure, a body with
-//     all three fields empty, or the service returned ErrInvalidRole.
-//   - 404 Not Found: the service returned ErrStaffNotFound.
-//   - 409 Conflict: the service returned ErrEmailAlreadyUsed — the new
-//     email collides with another staff user's email.
-//   - 500 Internal Server Error: any other service error. The response
-//     body is the generic string "internal server error"; the underlying
-//     error is not disclosed.
-//   - 200 OK: the updated StaffResponse, under the message "staff
-//     updated".
-//
-// # Concurrency
-//
-// Safe for concurrent use.
-//
-// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
+// Update edits supplied staff fields and returns conflicts for duplicate email or removal of the last active super administrator.
 func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -360,7 +330,7 @@ func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 		case errors.Is(err, ErrInvalidRole):
 			response.JSON(w, http.StatusBadRequest, nil, err.Error())
-		case errors.Is(err, ErrEmailAlreadyUsed):
+		case errors.Is(err, ErrEmailAlreadyUsed), errors.Is(err, ErrLastActiveSuperAdmin):
 			response.JSON(w, http.StatusConflict, nil, err.Error())
 		default:
 			response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
@@ -370,34 +340,7 @@ func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, toStaffResponse(staff), "staff updated")
 }
 
-// UpdateStatus handles PATCH /api/v1/staff/{id}/status.
-// It updates the active status of a staff user.
-// Returns 200 OK with updated staff data, 404 if not found.
-//
-// # Absent-field behaviour
-//
-// Because UpdateStatusRequest.IsActive is a plain bool, a request body
-// that omits the field is indistinguishable from a body that explicitly
-// sets it to false. Both deactivate the account. A client that intends to
-// leave the status unchanged cannot express that intent through this
-// endpoint.
-//
-// # Responses
-//
-//   - 400 Bad Request: a malformed id or a JSON decode failure.
-//   - 404 Not Found: the service returned ErrStaffNotFound.
-//   - 500 Internal Server Error: any other service error. The response
-//     body is the generic string "internal server error"; the underlying
-//     error is not disclosed.
-//   - 200 OK: the updated StaffResponse, under the message "status
-//     updated".
-//
-// # Concurrency
-//
-// Safe for concurrent use. Two concurrent status changes on the same
-// account are not serialised; the last write wins.
-//
-// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
+// UpdateStatus requires an explicit boolean and preserves an active super administrator.
 func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {
@@ -408,9 +351,17 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
-	staff, err := h.service.UpdateStatus(r.Context(), id, req.IsActive)
+	if req.IsActive == nil {
+		response.JSON(w, http.StatusBadRequest, nil, "is_active is required")
+		return
+	}
+	staff, err := h.service.UpdateStatus(r.Context(), id, *req.IsActive)
 	if err != nil {
 		if authz.WriteError(w, err) {
+			return
+		}
+		if errors.Is(err, ErrLastActiveSuperAdmin) {
+			response.JSON(w, http.StatusConflict, nil, err.Error())
 			return
 		}
 		if errors.Is(err, ErrStaffNotFound) {
@@ -423,64 +374,7 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, toStaffResponse(staff), "status updated")
 }
 
-// UpdatePassword handles PATCH /api/v1/staff/{id}/password.
-// It updates the password of a staff user.
-// Returns 200 OK on success; 400 if the id is malformed, the body is
-// malformed, either password field is empty, or the new password violates
-// the length policy; 403 if the acting staff user is not a super admin or
-// the current-password confirmation fails; 404 if the target account does
-// not exist; 500 for internal errors.
-//
-// # Administrative reset with re-authentication
-//
-// This is an administrative password reset: the caller sets a new password
-// for the target account. The target's current password is not required —
-// the caller is acting on someone else's account — but the *actor's* own
-// current password is required as a confirmation step. The handler
-// forwards both values to the service and does not itself perform any
-// verification; the service re-authenticates the actor and enforces the
-// password-length policy. See StaffService.UpdatePassword and
-// UpdatePasswordRequest for the rationale.
-//
-// # Validation performed here
-//
-// The handler rejects a request where either CurrentPassword or Password
-// is empty with a 400 before invoking the service. Deeper checks —
-// whether the current password is correct, whether the new password
-// satisfies the length policy, whether the target account exists — are
-// the service's responsibility and are reported through the error
-// mapping below.
-//
-// # Existing sessions
-//
-// A successful password change does not invalidate the target account's
-// existing access or refresh tokens. Any active session on the account
-// continues to work until its tokens expire; the new password is required
-// only for the next login. This is the codebase's no-revocation model,
-// and it means an admin-triggered password reset is not sufficient on its
-// own to force a compromised session to end.
-//
-// # Responses
-//
-//   - 400 Bad Request: a malformed id, a JSON decode failure, an empty
-//     current_password or password, or a new password that violates the
-//     length policy (ErrPasswordTooShort / ErrPasswordTooLong).
-//   - 403 Forbidden: the service returned ErrForbidden — the acting
-//     staff user is not a super admin. Missing/inactive identity returns 401. Also returned for
-//     ErrInvalidCurrentPassword — the current_password value did not
-//     match the acting super-admin's stored hash.
-//   - 404 Not Found: the service returned ErrStaffNotFound.
-//   - 500 Internal Server Error: any other service error. The response
-//     body is the generic string "internal server error"; the underlying
-//     error is not disclosed.
-//   - 200 OK: no data payload; the message "password updated" accompanies
-//     a nil data field.
-//
-// # Concurrency
-//
-// Safe for concurrent use.
-//
-// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
+// UpdatePassword resets the target password after current-authority and actor password checks.
 func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	id, err := parseInt64FromPath(r, "id")
 	if err != nil {

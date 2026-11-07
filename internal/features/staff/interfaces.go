@@ -75,7 +75,7 @@ type RoleRepository interface {
 // error pass-through, NULL handling — is provided on the concrete
 // repository in internal/database/repository/staff_users.go.
 type StaffUserRepository interface {
-	Count(ctx context.Context) (int64, error)
+	CountMatching(ctx context.Context, search string) (int64, error)
 	FindByID(ctx context.Context, id int64) (sqlc.StaffUser, error)
 	FindByEmail(ctx context.Context, email string) (sqlc.StaffUser, error)
 	List(ctx context.Context, offset, limit int32) ([]sqlc.ListStaffUsersRow, error)

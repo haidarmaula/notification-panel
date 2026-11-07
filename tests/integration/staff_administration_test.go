@@ -49,7 +49,7 @@ func TestStaffAdministrationAPI(t *testing.T) {
 	jwt := middleware.NewJWTMiddleware(tokens, repo)
 	auditMW := middleware.NewAuditMiddleware()
 	mux := http.NewServeMux()
-	staff.NewStaffModule(q, api.Use, jwt.Use, auditMW.Use).RegisterRoutes(mux)
+	staff.NewStaffModule(q, staffFixtureTransaction{tx}, api.Use, jwt.Use, auditMW.Use).RegisterRoutes(mux)
 	sign := func(id int64, role string) string {
 		value, err := fixtureAccess(ctx, q, tokens, id, role, "fixture@fixture.invalid")
 		require.NoError(t, err)
@@ -222,7 +222,7 @@ func TestStaffAdministrationAPI(t *testing.T) {
 			return principal, err
 		})
 		// Nil business repositories prove the service denies before target I/O.
-		handler := staff.NewStaffHandler(staff.NewStaffService(nil, nil, nil, checker))
+		handler := staff.NewStaffHandler(staff.NewStaffService(nil, nil, checker))
 		guarded := middleware.Chain(api.Use, jwt.Use)(authz.Guard(hook, authz.StaffManage, handler.Create))
 		var countBefore int64
 		require.NoError(t, tx.QueryRow(ctx, "SELECT count(*) FROM audit_logs").Scan(&countBefore))
@@ -253,7 +253,7 @@ func TestCommittedStaffAuthority(t *testing.T) {
 	api := middleware.NewAPIKeyMiddleware("fixture-api-key")
 	jwt := middleware.NewJWTMiddleware(tokens, repo)
 	mux := http.NewServeMux()
-	staff.NewStaffModule(q, api.Use, jwt.Use).RegisterRoutes(mux)
+	staff.NewStaffModule(q, pool, api.Use, jwt.Use).RegisterRoutes(mux)
 	access, err := fixtureAccess(ctx, q, tokens, id, "SUPER_ADMIN", "")
 	require.NoError(t, err)
 	claims, err := tokens.ParseAccessToken(access)

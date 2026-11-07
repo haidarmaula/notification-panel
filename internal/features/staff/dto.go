@@ -218,25 +218,9 @@ type UpdateStaffRequest struct {
 	Email string `json:"email"`
 }
 
-// UpdateStatusRequest represents the request payload for updating staff active status.
-//
-// It is the JSON body expected by PATCH /api/v1/staff/{id}/status. The
-// endpoint is a setter rather than a toggle: the service writes the
-// supplied value directly.
-//
-// # Absent-field ambiguity
-//
-// Because IsActive is a plain bool rather than a pointer, an empty request
-// body `{}` and a body explicitly setting `{"is_active": false}` are
-// indistinguishable at decode time — both produce IsActive == false, and
-// the service deactivates the account. A client that intends to leave the
-// status unchanged cannot express that intent through this endpoint; the
-// caller must know the current status and supply it, or accept the
-// deactivation.
+// UpdateStatusRequest distinguishes an explicit false from an omitted field.
 type UpdateStatusRequest struct {
-	// IsActive is the desired status. True activates the account; false
-	// deactivates it. There is no way to express "leave unchanged".
-	IsActive bool `json:"is_active"`
+	IsActive *bool `json:"is_active"`
 }
 
 // UpdatePasswordRequest represents the request payload for updating staff password.

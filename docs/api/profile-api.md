@@ -157,7 +157,7 @@ Changes the password for the currently authenticated staff user. The current pas
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `current_password` | string | ✅ | Current password for verification |
-| `new_password` | string | ✅ | New password to set |
+| `new_password` | string | ✅ | New password to set, at most 72 UTF-8 bytes |
 
 ### Success Response (200 OK)
 
@@ -184,3 +184,10 @@ Changes the password for the currently authenticated staff user. The current pas
 | Version | Date | Description |
 |---------|------|-------------|
 | 1.0 | 2026-07-20 | Initial API documentation for Profile feature |
+
+
+Profile edits update only supplied name and email fields under the current
+session and account locks. The database email uniqueness constraint returns
+409 for a conflicting email. The password endpoint verifies the current hash
+under the same lock, and a successful change invalidates all sessions for the
+account. Overlong new passwords return 400.

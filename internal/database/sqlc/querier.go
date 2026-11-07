@@ -32,6 +32,7 @@ type Querier interface {
 	// ==========================================
 	CountDeviceTokensByUser(ctx context.Context, userID int64) (int64, error)
 	CountExecutionOutcomes(ctx context.Context, arg CountExecutionOutcomesParams) (CountExecutionOutcomesRow, error)
+	CountMatchingStaff(ctx context.Context, keyword string) (int64, error)
 	// ==========================================
 	// COUNT
 	// ==========================================
@@ -317,6 +318,7 @@ type Querier interface {
 	// GET
 	// ==========================================
 	GetUserByID(ctx context.Context, id int64) (User, error)
+	HasActiveSuperAdmin(ctx context.Context) (bool, error)
 	HasLineageBlockedDeliveryUpdate(ctx context.Context, arg HasLineageBlockedDeliveryUpdateParams) (bool, error)
 	HoldCampaignPreparation(ctx context.Context, arg HoldCampaignPreparationParams) error
 	HoldResultDispatch(ctx context.Context, applicationID int64) error
@@ -469,6 +471,10 @@ type Querier interface {
 	LockScopedCampaignTemplate(ctx context.Context, arg LockScopedCampaignTemplateParams) (string, error)
 	LockScopedSegment(ctx context.Context, arg LockScopedSegmentParams) (LockScopedSegmentRow, error)
 	LockSendLogSource(ctx context.Context, id pgtype.UUID) (NotificationLogSource, error)
+	LockStaffAdministration(ctx context.Context) (bool, error)
+	LockStaffMutationLineage(ctx context.Context) (pgtype.UUID, error)
+	LockStaffMutationSession(ctx context.Context, arg LockStaffMutationSessionParams) (pgtype.UUID, error)
+	LockStaffMutationUsers(ctx context.Context, arg LockStaffMutationUsersParams) ([]int64, error)
 	MarkCampaignPrepared(ctx context.Context, arg MarkCampaignPreparedParams) error
 	// ==========================================
 	// UPDATE STATUS
@@ -544,6 +550,7 @@ type Querier interface {
 	UpdateNotificationStatusIfDraft(ctx context.Context, arg UpdateNotificationStatusIfDraftParams) (int64, error)
 	UpdateNotificationStatusIfQueued(ctx context.Context, arg UpdateNotificationStatusIfQueuedParams) (int64, error)
 	UpdateNotificationStatusIfScheduled(ctx context.Context, arg UpdateNotificationStatusIfScheduledParams) (int64, error)
+	UpdateOwnStaffProfile(ctx context.Context, arg UpdateOwnStaffProfileParams) (StaffUser, error)
 	// ==========================================
 	// UPDATE
 	// ==========================================

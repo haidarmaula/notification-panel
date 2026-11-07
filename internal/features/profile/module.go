@@ -1,9 +1,9 @@
 package profile
 
 import (
-	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 	"hello/internal/middleware"
+	"hello/internal/staffmutation"
 )
 
 // ProfileModule represents the profile feature module.
@@ -46,44 +46,7 @@ type ProfileModule struct {
 	handler     *ProfileHandler
 }
 
-// NewProfileModule creates a new ProfileModule instance.
-//
-// # Wiring
-//
-// The constructor performs the full dependency-injection chain for the
-// profile feature in a single call:
-//
-//  1. Builds a StaffUserRepository and a RoleRepository from the supplied
-//     sqlc.Queries. These are the same repository types used by the auth
-//     and staff features, constructed here independently — the module does
-//     not share repository instances with other modules, but the underlying
-//     pgx pool is shared, so the connection cost is not duplicated.
-//  2. Builds a ProfileService from the two repositories.
-//  3. Builds a ProfileHandler from the service.
-//  4. Returns the module with the supplied middlewares and the handler.
-//
-// # Parameters
-//
-// queries must be non-nil and is expected to be the shared instance from
-// cmd/server. The middlewares parameter is variadic so that the caller can
-// pass whichever cross-cutting concerns apply to the profile endpoints —
-// in the current wiring the API-key and JWT middlewares — without the
-// module hardcoding a chain. The order in which they are supplied is the
-// order in which they are applied; see middleware.Chain for the
-// composition rule.
-//
-// # Concurrency
-//
-// Intended to be called once during process startup, before the HTTP server
-// begins listening.
-func NewProfileModule(queries *sqlc.Queries, middlewares ...middleware.Middleware) *ProfileModule {
-	staffRepo := repository.NewStaffUserRepository(queries)
-	roleRepo := repository.NewRoleRepository(queries)
-	service := NewProfileService(staffRepo, roleRepo)
-	handler := NewProfileHandler(service)
-
-	return &ProfileModule{
-		middlewares: middlewares,
-		handler:     handler,
-	}
+// NewProfileModule binds profile reads and transactional, session-checked writes.
+func NewProfileModule(q *sqlc.Queries, db staffmutation.Transactor, middlewares ...middleware.Middleware) *ProfileModule {
+	return &ProfileModule{middlewares: middlewares, handler: NewProfileHandler(NewProfileService(q, db))}
 }

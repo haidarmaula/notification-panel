@@ -2,6 +2,7 @@ package profile
 
 import (
 	"errors"
+	"hello/internal/authz"
 	"hello/internal/httprequest"
 	"net/http"
 	"time"
@@ -103,42 +104,7 @@ func (h *ProfileHandler) GetProfile(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, toProfileResponse(profile), "success")
 }
 
-// UpdateProfile handles PATCH /api/v1/profile.
-// It updates the name and/or email of the authenticated staff user.
-//
-// # Validation
-//
-// The method extracts the acting staff ID, decodes the body into an
-// UpdateProfileRequest, and rejects a request where both Name and Email are
-// empty. Note that because the DTO's fields are plain strings, a request
-// that supplies only one of the two passes the empty string for the other
-// to the service; see UpdateProfileRequest for the consequences and the
-// recommended client pattern.
-//
-// # Responses
-//
-//   - 401 Unauthorized: the request context carries no staff identity.
-//   - 400 Bad Request: the body could not be decoded, or both Name and
-//     Email were empty.
-//   - 404 Not Found: the service returned ErrProfileNotFound.
-//   - 409 Conflict: the service returned ErrEmailAlreadyUsed — the new
-//     email collides with another staff user's email. The service is
-//     expected to have checked for this before attempting the write;
-//     whether the check is atomic with the write is the service's concern,
-//     not the handler's.
-//   - 500 Internal Server Error: any other service error. The response
-//     body is the generic string "internal server error"; the underlying
-//     error is not disclosed.
-//   - 200 OK: the updated ProfileResponse, with the message "profile
-//     updated". Unlike the equivalent response in the notifications
-//     feature, this response echoes the updated state rather than a bare
-//     message, so a client does not need a follow-up GET.
-//
-// # Concurrency
-//
-// Safe for concurrent use.
-//
-// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
+// UpdateProfile edits the authenticated account’s name or email.
 func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	staffID, ok := GetStaffIDFromContext(r.Context())
 	if !ok || staffID == 0 {
@@ -162,6 +128,9 @@ func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		Email: req.Email,
 	})
 	if err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
 		case errors.Is(err, ErrProfileNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
@@ -176,49 +145,7 @@ func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	response.JSON(w, http.StatusOK, toProfileResponse(profile), "profile updated")
 }
 
-// UpdatePassword handles PATCH /api/v1/profile/password.
-// It updates the password of the authenticated staff user.
-//
-// # Validation
-//
-// The method extracts the acting staff ID, decodes the body into an
-// UpdatePasswordRequest, and rejects a request with either CurrentPassword
-// or NewPassword empty. It performs no password-strength or length check;
-// see UpdatePasswordRequest for the policy implications.
-//
-// # Responses
-//
-//   - 401 Unauthorized: the request context carries no staff identity, or
-//     the service returned ErrInvalidCredentials because CurrentPassword
-//     did not match the stored hash.
-//   - 400 Bad Request: the body could not be decoded, or either password
-//     field was empty.
-//   - 404 Not Found: the service returned ErrProfileNotFound.
-//   - 500 Internal Server Error: any other service error. The response
-//     body is the generic string "internal server error"; the underlying
-//     error is not disclosed.
-//   - 200 OK: no data payload; the message "password updated successfully"
-//     accompanies a nil data field.
-//
-// # What happens to existing sessions
-//
-// A successful password change does not invalidate the caller's existing
-// access or refresh tokens. The tokens in the current session continue to
-// work until they expire; the new password is required only for the next
-// login. This mirrors the codebase's broader no-revocation model (see the
-// token package) and means a password change does not end a session on
-// another device.
-//
-// # Concurrency
-//
-// Safe for concurrent use. Two concurrent password changes with the same
-// current password will both pass the verification step, both write a new
-// hash, and whichever write lands last wins. The caller whose update did
-// not land last has effectively been logged out of the change they just
-// made, in the sense that their intended new password is not the one now
-// stored.
-//
-// JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
+// UpdatePassword verifies the current password and invalidates the account’s sessions after a successful change.
 func (h *ProfileHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 	staffID, ok := GetStaffIDFromContext(r.Context())
 	if !ok || staffID == 0 {
@@ -237,7 +164,12 @@ func (h *ProfileHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if err := h.service.UpdatePassword(r.Context(), staffID, req.CurrentPassword, req.NewPassword); err != nil {
+		if authz.WriteError(w, err) {
+			return
+		}
 		switch {
+		case errors.Is(err, ErrPasswordTooLong):
+			response.JSON(w, http.StatusBadRequest, nil, err.Error())
 		case errors.Is(err, ErrProfileNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 		case errors.Is(err, ErrInvalidCredentials):

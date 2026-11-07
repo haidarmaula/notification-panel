@@ -55,8 +55,8 @@ func TestJSONRequestLimitsAPI(t *testing.T) {
 	auth.NewAuthModule(q, tokens, api.Use).RegisterRoutes(mux)
 	// Keep the current server wiring: mobile/sync has no outer middleware.
 	mobile.NewMobileModule(q, cfg).RegisterRoutes(mux)
-	profile.NewProfileModule(q, api.Use, jwt.Use).RegisterRoutes(mux)
-	staff.NewStaffModule(q, api.Use, jwt.Use, auditMW.Use).RegisterRoutes(mux)
+	profile.NewProfileModule(q, staffFixtureTransaction{tx}, api.Use, jwt.Use).RegisterRoutes(mux)
+	staff.NewStaffModule(q, staffFixtureTransaction{tx}, api.Use, jwt.Use, auditMW.Use).RegisterRoutes(mux)
 	segments.NewSegmentModule(q, api.Use, jwt.Use, auditMW.Use).RegisterRoutes(mux)
 	notifications.NewNotificationModule(q, cfg, api.Use, jwt.Use, auditMW.Use).RegisterRoutes(mux)
 	users.NewUserModule(q, pool, []middleware.Middleware{api.Use, jwt.Use}, []middleware.Middleware{mobileJWT.Use}).RegisterRoutes(mux)

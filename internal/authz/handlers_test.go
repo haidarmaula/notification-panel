@@ -31,7 +31,7 @@ func TestEveryHandlerMapsAuthorizationErrors(t *testing.T) {
 			n := notifications.NewNotificationHandler(notifications.NewNotificationService(nil, nil, nil, nil, nil, nil, nil, nil, nil, checker))
 			s := segments.NewSegmentHandler(segments.NewSegmentService(nil, nil, nil, nil, checker))
 			m := segments.NewMembersHandler(segments.NewMembersService(nil, nil, nil, checker))
-			staffHandler := staff.NewStaffHandler(staff.NewStaffService(nil, nil, nil, checker))
+			staffHandler := staff.NewStaffHandler(staff.NewStaffService(nil, nil, checker))
 			handlers := []struct {
 				name    string
 				handler http.HandlerFunc

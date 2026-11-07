@@ -1,8 +1,9 @@
 package staff
 
 import (
-	"hello/internal/audit"
 	"hello/internal/authz"
+	"hello/internal/staffmutation"
+
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 	"hello/internal/middleware"
@@ -45,53 +46,9 @@ type StaffModule struct {
 	permissions authz.Checker
 }
 
-// NewStaffModule creates a new StaffModule instance with the given database queries and middlewares.
-//
-// # Wiring
-//
-// The constructor performs the full dependency-injection chain for the
-// staff feature in a single call:
-//
-//  1. Builds three repositories from the supplied sqlc.Queries: staff,
-//     role, and audit-log. The staff repository backs all staff_users
-//     access; the role repository resolves role names and IDs for the
-//     service; the audit-log repository backs the audit service.
-//  2. Builds an audit.AuditService on the audit-log repository.
-//  3. Builds a StaffService from the three collaborators. The
-//     constructor accepts interface-typed parameters, and the concrete
-//     repository types passed here satisfy those interfaces structurally.
-//  4. Builds a StaffHandler from the service. The handler's constructor
-//     accepts a StaffServicer, which the concrete *StaffService satisfies.
-//  5. Returns the module with the supplied middlewares and the handler.
-//
-// # Parameters
-//
-// queries must be non-nil and is expected to be the shared instance from
-// cmd/server. The middlewares parameter is variadic so that the caller can
-// pass whichever cross-cutting concerns apply to the staff endpoints — in
-// the current wiring the API-key, JWT and audit middlewares
-// — without the module hardcoding a chain. The order in which they are
-// supplied is the order in which they are applied; see middleware.Chain
-// for the composition rule.
-//
-// # Concurrency
-//
-// Intended to be called once during process startup, before the HTTP
-// server begins listening.
-func NewStaffModule(queries *sqlc.Queries, middlewares ...middleware.Middleware) *StaffModule {
-	staffRepo := repository.NewStaffUserRepository(queries)
-	roleRepo := repository.NewRoleRepository(queries)
-	auditRepo := repository.NewAuditLogRepository(queries)
-
-	auditService := audit.NewAuditService(auditRepo)
-	permissions := authz.New(staffRepo)
-	staffService := NewStaffService(staffRepo, roleRepo, auditService, permissions)
-
-	handler := NewStaffHandler(staffService)
-
-	return &StaffModule{
-		middlewares: middlewares,
-		handler:     handler,
-		permissions: permissions,
-	}
+// NewStaffModule binds read operations to the shared pool and each mutation
+// to a transaction that locks the authenticated actor and target until commit.
+func NewStaffModule(queries *sqlc.Queries, db staffmutation.Transactor, middlewares ...middleware.Middleware) *StaffModule {
+	service := NewStaffService(queries, db, authz.New(repository.NewStaffUserRepository(queries)))
+	return &StaffModule{middlewares: middlewares, handler: NewStaffHandler(service), permissions: service.permissions}
 }

@@ -830,6 +830,17 @@ See the [receipt contract](api/mobile-receipts.md).
 
 Migration 000032 adds application/class holds, versioned authorization grants and per-batch preview/apply evidence. Its two scoped expiry indexes cover spent origin assertions and expired receipt request deduplication. Receipt removal verifies the independently frozen capability expiry. Grants bind a finite cutoff, operator login OID, application, epochs and row/batch budget. The guarded down migration refuses to remove policy, grant or job evidence. See the [retention job runbook](runbooks/retention.md) for the command, privileges, reconciliation and excluded classes.
 
+Migration 000036 adds `send_key` to the existing versioned policy and grant workflow. It keeps the original function signature and privileges. Bounded send pages checkpoint the campaign cursor and reviewed campaign IDs. Indexed pending/outbox/physical replay checks run again at apply. The downgrade refuses active send policies or historical send checkpoints. Existing mobile-only policies and grants can remain through this migration or its guarded downgrade.
+
 ### Staff session families (M02)
 
 Migration 000033 adds staff authentication generations, a singleton session recovery epoch and scoped session families. A family stores a refresh digest and counters with an absolute expiry. Password, role and activation changes advance the staff generation. Staff deletion clears the family FK so a reused numeric ID cannot reclaim it. The down migration refuses retained session or generation evidence. The [staff session contract](specs/staff-sessions.md) covers lock ordering, legacy credential cutover and sealed recovery.
+
+
+Migration 000034 adds a single guard row for staff administration. Administrative
+writes lock that row, the current session lineage, the actor and target in account
+ID order, then the actor’s session. This serializes concurrent changes to the
+active super-administrator roster. A successful demotion or deactivation must
+leave an active super administrator. The actor, target, audit and roster check
+commit together. Profile writes use the lineage, own account and session locks.
+Direct database maintenance must preserve the active administrator invariant.

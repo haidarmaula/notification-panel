@@ -662,62 +662,68 @@ func (_m *MockStaffUserRepository) EXPECT() *MockStaffUserRepository_Expecter {
 	return &MockStaffUserRepository_Expecter{mock: &_m.Mock}
 }
 
-// Count provides a mock function for the type MockStaffUserRepository
-func (_mock *MockStaffUserRepository) Count(ctx context.Context) (int64, error) {
-	ret := _mock.Called(ctx)
+// CountMatching provides a mock function for the type MockStaffUserRepository
+func (_mock *MockStaffUserRepository) CountMatching(ctx context.Context, search string) (int64, error) {
+	ret := _mock.Called(ctx, search)
 
 	if len(ret) == 0 {
-		panic("no return value specified for Count")
+		panic("no return value specified for CountMatching")
 	}
 
 	var r0 int64
 	var r1 error
-	if returnFunc, ok := ret.Get(0).(func(context.Context) (int64, error)); ok {
-		return returnFunc(ctx)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) (int64, error)); ok {
+		return returnFunc(ctx, search)
 	}
-	if returnFunc, ok := ret.Get(0).(func(context.Context) int64); ok {
-		r0 = returnFunc(ctx)
+	if returnFunc, ok := ret.Get(0).(func(context.Context, string) int64); ok {
+		r0 = returnFunc(ctx, search)
 	} else {
 		r0 = ret.Get(0).(int64)
 	}
-	if returnFunc, ok := ret.Get(1).(func(context.Context) error); ok {
-		r1 = returnFunc(ctx)
+	if returnFunc, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = returnFunc(ctx, search)
 	} else {
 		r1 = ret.Error(1)
 	}
 	return r0, r1
 }
 
-// MockStaffUserRepository_Count_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'Count'
-type MockStaffUserRepository_Count_Call struct {
+// MockStaffUserRepository_CountMatching_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'CountMatching'
+type MockStaffUserRepository_CountMatching_Call struct {
 	*mock.Call
 }
 
-// Count is a helper method to define mock.On call
+// CountMatching is a helper method to define mock.On call
 //   - ctx context.Context
-func (_e *MockStaffUserRepository_Expecter) Count(ctx any) *MockStaffUserRepository_Count_Call {
-	return &MockStaffUserRepository_Count_Call{Call: _e.mock.On("Count", ctx)}
+//   - search string
+func (_e *MockStaffUserRepository_Expecter) CountMatching(ctx any, search any) *MockStaffUserRepository_CountMatching_Call {
+	return &MockStaffUserRepository_CountMatching_Call{Call: _e.mock.On("CountMatching", ctx, search)}
 }
 
-func (_c *MockStaffUserRepository_Count_Call) Run(run func(ctx context.Context)) *MockStaffUserRepository_Count_Call {
+func (_c *MockStaffUserRepository_CountMatching_Call) Run(run func(ctx context.Context, search string)) *MockStaffUserRepository_CountMatching_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		var arg0 context.Context
 		if args[0] != nil {
 			arg0 = args[0].(context.Context)
 		}
+		var arg1 string
+		if args[1] != nil {
+			arg1 = args[1].(string)
+		}
 		run(
 			arg0,
+			arg1,
 		)
 	})
 	return _c
 }
 
-func (_c *MockStaffUserRepository_Count_Call) Return(n int64, err error) *MockStaffUserRepository_Count_Call {
+func (_c *MockStaffUserRepository_CountMatching_Call) Return(n int64, err error) *MockStaffUserRepository_CountMatching_Call {
 	_c.Call.Return(n, err)
 	return _c
 }
 
-func (_c *MockStaffUserRepository_Count_Call) RunAndReturn(run func(ctx context.Context) (int64, error)) *MockStaffUserRepository_Count_Call {
+func (_c *MockStaffUserRepository_CountMatching_Call) RunAndReturn(run func(ctx context.Context, search string) (int64, error)) *MockStaffUserRepository_CountMatching_Call {
 	_c.Call.Return(run)
 	return _c
 }

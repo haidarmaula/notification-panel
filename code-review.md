@@ -204,21 +204,21 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 
 | # | Location | Issue |
 |---|----------|-------|
-| H1 | `internal/features/staff/handler.go` — `Update` | `ErrEmailAlreadyUsed` is not mapped — falls through to a 500 rather than the intended 409 |
+| H1 | `internal/features/staff/handler.go` — `Update` | Fixed locally. Staff update exposes email conflicts as 409, including the actual unique-constraint violation. |
 | H2 | `internal/features/auth/handler.go` — `RefreshToken` | `ErrInvalidCredentials` is not mapped — a deactivated account's refresh attempt returns 500 instead of 401 |
 | H3 | Feature-handler unknown 500 branches | **Original broad claim superseded:** reviewed current feature-handler 500 branches use literal internal server error; M02a/b authz error tests verify scoped failures | Source review is not complete redaction coverage for all mapped 4xx, DTOs, logs or future branches. See M02 assessment; production error/security review remains required. |
 | H4 | `internal/features/notifications/processor.go` | Status-update errors on the `FAILED` and `COMPLETED` paths are discarded with `_ =` |
-| H5 | `internal/features/profile/service.go` — `GetProfile`, `UpdateProfile` | Every repository failure is collapsed into `ErrProfileNotFound` — a database outage surfaces as 404 |
+| H5 | `internal/features/profile/service.go` — `GetProfile`, `UpdateProfile` | Fixed locally. Missing profile reads map to 404. Database failures propagate as internal errors. Profile writes recheck the active session under lock. |
 | H6 | `internal/features/segments/service.go` — `GetByID`, `Create`, `Update` | Same collapse pattern for `ErrSegmentNotFound` |
 | H7 | `internal/features/users/service.go` — `GetByID` | Same pattern — a transient DB failure is reported as 404 |
-| H8 | `internal/features/staff/service.go` — all read methods | Same pattern for `ErrStaffNotFound` across `GetByID`, `Update`, `UpdateStatus`, `UpdatePassword`, and `Delete` |
+| H8 | `internal/features/staff/service.go` — all read methods | Fixed locally. Staff operations distinguish missing rows and invalid roles from database errors. |
 
 ### List & Pagination
 
 | # | Location | Issue |
 |---|----------|-------|
 | H10 | `internal/features/segments/service.go` — `List` | Total uses the unfiltered `Count(ctx)` even when a search is applied — pagination metadata is wrong for every filtered list |
-| H11 | `internal/features/staff/service.go` — `List` | Same defect |
+| H11 | `internal/features/staff/service.go` — `List` | Fixed locally. Staff search and its total use the same name/email predicate. |
 | H12 | `internal/features/users/service.go` — `List` | Same defect, compounded by filters that do not compose — `external_id` takes priority over `keyword`, which takes priority over `status`; only one filter is honoured per request |
 | H13 | `internal/features/users/service.go` — `List` (external_id path) | Pagination is ignored entirely — `total: 1` on every page, regardless of the requested `page` and `limit` |
 | H14 | `internal/features/notifications/service.go` — `List` | `&row.ScheduledAt.Time` is taken for NULL columns — the resulting non-nil pointer carries the zero time `0001-01-01T00:00:00Z`, which a client renders as a valid-looking timestamp |
@@ -253,7 +253,7 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 | H33 | `internal/features/profile/service.go` — `UpdateProfile` | TOCTOU between `ExistsByEmail` and `Update` — concurrent updates claiming the same email either produce a unique-violation 500 or duplicate email rows, depending on the schema |
 | H34 | `internal/features/segments/service.go` — `Create`, `Update` | Advisory name-uniqueness check with the same TOCTOU properties |
 | H35 | `internal/features/segments/service.go` — `Delete` | Member-count guard is not atomic with the delete — a concurrent `AddMember` can race past the check |
-| H36 | `internal/features/staff/service.go` — `Create`, `Update` | Advisory email-uniqueness check |
+| H36 | `internal/features/staff/service.go` — `Create`, `Update` | Fixed locally. The staff create, administrative edit and profile paths map the exact staff email constraint to 409. |
 | H37 | `internal/features/users/service.go` — `RegisterDeviceToken`, `UpdateDeviceToken` | Advisory push-token-uniqueness check |
 
 ### Partial Commits & Stale State
@@ -261,7 +261,7 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 | # | Location | Issue |
 |---|----------|-------|
 | H38 | `internal/features/segments/service.go` — `Update` | A failure of the post-update re-fetch returns 500 even though the write has already committed |
-| H39 | `internal/features/staff/service.go` — `Update`, `UpdateStatus` | Same defect; the audit entry is also dropped when the re-fetch fails |
+| H39 | `internal/features/staff/service.go` — `Update`, `UpdateStatus` | Fixed locally. The mutation, re-fetch, redacted audit and final-active-administrator check share one transaction. A failure rolls back the write. |
 | H40 | `internal/features/notifications/service.go` — `Update` | Post-update re-fetch failure is mapped to `ErrNotificationNotFound` (404) despite the write having landed |
 | H41 | `internal/features/notifications/service.go` — `Create` | Parent notification and target rows are inserted without a transaction; the compensating delete is best-effort and its error is discarded, leaving orphaned notifications on failure |
 | H42 | `internal/features/segments/service.go` — `Create` | Same pattern — no transaction around the parent and target inserts |
@@ -321,7 +321,7 @@ Design inconsistencies, duplication, contract drift, and maintainability hazards
 | M22 | `internal/features/notifications/handler.go`, `internal/features/staff/handler.go` | Update responses return a small map in one feature and the full updated record in the other |
 | M23 | `internal/features/segments/dto.go` | `SegmentListItem` and `SegmentDetail` are field-identical yet declared separately |
 | M24 | `internal/features/staff/handler.go` — `Update` | Request DTO uses plain strings, so a field cannot be set to an empty value |
-| M25 | `internal/features/staff/dto.go` — `UpdateStatusRequest` | `IsActive bool` cannot distinguish "omitted" from `false` |
+| M25 | `internal/features/staff/dto.go` — `UpdateStatusRequest` | Fixed locally. Missing or null is_active returns 400. Explicit false still deactivates an eligible account. |
 | M26 | `internal/features/profile/dto.go` — `UpdateProfileRequest` | Same plain-string limitation — no true PATCH semantics |
 | M27 | `internal/features/notifications/dto.go` — `NotificationListItem.Type` | The inline comment "default SEGMENT because no join" reflects a field that does not reliably carry the real target type |
 

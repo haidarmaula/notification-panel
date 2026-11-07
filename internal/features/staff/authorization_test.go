@@ -42,7 +42,7 @@ func TestAllStaffServicesFailClosed(t *testing.T) {
 				return sqlc.GetStaffAuthorityRow{ID: id, IsActive: tc.active, RoleName: pgtype.Text{String: tc.role, Valid: true}}, tc.lookup
 			}))
 			// Nil business collaborators prove every operation denies before business I/O.
-			service := NewStaffService(nil, nil, nil, checker)
+			service := newOperations(nil, nil, nil, checker)
 			ctx := ctxWithStaffID(99)
 			if tc.missing {
 				ctx = context.Background()
@@ -61,7 +61,7 @@ func TestAllStaffServicesFailClosed(t *testing.T) {
 			}
 		})
 	}
-	require.Panics(t, func() { NewStaffService(nil, nil, nil, nil) })
+	require.Panics(t, func() { newOperations(nil, nil, nil, nil) })
 }
 
 func TestPasswordActorLookupFailsClosed(t *testing.T) {
@@ -82,7 +82,7 @@ func TestPasswordActorLookupFailsClosed(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			repo := mocks.NewMockStaffUserRepository(t)
 			repo.EXPECT().FindByID(mock.Anything, int64(99)).Return(tc.row, tc.lookup).Once()
-			s := NewStaffService(repo, nil, nil, testAuthority("SUPER_ADMIN"))
+			s := newOperations(repo, nil, nil, testAuthority("SUPER_ADMIN"))
 			err := s.UpdatePassword(ctxWithStaffID(99), 1, "fixture-password", "new-password")
 			require.Error(t, err)
 			if tc.want != nil {
