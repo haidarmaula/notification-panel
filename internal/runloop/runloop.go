@@ -40,6 +40,10 @@ type Task struct {
 	Interval time.Duration
 	Timeout  time.Duration
 	Run      func(context.Context) error
+	// RunPage is an alternative to Run for callers that drain bounded pages.
+	// Return true only after acknowledged progress with more work indicated.
+	RunPage        func(context.Context) (bool, error)
+	ActiveInterval time.Duration
 }
 
 // Supervise restarts an entire stopped component after it has joined its owned
@@ -92,7 +96,16 @@ func SuperviseObserved(ctx context.Context, name string, run func(context.Contex
 // off; success resets the failure streak. Callbacks must re-read durable state
 // on each poll, rather than blindly repeat a failed external-I/O transaction.
 func RunTask(ctx context.Context, task Task, policy RetryPolicy, logger *slog.Logger) error {
-	if !validName(task.Name) || task.Run == nil || task.Interval < 10*time.Millisecond || task.Timeout <= 0 || task.Timeout > time.Hour || policy.Validate() != nil || logger == nil {
+	if !validName(task.Name) || task.Interval < 10*time.Millisecond || task.Timeout <= 0 || task.Timeout > time.Hour || policy.Validate() != nil || logger == nil {
+		return errConfiguration
+	}
+	run := task.RunPage
+	if run == nil {
+		if task.Run == nil || task.ActiveInterval != 0 {
+			return errConfiguration
+		}
+		run = func(ctx context.Context) (bool, error) { return false, task.Run(ctx) }
+	} else if task.Run != nil || task.ActiveInterval < 10*time.Millisecond || task.ActiveInterval > task.Interval {
 		return errConfiguration
 	}
 	if task.Observer != nil {
@@ -107,7 +120,7 @@ func RunTask(ctx context.Context, task Task, policy RetryPolicy, logger *slog.Lo
 			task.Observer.Phase(task.Name, "running", time.Now().Add(task.Timeout))
 		}
 		callCtx, cancel := context.WithTimeout(ctx, task.Timeout)
-		err := task.Run(callCtx)
+		more, err := run(callCtx)
 		if err == nil {
 			err = callCtx.Err()
 		}
@@ -123,6 +136,9 @@ func RunTask(ctx context.Context, task Task, policy RetryPolicy, logger *slog.Lo
 			logger.ErrorContext(ctx, "background task failed", "component", task.Name, "attempt", failures, "retry_after", delay)
 		} else {
 			failures = 0
+			if more {
+				delay = task.ActiveInterval
+			}
 		}
 		if task.Observer != nil {
 			outcome := "success"

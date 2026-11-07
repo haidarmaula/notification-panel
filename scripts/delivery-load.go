@@ -46,11 +46,11 @@ func verify(ok bool, message string) {
 }
 
 type experiment struct {
-	db                           *pgxpool.Pool
-	ctx                          context.Context
-	app, staff                   int64
-	public, source, mode         string
-	devices, rate, dbConnections int
+	db                                         *pgxpool.Pool
+	ctx                                        context.Context
+	app, staff                                 int64
+	public, source, mode                       string
+	devices, rate, dbConnections, activePollMS int
 }
 
 func (e *experiment) exec(query string, args ...any) {
@@ -150,6 +150,9 @@ func (e *experiment) policy() {
 			"fingerprint_key": bytes.Repeat([]byte{2}, 32),
 			"signing_keys":    []map[string]any{{"id": "fixture-key", "key": ed25519.NewKeyFromSeed(bytes.Repeat([]byte{11}, 32))}},
 		},
+	}
+	if e.activePollMS != 100 {
+		p["delivery"].(map[string]any)["active_poll_interval_ms"] = e.activePollMS
 	}
 	if e.dbConnections != 2 {
 		p["delivery"].(map[string]any)["database_pool"] = map[string]int{"max_connections_per_replica": e.dbConnections, "deployment_connection_budget": e.dbConnections}
@@ -289,7 +292,7 @@ func (e *experiment) run(waves int, shape string) {
 	verify(providerMS > 0, "missing provider response timing")
 	log.Printf("drained devices=%d campaigns=%d shape=%s mode=%s charged=%d broker_updates=%d sent=%d version_one=%d outbox=%d sampled_peak_outbox=%d peak_deferred_uncharged=%d",
 		e.devices, waves, shape, e.mode, p.Charged, events, p.Sent, p.Versions, p.Outbox, maxDepth, peakDeferred)
-	log.Printf("provider %+v configured_rps=%d concurrency=%d database_connections=%d", s, e.rate, concurrency, e.dbConnections)
+	log.Printf("provider %+v configured_rps=%d concurrency=%d database_connections=%d active_poll_ms=%d", s, e.rate, concurrency, e.dbConnections, e.activePollMS)
 	log.Printf("timing first_queue_to_provider_complete_ms=%d first_queue_to_last_result_ms=%d result_p95_ms=%d result_p99_ms=%d first_queue_to_drain=%s avg_devices_per_s=%.2f",
 		providerMS, recordedMS, p95MS, p99MS, elapsed, float64(total)/elapsed.Seconds())
 
@@ -348,7 +351,7 @@ func (e *experiment) verifyPublished(before int64, total int) {
 
 func main() {
 	log.SetFlags(log.LUTC | log.Ldate | log.Ltime | log.Lmicroseconds)
-	verify(len(os.Args) == 7, "run through scripts/delivery-load.sh")
+	verify(len(os.Args) == 8, "run through scripts/delivery-load.sh")
 	n, err := strconv.Atoi(os.Args[1])
 	check(err)
 	waves, err := strconv.Atoi(os.Args[2])
@@ -356,9 +359,11 @@ func main() {
 	mode, shape := os.Args[3], os.Args[4]
 	rate, err := strconv.Atoi(os.Args[5])
 	check(err)
+	activeMS, err := strconv.Atoi(os.Args[7])
+	check(err)
 	poolSize, err := strconv.Atoi(os.Args[6])
 	check(err)
-	verify(n >= 1 && n <= 50000 && waves >= 1 && waves <= 25 && n*waves <= 100000 && poolSize >= 2 && poolSize <= 32 && rate >= 1 && rate <= 9999 && (mode == "healthy" || mode == "transient" || mode == "quota") && (shape == "burst" || shape == "soak"), "fixture parameters out of bounds")
+	verify(n >= 1 && n <= 50000 && waves >= 1 && waves <= 25 && n*waves <= 100000 && activeMS >= 10 && activeMS <= 100 && poolSize >= 2 && poolSize <= 32 && rate >= 1 && rate <= 9999 && (mode == "healthy" || mode == "transient" || mode == "quota") && (shape == "burst" || shape == "soak"), "fixture parameters out of bounds")
 	stopCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 	// A broken low-volume CI case should fail promptly. Allow pacing at the
@@ -373,6 +378,6 @@ func main() {
 	db, err := pgxpool.New(ctx, dsn)
 	check(err)
 	defer db.Close()
-	e := experiment{db: db, ctx: ctx, mode: mode, devices: n, rate: rate, dbConnections: poolSize}
+	e := experiment{db: db, ctx: ctx, mode: mode, devices: n, rate: rate, dbConnections: poolSize, activePollMS: activeMS}
 	e.run(waves, shape)
 }

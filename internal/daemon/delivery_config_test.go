@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"strings"
 	"testing"
+	"time"
 
 	"hello/internal/deployment"
 )
@@ -59,6 +60,9 @@ func TestDeliveryPolicyRejectsUnsafeConfiguration(t *testing.T) {
 	}{
 		{"unallocated request rate", func(p map[string]any) { p["replica_count"] = 5 }},
 		{"zero replicas", func(p map[string]any) { p["replica_count"] = 0 }},
+		{"too fast active poll", func(p map[string]any) { p["active_poll_interval_ms"] = 9 }},
+		{"late active poll", func(p map[string]any) { p["active_poll_interval_ms"] = 251 }},
+		{"null active poll", func(p map[string]any) { p["active_poll_interval_ms"] = nil }},
 		{"late renewal", func(p map[string]any) { p["renew_seconds"] = 21 }},
 		{"insufficient write margin", func(p map[string]any) {
 			p["lease_seconds"], p["renew_seconds"], p["request_timeout_seconds"] = 30, 10, 15
@@ -89,5 +93,23 @@ func TestDeliveryPolicyRejectsUnsafeConfiguration(t *testing.T) {
 				t.Fatal("accepted unsafe configuration")
 			}
 		})
+	}
+}
+
+func TestDeliveryPolicyActiveCadence(t *testing.T) {
+	for _, ms := range []int{0, 10, 250} {
+		input := deliveryPolicy()
+		expected := 250
+		if ms != 0 {
+			input["active_poll_interval_ms"] = ms
+			expected = ms
+		}
+		cfg, err := parseDelivery([]byte(policyJSON(t, input)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if cfg.activePoll != time.Duration(expected)*time.Millisecond {
+			t.Fatalf("input=%d active=%v", ms, cfg.activePoll)
+		}
 	}
 }

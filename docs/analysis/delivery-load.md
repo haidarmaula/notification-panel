@@ -206,3 +206,36 @@ sizes, campaign mixes, process replicas and shared-project quota allocations.
 Monitor DB waits, I/O, memory, broker lag and recovery during worker restarts,
 dependency outages and provider throttling. Verify controlled real-device
 delivery on Android/iOS as a separate cutover gate.
+
+## Active polling comparison
+
+Two additional healthy 20,000-device bursts ran in the same isolated synthetic
+fixture with an eight-connection worker pool, concurrency 16, 100 devices per
+page and a 100 ms idle interval. The optional seventh argument selected a 10 ms
+active interval. The control rows are the earlier fixed-cadence runs above.
+All times below are seconds from initial queue eligibility. The Kafka drain is
+the first observed terminal campaign with an empty outbox, followed by broker
+readback of every distinct delivery ID.
+
+| Starts/s allocated | Active ms | Last provider reply | Last committed result | Result p95 / p99 | Kafka drain | Sampled peak outbox | Peak arrivals/s / in flight |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 400 | 100 | 95.688 | 95.689 | 91.650 / 94.908 | 96.063 | 560 | 291 / 11 |
+| 400 | 10 | 74.833 | 74.835 | 70.990 / 74.239 | 78.054 | 7,689 | 348 / 10 |
+| 1,000 | 100 | 71.552 | 71.554 | 68.610 / 70.893 | 75.570 | 3,441 | 400 / 16 |
+| 1,000 | 10 | 48.843 | 48.845 | 45.923 / 48.332 | 56.981 | 9,250 | 617 / 16 |
+
+Both additional runs produced exactly 20,000 charges, provider requests,
+acceptances, SENT rows, version-one results and distinct broker delivery IDs.
+Each ended with zero outstanding outbox rows or active requests. Preparation
+took 6.038 s and 3.969 s respectively. Worker peak resident memory was 50,256 kB
+and 47,428 kB. The faster submission increased the peak backlog waiting for
+Kafka. The 1,000/s run finished submissions within the proposed 60-second
+window locally. The 400/s run exceeded it by 14.833 s. These single trials use a
+private simulated provider, local PostgreSQL and a single broker. Production
+acceptance still requires repeated runs with representative storage, approved
+project-wide capacity, concurrent campaigns, latency, failure and broker policy.
+
+```sh
+bash scripts/delivery-load.sh 20000 1 healthy burst 400 8 10
+bash scripts/delivery-load.sh 20000 1 healthy burst 1000 8 10
+```

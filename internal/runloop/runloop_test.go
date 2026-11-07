@@ -6,8 +6,10 @@ import (
 	"errors"
 	"log/slog"
 	"math"
+	"slices"
 	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 )
 
@@ -122,4 +124,56 @@ func TestRetryDelayRemainsBounded(t *testing.T) {
 			}
 		}
 	}
+}
+
+type phaseFunc func(string, string, time.Time)
+
+func (f phaseFunc) Phase(name, outcome string, next time.Time) { f(name, outcome, next) }
+
+func TestRunPageReportsActualWakeDeadline(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(t.Context())
+		defer cancel()
+		var starts []time.Time
+		var waits []time.Duration
+		var phases []string
+		task := Task{Name: "delivery", Interval: 100 * time.Millisecond, ActiveInterval: 10 * time.Millisecond, Timeout: time.Second}
+		task.Observer = phaseFunc(func(_ string, outcome string, next time.Time) {
+			phases = append(phases, outcome)
+			if outcome == "success" || outcome == "error" {
+				waits = append(waits, time.Until(next))
+			}
+		})
+		task.RunPage = func(callCtx context.Context) (bool, error) {
+			starts = append(starts, time.Now())
+			switch len(starts) {
+			case 1:
+				return true, nil
+			case 2:
+				return false, nil
+			case 3:
+				return true, errors.New("transient")
+			case 4:
+				<-callCtx.Done()
+				return true, nil
+			default:
+				cancel()
+				return false, nil
+			}
+		}
+		retry := 30 * time.Millisecond
+		err := RunTask(ctx, task, RetryPolicy{MinimumDelay: retry, MaximumDelay: retry}, slog.Default())
+		expected := []time.Duration{task.ActiveInterval, task.Interval, retry, retry}
+		if !errors.Is(err, context.Canceled) || !slices.Equal(waits, expected) || len(starts) != 5 || phases[len(phases)-1] != "stopped" {
+			t.Fatalf("error=%v phases=%v waits=%v calls=%d", err, phases, waits, len(starts))
+		}
+		for i, wait := range expected {
+			if i == 3 {
+				wait += task.Timeout
+			}
+			if elapsed := starts[i+1].Sub(starts[i]); elapsed != wait {
+				t.Errorf("call %d: elapsed=%v want=%v", i+1, elapsed, wait)
+			}
+		}
+	})
 }

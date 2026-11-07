@@ -6,19 +6,20 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 export GOWORK=off
 
 usage() {
-  echo 'Usage: bash scripts/delivery-load.sh [devices=32] [campaigns=1] [healthy|transient|quota] [burst|soak] [requests-per-second=400] [database-connections=2]' >&2
+  echo 'Usage: bash scripts/delivery-load.sh [devices=32] [campaigns=1] [healthy|transient|quota] [burst|soak] [requests-per-second=400] [database-connections=2] [active-poll-ms=100]' >&2
   exit 2
 }
-if [[ $# -gt 6 || ${1:-} == --help ]]; then usage; fi
+if [[ $# -gt 7 || ${1:-} == --help ]]; then usage; fi
 count=${1:-32}
 waves=${2:-1}
 mode=${3:-healthy}
 shape=${4:-burst}
 pace=${5:-400}
 pool_size=${6:-2}
-[[ $count =~ ^[1-9][0-9]{0,4}$ && $waves =~ ^[1-9][0-9]?$ && $pace =~ ^[1-9][0-9]{0,3}$ && $pool_size =~ ^[1-9][0-9]?$ ]] || usage
+active_ms=${7:-100}
+[[ $count =~ ^[1-9][0-9]{0,4}$ && $waves =~ ^[1-9][0-9]?$ && $pace =~ ^[1-9][0-9]{0,3}$ && $pool_size =~ ^[1-9][0-9]?$ && $active_ms =~ ^[1-9][0-9]{1,2}$ ]] || usage
 [[ ($mode == healthy || $mode == transient || $mode == quota) && ($shape == burst || $shape == soak) ]] || usage
-((count <= 50000 && waves <= 25 && count * waves <= 100000 && pool_size >= 2 && pool_size <= 32)) || usage
+((count <= 50000 && waves <= 25 && count * waves <= 100000 && pool_size >= 2 && pool_size <= 32 && active_ms <= 100)) || usage
 
 context_endpoint=$(docker context inspect "$(docker context show)" --format '{{ .Endpoints.docker.Host }}')
 if [[ $context_endpoint != unix://* || ${DOCKER_HOST:-unix://} != unix://* ]]; then
@@ -77,4 +78,4 @@ for migration in db/migrations/*.up.sql; do
 done
 "${compose[@]}" exec -T kafka /opt/kafka/bin/kafka-topics.sh \
   --bootstrap-server kafka:9094 --create --topic notification.delivery.updated --partitions 1 --replication-factor 1
-"${compose[@]}" exec -T worker-fixture /fixture-bin/load "$count" "$waves" "$mode" "$shape" "$pace" "$pool_size"
+"${compose[@]}" exec -T worker-fixture /fixture-bin/load "$count" "$waves" "$mode" "$shape" "$pace" "$pool_size" "$active_ms"

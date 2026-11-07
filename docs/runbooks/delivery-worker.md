@@ -31,7 +31,14 @@ or key rotation must provide its corresponding policy.
 
 ## Recovery and shutdown
 
-The worker polls immediately and after each completed tick. A single executor
+The worker polls immediately and waits after each completed tick. The optional
+`delivery.active_poll_interval_ms` ranges from 10 ms through `poll_interval_ms`
+and defaults to that normal interval. Acknowledged progress with another device
+or campaign page indicated, or a fully published outbox page, selects the active
+interval. Idle and held-only work uses the normal interval. Errors use bounded
+retry backoff. The heartbeat records the selected next wake time.
+
+A single executor
 owns a campaign lease while processing a bounded page. It renews during work
 and joins in-flight sends before releasing the lease. It records the FCM outcome
 under the attempt's lease generation. If the write fails, it retries the same

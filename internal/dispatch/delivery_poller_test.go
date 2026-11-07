@@ -126,7 +126,7 @@ func TestDeliveryPollerAdvancesPastHeldDevicesAndCampaigns(t *testing.T) {
 	}
 	for range 24 {
 		r, err := p.Tick(t.Context())
-		if err != nil || r.Acquired > 1 || r.Held > 1 {
+		if err != nil || r.Acquired > 1 || r.Held > 1 || r.More {
 			t.Fatalf("tick: %+v %v", r, err)
 		}
 		// Continual arrivals cannot postpone completing a started pass. These
@@ -281,6 +281,30 @@ func TestDeliveryPollerStopsResultPersistenceOnFenceOrDeadline(t *testing.T) {
 					t.Fatalf("unbounded or premature result retry: %d calls in %v", calls, time.Since(started))
 				}
 			})
+		})
+	}
+}
+
+func TestDeliveryPollerActiveCadenceRequiresAcknowledgedProgressAndContinuation(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		devices [][]byte
+		more    bool
+	}{
+		{"last device", [][]byte{{1}}, false},
+		{"another device", [][]byte{{1, 2}}, true},
+		{"another campaign", [][]byte{{1}, {2}}, true},
+		{"empty campaign", [][]byte{nil, {2}}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ledger := &pollTestLedger{app: pollID(20), devices: tc.devices, record: func(context.Context, *SubmissionResult) (RecordedResult, error) { return RecordedResult{}, nil }}
+			p := &DeliveryPoller{ledger: ledger, policy: DeliveryPollPolicy{ApplicationID: ledger.app, CampaignPageSize: 1, DevicePageSize: 1, Concurrency: 1, RenewInterval: time.Minute}, send: func(context.Context, *ExecutionLease, pgtype.UUID) (*SubmissionResult, error) {
+				return new(SubmissionResult), nil
+			}}
+			report, err := p.Tick(t.Context())
+			if err != nil || report.More != tc.more {
+				t.Fatalf("report=%+v error=%v", report, err)
+			}
 		})
 	}
 }

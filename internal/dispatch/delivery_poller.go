@@ -29,6 +29,8 @@ type DeliveryPollReport struct {
 	Visited, Acquired, Finalized int
 	Retired, Recorded            int
 	Held, Deferred, Unavailable  int
+	// More reports acknowledged work and a continuation of the current sweep.
+	More bool
 }
 
 type deliveryLedger interface {
@@ -93,7 +95,11 @@ func (p *DeliveryPoller) Tick(ctx context.Context) (DeliveryPollReport, error) {
 		if err == nil {
 			report.Acquired++
 			var page DeviceRecoveryPage
+			progress := report.Recorded + report.Retired
 			page, err = p.workCampaign(ctx, lease, &report)
+			if err == nil && page.More && report.Recorded+report.Retired > progress {
+				report.More = true
+			}
 			// Start the next round no higher than the smallest unfinished
 			// page end. Later UUIDs advance even if earlier sends stay held.
 			next := pgtype.UUID{}
@@ -109,6 +115,10 @@ func (p *DeliveryPoller) Tick(ctx context.Context) (DeliveryPollReport, error) {
 		if err != nil && !report.countSkip(err) {
 			return report, err
 		}
+	}
+	if len(campaigns) == int(p.policy.CampaignPageSize) && p.afterCampaign < p.throughCampaign &&
+		report.Recorded+report.Retired+report.Finalized > 0 {
+		report.More = true
 	}
 	if len(campaigns) < int(p.policy.CampaignPageSize) || p.afterCampaign >= p.throughCampaign {
 		p.afterCampaign = 0

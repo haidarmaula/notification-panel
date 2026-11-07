@@ -23,7 +23,7 @@ import (
 type deliveryConfig struct {
 	databaseMaxConns int32
 	application      pgtype.UUID
-	poll             time.Duration
+	poll, activePoll time.Duration
 	pageSize         int32
 	renew            time.Duration
 	execution        dispatch.ExecutionPolicy
@@ -38,6 +38,7 @@ func parseDelivery(raw json.RawMessage) (*deliveryConfig, error) {
 	var application, fingerprint string
 	var routes, encryption, signing []json.RawMessage
 	var databasePool json.RawMessage
+	var activeMS *int32
 	var pollMS, lease, renew, request, retry, observation, cooldown int32
 	var version, projectRate, replicas int32
 	p := &d.execution.Receipt
@@ -55,7 +56,7 @@ func parseDelivery(raw json.RawMessage) (*deliveryConfig, error) {
 		"poll_interval_ms": &pollMS, "page_size": &d.pageSize,
 		"current_key_version": &version, "fingerprint_key": &fingerprint, "encryption_keys": &encryption,
 		"signing_keys": &signing,
-	}, map[string]any{"database_pool": &databasePool})
+	}, map[string]any{"database_pool": &databasePool, "active_poll_interval_ms": &activeMS})
 	if err != nil || d.application.Scan(application) != nil || d.application.String() != application ||
 		!d.application.Valid || d.application.Bytes == [16]byte{} {
 		return nil, ErrConfiguration
@@ -80,6 +81,13 @@ func parseDelivery(raw json.RawMessage) (*deliveryConfig, error) {
 	p.ObservationWindow = time.Duration(observation) * time.Second
 	d.renew = time.Duration(renew) * time.Second
 	d.poll = time.Duration(pollMS) * time.Millisecond
+	d.activePoll = d.poll
+	if activeMS != nil {
+		if *activeMS < 10 || *activeMS > pollMS {
+			return nil, ErrConfiguration
+		}
+		d.activePoll = time.Duration(*activeMS) * time.Millisecond
+	}
 	if d.execution.Validate() != nil || d.transport.Validate() != nil || d.credential.ValidateIdentity(d.transport.ProjectID) != nil {
 		return nil, ErrConfiguration
 	}

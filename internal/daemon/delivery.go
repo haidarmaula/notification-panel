@@ -16,8 +16,8 @@ func runDelivery(ctx context.Context, logger *slog.Logger, cfg *deliveryConfig, 
 	poller *dispatch.DeliveryPoller, outbox *dispatch.UpdateOutbox,
 ) error {
 	deliver := runloop.Task{
-		Observer: observer, Name: "delivery_recovery", Interval: cfg.poll, Timeout: time.Hour,
-		Run: func(ctx context.Context) error {
+		Observer: observer, Name: "delivery_recovery", Interval: cfg.poll, ActiveInterval: cfg.activePoll, Timeout: time.Hour,
+		RunPage: func(ctx context.Context) (bool, error) {
 			report, err := poller.Tick(ctx)
 			if report.Visited > 0 {
 				logger.InfoContext(ctx, "delivery poll finished", "campaigns", report.Visited,
@@ -25,28 +25,28 @@ func runDelivery(ctx context.Context, logger *slog.Logger, cfg *deliveryConfig, 
 					"recorded", report.Recorded, "held", report.Held, "deferred", report.Deferred,
 					"unavailable", report.Unavailable)
 			}
-			return err
+			return report.More, err
 		},
 	}
 	publish := runloop.Task{
-		Observer: observer, Name: "delivery_updates", Interval: cfg.poll, Timeout: 30 * time.Second,
-		Run: func(ctx context.Context) error {
+		Observer: observer, Name: "delivery_updates", Interval: cfg.poll, ActiveInterval: cfg.activePoll, Timeout: 30 * time.Second,
+		RunPage: func(ctx context.Context) (bool, error) {
 			for range cfg.pageSize {
 				outcome, err := outbox.DrainOne(ctx)
 				if err != nil {
-					return err
+					return false, err
 				}
 				switch outcome {
 				case dispatch.Published:
 					continue
 				case dispatch.Held:
-					return errors.New("delivery update publication held")
+					return false, errors.New("delivery update publication held")
 				case dispatch.Deferred:
 					logger.WarnContext(ctx, "delivery update publication delayed", "outcome", string(outcome))
 				}
-				return nil
+				return false, nil
 			}
-			return nil
+			return true, nil
 		},
 	}
 	logger.InfoContext(ctx, "delivery worker started")
