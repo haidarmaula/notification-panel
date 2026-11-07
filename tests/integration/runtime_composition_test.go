@@ -86,6 +86,7 @@ func TestSchedulerAndAuthenticatedWorkerComposeDurablePipeline(t *testing.T) {
 	require.NoError(t, err)
 	_, err = lifecycle.Enroll(ctx, installation.Principal{ApplicationID: f.app, UserID: user}, installation.Route{Namespace: "runtime-fixture", Key: "runtime-route", Platform: "ANDROID", AddressType: installation.FCMRegistrationToken}, "runtime-fixture-address")
 	require.NoError(t, err)
+	approveFixtureBindings(t, ctx, f.pool, f.app)
 	_, err = f.pool.Exec(ctx, "INSERT INTO notification_targets(application_id,notification_id,target_type) VALUES($1,$2,'BROADCAST')", f.app, f.campaign)
 	require.NoError(t, err)
 	staffCtx := context.WithValue(ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: f.staff})

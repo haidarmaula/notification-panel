@@ -71,3 +71,8 @@ returns installation_id, version, owner_epoch and has_active_binding. After
 logout clears ownership, a valid project user holding proof can reconcile the
 unbound state. A different current owner returns 404. Proof is never reissued.
 Use this state before retrying a mutation whose commit outcome is uncertain.
+
+Successful enrollment or refresh records the current binding. Dispatch also
+requires the operator-approved route for that binding generation. An account
+transfer or address replacement needs a fresh route decision. Mobile clients
+cannot grant that permission. [Binding cutover procedure](../runbooks/binding-route-cutover.md)

@@ -42,6 +42,7 @@ func TestAtomicPreparationTwentyThousandDevices(t *testing.T) {
 	require.NoError(t, pool.QueryRow(ctx, "SELECT a.public_id::text,n.queued_at,n.deadline_at,n.origin_epoch::text,n.source_epoch::text FROM notifications n JOIN applications a ON a.id=n.application_id WHERE n.id=$1", campaignID).Scan(&event.ApplicationID, &event.RequestedAt, &event.DeadlineAt, &event.OriginEpoch, &event.SourceEpoch))
 	preparer, err := dispatch.NewPreparer(pool)
 	require.NoError(t, err)
+	approveFixtureBindings(t, ctx, pool, appID)
 	start := time.Now()
 	result, err := preparer.Prepare(ctx, event)
 	elapsed := time.Since(start)

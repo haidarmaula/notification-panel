@@ -24,7 +24,7 @@ WHERE d.application_id = $3::bigint AND d.notification_id = $4::bigint
         AND n.lease_owner = $9 AND n.lease_generation = $6::bigint
         AND n.lease_until > clock_timestamp()
   )
-RETURNING id, application_id, notification_id, installation_id, binding_id, owner_user_id, owner_epoch, delivery_version, status, attempt_count, next_attempt_at, created_at, attempt_id, claim_generation, last_attempt_at, attempt_resolved_at, provider_message_id, provider_accepted_at, observed_delivered_at, observed_opened_at, failed_at, terminal_reason, last_result_disposition, last_result_reason, last_result_fingerprint
+RETURNING id, application_id, notification_id, installation_id, binding_id, owner_user_id, owner_epoch, delivery_version, status, attempt_count, next_attempt_at, created_at, attempt_id, claim_generation, last_attempt_at, attempt_resolved_at, provider_message_id, provider_accepted_at, observed_delivered_at, observed_opened_at, failed_at, terminal_reason, last_result_disposition, last_result_reason, last_result_fingerprint, audience_route_revision
 `
 
 type FailRecoveredDeliveryParams struct {
@@ -78,6 +78,7 @@ func (q *Queries) FailRecoveredDelivery(ctx context.Context, arg FailRecoveredDe
 		&i.LastResultDisposition,
 		&i.LastResultReason,
 		&i.LastResultFingerprint,
+		&i.AudienceRouteRevision,
 	)
 	return i, err
 }

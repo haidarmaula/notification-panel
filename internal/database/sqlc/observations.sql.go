@@ -20,7 +20,7 @@ UPDATE notification_delivery_intents SET
 WHERE application_id=$3::bigint AND id=$4
     AND (($1::text='OPENED' AND observed_opened_at IS NULL) OR
          ($1::text='DELIVERED' AND observed_delivered_at IS NULL))
-RETURNING id, application_id, notification_id, installation_id, binding_id, owner_user_id, owner_epoch, delivery_version, status, attempt_count, next_attempt_at, created_at, attempt_id, claim_generation, last_attempt_at, attempt_resolved_at, provider_message_id, provider_accepted_at, observed_delivered_at, observed_opened_at, failed_at, terminal_reason, last_result_disposition, last_result_reason, last_result_fingerprint
+RETURNING id, application_id, notification_id, installation_id, binding_id, owner_user_id, owner_epoch, delivery_version, status, attempt_count, next_attempt_at, created_at, attempt_id, claim_generation, last_attempt_at, attempt_resolved_at, provider_message_id, provider_accepted_at, observed_delivered_at, observed_opened_at, failed_at, terminal_reason, last_result_disposition, last_result_reason, last_result_fingerprint, audience_route_revision
 `
 
 type ApplyDeliveryObservationParams struct {
@@ -64,6 +64,7 @@ func (q *Queries) ApplyDeliveryObservation(ctx context.Context, arg ApplyDeliver
 		&i.LastResultDisposition,
 		&i.LastResultReason,
 		&i.LastResultFingerprint,
+		&i.AudienceRouteRevision,
 	)
 	return i, err
 }

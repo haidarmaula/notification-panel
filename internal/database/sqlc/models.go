@@ -51,6 +51,37 @@ type AuditLog struct {
 	ApplicationID pgtype.Int8        `db:"application_id"`
 }
 
+type BindingRouteGrant struct {
+	ID               pgtype.UUID        `db:"id"`
+	ApplicationID    int64              `db:"application_id"`
+	BindingID        int64              `db:"binding_id"`
+	OperatorRole     pgtype.Uint32      `db:"operator_role"`
+	IssuerRole       pgtype.Uint32      `db:"issuer_role"`
+	OriginEpoch      pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch      pgtype.UUID        `db:"source_epoch"`
+	ExpectedRevision int64              `db:"expected_revision"`
+	Destination      string             `db:"destination"`
+	CohortID         pgtype.UUID        `db:"cohort_id"`
+	EvidenceID       pgtype.UUID        `db:"evidence_id"`
+	Reason           string             `db:"reason"`
+	ResumeFrom       pgtype.Int8        `db:"resume_from"`
+	IssuedAt         pgtype.Timestamptz `db:"issued_at"`
+	ExpiresAt        pgtype.Timestamptz `db:"expires_at"`
+	RevokedAt        pgtype.Timestamptz `db:"revoked_at"`
+	AppliedAt        pgtype.Timestamptz `db:"applied_at"`
+}
+
+type CurrentBindingRoute struct {
+	ApplicationID int64       `db:"application_id"`
+	BindingID     int64       `db:"binding_id"`
+	Revision      int32       `db:"revision"`
+	Destination   string      `db:"destination"`
+	CohortID      pgtype.UUID `db:"cohort_id"`
+	ResumeFrom    pgtype.Int8 `db:"resume_from"`
+	OriginEpoch   pgtype.UUID `db:"origin_epoch"`
+	SourceEpoch   pgtype.UUID `db:"source_epoch"`
+}
+
 type DeviceToken struct {
 	ID             int64              `db:"id"`
 	UserID         int64              `db:"user_id"`
@@ -185,6 +216,7 @@ type NotificationDeliveryIntent struct {
 	LastResultDisposition pgtype.Text        `db:"last_result_disposition"`
 	LastResultReason      pgtype.Text        `db:"last_result_reason"`
 	LastResultFingerprint []byte             `db:"last_result_fingerprint"`
+	AudienceRouteRevision pgtype.Int8        `db:"audience_route_revision"`
 }
 
 type NotificationLogSource struct {

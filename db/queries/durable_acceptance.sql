@@ -9,6 +9,8 @@ SELECT *, expires_at > clock_timestamp() AS unexpired FROM notification_send_key
 WHERE application_id=sqlc.arg(application_id)::bigint AND staff_user_id=sqlc.arg(staff_user_id)::bigint
   AND key_source=sqlc.arg(key_source) AND key=sqlc.arg(key) FOR UPDATE;
 
+-- A project opts into maintenance-owned expiry as soon as it gets a versioned
+-- send-key policy. Its API cannot remove keys through the ordinary reuse path.
 -- name: DeleteSendKey :execrows
 DELETE FROM notification_send_keys
 WHERE application_id=sqlc.arg(application_id)::bigint AND staff_user_id=sqlc.arg(staff_user_id)::bigint
@@ -44,6 +46,11 @@ SELECT (EXISTS(SELECT 1 FROM targets)
             ON i.application_id=b.application_id AND i.id=b.installation_id
             AND i.owner_user_id=b.owner_user_id AND i.owner_epoch=b.owner_epoch
             WHERE b.application_id=sqlc.arg(application_id)::bigint AND b.owner_user_id=e.id AND b.retired_at IS NULL)
+        OR EXISTS(SELECT 1 FROM installation_bindings b CROSS JOIN notification_runtime runtime
+            LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch FROM current_binding_routes cr
+        WHERE (cr.application_id,cr.binding_id)=(b.application_id,b.id) LIMIT 1) r ON true
+            WHERE runtime.singleton AND b.application_id=sqlc.arg(application_id)::bigint AND b.owner_user_id=e.id AND b.retired_at IS NULL
+                AND (r.destination IS DISTINCT FROM 'FCM_ACTIVE' OR (r.origin_epoch,r.source_epoch) IS DISTINCT FROM (runtime.origin_epoch,runtime.source_epoch)))
         OR EXISTS(SELECT 1 FROM device_tokens d WHERE d.user_id=e.id AND d.is_active))
 )::boolean AS ready;
 

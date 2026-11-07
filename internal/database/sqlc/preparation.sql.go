@@ -123,22 +123,27 @@ WITH targets AS MATERIALIZED (
 ), eligible AS MATERIALIZED (
     SELECT id FROM resolved WHERE status='ACTIVE'
 ), bindings AS MATERIALIZED (
-    SELECT b.id, b.application_id, b.installation_id, b.owner_user_id, b.owner_epoch, b.platform, b.provider_namespace, b.provider_route_key, b.address_type, b.address_fingerprint, b.address_ciphertext, b.encryption_key_version, b.created_at, b.retired_at, b.active_owner_user_id, b.active_owner_epoch FROM installation_bindings b JOIN mobile_installations i
+    SELECT b.application_id,b.id,b.installation_id,b.owner_user_id,b.owner_epoch,
+        CASE WHEN r.destination='FCM_ACTIVE' AND (r.origin_epoch,r.source_epoch)=(runtime.origin_epoch,runtime.source_epoch) THEN r.revision END AS route_revision
+    FROM installation_bindings b JOIN mobile_installations i
       ON i.application_id=b.application_id AND i.id=b.installation_id
       AND i.owner_user_id=b.owner_user_id AND i.owner_epoch=b.owner_epoch
     JOIN eligible e ON e.id=b.owner_user_id
-    WHERE b.application_id=$2::bigint AND b.retired_at IS NULL
+    CROSS JOIN notification_runtime runtime
+    LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch FROM current_binding_routes cr
+        WHERE (cr.application_id,cr.binding_id)=(b.application_id,b.id) LIMIT 1) r ON true
+    WHERE runtime.singleton AND b.application_id=$2::bigint AND b.retired_at IS NULL
 ), assessment AS MATERIALIZED (
     SELECT (EXISTS(SELECT 1 FROM targets) AND NOT EXISTS(SELECT 1 FROM targets
         WHERE application_id IS DISTINCT FROM $2::bigint
           OR NOT ((target_type='BROADCAST' AND user_id IS NULL AND segment_id IS NULL AND upload_batch_id IS NULL)
               OR (target_type='SEGMENT' AND user_id IS NULL AND segment_id IS NOT NULL AND upload_batch_id IS NULL)
               OR (target_type='INDIVIDUAL' AND user_id IS NOT NULL AND segment_id IS NULL AND upload_batch_id IS NULL))))::boolean AS supported,
-      (NOT EXISTS(SELECT 1 FROM eligible e WHERE NOT EXISTS(SELECT 1 FROM bindings b WHERE b.owner_user_id=e.id)
+      (NOT EXISTS(SELECT 1 FROM bindings WHERE route_revision IS NULL) AND NOT EXISTS(SELECT 1 FROM eligible e WHERE NOT EXISTS(SELECT 1 FROM bindings b WHERE b.owner_user_id=e.id)
           OR EXISTS(SELECT 1 FROM device_tokens d WHERE d.user_id=e.id AND d.is_active)))::boolean AS covered
 ), inserted AS (
-    INSERT INTO notification_delivery_intents(application_id,notification_id,installation_id,binding_id,owner_user_id,owner_epoch)
-    SELECT b.application_id,$1::bigint,b.installation_id,b.id,b.owner_user_id,b.owner_epoch
+    INSERT INTO notification_delivery_intents(application_id,notification_id,installation_id,binding_id,owner_user_id,owner_epoch,audience_route_revision)
+    SELECT b.application_id,$1::bigint,b.installation_id,b.id,b.owner_user_id,b.owner_epoch,b.route_revision
     FROM bindings b,assessment a WHERE a.supported AND a.covered
     RETURNING id
 )

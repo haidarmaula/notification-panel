@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	_ "embed"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -58,6 +59,9 @@ func (e *experiment) exec(query string, args ...any) {
 	check(err)
 }
 
+//go:embed fixtures/active-binding-routes.sql
+var syntheticRouteDecisions string
+
 func (e *experiment) seed() {
 	t := time.Now()
 	e.exec("ALTER TABLE applications DROP CONSTRAINT applications_status_check")
@@ -86,6 +90,7 @@ func (e *experiment) seed() {
 	}
 	check(rows.Err())
 	e.bind(batch)
+	e.exec(syntheticRouteDecisions, e.app)
 	verify(n == e.devices, "missing seeded installation")
 	e.exec("INSERT INTO application_dispatch_policy(application_id,hold_new,coverage_approved,push_ttl_seconds,key_ttl_seconds) VALUES($1,false,true,3600,86400)", e.app)
 	e.exec("UPDATE notification_runtime SET sealed=false,migration_hold=false")

@@ -194,6 +194,8 @@ type Querier interface {
 	// ==========================================
 	DeleteSegmentMember(ctx context.Context, id int64) error
 	DeleteSegmentMemberBySegmentAndUser(ctx context.Context, arg DeleteSegmentMemberBySegmentAndUserParams) error
+	// A project opts into maintenance-owned expiry as soon as it gets a versioned
+	// send-key policy. Its API cannot remove keys through the ordinary reuse path.
 	DeleteSendKey(ctx context.Context, arg DeleteSendKeyParams) (int64, error)
 	// ==========================================
 	// DELETE

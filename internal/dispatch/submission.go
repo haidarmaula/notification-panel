@@ -151,7 +151,7 @@ func (s *Execution) loadSubmission(parent context.Context, r *AttemptReservation
 		if err != nil {
 			return executionMissing(err)
 		}
-		if identity.BindingID != r.bindingID || identity.InstallationID != r.installationID || identity.OwnerUserID != r.ownerUserID || identity.OwnerEpoch != r.ownerEpoch {
+		if identity.AuthorizationRevision == 0 || identity.AuthorizationRevision != r.routeRevision || identity.BindingID != r.bindingID || identity.InstallationID != r.installationID || identity.OwnerUserID != r.ownerUserID || identity.OwnerEpoch != r.ownerEpoch {
 			return ErrExecutionHeld
 		}
 		if _, err = q.LockInstallationUser(ctx, sqlc.LockInstallationUserParams{ApplicationID: lease.applicationID, UserID: r.ownerUserID}); err != nil {

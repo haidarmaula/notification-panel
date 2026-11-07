@@ -239,3 +239,27 @@ project-wide capacity, concurrent campaigns, latency, failure and broker policy.
 bash scripts/delivery-load.sh 20000 1 healthy burst 400 8 10
 bash scripts/delivery-load.sh 20000 1 healthy burst 1000 8 10
 ```
+
+## With mandatory per-binding cutover approval
+
+The route-aware worker uses the same one-campaign, 20,000-device fixture, 1,000
+starts/s allocation, eight database connections, 16 in-flight calls and 10 ms
+active polling. Its fixture seeds an approved route revision for every synthetic
+binding before starting the clock. Both measured runs froze each delivery's
+audience revision and checked current authorization at reservation and before
+the physical call.
+
+| Latest route lookup | Preparation | Last committed result | Kafka drain | Peak sampled outbox |
+| --- | ---: | ---: | ---: | ---: |
+| Join to all latest binding revisions | 25.008 s | 104.946 s | 105.021 s | 203 |
+| Indexed lookup by application and binding | 9.337 s | 64.363 s | 64.850 s | 3,840 |
+
+An execution plan from the first fixture showed the join scanning the project's
+route history inside the binding loop. The scoped lookup selects one latest
+revision using the unique applied-grant index and both identity columns.
+The indexed run observed 20,000 accepted physical requests, 20,000 unique
+broker delivery IDs and zero outstanding outbox rows. Peak worker resident
+memory was 47,524 kB. The 48.845 s result above predates per-binding authorization.
+With the route checks enabled this trial exceeded the proposed 60 s threshold
+by 4.363 s. These are single-host synthetic measurements. Actual authorized
+provider capacity and target end-to-end timings are still required.

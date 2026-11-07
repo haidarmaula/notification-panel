@@ -48,6 +48,7 @@ func TestAtomicPreparation(t *testing.T) {
 		t.Helper()
 		enrollment, err := lifecycle.Enroll(ctx, installation.Principal{ApplicationID: app, UserID: user}, installation.Route{Namespace: "preparation-fixture", Key: "route", Platform: "ANDROID", AddressType: installation.FCMRegistrationToken}, address)
 		require.NoError(t, err)
+		approveFixtureBindings(t, ctx, pool, app)
 		return enrollment
 	}
 	firstBinding := enroll(appID, active, "prep-address-1")

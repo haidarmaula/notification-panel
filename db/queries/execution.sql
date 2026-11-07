@@ -59,8 +59,13 @@ WHERE n.application_id=sqlc.arg(application_id)::bigint AND n.id=sqlc.arg(notifi
 FOR SHARE OF n;
 
 -- name: GetExecutionIntentIdentity :one
-SELECT installation_id,binding_id,owner_user_id,owner_epoch FROM notification_delivery_intents
-WHERE application_id=sqlc.arg(application_id)::bigint AND notification_id=sqlc.arg(notification_id)::bigint AND id=sqlc.arg(delivery_id);
+SELECT d.installation_id,d.binding_id,d.owner_user_id,d.owner_epoch,
+    coalesce(CASE WHEN r.destination='FCM_ACTIVE' AND (r.origin_epoch,r.source_epoch)=(runtime.origin_epoch,runtime.source_epoch)
+        AND (r.revision=d.audience_route_revision OR r.resume_from=d.audience_route_revision) THEN r.revision END,0)::bigint AS authorization_revision
+FROM notification_delivery_intents d CROSS JOIN notification_runtime runtime
+LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch,resume_from FROM current_binding_routes cr
+        WHERE (cr.application_id,cr.binding_id)=(d.application_id,d.binding_id) LIMIT 1) r ON true
+WHERE runtime.singleton AND d.application_id=sqlc.arg(application_id)::bigint AND d.notification_id=sqlc.arg(notification_id)::bigint AND d.id=sqlc.arg(delivery_id);
 
 -- name: LockExecutionInstallation :one
 SELECT id,public_id,owner_user_id,owner_epoch FROM mobile_installations WHERE application_id=sqlc.arg(application_id)::bigint AND id=sqlc.arg(installation_id)::bigint FOR SHARE;

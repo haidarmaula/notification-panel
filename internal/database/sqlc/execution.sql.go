@@ -146,8 +146,13 @@ func (q *Queries) FinalizeExecutionCampaign(ctx context.Context, arg FinalizeExe
 }
 
 const getExecutionIntentIdentity = `-- name: GetExecutionIntentIdentity :one
-SELECT installation_id,binding_id,owner_user_id,owner_epoch FROM notification_delivery_intents
-WHERE application_id=$1::bigint AND notification_id=$2::bigint AND id=$3
+SELECT d.installation_id,d.binding_id,d.owner_user_id,d.owner_epoch,
+    coalesce(CASE WHEN r.destination='FCM_ACTIVE' AND (r.origin_epoch,r.source_epoch)=(runtime.origin_epoch,runtime.source_epoch)
+        AND (r.revision=d.audience_route_revision OR r.resume_from=d.audience_route_revision) THEN r.revision END,0)::bigint AS authorization_revision
+FROM notification_delivery_intents d CROSS JOIN notification_runtime runtime
+LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch,resume_from FROM current_binding_routes cr
+        WHERE (cr.application_id,cr.binding_id)=(d.application_id,d.binding_id) LIMIT 1) r ON true
+WHERE runtime.singleton AND d.application_id=$1::bigint AND d.notification_id=$2::bigint AND d.id=$3
 `
 
 type GetExecutionIntentIdentityParams struct {
@@ -157,10 +162,11 @@ type GetExecutionIntentIdentityParams struct {
 }
 
 type GetExecutionIntentIdentityRow struct {
-	InstallationID int64 `db:"installation_id"`
-	BindingID      int64 `db:"binding_id"`
-	OwnerUserID    int64 `db:"owner_user_id"`
-	OwnerEpoch     int64 `db:"owner_epoch"`
+	InstallationID        int64 `db:"installation_id"`
+	BindingID             int64 `db:"binding_id"`
+	OwnerUserID           int64 `db:"owner_user_id"`
+	OwnerEpoch            int64 `db:"owner_epoch"`
+	AuthorizationRevision int64 `db:"authorization_revision"`
 }
 
 func (q *Queries) GetExecutionIntentIdentity(ctx context.Context, arg GetExecutionIntentIdentityParams) (GetExecutionIntentIdentityRow, error) {
@@ -171,6 +177,7 @@ func (q *Queries) GetExecutionIntentIdentity(ctx context.Context, arg GetExecuti
 		&i.BindingID,
 		&i.OwnerUserID,
 		&i.OwnerEpoch,
+		&i.AuthorizationRevision,
 	)
 	return i, err
 }

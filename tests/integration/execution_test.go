@@ -52,6 +52,7 @@ func newExecutionFixture(t *testing.T, ctx context.Context, primaryAddress ...st
 			f.enrollment = enrollment
 		}
 	}
+	approveFixtureBindings(t, ctx, f.pool, f.app)
 	preparer, err := dispatch.NewPreparer(f.pool)
 	require.NoError(t, err)
 	result, err := preparer.Prepare(ctx, event)

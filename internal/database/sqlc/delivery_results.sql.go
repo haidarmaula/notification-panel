@@ -107,7 +107,7 @@ func (q *Queries) LockResultBinding(ctx context.Context, arg LockResultBindingPa
 }
 
 const lockResultDelivery = `-- name: LockResultDelivery :one
-SELECT d.id, d.application_id, d.notification_id, d.installation_id, d.binding_id, d.owner_user_id, d.owner_epoch, d.delivery_version, d.status, d.attempt_count, d.next_attempt_at, d.created_at, d.attempt_id, d.claim_generation, d.last_attempt_at, d.attempt_resolved_at, d.provider_message_id, d.provider_accepted_at, d.observed_delivered_at, d.observed_opened_at, d.failed_at, d.terminal_reason, d.last_result_disposition, d.last_result_reason, d.last_result_fingerprint,n.deadline_at,clock_timestamp()::timestamptz AS recorded_at
+SELECT d.id, d.application_id, d.notification_id, d.installation_id, d.binding_id, d.owner_user_id, d.owner_epoch, d.delivery_version, d.status, d.attempt_count, d.next_attempt_at, d.created_at, d.attempt_id, d.claim_generation, d.last_attempt_at, d.attempt_resolved_at, d.provider_message_id, d.provider_accepted_at, d.observed_delivered_at, d.observed_opened_at, d.failed_at, d.terminal_reason, d.last_result_disposition, d.last_result_reason, d.last_result_fingerprint, d.audience_route_revision,n.deadline_at,clock_timestamp()::timestamptz AS recorded_at
 FROM notification_delivery_intents d JOIN notifications n ON n.application_id=d.application_id AND n.id=d.notification_id
 WHERE d.application_id=$1::bigint AND d.notification_id=$2::bigint
     AND d.id=$3 AND d.attempt_id=$4 AND d.claim_generation=$5::bigint
@@ -153,6 +153,7 @@ type LockResultDeliveryRow struct {
 	LastResultDisposition pgtype.Text        `db:"last_result_disposition"`
 	LastResultReason      pgtype.Text        `db:"last_result_reason"`
 	LastResultFingerprint []byte             `db:"last_result_fingerprint"`
+	AudienceRouteRevision pgtype.Int8        `db:"audience_route_revision"`
 	DeadlineAt            pgtype.Timestamptz `db:"deadline_at"`
 	RecordedAt            pgtype.Timestamptz `db:"recorded_at"`
 }
@@ -195,6 +196,7 @@ func (q *Queries) LockResultDelivery(ctx context.Context, arg LockResultDelivery
 		&i.LastResultDisposition,
 		&i.LastResultReason,
 		&i.LastResultFingerprint,
+		&i.AudienceRouteRevision,
 		&i.DeadlineAt,
 		&i.RecordedAt,
 	)
@@ -252,7 +254,7 @@ WHERE d.application_id=$12::bigint AND d.id=$13
     AND EXISTS(SELECT 1 FROM notifications n WHERE n.application_id=d.application_id AND n.id=d.notification_id
         AND n.status='PROCESSING' AND n.origin_epoch=$16 AND n.source_epoch=$17
         AND n.lease_owner=$18 AND n.lease_generation=$15::bigint AND n.lease_until>clock_timestamp())
-RETURNING id, application_id, notification_id, installation_id, binding_id, owner_user_id, owner_epoch, delivery_version, status, attempt_count, next_attempt_at, created_at, attempt_id, claim_generation, last_attempt_at, attempt_resolved_at, provider_message_id, provider_accepted_at, observed_delivered_at, observed_opened_at, failed_at, terminal_reason, last_result_disposition, last_result_reason, last_result_fingerprint
+RETURNING id, application_id, notification_id, installation_id, binding_id, owner_user_id, owner_epoch, delivery_version, status, attempt_count, next_attempt_at, created_at, attempt_id, claim_generation, last_attempt_at, attempt_resolved_at, provider_message_id, provider_accepted_at, observed_delivered_at, observed_opened_at, failed_at, terminal_reason, last_result_disposition, last_result_reason, last_result_fingerprint, audience_route_revision
 `
 
 type WriteDeliveryResultParams struct {
@@ -324,6 +326,7 @@ func (q *Queries) WriteDeliveryResult(ctx context.Context, arg WriteDeliveryResu
 		&i.LastResultDisposition,
 		&i.LastResultReason,
 		&i.LastResultFingerprint,
+		&i.AudienceRouteRevision,
 	)
 	return i, err
 }

@@ -227,6 +227,7 @@ func seedOtherWorkerEvent(t *testing.T, ctx context.Context, f executionFixture)
 	_, err := f.lifecycle.Enroll(ctx, installation.Principal{ApplicationID: app, UserID: user},
 		installation.Route{Namespace: "execution-fixture", Key: "route", Platform: "ANDROID", AddressType: installation.FCMRegistrationToken}, "other-worker-address")
 	require.NoError(t, err)
+	approveFixtureBindings(t, ctx, f.pool, app)
 	event := kafka.ScopedSendRequested{SchemaVersion: 1, ApplicationID: project.String()}
 	require.NoError(t, f.pool.QueryRow(ctx, `INSERT INTO notifications(application_id,title,body,created_by,status,queued_at,deadline_at,origin_epoch,source_epoch)
 		SELECT $1,'Other','Other',$2,'QUEUED',clock_timestamp(),clock_timestamp()+interval '5 minutes',origin_epoch,source_epoch FROM notification_runtime

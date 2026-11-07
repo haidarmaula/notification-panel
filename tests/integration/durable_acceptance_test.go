@@ -108,6 +108,7 @@ func TestDurableAcceptance(t *testing.T) {
 	require.NoError(t, err)
 	_, err = lifecycle.Enroll(ctx, installation.Principal{ApplicationID: appID, UserID: userID}, installation.Route{Namespace: "fixture-project", Key: "fixture-route", Platform: "ANDROID", AddressType: installation.FCMRegistrationToken}, "fixture-address")
 	require.NoError(t, err)
+	approveFixtureBindings(t, ctx, pool, appID)
 	newDraft := func() int64 {
 		id := count("INSERT INTO notifications(application_id,title,body,created_by) VALUES($1,'Acceptance','Body',$2) RETURNING id", appID, actors["ADMIN"])
 		exec("INSERT INTO notification_targets(application_id,notification_id,target_type) VALUES($1,$2,'BROADCAST')", appID, id)

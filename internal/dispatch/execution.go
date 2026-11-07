@@ -63,6 +63,7 @@ type AttemptReservation struct {
 	lease                                              *ExecutionLease
 	deliveryID, attemptID                              pgtype.UUID
 	bindingID, installationID, ownerUserID, ownerEpoch int64
+	routeRevision                                      int64
 	material                                           receipt.Material
 	use                                                *atomic.Bool
 }
@@ -186,6 +187,9 @@ func (s *Execution) Reserve(ctx context.Context, lease *ExecutionLease, delivery
 		if err != nil {
 			return executionMissing(err)
 		}
+		if identity.AuthorizationRevision == 0 {
+			return ErrExecutionHeld
+		}
 		// Identity discovery takes no child lock. The immutable user is locked before
 		// the campaign; installation/binding locks follow it in the shared protocol.
 		if _, err = q.LockInstallationUser(ctx, sqlc.LockInstallationUserParams{ApplicationID: lease.applicationID, UserID: identity.OwnerUserID}); err != nil {
@@ -230,7 +234,7 @@ func (s *Execution) Reserve(ctx context.Context, lease *ExecutionLease, delivery
 		if err != nil {
 			return executionMissing(err)
 		}
-		provisional = &AttemptReservation{lease: lease, deliveryID: deliveryID, attemptID: attemptID, bindingID: identity.BindingID, installationID: identity.InstallationID, ownerUserID: identity.OwnerUserID, ownerEpoch: identity.OwnerEpoch, material: material, use: new(atomic.Bool)}
+		provisional = &AttemptReservation{lease: lease, deliveryID: deliveryID, attemptID: attemptID, bindingID: identity.BindingID, installationID: identity.InstallationID, ownerUserID: identity.OwnerUserID, ownerEpoch: identity.OwnerEpoch, routeRevision: identity.AuthorizationRevision, material: material, use: new(atomic.Bool)}
 		return nil
 	})
 	if err != nil {

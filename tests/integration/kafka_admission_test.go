@@ -93,6 +93,7 @@ func kafkaAdmissionGenerationHandoff(t *testing.T, authenticated bool) {
 	require.NoError(t, err)
 	_, err = lifecycle.Enroll(ctx, installation.Principal{ApplicationID: appID, UserID: userID}, installation.Route{Namespace: "broker-fixture", Key: "broker-route", Platform: "ANDROID", AddressType: installation.FCMRegistrationToken}, "broker-fixture-address")
 	require.NoError(t, err)
+	approveFixtureBindings(t, ctx, pool, appID)
 	actualPreparer, err := dispatch.NewPreparer(pool)
 	require.NoError(t, err)
 	quarantine, err := dispatch.NewQuarantine(pool)

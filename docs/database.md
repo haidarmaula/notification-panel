@@ -844,3 +844,22 @@ active super-administrator roster. A successful demotion or deactivation must
 leave an active super administrator. The actor, target, audit and roster check
 commit together. Profile writes use the lineage, own account and session locks.
 Direct database maintenance must preserve the active administrator invariant.
+
+### Protected daemon privileges
+
+Migration 000035 gives row locks a safe privilege target by enforcing immutable
+identifiers on applications, dispatch policy, staff, users and quarantine
+evidence. PostgreSQL requires UPDATE permission on a column even for a shared
+row lock. The protected scheduler, admission and delivery profiles receive
+column-limited mutations and access to narrowly scoped, owner-executed routines
+for one-way holds and expired replay cleanup. Routine execution requires an
+explicit grant. M37 adds read access to applied binding route decisions and
+permits preparation to freeze the route revision. The deployment template and
+real non-owner verification procedure are in the [daemon role runbook](runbooks/daemon-database-grants.md).
+
+Migration 000037 stores scoped, expiring binding route grants and their applied
+revisions. The current view exposes only the latest applied decision for a
+binding. Delivery intents persist the audience route revision and reject later
+rewrites. Existing intents without a revision remain fenced. The protected
+transition function binds each change to its login, reviewed cohort, epochs
+and initial revision. [Binding cutover](runbooks/binding-route-cutover.md)
