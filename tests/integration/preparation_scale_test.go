@@ -4,10 +4,12 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"hello/internal/database/sqlc"
 	"hello/internal/dispatch"
 	"hello/internal/kafka"
 )
@@ -43,6 +45,40 @@ func TestAtomicPreparationTwentyThousandDevices(t *testing.T) {
 	preparer, err := dispatch.NewPreparer(pool)
 	require.NoError(t, err)
 	approveFixtureBindings(t, ctx, pool, appID)
+	// Capture the actual generated statement and profile it before ANALYZE.
+	// Keep this snapshot rolled back so the service still performs real fan-out.
+	tx, err := pool.Begin(ctx)
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback(ctx) }()
+	savepoint, err := tx.Begin(ctx)
+	require.NoError(t, err)
+	probe := &queryPlanProbe{DBTX: savepoint}
+	args := sqlc.InsertPreparationIntentsParams{ApplicationID: appID, NotificationID: campaignID}
+	measured, err := sqlc.New(probe).InsertPreparationIntents(ctx, args)
+	require.NoError(t, err)
+	require.EqualValues(t, 20_000, measured.EligibleDevices)
+	require.NoError(t, savepoint.Rollback(ctx))
+	var raw []byte
+	require.NoError(t, tx.QueryRow(ctx, "EXPLAIN (ANALYZE, TIMING OFF, FORMAT JSON) "+probe.statement, probe.args...).Scan(&raw))
+	require.NoError(t, tx.Rollback(ctx))
+	type planNode struct {
+		Loops      int64 `json:"Actual Loops"`
+		Rows       int64 `json:"Actual Rows"`
+		Filter     int64 `json:"Rows Removed by Filter"`
+		JoinFilter int64 `json:"Rows Removed by Join Filter"`
+		Plans      []planNode
+	}
+	var plans []struct{ Plan planNode }
+	require.NoError(t, json.Unmarshal(raw, &plans))
+	require.Len(t, plans, 1)
+	var assertBounded func(planNode)
+	assertBounded = func(node planNode) {
+		require.Less(t, node.Loops*(node.Rows+node.Filter+node.JoinFilter), int64(2_000_000), "preparation must avoid rescanning the audience per binding")
+		for _, child := range node.Plans {
+			assertBounded(child)
+		}
+	}
+	assertBounded(plans[0].Plan)
 	start := time.Now()
 	result, err := preparer.Prepare(ctx, event)
 	elapsed := time.Since(start)

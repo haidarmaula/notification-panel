@@ -877,3 +877,10 @@ grant ledger retains immutable scope and four evidence digests. A provider
 hold advances the same generation as an operator rollback. The managed policy
 cannot be deleted and recreated to reuse a previous generation. [Dispatch
 release and rollback](runbooks/application-dispatch.md).
+
+Migration 000040 indexes active installation bindings by application and
+current owner. Retired bindings stay in history and outside the partial
+index. Campaign acceptance can find the active bindings for each eligible
+owner without scanning the project's installations repeatedly. The index
+build and removal can block writes to installation bindings. Rehearse their
+duration with representative data and use the deployment migration window.

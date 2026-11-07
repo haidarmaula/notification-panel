@@ -16,13 +16,13 @@ import (
 
 // Explain the actual parameterized statement used by sqlc on this transaction.
 // Duplicating the query to reproduce its plan can hide regressions in the real selector.
-type outboxPlanProbe struct {
+type queryPlanProbe struct {
 	sqlc.DBTX
 	statement string
 	args      []any
 }
 
-func (p *outboxPlanProbe) QueryRow(ctx context.Context, statement string, args ...any) pgx.Row {
+func (p *queryPlanProbe) QueryRow(ctx context.Context, statement string, args ...any) pgx.Row {
 	p.statement, p.args = statement, args
 	return p.DBTX.QueryRow(ctx, statement, args...)
 }
@@ -48,7 +48,7 @@ func checkScopedOutboxSelection(t *testing.T, ctx context.Context, pool *pgxpool
 	require.NoError(t, args.ApplicationPublicID.Scan(event.ApplicationID))
 	require.NoError(t, args.OriginEpoch.Scan(event.OriginEpoch))
 	require.NoError(t, args.SourceEpoch.Scan(event.SourceEpoch))
-	probe := &outboxPlanProbe{DBTX: tx}
+	probe := &queryPlanProbe{DBTX: tx}
 	row, err := sqlc.New(probe).LockNextDeliveryUpdate(ctx, args)
 	require.NoError(t, err)
 	require.Equal(t, args.ApplicationPublicID, row.ApplicationPublicID)

@@ -30,14 +30,20 @@ WITH targets AS MATERIALIZED (
 ), bindings AS MATERIALIZED (
     SELECT b.application_id,b.id,b.installation_id,b.owner_user_id,b.owner_epoch,
         CASE WHEN r.destination='FCM_ACTIVE' AND (r.origin_epoch,r.source_epoch)=(runtime.origin_epoch,runtime.source_epoch) AND (sqlc.narg(pilot_cohort)::uuid IS NULL OR r.cohort_id=sqlc.narg(pilot_cohort)::uuid) THEN r.revision END AS route_revision
-    FROM installation_bindings b JOIN mobile_installations i
-      ON i.application_id=b.application_id AND i.id=b.installation_id
-      AND i.owner_user_id=b.owner_user_id AND i.owner_epoch=b.owner_epoch
-    JOIN eligible e ON e.id=b.owner_user_id
+    FROM installation_bindings b
+    -- Probe the single installation for each candidate binding. Joining on
+    -- owner alone can repeatedly scan the application's installation index.
+    JOIN LATERAL (SELECT 1 FROM mobile_installations i
+        WHERE (i.application_id,i.id,i.owner_user_id,i.owner_epoch)=
+              (b.application_id,b.installation_id,b.owner_user_id,b.owner_epoch)
+        LIMIT 1) owner ON true
     CROSS JOIN notification_runtime runtime
     LEFT JOIN LATERAL (SELECT revision,destination,origin_epoch,source_epoch,cohort_id FROM current_binding_routes cr
         WHERE (cr.application_id,cr.binding_id)=(b.application_id,b.id) LIMIT 1) r ON true
     WHERE runtime.singleton AND b.application_id=sqlc.arg(application_id)::bigint AND b.retired_at IS NULL
+      -- Build the eligible owner keys once so a cold planner cannot join
+      -- every binding against another full scan of the eligible audience.
+      AND b.owner_user_id=ANY(ARRAY(SELECT id FROM eligible))
 ), assessment AS MATERIALIZED (
     SELECT (EXISTS(SELECT 1 FROM targets) AND NOT EXISTS(SELECT 1 FROM targets
         WHERE application_id IS DISTINCT FROM sqlc.arg(application_id)::bigint
@@ -46,8 +52,11 @@ WITH targets AS MATERIALIZED (
               OR (target_type='INDIVIDUAL' AND user_id IS NOT NULL AND segment_id IS NULL AND upload_batch_id IS NULL))))::boolean AS supported,
       ((sqlc.narg(pilot_cohort)::uuid IS NULL OR (EXISTS(SELECT 1 FROM eligible)
           AND NOT EXISTS(SELECT 1 FROM targets WHERE target_type='BROADCAST')))
-       AND NOT EXISTS(SELECT 1 FROM bindings WHERE route_revision IS NULL) AND NOT EXISTS(SELECT 1 FROM eligible e WHERE NOT EXISTS(SELECT 1 FROM bindings b WHERE b.owner_user_id=e.id)
-          OR EXISTS(SELECT 1 FROM device_tokens d WHERE d.user_id=e.id AND d.is_active)))::boolean AS covered
+       AND NOT EXISTS(SELECT 1 FROM bindings WHERE route_revision IS NULL)
+       -- Bindings were scoped to eligible users. Equality of the distinct
+       -- owner count proves coverage without rescanning bindings per user.
+       AND (SELECT count(DISTINCT owner_user_id) FROM bindings)=(SELECT count(*) FROM eligible)
+       AND NOT EXISTS(SELECT 1 FROM eligible e JOIN device_tokens d ON d.user_id=e.id WHERE d.is_active))::boolean AS covered
 ), inserted AS (
     INSERT INTO notification_delivery_intents(application_id,notification_id,installation_id,binding_id,owner_user_id,owner_epoch,audience_route_revision)
     SELECT b.application_id,sqlc.arg(notification_id)::bigint,b.installation_id,b.id,b.owner_user_id,b.owner_epoch,b.route_revision
