@@ -4,6 +4,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"math/big"
@@ -15,6 +16,7 @@ import (
 	"time"
 
 	"hello/internal/deployment"
+	"hello/internal/token"
 )
 
 func TestEscapedDatabaseCredentials(t *testing.T) {
@@ -35,8 +37,11 @@ func TestEscapedDatabaseCredentials(t *testing.T) {
 func TestProtectedServerDatabaseAndMobilePolicy(t *testing.T) {
 	clearDeploymentEnv(t)
 	const dbURL = "postgres://svc:p%40ss@db.example.test:5432/app?sslmode=verify-full"
-	p := map[string]any{"ingress": fixtureIngress(t), "database_url": dbURL, "api_key": strings.Repeat("a", 32), "access_secret": strings.Repeat("b", 32),
-		"refresh_secret": strings.Repeat("c", 32), "mobile_policy_file": ""}
+	purpose := func(kid, material string) map[string]any {
+		return map[string]any{"audience": "aud-" + kid, "active_kid": kid, "keys": []map[string]string{{"kid": kid, "key": base64.RawURLEncoding.EncodeToString([]byte(material))}}}
+	}
+	trust := map[string]any{"issuer": "protected-staff", "access": purpose("access", strings.Repeat("b", 32)), "refresh": purpose("refresh", strings.Repeat("c", 32))}
+	p := map[string]any{"ingress": fixtureIngress(t), "database_url": dbURL, "api_key": strings.Repeat("a", 32), "staff_tokens": trust, "mobile_policy_file": ""}
 	parse := func() (*ServerConfig, error) {
 		b, err := json.Marshal(p)
 		if err != nil {
@@ -47,6 +52,14 @@ func TestProtectedServerDatabaseAndMobilePolicy(t *testing.T) {
 	cfg, err := parse()
 	if err != nil {
 		t.Fatal(err)
+	}
+	pair, err := cfg.StaffTokens().Issue(1, "ADMIN", "", token.NewFamily())
+	if err != nil {
+		t.Fatal(err)
+	}
+	access, err := cfg.StaffTokens().ParseAccessToken(pair.AccessToken)
+	if err != nil || access.Issuer != "protected-staff" || access.Audience[0] != "aud-access" {
+		t.Fatal("protected server did not use configured issuer")
 	}
 	db := cfg.protectedDatabase
 	if db.ConnConfig.Password != "p@ss" || db.ConnConfig.TLSConfig == nil || db.ConnConfig.TLSConfig.InsecureSkipVerify || len(db.ConnConfig.Fallbacks) != 0 {
@@ -75,9 +88,18 @@ func TestProtectedServerDatabaseAndMobilePolicy(t *testing.T) {
 		}
 	}
 	p["database_url"] = dbURL
-	p["refresh_secret"] = p["access_secret"]
+	trust["refresh"] = purpose("refresh", strings.Repeat("b", 32))
 	if cfg, err := parse(); cfg != nil || err != deployment.ErrConfiguration {
 		t.Fatal("cross-purpose signing secrets accepted")
+	}
+	trust["refresh"] = purpose("refresh", strings.Repeat("a", 32))
+	if cfg, err := parse(); cfg != nil || err != deployment.ErrConfiguration {
+		t.Fatal("API key reused for signing")
+	}
+	delete(p, "staff_tokens")
+	p["access_secret"], p["refresh_secret"] = strings.Repeat("b", 32), strings.Repeat("c", 32)
+	if cfg, err := parse(); cfg != nil || err != deployment.ErrConfiguration {
+		t.Fatal("legacy protected config accepted")
 	}
 }
 

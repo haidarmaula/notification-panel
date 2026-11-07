@@ -115,10 +115,10 @@ trust silently. A role claim from a long-lived token is not current permission.
 
 ### Consequences
 
-M02e locally implements HS256-only staff access/refresh parsing with required exp
-and positive identity; see [SPEC](../specs/m02e-staff-jwt-parser.md). It preserves
-current token shape and does not implement issuer/audience/key/session/mobile
-requirements. [M02 assessment](../analysis/m02-baseline-assessment.md) assigns
+M02e introduced HS256-only staff access/refresh parsing with required expiry
+and positive identity. Migration 000033 binds staff tokens to current sessions.
+The protected server now requires the issuer, separate audiences and bounded
+key rings with rotation cutoffs. See the [staff session specification](../specs/staff-sessions.md). [M02 assessment](../analysis/m02-baseline-assessment.md) assigns
 remaining gates.
 
 Required claim/key-ring config is NEW and per binary; fail startup on incomplete

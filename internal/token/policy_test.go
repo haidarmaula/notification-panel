@@ -9,6 +9,10 @@ import (
 
 func TestStaffParserPolicy(t *testing.T) {
 	for _, purpose := range []string{"access", "refresh"} {
+		audience := "hello-local-api"
+		if purpose == "refresh" {
+			audience = "hello-local-refresh"
+		}
 		t.Run(purpose, func(t *testing.T) {
 			secret := testAccessSecret
 			if purpose == "refresh" {
@@ -24,6 +28,13 @@ func TestStaffParserPolicy(t *testing.T) {
 				{name: "HS512", method: jwt.SigningMethodHS512},
 				{name: "none", method: jwt.SigningMethodNone},
 				{name: "wrong secret", secret: "fixture-wrong-key"},
+				{name: "missing issuer", change: func(c jwt.MapClaims) { delete(c, "iss") }},
+				{name: "wrong issuer", change: func(c jwt.MapClaims) { c["iss"] = "other-staff" }},
+				{name: "missing audience", change: func(c jwt.MapClaims) { delete(c, "aud") }},
+				{name: "wrong audience", change: func(c jwt.MapClaims) { c["aud"] = "other-purpose" }},
+				{name: "extra audience", change: func(c jwt.MapClaims) { c["aud"] = []string{audience, "other-purpose"} }},
+				{name: "overlong lifetime", change: func(c jwt.MapClaims) { c["exp"] = time.Now().Add(48 * time.Hour).Unix() }},
+				{name: "future issue time", change: func(c jwt.MapClaims) { c["iat"] = time.Now().Add(time.Minute).Unix() }},
 				{name: "missing exp", change: func(c jwt.MapClaims) { delete(c, "exp") }},
 				{name: "null exp", change: func(c jwt.MapClaims) { c["exp"] = nil }},
 				{name: "invalid exp", change: func(c jwt.MapClaims) { c["exp"] = "tomorrow" }},
@@ -43,7 +54,7 @@ func TestStaffParserPolicy(t *testing.T) {
 			}
 			for _, tc := range cases {
 				t.Run(tc.name, func(t *testing.T) {
-					claims := jwt.MapClaims{"user_id": 7, "type": purpose, "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "sub": "7", "sid": NewFamily().ID.String(), "jti": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
+					claims := jwt.MapClaims{"user_id": 7, "type": purpose, "iss": "hello-local-staff", "aud": audience, "exp": time.Now().Add(10 * time.Minute).Unix(), "iat": time.Now().Unix(), "sub": "7", "sid": NewFamily().ID.String(), "jti": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
 					if tc.change != nil {
 						tc.change(claims)
 					}
@@ -58,7 +69,9 @@ func TestStaffParserPolicy(t *testing.T) {
 					if method == jwt.SigningMethodNone {
 						key = jwt.UnsafeAllowNoneSignatureType
 					}
-					signed, err := jwt.NewWithClaims(method, claims).SignedString(key)
+					candidate := jwt.NewWithClaims(method, claims)
+					candidate.Header["kid"] = "dev-" + purpose
+					signed, err := candidate.SignedString(key)
 					require.NoError(t, err)
 					manager := newTestManager()
 					if purpose == "access" {

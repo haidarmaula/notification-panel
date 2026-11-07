@@ -8,7 +8,10 @@ import (
 	"encoding/base64"
 	"errors"
 	"strconv"
+	"strings"
 	"time"
+
+	"hello/internal/jsonobject"
 
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -65,16 +68,25 @@ type Pair struct {
 }
 
 // TokenManager uses separate immutable keys for staff access and rotation.
-type TokenManager struct{ accessSecret, refreshSecret []byte }
-
-func NewTokenManager(accessSecret, refreshSecret string) *TokenManager {
-	return &TokenManager{accessSecret: []byte(accessSecret), refreshSecret: []byte(refreshSecret)}
+type TokenManager struct {
+	issuer          string
+	access, refresh purposeKeys
 }
 
-func registered(staffID int64, now, expiry time.Time) jwt.RegisteredClaims {
+// NewTokenManager retains the local development constructor. Deployments use ParsePolicy.
+func NewTokenManager(accessSecret, refreshSecret string) *TokenManager {
+	return &TokenManager{
+		issuer:  "hello-local-staff",
+		access:  localPurpose("hello-local-api", "dev-access", accessSecret),
+		refresh: localPurpose("hello-local-refresh", "dev-refresh", refreshSecret),
+	}
+}
+
+func registered(staffID int64, issuer, audience string, now, expiry time.Time) jwt.RegisteredClaims {
 	var nonce [32]byte
 	rand.Read(nonce[:])
 	return jwt.RegisteredClaims{
+		Issuer: issuer, Audience: jwt.ClaimStrings{audience},
 		Subject: strconv.FormatInt(staffID, 10), ID: base64.RawURLEncoding.EncodeToString(nonce[:]),
 		ExpiresAt: jwt.NewNumericDate(expiry), IssuedAt: jwt.NewNumericDate(now),
 	}
@@ -84,7 +96,8 @@ func registered(staffID int64, now, expiry time.Time) jwt.RegisteredClaims {
 // family insertion or compare-and-rotate operation commits.
 func (t *TokenManager) Issue(staffID int64, role, email string, f Family) (Pair, error) {
 	now := time.Now().UTC().Truncate(time.Second)
-	if staffID < 1 || !f.ID.Valid || f.ID.Bytes == [16]byte{} || !f.ExpiresAt.After(now) {
+	if staffID < 1 || !f.ID.Valid || f.ID.Bytes == [16]byte{} ||
+		!f.ExpiresAt.After(now) || f.ExpiresAt.After(now.Add(refreshTTL)) {
 		return Pair{}, ErrInvalidToken
 	}
 	accessUntil := now.Add(accessTTL)
@@ -92,38 +105,52 @@ func (t *TokenManager) Issue(staffID int64, role, email string, f Family) (Pair,
 		accessUntil = f.ExpiresAt
 	}
 	sid := f.ID.String()
-	access := AccessClaims{StaffID: staffID, RoleName: role, Email: email, SessionID: sid, Type: "access", RegisteredClaims: registered(staffID, now, accessUntil)}
-	refresh := RefreshClaims{StaffID: staffID, RoleName: role, SessionID: sid, Type: "refresh", RegisteredClaims: registered(staffID, now, f.ExpiresAt)}
-	signedAccess, err := jwt.NewWithClaims(jwt.SigningMethodHS256, access).SignedString(t.accessSecret)
+	access := AccessClaims{StaffID: staffID, RoleName: role, Email: email, SessionID: sid, Type: "access",
+		RegisteredClaims: registered(staffID, t.issuer, t.access.audience, now, accessUntil)}
+	refresh := RefreshClaims{StaffID: staffID, RoleName: role, SessionID: sid, Type: "refresh",
+		RegisteredClaims: registered(staffID, t.issuer, t.refresh.audience, now, f.ExpiresAt)}
+	signedAccess, err := t.access.sign(access)
 	if err != nil {
 		return Pair{}, err
 	}
-	signedRefresh, err := jwt.NewWithClaims(jwt.SigningMethodHS256, refresh).SignedString(t.refreshSecret)
+	signedRefresh, err := t.refresh.sign(refresh)
 	if err != nil {
 		return Pair{}, err
 	}
 	return Pair{AccessToken: signedAccess, RefreshToken: signedRefresh, RefreshDigest: sha256.Sum256([]byte(refresh.ID))}, nil
 }
 
-func validSession(staffID int64, sid string, claims jwt.RegisteredClaims) bool {
+func validSession(staffID int64, sid string, claims jwt.RegisteredClaims, maxTTL time.Duration) bool {
 	var family pgtype.UUID
 	if staffID <= 0 || claims.Subject != strconv.FormatInt(staffID, 10) || family.Scan(sid) != nil || !family.Valid ||
 		family.Bytes == [16]byte{} || family.String() != sid || claims.IssuedAt == nil || claims.ExpiresAt == nil ||
-		!claims.ExpiresAt.After(claims.IssuedAt.Time) || len(claims.ID) != 43 {
+		!claims.ExpiresAt.After(claims.IssuedAt.Time) || claims.ExpiresAt.Sub(claims.IssuedAt.Time) > maxTTL ||
+		len(claims.Audience) != 1 || len(claims.ID) != 43 {
 		return false
 	}
 	raw, err := base64.RawURLEncoding.Strict().DecodeString(claims.ID)
 	return err == nil && len(raw) == 32
 }
 
-func parse(raw string, claims jwt.Claims, secret []byte) error {
+func (t *TokenManager) parse(raw string, claims jwt.Claims, keys purposeKeys) error {
 	if len(raw) == 0 || len(raw) > 8192 {
 		return ErrInvalidToken
 	}
-	_, err := jwt.ParseWithClaims(raw, claims, func(*jwt.Token) (any, error) { return secret, nil },
-		jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
+	_, err := jwt.ParseWithClaims(raw, claims, keys.keyFor,
+		jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired(), jwt.WithIssuedAt(),
+		jwt.WithStrictDecoding(), jwt.WithIssuer(t.issuer), jwt.WithAudience(keys.audience))
 	if err != nil {
 		return ErrInvalidToken
+	}
+	// encoding/json otherwise accepts duplicate names and case aliases. Require
+	// one interpretation of the signed header and payload across consumers.
+	header, rest, _ := strings.Cut(raw, ".")
+	payload, _, _ := strings.Cut(rest, ".")
+	for _, segment := range []string{header, payload} {
+		data, err := base64.RawURLEncoding.Strict().DecodeString(segment)
+		if err != nil || !jsonobject.UniqueLowercaseFields(data) {
+			return ErrInvalidToken
+		}
 	}
 	return nil
 }
@@ -132,7 +159,7 @@ func parse(raw string, claims jwt.Claims, secret []byte) error {
 // token identifiers before the caller touches the database.
 func (t *TokenManager) ParseAccessToken(raw string) (*AccessClaims, error) {
 	var c AccessClaims
-	if parse(raw, &c, t.accessSecret) != nil || c.Type != "access" || !validSession(c.StaffID, c.SessionID, c.RegisteredClaims) {
+	if t.parse(raw, &c, t.access) != nil || c.Type != "access" || !validSession(c.StaffID, c.SessionID, c.RegisteredClaims, accessTTL) {
 		return nil, ErrInvalidToken
 	}
 	return &c, nil
@@ -141,7 +168,7 @@ func (t *TokenManager) ParseAccessToken(raw string) (*AccessClaims, error) {
 // ParseRefreshToken validates a single-use credential under the refresh key.
 func (t *TokenManager) ParseRefreshToken(raw string) (*RefreshClaims, error) {
 	var c RefreshClaims
-	if parse(raw, &c, t.refreshSecret) != nil || c.Type != "refresh" || !validSession(c.StaffID, c.SessionID, c.RegisteredClaims) {
+	if t.parse(raw, &c, t.refresh) != nil || c.Type != "refresh" || !validSession(c.StaffID, c.SessionID, c.RegisteredClaims, refreshTTL) {
 		return nil, ErrInvalidToken
 	}
 	return &c, nil

@@ -25,7 +25,7 @@ Darwin uses `/private/etc/hello` for protected policies.
 
 | Role | Policy and required fields |
 |---|---|
-| Server | `/etc/hello/server.json`: `database_url`, `api_key`, `access_secret`, `refresh_secret`, `mobile_policy_file` and a required [ingress policy](../specs/m02-gateway.md). Use distinct random values for the three auth secrets, each at least 32 bytes. Use an empty mobile path to keep optional mobile routes disabled. A nonempty path points to a second protected JSON file (64 KiB maximum) containing the application's mobile identity, installation and optional receipt policies. |
+| Server | `/etc/hello/server.json`: `database_url`, `api_key`, required [staff token policy](../specs/staff-sessions.md#protected-signing-policy) in `staff_tokens`, `mobile_policy_file` and a required [ingress policy](../specs/m02-gateway.md). Use a separate random API key of at least 32 bytes. Use an empty mobile path to keep optional mobile routes disabled. A nonempty path points to a second protected JSON file (64 KiB maximum) containing the application's mobile identity, installation and optional receipt policies. |
 | Bootstrap | `/etc/hello/bootstrap.json`: `database_url`, `admin_name`, `admin_email`, `admin_password`. The one-shot password is 8–72 bytes. Mount this only for provisioning, remove it afterward and rotate the login credential as required. |
 | Worker | `/etc/hello/worker.json` selects admission or application-specific delivery, as described in the [delivery worker runbook](delivery-worker.md). |
 | Scheduler | `/etc/hello/scheduler.json` uses the scheduler's approved send source and authenticated broker policy. |

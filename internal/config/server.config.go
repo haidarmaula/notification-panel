@@ -6,6 +6,7 @@ import (
 
 	"hello/internal/ingress"
 	"hello/internal/observability"
+	"hello/internal/token"
 )
 
 // ServerConfig holds the configuration required by the HTTP API server
@@ -20,6 +21,7 @@ type ServerConfig struct {
 	Gateway          *ingress.Gateway
 	Monitoring       *observability.Admin
 	mobilePolicyFile string
+	staffTokens      *token.TokenManager
 
 	BaseConfig
 
@@ -29,12 +31,12 @@ type ServerConfig struct {
 	// requires coordinating with the portal deployment.
 	APIKey string
 
-	// AccessSecret is the HMAC secret used to sign short-lived access
+	// AccessSecret is the local development HMAC secret used to sign short-lived access
 	// tokens (ACCESS_SECRET). Must be kept private; leaking it allows an
 	// attacker to mint valid access tokens.
 	AccessSecret string
 
-	// RefreshSecret is the HMAC secret used to sign refresh tokens
+	// RefreshSecret is the local development HMAC secret used to sign refresh tokens
 	// (REFRESH_SECRET). It is kept separate from AccessSecret so that the
 	// blast radius of a leak is limited to one token class.
 	RefreshSecret string
@@ -59,6 +61,14 @@ type ServerConfig struct {
 	// published (KAFKA_SEND_TOPIC). It must match the topic the worker
 	// consumes from.
 	SendTopic string
+}
+
+// StaffTokens returns the immutable protected issuer or the local environment issuer.
+func (c *ServerConfig) StaffTokens() *token.TokenManager {
+	if c.protectedDatabase != nil {
+		return c.staffTokens
+	}
+	return token.NewTokenManager(c.AccessSecret, c.RefreshSecret)
 }
 
 // LoadServerConfig reads the API server configuration from the process

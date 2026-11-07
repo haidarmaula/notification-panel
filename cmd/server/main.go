@@ -24,7 +24,6 @@ import (
 	"hello/internal/middleware"
 	"hello/internal/observability"
 	"hello/internal/runloop"
-	"hello/internal/token"
 )
 
 func main() { os.Exit(run()) }
@@ -110,7 +109,7 @@ func runServer(ctx context.Context, cfg *config.ServerConfig) (err error) {
 }
 
 func serverRoutes(queries *sqlc.Queries, db applications.Transactor, cfg *config.ServerConfig) *http.ServeMux {
-	tokenManager := token.NewTokenManager(cfg.AccessSecret, cfg.RefreshSecret)
+	tokenManager := cfg.StaffTokens()
 	apiKeyMW := middleware.NewAPIKeyMiddleware(cfg.APIKey)
 	jwtMW := middleware.NewJWTMiddleware(tokenManager, repository.NewStaffUserRepository(queries))
 	auditMW := middleware.NewAuditMiddleware()

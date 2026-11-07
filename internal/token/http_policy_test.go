@@ -25,11 +25,19 @@ func (p *statusProbe) SessionActive(context.Context, int64, string) (bool, error
 
 func TestStaffHTTPRejectsBeforeLookup(t *testing.T) {
 	for _, purpose := range []string{"access", "refresh"} {
-		for _, variant := range []string{"HS384", "missing exp", "zero identity", "legacy format"} {
+		audience := "hello-local-api"
+		if purpose == "refresh" {
+			audience = "hello-local-refresh"
+		}
+		for _, variant := range []string{"HS384", "missing exp", "zero identity", "legacy format", "wrong issuer", "wrong audience", "unknown kid", "missing kid", "foreign purpose kid", "remote key URL"} {
 			t.Run(purpose+"/"+variant, func(t *testing.T) {
-				claims := jwt.MapClaims{"type": purpose, "user_id": 7, "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "sub": "7", "sid": token.NewFamily().ID.String(), "jti": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
+				claims := jwt.MapClaims{"type": purpose, "user_id": 7, "iss": "hello-local-staff", "aud": audience, "exp": time.Now().Add(10 * time.Minute).Unix(), "iat": time.Now().Unix(), "sub": "7", "sid": token.NewFamily().ID.String(), "jti": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
 				var method jwt.SigningMethod = jwt.SigningMethodHS256
 				switch variant {
+				case "wrong issuer":
+					claims["iss"] = "other-fixture"
+				case "wrong audience":
+					claims["aud"] = "other-fixture"
 				case "legacy format":
 					delete(claims, "sid")
 				case "HS384":
@@ -43,7 +51,22 @@ func TestStaffHTTPRejectsBeforeLookup(t *testing.T) {
 				if purpose == "refresh" {
 					secret = "fixture-refresh-key"
 				}
-				signed, err := jwt.NewWithClaims(method, claims).SignedString([]byte(secret))
+				candidate := jwt.NewWithClaims(method, claims)
+				candidate.Header["kid"] = "dev-" + purpose
+				switch variant {
+				case "unknown kid":
+					candidate.Header["kid"] = "retired-key"
+				case "missing kid":
+					delete(candidate.Header, "kid")
+				case "foreign purpose kid":
+					candidate.Header["kid"] = "dev-refresh"
+					if purpose == "refresh" {
+						candidate.Header["kid"] = "dev-access"
+					}
+				case "remote key URL":
+					candidate.Header["jku"] = "https://example.invalid/jwks"
+				}
+				signed, err := candidate.SignedString([]byte(secret))
 				require.NoError(t, err)
 				manager := token.NewTokenManager("fixture-access-key", "fixture-refresh-key")
 				w := httptest.NewRecorder()

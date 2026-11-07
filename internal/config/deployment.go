@@ -10,6 +10,7 @@ import (
 	"hello/internal/ingress"
 	"hello/internal/jsonobject"
 	"hello/internal/observability"
+	"hello/internal/token"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -33,14 +34,16 @@ func ServerForCommand(args []string) (*ServerConfig, error) {
 
 func parseServerDeployment(data []byte) (*ServerConfig, error) {
 	var c ServerConfig
-	var admin, gateway json.RawMessage
+	var admin, gateway, staffTokens json.RawMessage
 	var dsn string
 	err := jsonobject.DecodeOptional(data, map[string]any{
-		"ingress": &gateway, "database_url": &dsn, "api_key": &c.APIKey, "access_secret": &c.AccessSecret,
-		"refresh_secret": &c.RefreshSecret, "mobile_policy_file": &c.mobilePolicyFile,
+		"ingress": &gateway, "database_url": &dsn, "api_key": &c.APIKey, "staff_tokens": &staffTokens, "mobile_policy_file": &c.mobilePolicyFile,
 	}, map[string]any{"monitoring": &admin})
-	if err != nil || len(c.APIKey) < 32 || len(c.AccessSecret) < 32 || len(c.RefreshSecret) < 32 ||
-		c.AccessSecret == c.RefreshSecret || c.APIKey == c.AccessSecret || c.APIKey == c.RefreshSecret {
+	if err != nil || len(c.APIKey) < 32 {
+		return nil, deployment.ErrConfiguration
+	}
+	c.staffTokens, err = token.ParsePolicy(staffTokens, c.APIKey)
+	if err != nil {
 		return nil, deployment.ErrConfiguration
 	}
 	c.Gateway, err = ingress.Parse(gateway)

@@ -357,7 +357,7 @@ Design inconsistencies, duplication, contract drift, and maintainability hazards
 | # | Location | Issue |
 |---|----------|-------|
 | M40 | `internal/token/jwt.go` — both staff parsers | **Fixed locally in M02e:** pin HS256, require exp and positive user_id in addition to purpose/signature checks |
-| M41 | `internal/token/jwt.go` | No `iss`, `aud`, or `sub` enforcement |
+| M41 | `internal/token/jwt.go` | Fixed locally. Both staff token classes bind the subject to staff ID and require the configured issuer, a single purpose-specific audience and a permitted signing key ID. Protected key rotation and expiry are exercised through the login, refresh and access paths. [Staff policy](docs/specs/staff-sessions.md). |
 | M42 | `internal/token/jwt.go`, staff auth, migration 000033 | Fixed locally. Single-use refresh rotation detects replay, logout revokes a family, and credential/role/activity changes invalidate its staff generation. [Session contract and recovery](docs/specs/staff-sessions.md). |
 | M43 | `internal/features/auth` | **Partially fixed in M02d:** login/refresh use the 64KiB full-body limit with safe 413/400; real-module rejection tests pass locally. Content-Type enforcement remains open for compatibility. |
 | M44 | All 16 JSON input handlers, including profile | **Fixed in local code, M02d:** 64KiB small JSON / 1MiB campaign limits, complete bounded reads and single-value decoding. [Evidence](docs/analysis/m02d-verification.md): boundary/direct-handler/real-DB route tests; no rejected mutation or Kafka event. Other abuse controls remain open. |

@@ -60,11 +60,19 @@ func TestStaffJWTPolicyAPI(t *testing.T) {
 		return w
 	}
 	for _, purpose := range []string{"access", "refresh"} {
-		for _, variant := range []string{"HS384", "missing exp", "zero identity", "legacy format"} {
+		audience := "hello-local-api"
+		if purpose == "refresh" {
+			audience = "hello-local-refresh"
+		}
+		for _, variant := range []string{"HS384", "missing exp", "zero identity", "legacy format", "wrong issuer", "wrong audience", "unknown kid", "missing kid", "foreign purpose kid", "remote key URL"} {
 			t.Run(purpose+"/"+variant, func(t *testing.T) {
-				claims := jwtlib.MapClaims{"user_id": actor, "role_name": "SUPER_ADMIN", "type": purpose, "exp": time.Now().Add(time.Hour).Unix(), "iat": time.Now().Unix(), "sub": "700001", "sid": token.NewFamily().ID.String(), "jti": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
+				claims := jwtlib.MapClaims{"user_id": actor, "role_name": "SUPER_ADMIN", "type": purpose, "iss": "hello-local-staff", "aud": audience, "exp": time.Now().Add(10 * time.Minute).Unix(), "iat": time.Now().Unix(), "sub": "700001", "sid": token.NewFamily().ID.String(), "jti": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}
 				var method jwtlib.SigningMethod = jwtlib.SigningMethodHS256
 				switch variant {
+				case "wrong issuer":
+					claims["iss"] = "other-fixture"
+				case "wrong audience":
+					claims["aud"] = "other-fixture"
 				case "legacy format":
 					delete(claims, "sid")
 				case "HS384":
@@ -78,7 +86,22 @@ func TestStaffJWTPolicyAPI(t *testing.T) {
 				if purpose == "refresh" {
 					secret = "fixture-refresh-key"
 				}
-				signed, err := jwtlib.NewWithClaims(method, claims).SignedString([]byte(secret))
+				candidate := jwtlib.NewWithClaims(method, claims)
+				candidate.Header["kid"] = "dev-" + purpose
+				switch variant {
+				case "unknown kid":
+					candidate.Header["kid"] = "retired-key"
+				case "missing kid":
+					delete(candidate.Header, "kid")
+				case "foreign purpose kid":
+					candidate.Header["kid"] = "dev-refresh"
+					if purpose == "refresh" {
+						candidate.Header["kid"] = "dev-access"
+					}
+				case "remote key URL":
+					candidate.Header["jku"] = "https://example.invalid/jwks"
+				}
+				signed, err := candidate.SignedString([]byte(secret))
 				require.NoError(t, err)
 				w := request(purpose, signed)
 				require.Equal(t, 401, w.Code, w.Body.String())

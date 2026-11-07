@@ -5,9 +5,11 @@ package integration
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -31,12 +33,16 @@ func TestStaffSessionFamilies(t *testing.T) {
 	var staffID int64
 	require.NoError(t, pool.QueryRow(ctx, "INSERT INTO staff_users(role_id,name,email,password_hash) SELECT id,'Fixture','sessions@fixture.test',$1 FROM roles WHERE name='ADMIN' RETURNING id", string(hash)).Scan(&staffID))
 	q := sqlc.New(pool)
-	tokens := token.NewTokenManager("fixture-access-key", "fixture-refresh-key")
+	tokens := protectedSessionTokens(t, 1, true)
 	api := middleware.NewAPIKeyMiddleware("fixture-api-key")
-	mux := http.NewServeMux()
-	auth.NewAuthModule(q, tokens, api.Use).RegisterRoutes(mux)
-	guard := middleware.NewJWTMiddleware(tokens, repository.NewStaffUserRepository(q))
-	mux.HandleFunc("GET /current", guard.Use(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	routes := func(tokens *token.TokenManager) *http.ServeMux {
+		mux := http.NewServeMux()
+		auth.NewAuthModule(q, tokens, api.Use).RegisterRoutes(mux)
+		guard := middleware.NewJWTMiddleware(tokens, repository.NewStaffUserRepository(q))
+		mux.HandleFunc("GET /current", guard.Use(func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+		return mux
+	}
+	mux := routes(tokens)
 	do := func(method, path string, body []byte, bearer string) *httptest.ResponseRecorder {
 		req := httptest.NewRequest(method, path, bytes.NewReader(body)).WithContext(ctx)
 		req.Header.Set("X-API-Key", "fixture-api-key")
@@ -73,7 +79,12 @@ func TestStaffSessionFamilies(t *testing.T) {
 		_, err := pool.Exec(ctx, query, args...)
 		require.NoError(t, err)
 	}
-	first, second := login(), login()
+	first, second, oldSignerFamily := login(), login(), login()
+	current(first, 204)
+	// A rolling restart changes the issuer's active keys without modifying
+	// credentials already presented or any database session.
+	tokens = protectedSessionTokens(t, 2, true)
+	mux = routes(tokens)
 	current(first, 204)
 	next := decode(renew("refresh", first.RefreshToken))
 	require.NotEqual(t, first.RefreshToken, next.RefreshToken)
@@ -96,6 +107,14 @@ func TestStaffSessionFamilies(t *testing.T) {
 	require.Equal(t, 200, renew("logout", second.RefreshToken).Code)
 	current(second, 401)
 	require.Equal(t, 401, renew("refresh", second.RefreshToken).Code)
+
+	activeSignerFamily := login()
+	tokens = protectedSessionTokens(t, 2, false)
+	mux = routes(tokens)
+	current(oldSignerFamily, 401)
+	require.Equal(t, 401, renew("refresh", oldSignerFamily.RefreshToken).Code)
+	current(activeSignerFamily, 204)
+	current(decode(renew("refresh", activeSignerFamily.RefreshToken)), 204)
 
 	concurrent := login()
 	results := make(chan *httptest.ResponseRecorder, 2)
@@ -145,4 +164,30 @@ func TestStaffSessionFamilies(t *testing.T) {
 	exec("UPDATE staff_sessions SET expires_at=created_at+interval '1 microsecond' WHERE revoked_at IS NULL")
 	current(p, 401)
 	require.Equal(t, 401, renew("refresh", p.RefreshToken).Code)
+}
+
+// protectedSessionTokens constructs an independent replica using synthetic,
+// disjoint keys for both token purposes and the requested rollout generation.
+func protectedSessionTokens(t *testing.T, active int, keepOld bool) *token.TokenManager {
+	t.Helper()
+	ring := func(prefix string, first byte) map[string]any {
+		var keys []map[string]string
+		for generation := 1; generation <= 2; generation++ {
+			if generation == 1 && !keepOld {
+				continue
+			}
+			id := prefix + strconv.Itoa(generation)
+			key := map[string]string{"kid": id, "key": base64.RawURLEncoding.EncodeToString(bytes.Repeat([]byte{first + byte(generation)}, 32))}
+			if generation != active {
+				key["verify_until"] = time.Now().UTC().Add(25 * time.Hour).Format(time.RFC3339)
+			}
+			keys = append(keys, key)
+		}
+		return map[string]any{"active_kid": prefix + strconv.Itoa(active), "audience": "urn:fixture:" + prefix, "keys": keys}
+	}
+	raw, err := json.Marshal(map[string]any{"issuer": "urn:fixture:staff", "access": ring("access", 1), "refresh": ring("refresh", 3)})
+	require.NoError(t, err)
+	manager, err := token.ParsePolicy(raw, "fixture-api-key")
+	require.NoError(t, err)
+	return manager
 }
