@@ -44,6 +44,7 @@ all historical findings or establish production readiness.
 | --- | --- | --- |
 | GA1 | P2 | Mobile identity/origin database calls and lifecycle transactions inherited caller contexts without an internal deadline; lifecycle rollback used unbounded Background. A held project row or stalled pool could retain connections indefinitely. Fixed with five-second operation budgets, context propagation through transaction callbacks/retries, and independent one-second cleanup. Earlier caller deadlines and ownership checks are preserved. |
 | GA2 | P2 | Kafka source approval during Fetch could wait on PostgreSQL for the entire generation lifetime. Fixed with a five-second database-check budget; idle Kafka waiting still follows generation cancellation. |
+| GA3 | P2 — fixed | A send record could use case aliases to overwrite an earlier JSON field in Go's decoder. Admission now checks exact wire names before decoding. Regression tests cover aliases alone and alongside their canonical names. |
 
 Regression evidence and the remaining review boundary are recorded in
 [the modern Go audit](docs/analysis/modern-go-audit.md).

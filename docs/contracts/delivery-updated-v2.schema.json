@@ -1,0 +1,336 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Scoped delivery updated",
+  "description": "Kafka value, UTF-8 JSON with unique fields and a 65536-byte maximum. The consumer must independently validate the physical source and routing key.",
+  "x-kafka-topic": "notification.delivery.updated",
+  "x-kafka-key": "delivery_<notification_id>",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 2
+    },
+    "application_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "not": {
+        "const": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    "origin_epoch": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "not": {
+        "const": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    "source_epoch": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "not": {
+        "const": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "not": {
+        "const": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    "delivery_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "not": {
+        "const": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    "delivery_version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "event_kind": {
+      "type": "string",
+      "enum": [
+        "observation",
+        "submission"
+      ]
+    },
+    "notification_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "user_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "provider": {
+      "const": "FCM"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "PENDING",
+        "SENT",
+        "DELIVERED",
+        "OPENED",
+        "FAILED"
+      ]
+    },
+    "provider_message_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "pattern": "^[!-~]+$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "provider_accepted_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d{1,6}0{0,3})?Z$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "observed_delivered": {
+      "type": "boolean"
+    },
+    "observed_delivered_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d{1,6}0{0,3})?Z$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "observed_opened": {
+      "type": "boolean"
+    },
+    "observed_opened_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d{1,6}0{0,3})?Z$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "failed_at": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d{1,6}0{0,3})?Z$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "reason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-z0-9_]{1,64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "occurred_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d{1,6}0{0,3})?Z$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "application_id",
+    "origin_epoch",
+    "source_epoch",
+    "event_id",
+    "delivery_id",
+    "delivery_version",
+    "event_kind",
+    "notification_id",
+    "user_id",
+    "provider",
+    "status",
+    "provider_message_id",
+    "provider_accepted_at",
+    "observed_delivered",
+    "observed_delivered_at",
+    "observed_opened",
+    "observed_opened_at",
+    "failed_at",
+    "reason",
+    "occurred_at"
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema_version": 2,
+      "application_id": "10000000-0000-4000-8000-000000000001",
+      "origin_epoch": "10000000-0000-4000-8000-000000000002",
+      "source_epoch": "10000000-0000-4000-8000-000000000003",
+      "event_id": "10000000-0000-4000-8000-000000000005",
+      "delivery_id": "10000000-0000-4000-8000-000000000004",
+      "delivery_version": 2,
+      "event_kind": "observation",
+      "notification_id": 42,
+      "user_id": 7,
+      "provider": "FCM",
+      "status": "OPENED",
+      "provider_message_id": null,
+      "provider_accepted_at": null,
+      "observed_delivered": true,
+      "observed_delivered_at": null,
+      "observed_opened": true,
+      "observed_opened_at": "2030-01-01T00:00:00Z",
+      "failed_at": null,
+      "reason": null,
+      "occurred_at": "2030-01-01T00:00:00Z"
+    }
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "provider_message_id": {
+            "type": "null"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provider_accepted_at": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "provider_message_id": {
+            "type": "string"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "provider_accepted_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d{1,6}0{0,3})?Z$"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "observed_opened": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_delivered": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "OPENED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_opened": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "DELIVERED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_delivered": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "observed_delivered": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_delivered_at": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "observed_opened": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "observed_opened_at": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

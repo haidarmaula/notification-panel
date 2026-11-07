@@ -63,7 +63,13 @@ func DecodeScopedSend(key, value []byte) (ScopedSendRequested, error) {
 		if err != nil || !ok || seen[name] {
 			return invalid()
 		}
-		seen[name] = true
+		// encoding/json otherwise accepts case aliases for tagged struct fields.
+		switch name {
+		case "schema_version", "application_id", "notification_id", "origin_epoch", "source_epoch", "requested_at", "scheduled_for", "deadline_at":
+			seen[name] = true
+		default:
+			return invalid()
+		}
 		var raw json.RawMessage
 		if err := d.Decode(&raw); err != nil {
 			return invalid()

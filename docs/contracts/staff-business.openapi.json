@@ -1,0 +1,3612 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Staff authentication, administration and project business API",
+    "version": "1.0.0",
+    "description": "Live v1 JSON contract. Send the API key through the trusted private gateway. Business routes require the current database permission, an explicit grant and an ACTIVE project. Business list cursors and IDs are decimal strings. Global staff IDs use JSON numbers. See the separate application-registry.openapi.json for project/grant management, and mobile-delivery.openapi.json for delivery lifecycle operations."
+  },
+  "security": [
+    {
+      "ApiKey": [],
+      "StaffJWT": []
+    }
+  ],
+  "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "operationId": "loginStaff",
+        "summary": "Open a staff session",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Login" },
+              "example": {
+                "email": "staff@example.invalid",
+                "password": "SYNTHETIC_PASSWORD"
+              }
+            }
+          }
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CredentialsResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "access_token": "SYNTHETIC_ACCESS",
+                    "refresh_token": "SYNTHETIC_SUCCESSOR"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "operationId": "rotateStaffSession",
+        "summary": "Rotate a single-use refresh credential",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Refresh" },
+              "example": {
+                "refresh_token": "SYNTHETIC_CURRENT"
+              }
+            }
+          }
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "200": {
+            "description": "Replace both tokens atomically. Reusing the previous refresh token revokes the entire family.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CredentialsResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "access_token": "SYNTHETIC_ACCESS",
+                    "refresh_token": "SYNTHETIC_SUCCESSOR"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "operationId": "logoutStaff",
+        "summary": "Revoke the represented staff session",
+        "security": [
+          {
+            "ApiKey": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/Refresh" },
+              "example": {
+                "refresh_token": "SYNTHETIC_CURRENT"
+              }
+            }
+          }
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/NullAckResult" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/profile": {
+      "get": {
+        "operationId": "getProfile",
+        "summary": "Read the current staff profile",
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StaffResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "id": 84,
+                    "role_id": 2,
+                    "role_name": "ADMIN",
+                    "name": "Fixture Staff",
+                    "email": "staff@example.invalid",
+                    "is_active": true,
+                    "created_at": "2026-11-07T08:00:00Z",
+                    "updated_at": "2026-11-07T08:00:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "patch": {
+        "operationId": "updateProfile",
+        "summary": "Update the current staff profile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateProfile" }
+            }
+          }
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StaffResult" },
+                "example": {
+                  "success": true,
+                  "message": "profile updated",
+                  "data": {
+                    "id": 84,
+                    "role_id": 2,
+                    "role_name": "ADMIN",
+                    "name": "Fixture Staff",
+                    "email": "staff@example.invalid",
+                    "is_active": true,
+                    "created_at": "2026-11-07T08:00:00Z",
+                    "updated_at": "2026-11-07T08:00:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/profile/password": {
+      "patch": {
+        "operationId": "changeProfilePassword",
+        "summary": "Change the current staff password",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChangeProfilePassword" }
+            }
+          }
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AckResult" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/staff": {
+      "get": {
+        "operationId": "listStaff",
+        "summary": "List staff accounts",
+        "x-required-permission": "staff.manage",
+        "parameters": [
+          { "$ref": "#/components/parameters/StaffPage" },
+          { "$ref": "#/components/parameters/StaffLimit" },
+          { "$ref": "#/components/parameters/Search" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StaffPageResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "data": [
+                      {
+                        "id": 84,
+                        "role_id": 2,
+                        "role_name": "ADMIN",
+                        "name": "Fixture Staff",
+                        "email": "staff@example.invalid",
+                        "is_active": true,
+                        "created_at": "2026-11-07T08:00:00Z",
+                        "updated_at": "2026-11-07T08:00:00Z"
+                      }
+                    ],
+                    "page": 1,
+                    "limit": 10,
+                    "total": 1,
+                    "total_pages": 1
+                  }
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "post": {
+        "operationId": "createStaff",
+        "summary": "Create a staff account",
+        "x-required-permission": "staff.manage",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateStaff" }
+            }
+          }
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "201": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StaffResult" },
+                "example": {
+                  "success": true,
+                  "message": "staff created",
+                  "data": {
+                    "id": 84,
+                    "role_id": 2,
+                    "role_name": "ADMIN",
+                    "name": "Fixture Staff",
+                    "email": "staff@example.invalid",
+                    "is_active": true,
+                    "created_at": "2026-11-07T08:00:00Z",
+                    "updated_at": "2026-11-07T08:00:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/staff/{id}": {
+      "get": {
+        "operationId": "getStaff",
+        "summary": "Read a staff account",
+        "x-required-permission": "staff.manage",
+        "parameters": [
+          { "$ref": "#/components/parameters/StaffId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StaffResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "id": 84,
+                    "role_id": 2,
+                    "role_name": "ADMIN",
+                    "name": "Fixture Staff",
+                    "email": "staff@example.invalid",
+                    "is_active": true,
+                    "created_at": "2026-11-07T08:00:00Z",
+                    "updated_at": "2026-11-07T08:00:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "patch": {
+        "operationId": "updateStaff",
+        "summary": "Update staff identity or role",
+        "x-required-permission": "staff.manage",
+        "parameters": [
+          { "$ref": "#/components/parameters/StaffId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateStaff" }
+            }
+          }
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StaffResult" },
+                "example": {
+                  "success": true,
+                  "message": "staff updated",
+                  "data": {
+                    "id": 84,
+                    "role_id": 2,
+                    "role_name": "ADMIN",
+                    "name": "Fixture Staff",
+                    "email": "staff@example.invalid",
+                    "is_active": true,
+                    "created_at": "2026-11-07T08:00:00Z",
+                    "updated_at": "2026-11-07T08:00:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteStaff",
+        "summary": "Delete a staff account",
+        "x-required-permission": "staff.manage",
+        "parameters": [
+          { "$ref": "#/components/parameters/StaffId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AckResult" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/staff/{id}/status": {
+      "patch": {
+        "operationId": "setStaffStatus",
+        "summary": "Set a staff account's active flag",
+        "x-required-permission": "staff.manage",
+        "parameters": [
+          { "$ref": "#/components/parameters/StaffId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SetStaffStatus" }
+            }
+          }
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "200": {
+            "description": "For compatibility, an omitted is_active field decodes as false. Send it explicitly.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StaffResult" },
+                "example": {
+                  "success": true,
+                  "message": "status updated",
+                  "data": {
+                    "id": 84,
+                    "role_id": 2,
+                    "role_name": "ADMIN",
+                    "name": "Fixture Staff",
+                    "email": "staff@example.invalid",
+                    "is_active": true,
+                    "created_at": "2026-11-07T08:00:00Z",
+                    "updated_at": "2026-11-07T08:00:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/staff/{id}/password": {
+      "patch": {
+        "operationId": "resetStaffPassword",
+        "summary": "Reset a staff password using the acting administrator's current password",
+        "x-required-permission": "staff.manage",
+        "parameters": [
+          { "$ref": "#/components/parameters/StaffId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ResetStaffPassword" }
+            }
+          }
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AckResult" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/users": {
+      "get": {
+        "operationId": "listProjectUsers",
+        "summary": "List Project Users",
+        "x-required-permission": "users.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/After" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserPageResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "items": [
+                      {
+                        "id": "9007199254740993",
+                        "external_id": "fixture-42",
+                        "name": null,
+                        "email": null,
+                        "status": "ACTIVE",
+                        "created_at": "2026-11-07T08:00:00Z",
+                        "updated_at": "2026-11-07T08:00:00Z"
+                      }
+                    ],
+                    "next_after_id": null
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/users/{user_id}": {
+      "get": {
+        "operationId": "getProjectUser",
+        "summary": "Get Project User",
+        "x-required-permission": "users.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/userId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "id": "9007199254740993",
+                    "external_id": "fixture-42",
+                    "name": null,
+                    "email": null,
+                    "status": "ACTIVE",
+                    "created_at": "2026-11-07T08:00:00Z",
+                    "updated_at": "2026-11-07T08:00:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/users/{user_id}/devices": {
+      "get": {
+        "operationId": "listProjectUserDevices",
+        "summary": "List Project User Devices",
+        "x-required-permission": "users.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/userId" },
+          { "$ref": "#/components/parameters/After" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DevicePageResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "items": [],
+                    "next_after_id": null
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/segments": {
+      "get": {
+        "operationId": "listProjectSegments",
+        "summary": "List Project Segments",
+        "x-required-permission": "segments.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/After" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SegmentPageResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "items": [
+                      {
+                        "id": "12",
+                        "name": "Fixture group",
+                        "description": null,
+                        "created_at": "2026-11-07T08:00:00Z",
+                        "updated_at": "2026-11-07T08:00:00Z"
+                      }
+                    ],
+                    "next_after_id": null
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "post": {
+        "operationId": "createSegment",
+        "summary": "Create a project segment",
+        "x-required-permission": "segments.write",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SegmentInput" },
+              "example": {
+                "name": "Fixture group",
+                "description": null
+              }
+            }
+          },
+          "description": "Strict UTF-8 JSON. Unknown fields, duplicate object members and trailing values are rejected."
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "201": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SegmentResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "id": "12",
+                    "name": "Fixture group",
+                    "description": null,
+                    "created_at": "2026-11-07T08:00:00Z",
+                    "updated_at": "2026-11-07T08:00:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/segments/{segment_id}": {
+      "get": {
+        "operationId": "getProjectSegment",
+        "summary": "Get Project Segment",
+        "x-required-permission": "segments.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/segmentId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SegmentResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "id": "12",
+                    "name": "Fixture group",
+                    "description": null,
+                    "created_at": "2026-11-07T08:00:00Z",
+                    "updated_at": "2026-11-07T08:00:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "put": {
+        "operationId": "replaceSegment",
+        "summary": "Replace a segment and clear any omitted description",
+        "x-required-permission": "segments.write",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/segmentId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SegmentInput" },
+              "example": {
+                "name": "Fixture group",
+                "description": null
+              }
+            }
+          },
+          "description": "Strict UTF-8 JSON. Unknown fields, duplicate object members and trailing values are rejected."
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SegmentResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "id": "12",
+                    "name": "Fixture group",
+                    "description": null,
+                    "created_at": "2026-11-07T08:00:00Z",
+                    "updated_at": "2026-11-07T08:00:00Z"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteSegment",
+        "summary": "Delete an unreferenced segment",
+        "x-required-permission": "segments.write",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/segmentId" }
+        ],
+        "x-requires-empty-body": true,
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "204": {
+            "description": "No response body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/segments/{segment_id}/members": {
+      "get": {
+        "operationId": "listSegmentMembers",
+        "summary": "List Segment Members",
+        "x-required-permission": "segments.members.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/segmentId" },
+          { "$ref": "#/components/parameters/After" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MemberPageResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "items": [
+                      {
+                        "id": "19",
+                        "user_id": "9007199254740993",
+                        "external_id": "fixture-42",
+                        "name": null,
+                        "created_at": "2026-11-07T08:00:00Z"
+                      }
+                    ],
+                    "next_after_id": null
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/campaigns": {
+      "get": {
+        "operationId": "listCampaigns",
+        "summary": "List Campaigns",
+        "x-required-permission": "notifications.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/After" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CampaignSummaryPageResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "items": [
+                      {
+                        "id": "9007199254740993",
+                        "title": "Reminder",
+                        "status": "DRAFT"
+                      }
+                    ],
+                    "next_after_id": "9007199254740993"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "post": {
+        "operationId": "createCampaignDraft",
+        "summary": "Create a campaign draft",
+        "x-required-permission": "notifications.draft.write",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CampaignInput" },
+              "example": {
+                "title": "Reminder",
+                "body": "Open the app.",
+                "targets": [
+                  {
+                    "type": "INDIVIDUAL",
+                    "id": "9007199254740993"
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Strict UTF-8 JSON. Unknown fields, duplicate object members and trailing values are rejected."
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "201": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CampaignDraftResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "id": "9007199254740993",
+                    "status": "DRAFT"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/campaigns/{campaign_id}": {
+      "get": {
+        "operationId": "getCampaign",
+        "summary": "Get Campaign",
+        "x-required-permission": "notifications.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/campaignId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CampaignResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "id": "42",
+                    "title": "Reminder",
+                    "status": "DRAFT",
+                    "body": "Open the app.",
+                    "template_id": null,
+                    "template_name": null,
+                    "targets": [
+                      {
+                        "type": "INDIVIDUAL",
+                        "id": "9007199254740993"
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "put": {
+        "operationId": "replaceCampaignDraft",
+        "summary": "Replace the draft and its entire target set",
+        "x-required-permission": "notifications.draft.write",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/campaignId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CampaignInput" },
+              "example": {
+                "title": "Reminder",
+                "body": "Open the app.",
+                "targets": [
+                  {
+                    "type": "INDIVIDUAL",
+                    "id": "9007199254740993"
+                  }
+                ]
+              }
+            }
+          },
+          "description": "Strict UTF-8 JSON. Unknown fields, duplicate object members and trailing values are rejected."
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CampaignDraftResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "id": "9007199254740993",
+                    "status": "DRAFT"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteCampaignDraft",
+        "summary": "Delete an unprotected draft",
+        "x-required-permission": "notifications.draft.write",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/campaignId" }
+        ],
+        "x-requires-empty-body": true,
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "204": {
+            "description": "No response body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/campaigns/{campaign_id}/deliveries": {
+      "get": {
+        "operationId": "listCampaignDeliveryHistory",
+        "summary": "List Campaign Delivery History",
+        "x-required-permission": "notifications.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/campaignId" },
+          { "$ref": "#/components/parameters/After" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DeliveryPageResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "items": [
+                      {
+                        "id": "24",
+                        "user_id": "9007199254740993",
+                        "device_id": "7",
+                        "status": "SENT",
+                        "sent_at": "2026-11-07T08:00:00Z",
+                        "delivered_at": null,
+                        "opened_at": null
+                      }
+                    ],
+                    "next_after_id": null
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/campaigns/{campaign_id}/reads": {
+      "get": {
+        "operationId": "listCampaignReadHistory",
+        "summary": "List Campaign Read History",
+        "x-required-permission": "notifications.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/campaignId" },
+          { "$ref": "#/components/parameters/After" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CampaignReadPageResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "items": [
+                      {
+                        "id": "32",
+                        "user_id": "9007199254740993",
+                        "read_at": "2026-11-07T08:00:00Z"
+                      }
+                    ],
+                    "next_after_id": null
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/templates": {
+      "get": {
+        "operationId": "listTemplates",
+        "summary": "List Templates",
+        "x-required-permission": "notifications.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/After" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TemplatePageResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "items": [
+                      {
+                        "id": "8",
+                        "name": "Reminder",
+                        "title_template": "Reminder",
+                        "body_template": "Open the app.",
+                        "is_active": true
+                      }
+                    ],
+                    "next_after_id": null
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "post": {
+        "operationId": "createTemplate",
+        "summary": "Create a project template",
+        "x-required-permission": "notifications.draft.write",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TemplateInput" },
+              "example": {
+                "name": "Reminder",
+                "title_template": "Reminder",
+                "body_template": "Open the app.",
+                "is_active": true
+              }
+            }
+          },
+          "description": "Strict UTF-8 JSON. Unknown fields, duplicate object members and trailing values are rejected."
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "201": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TemplateResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "id": "8",
+                    "name": "Reminder",
+                    "title_template": "Reminder",
+                    "body_template": "Open the app.",
+                    "is_active": true
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/templates/{template_id}": {
+      "get": {
+        "operationId": "getTemplate",
+        "summary": "Get Template",
+        "x-required-permission": "notifications.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/templateId" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TemplateResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "id": "8",
+                    "name": "Reminder",
+                    "title_template": "Reminder",
+                    "body_template": "Open the app.",
+                    "is_active": true
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "put": {
+        "operationId": "replaceTemplate",
+        "summary": "Replace a template's editable fields",
+        "x-required-permission": "notifications.draft.write",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/templateId" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/TemplateInput" },
+              "example": {
+                "name": "Reminder",
+                "title_template": "Reminder",
+                "body_template": "Open the app.",
+                "is_active": true
+              }
+            }
+          },
+          "description": "Strict UTF-8 JSON. Unknown fields, duplicate object members and trailing values are rejected."
+        },
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TemplateResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "id": "8",
+                    "name": "Reminder",
+                    "title_template": "Reminder",
+                    "body_template": "Open the app.",
+                    "is_active": true
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/uploads": {
+      "get": {
+        "operationId": "listUploadBatches",
+        "summary": "List Upload Batches",
+        "x-required-permission": "notifications.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/After" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UploadPageResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "items": [
+                      {
+                        "id": "17",
+                        "total_rows": 3,
+                        "valid_rows": 2,
+                        "invalid_rows": 1,
+                        "created_at": "2026-11-07T08:00:00Z"
+                      }
+                    ],
+                    "next_after_id": null
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/uploads/{batch_id}/rows": {
+      "get": {
+        "operationId": "listUploadRows",
+        "summary": "List Upload Rows",
+        "x-required-permission": "notifications.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/batchId" },
+          { "$ref": "#/components/parameters/After" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UploadRowPageResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "items": [
+                      {
+                        "id": "23",
+                        "is_valid": false,
+                        "created_at": "2026-11-07T08:00:00Z"
+                      }
+                    ],
+                    "next_after_id": null
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/audit-logs": {
+      "get": {
+        "operationId": "listProjectAudit",
+        "summary": "List Project Audit",
+        "x-required-permission": "audit.read",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/After" },
+          { "$ref": "#/components/parameters/Limit" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/AuditPageResult" },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "items": [
+                      {
+                        "id": "38",
+                        "actor_id": "5",
+                        "action": "NOTIFICATION_CREATE",
+                        "entity_type": "notification",
+                        "entity_id": "42",
+                        "created_at": "2026-11-07T08:00:00Z"
+                      }
+                    ],
+                    "next_after_id": null
+                  }
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/segments/{segment_id}/members/{user_id}": {
+      "put": {
+        "operationId": "addSegmentMember",
+        "summary": "Add a member to a segment",
+        "x-required-permission": "segments.members.write",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/segmentId" },
+          { "$ref": "#/components/parameters/userId" }
+        ],
+        "x-requires-empty-body": true,
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "204": {
+            "description": "No response body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      },
+      "delete": {
+        "operationId": "removeSegmentMember",
+        "summary": "Remove a segment membership",
+        "x-required-permission": "segments.members.write",
+        "x-active-project-grant": true,
+        "x-reject-unknown-query-parameters": true,
+        "parameters": [
+          { "$ref": "#/components/parameters/AppId" },
+          { "$ref": "#/components/parameters/segmentId" },
+          { "$ref": "#/components/parameters/userId" }
+        ],
+        "x-requires-empty-body": true,
+        "x-max-body-bytes": 65536,
+        "responses": {
+          "204": {
+            "description": "No response body.",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string",
+                  "const": "no-store"
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/Error400" },
+          "401": { "$ref": "#/components/responses/Error401" },
+          "403": { "$ref": "#/components/responses/Error403" },
+          "404": { "$ref": "#/components/responses/Error404" },
+          "409": { "$ref": "#/components/responses/Error409" },
+          "413": { "$ref": "#/components/responses/Error413" },
+          "429": { "$ref": "#/components/responses/Error429" },
+          "500": { "$ref": "#/components/responses/Error500" },
+          "503": { "$ref": "#/components/responses/Error503" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "ApiKey": {
+        "type": "apiKey",
+        "name": "X-API-Key",
+        "in": "header"
+      },
+      "StaffJWT": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "parameters": {
+      "AppId": {
+        "name": "app_id",
+        "in": "path",
+        "required": true,
+        "description": "Public application UUID.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "userId": {
+        "name": "user_id",
+        "in": "path",
+        "required": true,
+        "description": "Positive decimal business ID.",
+        "schema": { "$ref": "#/components/schemas/BusinessId" }
+      },
+      "segmentId": {
+        "name": "segment_id",
+        "in": "path",
+        "required": true,
+        "description": "Positive decimal business ID.",
+        "schema": { "$ref": "#/components/schemas/BusinessId" }
+      },
+      "campaignId": {
+        "name": "campaign_id",
+        "in": "path",
+        "required": true,
+        "description": "Positive decimal business ID.",
+        "schema": { "$ref": "#/components/schemas/BusinessId" }
+      },
+      "templateId": {
+        "name": "template_id",
+        "in": "path",
+        "required": true,
+        "description": "Positive decimal business ID.",
+        "schema": { "$ref": "#/components/schemas/BusinessId" }
+      },
+      "batchId": {
+        "name": "batch_id",
+        "in": "path",
+        "required": true,
+        "description": "Positive decimal business ID.",
+        "schema": { "$ref": "#/components/schemas/BusinessId" }
+      },
+      "StaffId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Internal staff ID (int64).",
+        "schema": {
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "After": {
+        "name": "after_id",
+        "in": "query",
+        "description": "Resume after the last item ID. Ordinary pagination has no cross-request snapshot.",
+        "schema": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]{0,18})$",
+          "default": "0"
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "description": "Maximum items per page.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 20
+        }
+      },
+      "StaffPage": {
+        "name": "page",
+        "in": "query",
+        "description": "Invalid values fall back to page one.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 1
+        }
+      },
+      "StaffLimit": {
+        "name": "limit",
+        "in": "query",
+        "description": "Invalid values fall back to ten.",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 10
+        }
+      },
+      "Search": {
+        "name": "search",
+        "in": "query",
+        "description": "Search display name or email.",
+        "schema": {
+          "type": "string"
+        }
+      }
+    },
+    "schemas": {
+      "BusinessId": {
+        "type": "string",
+        "pattern": "^[1-9][0-9]{0,18}$",
+        "description": "Canonical positive decimal int64. Preserve as a string in JavaScript."
+      },
+      "Credentials": {
+        "type": "object",
+        "properties": {
+          "access_token": {
+            "type": "string"
+          },
+          "refresh_token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "access_token",
+          "refresh_token"
+        ],
+        "additionalProperties": false
+      },
+      "Staff": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "role_id": {
+            "type": "integer",
+            "format": "int64"
+          },
+          "role_name": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "role_id",
+          "role_name",
+          "name",
+          "email",
+          "is_active",
+          "created_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      },
+      "Login": {
+        "type": "object",
+        "properties": {
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "email",
+          "password"
+        ],
+        "additionalProperties": true
+      },
+      "Refresh": {
+        "type": "object",
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "refresh_token"
+        ],
+        "additionalProperties": true
+      },
+      "CreateStaff": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "role",
+          "name",
+          "email",
+          "password"
+        ],
+        "additionalProperties": true
+      },
+      "UpdateStaff": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "additionalProperties": true
+      },
+      "SetStaffStatus": {
+        "type": "object",
+        "properties": {
+          "is_active": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "required": [],
+        "additionalProperties": true
+      },
+      "ResetStaffPassword": {
+        "type": "object",
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true
+          },
+          "password": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true,
+            "x-min-utf8-bytes": 8,
+            "x-max-utf8-bytes": 72
+          }
+        },
+        "required": [
+          "current_password",
+          "password"
+        ],
+        "additionalProperties": true
+      },
+      "UpdateProfile": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "email": {
+            "type": "string"
+          }
+        },
+        "required": [],
+        "additionalProperties": true,
+        "anyOf": [
+          {
+            "required": [
+              "name"
+            ],
+            "properties": {
+              "name": {
+                "minLength": 1
+              }
+            }
+          },
+          {
+            "required": [
+              "email"
+            ],
+            "properties": {
+              "email": {
+                "minLength": 1
+              }
+            }
+          }
+        ]
+      },
+      "ChangeProfilePassword": {
+        "type": "object",
+        "properties": {
+          "current_password": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true
+          },
+          "new_password": {
+            "type": "string",
+            "format": "password",
+            "writeOnly": true
+          }
+        },
+        "required": [
+          "current_password",
+          "new_password"
+        ],
+        "additionalProperties": true
+      },
+      "StaffPage": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Staff" }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "page": {
+            "type": "integer"
+          },
+          "limit": {
+            "type": "integer"
+          },
+          "total_pages": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "data",
+          "total",
+          "page",
+          "limit",
+          "total_pages"
+        ],
+        "additionalProperties": false
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "external_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "email": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "status": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "external_id",
+          "name",
+          "email",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      },
+      "Device": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "platform": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          },
+          "last_seen_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "platform",
+          "is_active",
+          "last_seen_at",
+          "created_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      },
+      "Segment": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "description",
+          "created_at",
+          "updated_at"
+        ],
+        "additionalProperties": false
+      },
+      "Member": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "user_id": { "$ref": "#/components/schemas/BusinessId" },
+          "external_id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "external_id",
+          "name",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "SegmentInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "x-max-utf8-bytes": 128
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "additionalProperties": false
+      },
+      "Template": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "name": {
+            "type": "string"
+          },
+          "title_template": {
+            "type": "string"
+          },
+          "body_template": {
+            "type": "string"
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "title_template",
+          "body_template",
+          "is_active"
+        ],
+        "additionalProperties": false
+      },
+      "TemplateInput": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "x-max-utf8-bytes": 128
+          },
+          "title_template": {
+            "type": "string",
+            "minLength": 1,
+            "x-max-utf8-bytes": 255
+          },
+          "body_template": {
+            "type": "string",
+            "minLength": 1,
+            "x-max-utf8-bytes": 4096
+          },
+          "is_active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "title_template",
+          "body_template",
+          "is_active"
+        ],
+        "additionalProperties": false
+      },
+      "CampaignSummary": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "CampaignDraft": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "status": {
+            "const": "DRAFT"
+          }
+        },
+        "required": [
+          "id",
+          "status"
+        ],
+        "additionalProperties": false
+      },
+      "TargetInput": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "const": "BROADCAST"
+              },
+              "id": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "type"
+            ],
+            "additionalProperties": false
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "enum": [
+                  "INDIVIDUAL",
+                  "SEGMENT"
+                ]
+              },
+              "id": { "$ref": "#/components/schemas/BusinessId" }
+            },
+            "required": [
+              "type",
+              "id"
+            ],
+            "additionalProperties": false
+          }
+        ]
+      },
+      "CampaignInput": {
+        "type": "object",
+        "properties": {
+          "title": {
+            "type": "string",
+            "minLength": 1,
+            "x-max-utf8-bytes": 255
+          },
+          "body": {
+            "type": "string",
+            "minLength": 1,
+            "x-max-utf8-bytes": 4096
+          },
+          "template_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          },
+          "targets": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TargetInput" },
+            "minItems": 1,
+            "maxItems": 100,
+            "uniqueItems": true,
+            "description": "BROADCAST must be the only target. Duplicate type/ID pairs are rejected."
+          }
+        },
+        "required": [
+          "title",
+          "body",
+          "targets"
+        ],
+        "additionalProperties": false
+      },
+      "Campaign": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "title": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "body": {
+            "type": "string"
+          },
+          "template_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          },
+          "template_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "enum": [
+                    "BROADCAST",
+                    "SEGMENT",
+                    "INDIVIDUAL",
+                    "UPLOAD"
+                  ]
+                },
+                "id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[1-9][0-9]{0,18}$"
+                }
+              },
+              "required": [
+                "type",
+                "id"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "status",
+          "body",
+          "template_id",
+          "template_name",
+          "targets"
+        ],
+        "additionalProperties": false
+      },
+      "Delivery": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "user_id": { "$ref": "#/components/schemas/BusinessId" },
+          "device_id": { "$ref": "#/components/schemas/BusinessId" },
+          "status": {
+            "type": "string"
+          },
+          "sent_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "delivered_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "opened_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "device_id",
+          "status",
+          "sent_at",
+          "delivered_at",
+          "opened_at"
+        ],
+        "additionalProperties": false
+      },
+      "CampaignRead": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "user_id": { "$ref": "#/components/schemas/BusinessId" },
+          "read_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "user_id",
+          "read_at"
+        ],
+        "additionalProperties": false
+      },
+      "Upload": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "total_rows": {
+            "type": "integer"
+          },
+          "valid_rows": {
+            "type": "integer"
+          },
+          "invalid_rows": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "total_rows",
+          "valid_rows",
+          "invalid_rows",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "UploadRow": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "is_valid": {
+            "type": "boolean"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "is_valid",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "Audit": {
+        "type": "object",
+        "properties": {
+          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "actor_id": { "$ref": "#/components/schemas/BusinessId" },
+          "action": {
+            "type": "string"
+          },
+          "entity_type": {
+            "type": "string"
+          },
+          "entity_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "actor_id",
+          "action",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
+        "additionalProperties": false
+      },
+      "UserPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/User" }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          }
+        },
+        "required": [
+          "items",
+          "next_after_id"
+        ],
+        "additionalProperties": false
+      },
+      "DevicePage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Device" }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          }
+        },
+        "required": [
+          "items",
+          "next_after_id"
+        ],
+        "additionalProperties": false
+      },
+      "SegmentPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Segment" }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          }
+        },
+        "required": [
+          "items",
+          "next_after_id"
+        ],
+        "additionalProperties": false
+      },
+      "MemberPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Member" }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          }
+        },
+        "required": [
+          "items",
+          "next_after_id"
+        ],
+        "additionalProperties": false
+      },
+      "TemplatePage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Template" }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          }
+        },
+        "required": [
+          "items",
+          "next_after_id"
+        ],
+        "additionalProperties": false
+      },
+      "CampaignSummaryPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CampaignSummary" }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          }
+        },
+        "required": [
+          "items",
+          "next_after_id"
+        ],
+        "additionalProperties": false
+      },
+      "DeliveryPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Delivery" }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          }
+        },
+        "required": [
+          "items",
+          "next_after_id"
+        ],
+        "additionalProperties": false
+      },
+      "CampaignReadPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/CampaignRead" }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          }
+        },
+        "required": [
+          "items",
+          "next_after_id"
+        ],
+        "additionalProperties": false
+      },
+      "UploadPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Upload" }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          }
+        },
+        "required": [
+          "items",
+          "next_after_id"
+        ],
+        "additionalProperties": false
+      },
+      "UploadRowPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/UploadRow" }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          }
+        },
+        "required": [
+          "items",
+          "next_after_id"
+        ],
+        "additionalProperties": false
+      },
+      "AuditPage": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Audit" }
+          },
+          "next_after_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "pattern": "^[1-9][0-9]{0,18}$"
+          }
+        },
+        "required": [
+          "items",
+          "next_after_id"
+        ],
+        "additionalProperties": false
+      },
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "CredentialsResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/Credentials" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "NullAckResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "null"
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "StaffResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/Staff" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "AckResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "StaffPageResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/StaffPage" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "UserPageResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/UserPage" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "UserResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/User" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "DevicePageResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/DevicePage" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "SegmentPageResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/SegmentPage" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "SegmentResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/Segment" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "MemberPageResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/MemberPage" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "CampaignSummaryPageResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/CampaignSummaryPage" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "CampaignDraftResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/CampaignDraft" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "CampaignResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/Campaign" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "DeliveryPageResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/DeliveryPage" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "CampaignReadPageResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/CampaignReadPage" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "TemplatePageResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/TemplatePage" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "TemplateResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/Template" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "UploadPageResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/UploadPage" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "UploadRowPageResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/UploadRowPage" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "AuditPageResult": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": { "$ref": "#/components/schemas/AuditPage" }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "responses": {
+      "Error400": {
+        "description": "Invalid request.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "success": false,
+              "message": "invalid request body"
+            }
+          }
+        }
+      },
+      "Error401": {
+        "description": "Missing, invalid, expired or revoked credentials.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "success": false,
+              "message": "missing token"
+            }
+          }
+        }
+      },
+      "Error403": {
+        "description": "The configured ingress requires an authenticated secure gateway. Staff routes also check permissions and applicable password confirmation.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "success": false,
+              "message": "forbidden"
+            }
+          }
+        }
+      },
+      "Error404": {
+        "description": "Resource missing or inaccessible in the application scope.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "success": false,
+              "message": "application not found"
+            }
+          }
+        }
+      },
+      "Error409": {
+        "description": "The current resource state conflicts with this request.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "success": false,
+              "message": "campaign is not a draft"
+            }
+          }
+        }
+      },
+      "Error413": {
+        "description": "Request body exceeds its byte limit.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "success": false,
+              "message": "request body too large"
+            }
+          }
+        }
+      },
+      "Error429": {
+        "description": "Rate budget exhausted at a configured ingress.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "success": false,
+              "message": "request rate limit exceeded"
+            }
+          }
+        },
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      },
+      "Error500": {
+        "description": "An unexpected server failure is returned as internal server error.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "success": false,
+              "message": "internal server error"
+            }
+          }
+        }
+      },
+      "Error415": {
+        "description": "Scoped JSON writes require application/json (optional charset=utf-8) and identity content encoding.",
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "success": false,
+              "message": "unsupported media type"
+            }
+          }
+        }
+      },
+      "Error503": {
+        "description": "The configured ingress has reached its in-flight limit. Observe Retry-After.",
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "content": {
+          "application/json": {
+            "schema": { "$ref": "#/components/schemas/Error" },
+            "example": {
+              "success": false,
+              "message": "service busy"
+            }
+          }
+        }
+      }
+    }
+  }
+}

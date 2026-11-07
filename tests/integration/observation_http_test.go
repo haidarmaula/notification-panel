@@ -59,9 +59,20 @@ func TestMobileReceiptHTTPAuthenticatesProjectAndAcknowledgesDuplicates(t *testi
 		require.NoError(t, err)
 		return token
 	}
+	const receiptPath = "/mobile/notifications/{campaign_id}/receipt"
+	requestExample := rolloutExample(t, "post", receiptPath, "")
+	responseExample := rolloutExample(t, "post", receiptPath, "200")
+	observedAt := time.Now().UTC().Format(time.RFC3339Nano)
 	record := func(app pgtype.UUID, token, event string) int {
 		t.Helper()
-		body, err := json.Marshal(map[string]any{"delivery_id": f.report.DeliveryID.String(), "client_event_id": f.report.ClientEventID.String(), "receipt_token": f.report.Token, "event": event})
+		var payload map[string]any
+		require.NoError(t, json.Unmarshal(requestExample, &payload))
+		payload["delivery_id"] = f.report.DeliveryID.String()
+		payload["client_event_id"] = f.report.ClientEventID.String()
+		payload["receipt_token"] = f.report.Token
+		payload["event"] = event
+		payload["observed_at"] = observedAt
+		body, err := json.Marshal(payload)
 		require.NoError(t, err)
 		target := fmt.Sprintf("https://example.test/api/v1/apps/%s/mobile/notifications/%d/receipt", app.String(), f.campaign)
 		request := httptest.NewRequestWithContext(ctx, http.MethodPost, target, bytes.NewReader(body))
@@ -72,6 +83,9 @@ func TestMobileReceiptHTTPAuthenticatesProjectAndAcknowledgesDuplicates(t *testi
 		recorder := httptest.NewRecorder()
 		mux.ServeHTTP(recorder, request)
 		require.NotContains(t, recorder.Body.String(), f.report.Token)
+		if recorder.Code == 200 {
+			require.JSONEq(t, string(responseExample), recorder.Body.String())
+		}
 		return recorder.Code
 	}
 	valid := bearer("fixture-app")

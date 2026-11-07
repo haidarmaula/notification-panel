@@ -1,0 +1,1612 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Mobile installations, receipts and campaign delivery",
+    "version": "1.0.0",
+    "description": "External HTTPS through the deployment gateway. All examples use synthetic identities. All operations reject unknown query parameters and return Cache-Control no-store. JSON requests allow application/json with optional UTF-8 charset. No client supplies forwarded headers."
+  },
+  "paths": {
+    "/api/v1/apps/{app_id}/mobile/installations": {
+      "post": {
+        "operationId": "enrollInstallation",
+        "description": "Obtain one installation proof. Replace all synthetic credentials in the example with real credentials issued for the test environment.",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "MobileBearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "201": {
+            "description": "Acknowledged outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Enrolled"
+                },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "installation_id": "10000000-0000-4000-8000-000000000003",
+                    "version": "1",
+                    "owner_epoch": "1",
+                    "proof": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Enrollment"
+              },
+              "example": {
+                "platform": "ANDROID",
+                "address_type": "FCM_REGISTRATION_TOKEN",
+                "address": "synthetic-provider-address",
+                "origin": "synthetic-origin-replace-with-provider-assertion"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/mobile/installations/{installation_id}/refresh": {
+      "post": {
+        "operationId": "refreshInstallation",
+        "description": "Replace the current binding under the same owner.",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "installation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "MobileBearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "200": {
+            "description": "Acknowledged outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Updated"
+                },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "installation_id": "10000000-0000-4000-8000-000000000003",
+                    "version": "2",
+                    "owner_epoch": "1"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BindingUpdate"
+              },
+              "example": {
+                "platform": "ANDROID",
+                "address_type": "FCM_REGISTRATION_TOKEN",
+                "address": "synthetic-provider-address",
+                "proof": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "version": "1"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/mobile/installations/{installation_id}/logout": {
+      "post": {
+        "operationId": "logOutInstallation",
+        "description": "Release ownership using the current version.",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "installation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "MobileBearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "200": {
+            "description": "Acknowledged outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Updated"
+                },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "installation_id": "10000000-0000-4000-8000-000000000003",
+                    "version": "2",
+                    "owner_epoch": "1"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Logout"
+              },
+              "example": {
+                "proof": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "version": "1"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/mobile/installations/{installation_id}/switch": {
+      "post": {
+        "operationId": "switchInstallationOwner",
+        "description": "Present the destination account JWT and current installation proof/version.",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "installation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "MobileBearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "200": {
+            "description": "Acknowledged outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Updated"
+                },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "installation_id": "10000000-0000-4000-8000-000000000003",
+                    "version": "2",
+                    "owner_epoch": "1"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BindingUpdate"
+              },
+              "example": {
+                "platform": "ANDROID",
+                "address_type": "FCM_REGISTRATION_TOKEN",
+                "address": "synthetic-provider-address",
+                "proof": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                "version": "1"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/mobile/installations/{installation_id}/state": {
+      "post": {
+        "operationId": "readInstallationState",
+        "description": "Reconcile an uncertain lifecycle response using proof and the current account.",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "installation_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "security": [
+          {
+            "MobileBearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "200": {
+            "description": "Acknowledged outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/State"
+                },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "installation_id": "10000000-0000-4000-8000-000000000003",
+                    "version": "1",
+                    "owner_epoch": "1",
+                    "has_active_binding": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Proof"
+              },
+              "example": {
+                "proof": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/mobile/notifications/{campaign_id}/receipt": {
+      "post": {
+        "operationId": "reportDeviceReceipt",
+        "description": "Retry an uncertain report with the same client event ID and original capability. Requires receipt policy, current installation ownership and project identity. Maximum 4096 body bytes.",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "description": "Positive decimal int64."
+            }
+          }
+        ],
+        "security": [
+          {
+            "MobileBearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "410": {
+            "$ref": "#/components/responses/Error410"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "200": {
+            "description": "Acknowledged outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Acknowledged"
+                },
+                "example": {
+                  "success": true,
+                  "message": "receipt acknowledged"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Receipt"
+              },
+              "example": {
+                "delivery_id": "10000000-0000-4000-8000-000000000004",
+                "client_event_id": "10000000-0000-4000-8000-000000000005",
+                "event": "OPENED",
+                "receipt_token": "synthetic-capability-replace-with-original-payload",
+                "observed_at": "2030-01-01T00:00:00Z"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/campaigns/{campaign_id}/send": {
+      "post": {
+        "operationId": "acceptCampaign",
+        "description": "Empty request body. Acceptance commits the outbox before replying. Requires current send permission and an explicit application grant.",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "description": "Positive decimal int64."
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "schema": {
+              "type": "string",
+              "maxLength": 255
+            },
+            "description": "One value with no control characters. Omit or empty to derive a per-campaign key."
+          }
+        ],
+        "security": [
+          {
+            "StaffAPIKey": [],
+            "StaffBearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "202": {
+            "description": "Acknowledged outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Accepted"
+                },
+                "example": {
+                  "success": true,
+                  "message": "campaign accepted",
+                  "data": {
+                    "id": "42",
+                    "status": "QUEUED",
+                    "queued_at": "2030-01-01T00:00:00Z",
+                    "deadline_at": "2030-01-01T01:00:00Z"
+                  }
+                }
+              }
+            },
+            "headers": {
+              "Idempotency-Replayed": {
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "true",
+                    "false"
+                  ]
+                },
+                "description": "Whether the original accepted snapshot was returned."
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/campaigns/{campaign_id}/schedule": {
+      "post": {
+        "operationId": "scheduleCampaign",
+        "description": "The timestamp must be in the future at commit. Requires current schedule permission and an explicit application grant.",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "description": "Positive decimal int64."
+            }
+          }
+        ],
+        "security": [
+          {
+            "StaffAPIKey": [],
+            "StaffBearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "413": {
+            "$ref": "#/components/responses/Error413"
+          },
+          "415": {
+            "$ref": "#/components/responses/Error415"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "202": {
+            "description": "Acknowledged outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Scheduled"
+                },
+                "example": {
+                  "success": true,
+                  "message": "campaign scheduled",
+                  "data": {
+                    "id": "42",
+                    "status": "SCHEDULED",
+                    "scheduled_at": "2030-01-01T00:00:00Z",
+                    "deadline_at": "2030-01-01T01:00:00Z"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Schedule"
+              },
+              "example": {
+                "scheduled_at": "2030-01-01T00:00:00Z"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/apps/{app_id}/campaigns/{campaign_id}/statistics": {
+      "get": {
+        "operationId": "getCampaignStatistics",
+        "description": "One consistent snapshot. Pending preparation has null counts. Device reports, provider acknowledgements and opened users have different denominators.",
+        "parameters": [
+          {
+            "name": "app_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[1-9][0-9]{0,18}$",
+              "description": "Positive decimal int64."
+            }
+          }
+        ],
+        "security": [
+          {
+            "StaffAPIKey": [],
+            "StaffBearer": []
+          }
+        ],
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/Error400"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error401"
+          },
+          "403": {
+            "$ref": "#/components/responses/Error403"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error404"
+          },
+          "409": {
+            "$ref": "#/components/responses/Error409"
+          },
+          "429": {
+            "$ref": "#/components/responses/Error429"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error500"
+          },
+          "503": {
+            "$ref": "#/components/responses/Error503"
+          },
+          "200": {
+            "description": "Acknowledged outcome.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Statistics"
+                },
+                "example": {
+                  "success": true,
+                  "message": "success",
+                  "data": {
+                    "schema_version": 1,
+                    "snapshot_complete": true,
+                    "observation_coverage": "reporting_devices_only",
+                    "counts": {
+                      "targeted_users": 0,
+                      "eligible_users": 0,
+                      "targeted_devices": 0,
+                      "pending_devices": 0,
+                      "provider_accepted_devices": 0,
+                      "submission_failed_devices": 0,
+                      "observed_devices": 0,
+                      "opened_devices": 0,
+                      "opened_users": 0,
+                      "failed_observed_devices": 0
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": false
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "Enrollment": {
+        "type": "object",
+        "properties": {
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ANDROID",
+              "IOS"
+            ]
+          },
+          "address_type": {
+            "type": "string",
+            "enum": [
+              "FCM_REGISTRATION_TOKEN",
+              "FCM_FID"
+            ]
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Provider address. Maximum 4096 UTF-8 bytes. Only configured platform/address-type pairs are accepted."
+          },
+          "origin": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Single-use origin assertion bound to this project and exact mobile JWT."
+          }
+        },
+        "required": [
+          "platform",
+          "address_type",
+          "address",
+          "origin"
+        ],
+        "additionalProperties": false
+      },
+      "BindingUpdate": {
+        "type": "object",
+        "properties": {
+          "proof": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Opaque installation proof returned once at enrollment. Store in device-protected storage."
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,18}$",
+            "description": "Positive decimal int64."
+          },
+          "platform": {
+            "type": "string",
+            "enum": [
+              "ANDROID",
+              "IOS"
+            ]
+          },
+          "address_type": {
+            "type": "string",
+            "enum": [
+              "FCM_REGISTRATION_TOKEN",
+              "FCM_FID"
+            ]
+          },
+          "address": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Provider address. Maximum 4096 UTF-8 bytes. Only configured platform/address-type pairs are accepted."
+          }
+        },
+        "required": [
+          "proof",
+          "version",
+          "platform",
+          "address_type",
+          "address"
+        ],
+        "additionalProperties": false
+      },
+      "Logout": {
+        "type": "object",
+        "properties": {
+          "proof": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Opaque installation proof returned once at enrollment. Store in device-protected storage."
+          },
+          "version": {
+            "type": "string",
+            "pattern": "^[1-9][0-9]{0,18}$",
+            "description": "Positive decimal int64."
+          }
+        },
+        "required": [
+          "proof",
+          "version"
+        ],
+        "additionalProperties": false
+      },
+      "Proof": {
+        "type": "object",
+        "properties": {
+          "proof": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]{43}$",
+            "description": "Opaque installation proof returned once at enrollment. Store in device-protected storage."
+          }
+        },
+        "required": [
+          "proof"
+        ],
+        "additionalProperties": false
+      },
+      "Enrolled": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "installation_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "version": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,18}$",
+                "description": "Positive decimal int64."
+              },
+              "owner_epoch": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,18}$",
+                "description": "Positive decimal int64."
+              },
+              "proof": {
+                "type": "string",
+                "minLength": 1,
+                "pattern": "^[A-Za-z0-9_-]{43}$",
+                "description": "Opaque installation proof returned once at enrollment. Store in device-protected storage."
+              }
+            },
+            "required": [
+              "installation_id",
+              "version",
+              "owner_epoch",
+              "proof"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "Updated": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "installation_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "version": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,18}$",
+                "description": "Positive decimal int64."
+              },
+              "owner_epoch": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,18}$",
+                "description": "Positive decimal int64."
+              }
+            },
+            "required": [
+              "installation_id",
+              "version",
+              "owner_epoch"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "State": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "installation_id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "version": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,18}$",
+                "description": "Positive decimal int64."
+              },
+              "owner_epoch": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,18}$",
+                "description": "Positive decimal int64."
+              },
+              "has_active_binding": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "installation_id",
+              "version",
+              "owner_epoch",
+              "has_active_binding"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "Receipt": {
+        "type": "object",
+        "properties": {
+          "delivery_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "client_event_id": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "event": {
+            "type": "string",
+            "enum": [
+              "OPENED",
+              "DELIVERED"
+            ]
+          },
+          "receipt_token": {
+            "type": "string",
+            "minLength": 1
+          },
+          "observed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "delivery_id",
+          "client_event_id",
+          "event",
+          "receipt_token"
+        ],
+        "additionalProperties": false
+      },
+      "Acknowledged": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "success",
+          "message"
+        ],
+        "additionalProperties": false
+      },
+      "Schedule": {
+        "type": "object",
+        "properties": {
+          "scheduled_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "scheduled_at"
+        ],
+        "additionalProperties": false
+      },
+      "Accepted": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,18}$",
+                "description": "Positive decimal int64."
+              },
+              "status": {
+                "const": "QUEUED"
+              },
+              "queued_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "deadline_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "queued_at",
+              "deadline_at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "Scheduled": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[1-9][0-9]{0,18}$",
+                "description": "Positive decimal int64."
+              },
+              "status": {
+                "const": "SCHEDULED"
+              },
+              "scheduled_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "deadline_at": {
+                "type": "string",
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "status",
+              "scheduled_at",
+              "deadline_at"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      },
+      "Counts": {
+        "type": "object",
+        "properties": {
+          "targeted_users": {
+            "type": "integer",
+            "minimum": 0,
+            "format": "int64"
+          },
+          "eligible_users": {
+            "type": "integer",
+            "minimum": 0,
+            "format": "int64"
+          },
+          "targeted_devices": {
+            "type": "integer",
+            "minimum": 0,
+            "format": "int64"
+          },
+          "pending_devices": {
+            "type": "integer",
+            "minimum": 0,
+            "format": "int64"
+          },
+          "provider_accepted_devices": {
+            "type": "integer",
+            "minimum": 0,
+            "format": "int64"
+          },
+          "submission_failed_devices": {
+            "type": "integer",
+            "minimum": 0,
+            "format": "int64"
+          },
+          "observed_devices": {
+            "type": "integer",
+            "minimum": 0,
+            "format": "int64"
+          },
+          "opened_devices": {
+            "type": "integer",
+            "minimum": 0,
+            "format": "int64"
+          },
+          "opened_users": {
+            "type": "integer",
+            "minimum": 0,
+            "format": "int64"
+          },
+          "failed_observed_devices": {
+            "type": "integer",
+            "minimum": 0,
+            "format": "int64"
+          }
+        },
+        "required": [
+          "targeted_users",
+          "eligible_users",
+          "targeted_devices",
+          "pending_devices",
+          "provider_accepted_devices",
+          "submission_failed_devices",
+          "observed_devices",
+          "opened_devices",
+          "opened_users",
+          "failed_observed_devices"
+        ],
+        "additionalProperties": false
+      },
+      "Statistics": {
+        "type": "object",
+        "properties": {
+          "success": {
+            "const": true
+          },
+          "message": {
+            "type": "string"
+          },
+          "data": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "snapshot_complete": {
+                    "const": true
+                  },
+                  "observation_coverage": {
+                    "const": "reporting_devices_only"
+                  },
+                  "counts": {
+                    "$ref": "#/components/schemas/Counts"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "snapshot_complete",
+                  "observation_coverage",
+                  "counts"
+                ],
+                "additionalProperties": false
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "schema_version": {
+                    "const": 1
+                  },
+                  "snapshot_complete": {
+                    "const": false
+                  },
+                  "observation_coverage": {
+                    "const": "reporting_devices_only"
+                  },
+                  "counts": {
+                    "type": "null"
+                  }
+                },
+                "required": [
+                  "schema_version",
+                  "snapshot_complete",
+                  "observation_coverage",
+                  "counts"
+                ],
+                "additionalProperties": false
+              }
+            ]
+          }
+        },
+        "required": [
+          "success",
+          "message",
+          "data"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "responses": {
+      "Error400": {
+        "description": "Malformed path, query or body.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error401": {
+        "description": "Invalid or expired credential.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error403": {
+        "description": "Gateway, secure transport or permission check failed.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error404": {
+        "description": "Resource unavailable to the current identity.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error409": {
+        "description": "Project, ownership version or idempotency conflict.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error410": {
+        "description": "Original receipt capability expired.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error413": {
+        "description": "Request exceeds the byte budget.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error415": {
+        "description": "Unsupported media type or content encoding.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Error429": {
+        "description": "Request budget exhausted.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        },
+        "headers": {
+          "Retry-After": {
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "Delay in seconds."
+          }
+        }
+      },
+      "Error500": {
+        "description": "Unexpected server error.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "success": false,
+              "message": "internal server error"
+            }
+          }
+        }
+      },
+      "Error503": {
+        "description": "Request concurrency, recovery or dispatch hold.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "StaffAPIKey": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Server-owned BFF or integration credential."
+      },
+      "StaffBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "MobileBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Project-specific mobile identity token."
+      }
+    }
+  }
+}

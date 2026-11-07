@@ -43,13 +43,15 @@ func TestDecodeScopedSend(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, event, decoded)
 	for name, payload := range map[string]string{
-		"legacy":    `{"notification_id":42,"requested_at":"2030-01-01T00:00:00Z"}`,
-		"null":      `null`,
-		"array":     `[]`,
-		"trailing":  string(value) + `{}`,
-		"duplicate": strings.TrimSuffix(string(value), "}") + `,"notification_id":42}`,
-		"unknown":   strings.TrimSuffix(string(value), "}") + `,"override":true}`,
-		"too_large": strings.Repeat(" ", 65537),
+		"legacy":         `{"notification_id":42,"requested_at":"2030-01-01T00:00:00Z"}`,
+		"null":           `null`,
+		"array":          `[]`,
+		"trailing":       string(value) + `{}`,
+		"duplicate":      strings.TrimSuffix(string(value), "}") + `,"notification_id":42}`,
+		"case_alias":     strings.Replace(string(value), "notification_id", "Notification_ID", 1),
+		"alias_override": strings.TrimSuffix(string(value), "}") + `,"NOTIFICATION_ID":42}`,
+		"unknown":        strings.TrimSuffix(string(value), "}") + `,"override":true}`,
+		"too_large":      strings.Repeat(" ", 65537),
 	} {
 		t.Run(name, func(t *testing.T) {
 			_, err := DecodeScopedSend([]byte("notification_42"), []byte(payload))

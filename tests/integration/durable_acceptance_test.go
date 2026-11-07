@@ -5,6 +5,7 @@ package integration
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -133,6 +135,28 @@ func TestDurableAcceptance(t *testing.T) {
 		mux.ServeHTTP(w, r)
 		require.Equal(t, want, w.Code, w.Body.String())
 		require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+		if want == 202 {
+			example := rolloutExample(t, "post", "/campaigns/{campaign_id}/"+operation, "202")
+			var expected, actual struct {
+				Success bool              `json:"success"`
+				Message string            `json:"message"`
+				Data    map[string]string `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(example, &expected))
+			require.NoError(t, json.Unmarshal(w.Body.Bytes(), &actual))
+			require.Equal(t, expected.Success, actual.Success)
+			require.Equal(t, expected.Message, actual.Message)
+			require.Equal(t, expected.Data["status"], actual.Data["status"])
+			require.Equal(t, strconv.FormatInt(id, 10), actual.Data["id"])
+			require.Len(t, actual.Data, len(expected.Data))
+			for field := range expected.Data {
+				require.Contains(t, actual.Data, field)
+				if strings.HasSuffix(field, "_at") {
+					_, err := time.Parse(time.RFC3339Nano, actual.Data[field])
+					require.NoError(t, err)
+				}
+			}
+		}
 		return w
 	}
 	draft := newDraft()

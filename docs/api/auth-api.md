@@ -2,6 +2,8 @@
 
 All three endpoints accept JSON at `/api/v1/auth` behind the server's `X-API-Key` guard. Use the approved private HTTPS ingress. Keep the API key on the trusted server or BFF. The API does not set browser cookies.
 
+The [staff and business OpenAPI contract](../contracts/staff-business.openapi.json) includes request bodies, response shapes and synthetic wire examples for authentication, profile and staff administration, and project business routes.
+
 | Method and path | Request | Success |
 | --- | --- | --- |
 | `POST /api/v1/auth/login` | `{"email":"staff@example.invalid","password":"…"}` | Opens a new session family and returns an access/refresh pair. |

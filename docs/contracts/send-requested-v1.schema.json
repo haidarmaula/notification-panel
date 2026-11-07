@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Scoped send requested",
+  "description": "Kafka value, UTF-8 JSON with unique fields and a 65536-byte maximum. The consumer must independently validate the physical source and routing key.",
+  "x-kafka-topic": "notification.send.requested",
+  "x-kafka-key": "notification_<notification_id>",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "application_id": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "not": {
+        "const": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    "notification_id": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "origin_epoch": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "not": {
+        "const": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    "source_epoch": {
+      "type": "string",
+      "format": "uuid",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "not": {
+        "const": "00000000-0000-0000-0000-000000000000"
+      }
+    },
+    "requested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "scheduled_for": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date-time"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "deadline_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "schema_version",
+    "application_id",
+    "notification_id",
+    "origin_epoch",
+    "source_epoch",
+    "requested_at",
+    "deadline_at"
+  ],
+  "additionalProperties": false,
+  "examples": [
+    {
+      "schema_version": 1,
+      "application_id": "10000000-0000-4000-8000-000000000001",
+      "notification_id": 42,
+      "origin_epoch": "10000000-0000-4000-8000-000000000002",
+      "source_epoch": "10000000-0000-4000-8000-000000000003",
+      "requested_at": "2030-01-01T00:00:00Z",
+      "deadline_at": "2030-01-01T01:00:00Z"
+    }
+  ]
+}

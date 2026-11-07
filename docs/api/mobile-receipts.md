@@ -34,6 +34,8 @@ one user read. A failed submission can still have a late device observation.
 | 429 | Wait the stated Retry-After seconds. |
 | 500, 503 | Retry the same report with backoff. |
 
+The [OpenAPI contract](../contracts/mobile-delivery.openapi.json) includes the request and acknowledgment examples.
+
 ## Server policy
 
 A project in the mobile policy file opts in with a `receipts` object.
