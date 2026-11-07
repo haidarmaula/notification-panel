@@ -3,7 +3,8 @@
 Date: 2026-11-05. Status: lease/reservation persistence and service are implemented
 and locally tested. [Single-use submission](m06-submission.md) is implemented;
 [Fenced result persistence and outbox insertion](m06-results.md) are implemented;
-recovery and update publication remain open. Delivery runtime remains
+[recovery/finalization](m06-recovery.md) and [ordered publication](m06-update-publication.md)
+are implemented. Delivery runtime remains
 disabled. See [verification](../analysis/m06-execution-verification.md).
 Dependencies: [ADR-01](../adr/adr-01-provider-retry.md),
 [ADR-04](../adr/adr-04-provider-selection.md),

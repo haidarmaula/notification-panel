@@ -29,6 +29,7 @@ type Querier interface {
 	// COUNT
 	// ==========================================
 	CountDeviceTokensByUser(ctx context.Context, userID int64) (int64, error)
+	CountExecutionOutcomes(ctx context.Context, arg CountExecutionOutcomesParams) (CountExecutionOutcomesRow, error)
 	// ==========================================
 	// COUNT
 	// ==========================================
@@ -235,6 +236,8 @@ type Querier interface {
 	ExistsUserByExternalID(ctx context.Context, externalID string) (bool, error)
 	ExpireScopedSchedule(ctx context.Context, arg ExpireScopedScheduleParams) (int64, error)
 	ExpireUnpreparedCampaign(ctx context.Context, arg ExpireUnpreparedCampaignParams) error
+	FailRecoveredDelivery(ctx context.Context, arg FailRecoveredDeliveryParams) (NotificationDeliveryIntent, error)
+	FinalizeExecutionCampaign(ctx context.Context, arg FinalizeExecutionCampaignParams) (int64, error)
 	FinishReplayAttempt(ctx context.Context, arg FinishReplayAttemptParams) (int64, error)
 	FreezeReceiptMetadata(ctx context.Context, arg FreezeReceiptMetadataParams) error
 	// Keep staff row when app/grant is absent, for correct 401/404 distinctions.
@@ -334,6 +337,11 @@ type Querier interface {
 	ListDeviceTokensByUser(ctx context.Context, arg ListDeviceTokensByUserParams) ([]DeviceToken, error)
 	ListDeviceTokensByUserIDs(ctx context.Context, userIds []int64) ([]DeviceToken, error)
 	ListDueScopedSchedules(ctx context.Context, pageSize int32) ([]ListDueScopedSchedulesRow, error)
+	// Metadata only: a later acquisition rechecks the marker, epochs and live lease.
+	ListExecutionRecoveryCampaigns(ctx context.Context, arg ListExecutionRecoveryCampaignsParams) ([]ListExecutionRecoveryCampaignsRow, error)
+	// Healthy due devices can be returned as advisory IDs without locking every
+	// recipient twice. The send path always checks the actual current ownership.
+	ListExecutionRecoveryDevices(ctx context.Context, arg ListExecutionRecoveryDevicesParams) ([]ListExecutionRecoveryDevicesRow, error)
 	ListExpiredReplayClaims(ctx context.Context, pageSize int32) ([]ListExpiredReplayClaimsRow, error)
 	// Does not authenticate the caller; service must check current authority first.
 	ListGrantedApplications(ctx context.Context, arg ListGrantedApplicationsParams) (ListGrantedApplicationsRow, error)
@@ -432,6 +440,10 @@ type Querier interface {
 	LockNotificationRuntime(ctx context.Context) (LockNotificationRuntimeRow, error)
 	LockPreparationCampaign(ctx context.Context, arg LockPreparationCampaignParams) (LockPreparationCampaignRow, error)
 	LockReceiptDelivery(ctx context.Context, arg LockReceiptDeliveryParams) (LockReceiptDeliveryRow, error)
+	LockRecoverableDelivery(ctx context.Context, arg LockRecoverableDeliveryParams) (LockRecoverableDeliveryRow, error)
+	LockRecoveryBindingRetirement(ctx context.Context, arg LockRecoveryBindingRetirementParams) (pgtype.Timestamptz, error)
+	LockRecoveryDeliveryUser(ctx context.Context, arg LockRecoveryDeliveryUserParams) (LockRecoveryDeliveryUserRow, error)
+	LockRecoveryInstallationOwner(ctx context.Context, arg LockRecoveryInstallationOwnerParams) (LockRecoveryInstallationOwnerRow, error)
 	LockReplayCleanupGrant(ctx context.Context, arg LockReplayCleanupGrantParams) (pgtype.UUID, error)
 	LockReplayControl(ctx context.Context, arg LockReplayControlParams) (NotificationReplayControl, error)
 	LockReplayEvidence(ctx context.Context, arg LockReplayEvidenceParams) (NotificationSendDeadLetter, error)

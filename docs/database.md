@@ -710,8 +710,9 @@ now consumes acknowledged reservations once and rechecks exact unresolved attemp
 current identity, frozen receipt metadata and live DB-clock lease/deadline after
 credential/rate waits. Query-only changes add bounded payload reads and a remaining
 lease/deadline interval; no schema change is required. Locks release before provider
-I/O, and unknown validation commits authorize none. Attempt result persistence,
-terminalization and update outbox remain open. See the [M06 contract](specs/m06-execution.md).
+I/O, and unknown validation commits authorize none. [Execution recovery](specs/m06-recovery.md)
+uses the same lineage and a fresh generation to retire abandoned work. It checks
+the intent count against the preparation marker before recording campaign completion. See the [M06 contract](specs/m06-execution.md).
 
 ### Frozen receipt capability metadata (M06)
 

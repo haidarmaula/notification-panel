@@ -37,7 +37,7 @@ func (p ExecutionPolicy) Validate() error {
 }
 
 // Execution owns one random process identity and immutable policy. Its operations
-// make no provider calls and do not finalize deliveries or publish state updates.
+// use the delivery ledger and outbox; it never calls a provider or broker.
 type Execution struct {
 	db     Transactor
 	owner  pgtype.UUID
@@ -48,6 +48,7 @@ type Execution struct {
 // rebuilt from a database row or transferred to another Execution instance.
 // Do not log the capability.
 type ExecutionLease struct {
+	bookkeepingOnly                           bool
 	service                                   *Execution
 	application                               pgtype.UUID
 	applicationID, notificationID, generation int64
@@ -79,29 +80,41 @@ func NewExecution(db Transactor, policy ExecutionPolicy) (*Execution, error) {
 }
 
 // Acquire increments the campaign generation only after the previous lease is
-// absent/expired and actionable pending work exists. Errors return no capability,
+// absent/expired and work is due or ready for finalization. Errors return no capability,
 // including unknown commit acknowledgement. The accepted TTL is never extended.
 func (s *Execution) Acquire(ctx context.Context, application pgtype.UUID, notificationID int64) (*ExecutionLease, error) {
+	return s.acquire(ctx, application, notificationID, nil)
+}
+
+func (s *Execution) acquire(ctx context.Context, application pgtype.UUID, notificationID int64, discovered *RecoveryCampaign) (*ExecutionLease, error) {
 	if s == nil || s.db == nil || !executionUUID(s.owner) || !executionUUID(application) || notificationID < 1 {
 		return nil, ErrExecutionInput
 	}
 	var provisional *ExecutionLease
 	err := s.transaction(ctx, func(ctx context.Context, q *sqlc.Queries) error {
-		appID, runtime, err := s.lockBase(ctx, q, application)
+		appID, runtime, sendAllowed, err := s.lockScope(ctx, q, application)
 		if err != nil {
 			return err
+		}
+		if discovered == nil && !sendAllowed ||
+			discovered != nil && (discovered.origin != runtime.OriginEpoch || discovered.source != runtime.SourceEpoch) {
+			return ErrExecutionHeld
 		}
 		if err := lockExecutionCampaign(ctx, q, appID, notificationID, runtime); err != nil {
 			return err
 		}
 		row, err := q.AcquireExecutionLease(ctx, sqlc.AcquireExecutionLeaseParams{
 			ApplicationID: appID, NotificationID: notificationID, Owner: s.owner, OriginEpoch: runtime.OriginEpoch, SourceEpoch: runtime.SourceEpoch,
-			LeaseSeconds: int32(s.policy.LeaseDuration / time.Second), MaxAttempts: s.policy.MaxAttempts,
+			LeaseSeconds: int32(s.policy.LeaseDuration / time.Second), MaxAttempts: s.policy.MaxAttempts, SendAllowed: sendAllowed,
 		})
 		if err != nil {
 			return executionMissing(err)
 		}
-		provisional = &ExecutionLease{service: s, application: application, applicationID: appID, notificationID: notificationID, generation: row.LeaseGeneration, origin: runtime.OriginEpoch, source: runtime.SourceEpoch}
+		provisional = &ExecutionLease{
+			service: s, application: application, applicationID: appID, notificationID: notificationID,
+			generation: row.LeaseGeneration, origin: runtime.OriginEpoch, source: runtime.SourceEpoch,
+			bookkeepingOnly: !sendAllowed,
+		}
 		return nil
 	})
 	if err != nil {
@@ -126,7 +139,11 @@ func (s *Execution) changeLease(ctx context.Context, lease *ExecutionLease, rene
 		return ErrExecutionInput
 	}
 	return s.transaction(ctx, func(ctx context.Context, q *sqlc.Queries) error {
-		if err := s.lockLeaseBase(ctx, q, lease); err != nil {
+		if lease.bookkeepingOnly {
+			if err := s.lockResultBase(ctx, q, lease, false); err != nil {
+				return err
+			}
+		} else if err := s.lockLeaseBase(ctx, q, lease); err != nil {
 			return err
 		}
 		runtime := sqlc.LockNotificationRuntimeRow{OriginEpoch: lease.origin, SourceEpoch: lease.source}
@@ -223,36 +240,36 @@ func executionMissing(err error) error {
 	}
 	return err
 }
-func (s *Execution) lockBase(ctx context.Context, q *sqlc.Queries, application pgtype.UUID) (int64, sqlc.LockNotificationRuntimeRow, error) {
+func (s *Execution) lockScope(ctx context.Context, q *sqlc.Queries, application pgtype.UUID) (int64, sqlc.LockNotificationRuntimeRow, bool, error) {
 	runtime, err := q.LockNotificationRuntime(ctx)
 	if err != nil {
-		return 0, runtime, err
+		return 0, runtime, false, err
 	}
 	if runtime.Sealed || runtime.MigrationHold {
-		return 0, runtime, ErrExecutionHeld
+		return 0, runtime, false, ErrExecutionHeld
 	}
 	app, err := q.LockExecutionApplication(ctx, application)
 	if err != nil {
-		return 0, runtime, executionMissing(err)
+		return 0, runtime, false, executionMissing(err)
 	}
 	policy, err := q.GetApplicationDispatchPolicy(ctx, app.ID)
 	if errors.Is(err, pgx.ErrNoRows) {
-		return 0, runtime, ErrExecutionHeld
+		return 0, runtime, false, ErrExecutionHeld
 	}
 	if err != nil {
-		return 0, runtime, err
+		return 0, runtime, false, err
 	}
-	if app.Status != "ACTIVE" || policy.HoldNew || !policy.CoverageApproved {
-		return 0, runtime, ErrExecutionHeld
-	}
-	return app.ID, runtime, nil
+	return app.ID, runtime, app.Status == "ACTIVE" && !policy.HoldNew && policy.CoverageApproved, nil
 }
 func (s *Execution) lockLeaseBase(ctx context.Context, q *sqlc.Queries, lease *ExecutionLease) error {
-	appID, runtime, err := s.lockBase(ctx, q, lease.application)
+	if lease.bookkeepingOnly {
+		return ErrExecutionHeld
+	}
+	appID, runtime, sendAllowed, err := s.lockScope(ctx, q, lease.application)
 	if err != nil {
 		return err
 	}
-	if appID != lease.applicationID || runtime.OriginEpoch != lease.origin || runtime.SourceEpoch != lease.source {
+	if !sendAllowed || appID != lease.applicationID || runtime.OriginEpoch != lease.origin || runtime.SourceEpoch != lease.source {
 		return ErrExecutionHeld
 	}
 	return nil
@@ -262,7 +279,13 @@ func lockExecutionCampaign(ctx context.Context, q *sqlc.Queries, appID, notifica
 	if err != nil {
 		return executionMissing(err)
 	}
-	if campaign.Status != "PROCESSING" || !campaign.DeadlineAt.Valid || campaign.OriginEpoch != runtime.OriginEpoch || campaign.SourceEpoch != runtime.SourceEpoch {
+	if campaign.OriginEpoch != runtime.OriginEpoch || campaign.SourceEpoch != runtime.SourceEpoch {
+		return ErrExecutionHeld
+	}
+	if campaign.Status == "COMPLETED" || campaign.Status == "FAILED" {
+		return ErrExecutionUnavailable
+	}
+	if campaign.Status != "PROCESSING" || !campaign.DeadlineAt.Valid {
 		return ErrExecutionHeld
 	}
 	complete, err := q.GetCompletePreparation(ctx, sqlc.GetCompletePreparationParams{ApplicationID: appID, NotificationID: notificationID})

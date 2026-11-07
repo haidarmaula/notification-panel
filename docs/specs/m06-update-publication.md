@@ -36,4 +36,5 @@ must deduplicate event_id and retain highest version within approved source/deli
 scope. Stop new calls and Close/drain producer before source handoff/restore.
 This library creates no goroutines and proves neither exactly-once publication
 nor consumer compatibility. Consumer acceptance, live deployment credentials/ACLs,
-retry/recovery/finalizer loops and worker composition remain separate gates.
+and worker composition remain separate gates. [Recovery and finalization](m06-recovery.md)
+now operate on the durable ledger.

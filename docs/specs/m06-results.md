@@ -51,6 +51,7 @@ metadata is mutable; immutable event fields are not. The [ordered dispatcher](m0
 delivery_<notification_id>, stable event bytes/ID, predecessor ordering and
 ack-before-delete. Consumer dedup/version acceptance remains required.
 
-Remaining: retry/recovery/finalizer loops, v2 consumer
-acceptance, receipts/statistics and delivery composition. No production activation
-or external exactly-once guarantee is implied.
+[Recovery and finalization](m06-recovery.md) now handle abandoned attempts and
+close campaigns. Delivery-worker composition, v2 consumer acceptance, receipts
+and statistics remain open. No production activation or external exactly-once
+guarantee is implied.

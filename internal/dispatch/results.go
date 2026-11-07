@@ -110,19 +110,7 @@ func (s *Execution) RecordResult(ctx context.Context, result *SubmissionResult) 
 			recorded.DispatchHeld = true
 		}
 		if changed {
-			id, err := newReplayClaimToken()
-			if err != nil {
-				return err
-			}
-			event := deliveryProjection(lease, updated, id, row.RecordedAt.Time)
-			if event.Validate() != nil {
-				return ErrExecutionHeld
-			}
-			payload, err := json.Marshal(event)
-			if err != nil {
-				return err
-			}
-			if err = q.InsertDeliveryUpdate(ctx, sqlc.InsertDeliveryUpdateParams{EventID: id, ApplicationID: lease.applicationID, NotificationID: lease.notificationID, DeliveryID: r.deliveryID, DeliveryVersion: updated.DeliveryVersion, OriginEpoch: lease.origin, SourceEpoch: lease.source, Payload: payload, OccurredAt: row.RecordedAt}); err != nil {
+			if err := enqueueDeliveryUpdate(ctx, q, lease, updated, row.RecordedAt); err != nil {
 				return err
 			}
 		}
@@ -262,6 +250,28 @@ func eventTextPointer(t pgtype.Text) *string {
 	v := t.String
 	return &v
 }
+
+// enqueueDeliveryUpdate stores the complete projection in the ledger mutation's transaction.
+func enqueueDeliveryUpdate(ctx context.Context, q *sqlc.Queries, lease *ExecutionLease, row sqlc.NotificationDeliveryIntent, at pgtype.Timestamptz) error {
+	id, err := newReplayClaimToken()
+	if err != nil {
+		return err
+	}
+	event := deliveryProjection(lease, row, id, at.Time)
+	if event.Validate() != nil {
+		return ErrExecutionHeld
+	}
+	payload, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+	return q.InsertDeliveryUpdate(ctx, sqlc.InsertDeliveryUpdateParams{
+		EventID: id, ApplicationID: lease.applicationID, NotificationID: lease.notificationID,
+		DeliveryID: row.ID, DeliveryVersion: row.DeliveryVersion, OriginEpoch: lease.origin,
+		SourceEpoch: lease.source, Payload: payload, OccurredAt: at,
+	})
+}
+
 func deliveryProjection(lease *ExecutionLease, row sqlc.NotificationDeliveryIntent, id pgtype.UUID, at time.Time) kafka.ScopedDeliveryUpdated {
 	opened := row.ObservedOpenedAt.Valid || row.Status == "OPENED"
 	delivered := opened || row.ObservedDeliveredAt.Valid || row.Status == "DELIVERED"

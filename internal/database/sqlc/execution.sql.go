@@ -17,8 +17,14 @@ UPDATE notifications n SET lease_owner=$1,lease_generation=n.lease_generation+1,
 WHERE n.application_id=$3::bigint AND n.id=$4::bigint
     AND n.status='PROCESSING' AND n.origin_epoch=$5 AND n.source_epoch=$6
     AND n.lease_generation<9223372036854775807 AND (n.lease_until IS NULL OR n.lease_until<=clock_timestamp())
-    AND EXISTS(SELECT 1 FROM notification_delivery_intents d WHERE d.notification_id=n.id AND d.status='PENDING'
-        AND (d.next_attempt_at<=clock_timestamp() OR d.attempt_count>=$7::integer OR n.deadline_at<=clock_timestamp()))
+    AND (
+        NOT EXISTS (SELECT 1 FROM notification_delivery_intents d
+                    WHERE d.notification_id=n.id AND d.status='PENDING')
+        OR EXISTS (SELECT 1 FROM notification_delivery_intents d
+                   WHERE d.notification_id=n.id AND d.status='PENDING'
+                     AND (($7::boolean AND d.next_attempt_at<=clock_timestamp()) OR d.attempt_count>=$8::integer
+                          OR n.deadline_at<=clock_timestamp() OR d.next_attempt_at>=n.deadline_at))
+    )
 RETURNING n.lease_generation,n.lease_until
 `
 
@@ -29,6 +35,7 @@ type AcquireExecutionLeaseParams struct {
 	NotificationID int64       `db:"notification_id"`
 	OriginEpoch    pgtype.UUID `db:"origin_epoch"`
 	SourceEpoch    pgtype.UUID `db:"source_epoch"`
+	SendAllowed    bool        `db:"send_allowed"`
 	MaxAttempts    int32       `db:"max_attempts"`
 }
 
@@ -45,11 +52,97 @@ func (q *Queries) AcquireExecutionLease(ctx context.Context, arg AcquireExecutio
 		arg.NotificationID,
 		arg.OriginEpoch,
 		arg.SourceEpoch,
+		arg.SendAllowed,
 		arg.MaxAttempts,
 	)
 	var i AcquireExecutionLeaseRow
 	err := row.Scan(&i.LeaseGeneration, &i.LeaseUntil)
 	return i, err
+}
+
+const countExecutionOutcomes = `-- name: CountExecutionOutcomes :one
+SELECT p.eligible_device_count, count(d.id) AS device_count,
+    count(d.id) FILTER (WHERE d.status IN ('SENT','DELIVERED','OPENED')) AS successes,
+    count(d.id) FILTER (WHERE d.status='PENDING'
+        OR (d.claim_generation=n.lease_generation AND d.attempt_resolved_at IS NULL)) AS unfinished
+FROM notifications n
+JOIN notification_preparations p ON p.application_id=n.application_id AND p.notification_id=n.id
+    AND p.origin_epoch=n.origin_epoch AND p.source_epoch=n.source_epoch
+LEFT JOIN notification_delivery_intents d ON d.application_id=n.application_id AND d.notification_id=n.id
+WHERE n.application_id=$1::bigint AND n.id=$2::bigint
+    AND n.status='PROCESSING' AND n.origin_epoch=$3 AND n.source_epoch=$4
+    AND n.lease_owner=$5 AND n.lease_generation=$6::bigint AND n.lease_until>clock_timestamp()
+GROUP BY p.eligible_device_count
+`
+
+type CountExecutionOutcomesParams struct {
+	ApplicationID  int64       `db:"application_id"`
+	NotificationID int64       `db:"notification_id"`
+	OriginEpoch    pgtype.UUID `db:"origin_epoch"`
+	SourceEpoch    pgtype.UUID `db:"source_epoch"`
+	Owner          pgtype.UUID `db:"owner"`
+	Generation     int64       `db:"generation"`
+}
+
+type CountExecutionOutcomesRow struct {
+	EligibleDeviceCount int64 `db:"eligible_device_count"`
+	DeviceCount         int64 `db:"device_count"`
+	Successes           int64 `db:"successes"`
+	Unfinished          int64 `db:"unfinished"`
+}
+
+func (q *Queries) CountExecutionOutcomes(ctx context.Context, arg CountExecutionOutcomesParams) (CountExecutionOutcomesRow, error) {
+	row := q.db.QueryRow(ctx, countExecutionOutcomes,
+		arg.ApplicationID,
+		arg.NotificationID,
+		arg.OriginEpoch,
+		arg.SourceEpoch,
+		arg.Owner,
+		arg.Generation,
+	)
+	var i CountExecutionOutcomesRow
+	err := row.Scan(
+		&i.EligibleDeviceCount,
+		&i.DeviceCount,
+		&i.Successes,
+		&i.Unfinished,
+	)
+	return i, err
+}
+
+const finalizeExecutionCampaign = `-- name: FinalizeExecutionCampaign :execrows
+UPDATE notifications SET status=CASE WHEN $1::boolean THEN 'COMPLETED' ELSE 'FAILED' END,
+    lifecycle_reason=CASE WHEN $1::boolean THEN NULL ELSE 'all_deliveries_failed' END,
+    completed_at=clock_timestamp(), lease_owner=NULL, lease_until=NULL
+WHERE application_id=$2::bigint AND id=$3::bigint
+    AND status='PROCESSING' AND origin_epoch=$4 AND source_epoch=$5
+    AND lease_owner=$6 AND lease_generation=$7::bigint AND lease_until>clock_timestamp()
+`
+
+type FinalizeExecutionCampaignParams struct {
+	Completed      bool        `db:"completed"`
+	ApplicationID  int64       `db:"application_id"`
+	NotificationID int64       `db:"notification_id"`
+	OriginEpoch    pgtype.UUID `db:"origin_epoch"`
+	SourceEpoch    pgtype.UUID `db:"source_epoch"`
+	Owner          pgtype.UUID `db:"owner"`
+	Generation     int64       `db:"generation"`
+}
+
+func (q *Queries) FinalizeExecutionCampaign(ctx context.Context, arg FinalizeExecutionCampaignParams) (int64, error) {
+	result, err := q.db.Exec(ctx, finalizeExecutionCampaign,
+		arg.Completed,
+		arg.ApplicationID,
+		arg.NotificationID,
+		arg.OriginEpoch,
+		arg.SourceEpoch,
+		arg.Owner,
+		arg.Generation,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getExecutionIntentIdentity = `-- name: GetExecutionIntentIdentity :one
