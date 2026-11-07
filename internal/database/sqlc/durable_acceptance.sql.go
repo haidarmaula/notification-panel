@@ -48,10 +48,12 @@ func (q *Queries) CampaignAcceptanceReady(ctx context.Context, arg CampaignAccep
 	return ready, err
 }
 
-const deleteSendKey = `-- name: DeleteSendKey :exec
+const deleteSendKey = `-- name: DeleteSendKey :execrows
 DELETE FROM notification_send_keys
 WHERE application_id=$1::bigint AND staff_user_id=$2::bigint
-  AND key_source=$3 AND key=$4
+  AND key_source=$3 AND key=$4 AND expires_at<=clock_timestamp()
+  AND NOT EXISTS(SELECT 1 FROM retention_policies p
+      WHERE p.application_id=notification_send_keys.application_id AND p.record_class='send_key')
 `
 
 type DeleteSendKeyParams struct {
@@ -61,14 +63,17 @@ type DeleteSendKeyParams struct {
 	Key           string `db:"key"`
 }
 
-func (q *Queries) DeleteSendKey(ctx context.Context, arg DeleteSendKeyParams) error {
-	_, err := q.db.Exec(ctx, deleteSendKey,
+func (q *Queries) DeleteSendKey(ctx context.Context, arg DeleteSendKeyParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteSendKey,
 		arg.ApplicationID,
 		arg.StaffUserID,
 		arg.KeySource,
 		arg.Key,
 	)
-	return err
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const expireScopedSchedule = `-- name: ExpireScopedSchedule :execrows

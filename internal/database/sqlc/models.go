@@ -363,13 +363,16 @@ type NotificationUpdateOutbox struct {
 }
 
 type RetentionBatch struct {
-	GrantID      pgtype.UUID        `db:"grant_id"`
-	BatchNo      int32              `db:"batch_no"`
-	PreviewAt    pgtype.Timestamptz `db:"preview_at"`
-	PreviewCount int32              `db:"preview_count"`
-	AppliedAt    pgtype.Timestamptz `db:"applied_at"`
-	RemovedCount pgtype.Int4        `db:"removed_count"`
-	Outcome      string             `db:"outcome"`
+	GrantID        pgtype.UUID        `db:"grant_id"`
+	BatchNo        int32              `db:"batch_no"`
+	PreviewAt      pgtype.Timestamptz `db:"preview_at"`
+	PreviewCount   int32              `db:"preview_count"`
+	AppliedAt      pgtype.Timestamptz `db:"applied_at"`
+	RemovedCount   pgtype.Int4        `db:"removed_count"`
+	Outcome        string             `db:"outcome"`
+	SendPageEnd    pgtype.Int8        `db:"send_page_end"`
+	SendPageFull   pgtype.Bool        `db:"send_page_full"`
+	SendCandidates []int64            `db:"send_candidates"`
 }
 
 type RetentionGrant struct {

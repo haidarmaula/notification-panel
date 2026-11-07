@@ -9,10 +9,12 @@ SELECT *, expires_at > clock_timestamp() AS unexpired FROM notification_send_key
 WHERE application_id=sqlc.arg(application_id)::bigint AND staff_user_id=sqlc.arg(staff_user_id)::bigint
   AND key_source=sqlc.arg(key_source) AND key=sqlc.arg(key) FOR UPDATE;
 
--- name: DeleteSendKey :exec
+-- name: DeleteSendKey :execrows
 DELETE FROM notification_send_keys
 WHERE application_id=sqlc.arg(application_id)::bigint AND staff_user_id=sqlc.arg(staff_user_id)::bigint
-  AND key_source=sqlc.arg(key_source) AND key=sqlc.arg(key);
+  AND key_source=sqlc.arg(key_source) AND key=sqlc.arg(key) AND expires_at<=clock_timestamp()
+  AND NOT EXISTS(SELECT 1 FROM retention_policies p
+      WHERE p.application_id=notification_send_keys.application_id AND p.record_class='send_key');
 
 -- name: LockCampaignAcceptance :one
 SELECT id,status,scheduled_at,queued_at,deadline_at,origin_epoch,source_epoch,

@@ -20,7 +20,10 @@ campaign-specific key in a separate namespace. Keys are scoped by project and
 staff actor. Within the deployment-configured retention, the same key and
 campaign return the original snapshot; a different campaign returns 409.
 `Idempotency-Replayed: true|false` identifies replay. Current authority is still
-required for replay, including during a new-send hold.
+required for replay, including during a new-send hold. If the project has
+enabled the `send_key` maintenance policy, an expired occupied key returns 409
+until an authorized retention batch releases it. A fresh key can still be used
+for a different eligible DRAFT campaign. [Retention policy](../runbooks/retention.md).
 
 The normal response wrapper contains `data` with string `id`, `status`,
 `queued_at`, and `deadline_at`; scheduling substitutes `scheduled_at` for

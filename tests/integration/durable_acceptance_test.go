@@ -252,4 +252,21 @@ func TestDurableAcceptance(t *testing.T) {
 	require.True(t, changed)
 	require.EqualValues(t, 1, count("SELECT count(*) FROM notifications WHERE id=$1 AND status='FAILED' AND lifecycle_reason='ttl_expired'", expired))
 	require.Zero(t, count("SELECT count(*) FROM notification_send_outbox WHERE notification_id=$1", expired))
+
+	// Opting into a versioned retention policy transfers deletion authority to
+	// the batch workflow, including the interval while its first hold is active.
+	nextDraft := newDraft()
+	exec("UPDATE notification_send_keys SET queued_at=clock_timestamp()-interval '1 hour',expires_at=clock_timestamp()-interval '1 minute' WHERE key='concurrent-key'")
+	exec("INSERT INTO retention_policies(application_id,record_class,policy_version,retain_after_expiry_seconds) VALUES($1,'send_key',gen_random_uuid(),60)", appID)
+	request("ADMIN", nextDraft, "send", "concurrent-key", "", 409)
+	exec("UPDATE retention_policies SET held=false WHERE application_id=$1 AND record_class='send_key'", appID)
+	request("ADMIN", nextDraft, "send", "concurrent-key", "", 409)
+	require.EqualValues(t, 1, count("SELECT count(*) FROM notification_send_keys WHERE notification_id=$1 AND key='concurrent-key'", draft))
+	require.EqualValues(t, 1, count("SELECT count(*) FROM notifications WHERE id=$1 AND status='DRAFT'", nextDraft))
+
+	// A project without any send-key maintenance policy keeps M04's previous
+	// authenticated reuse semantics. Even then an accepted campaign cannot resend.
+	exec("DELETE FROM retention_policies WHERE application_id=$1 AND record_class='send_key'", appID)
+	request("ADMIN", nextDraft, "send", "concurrent-key", "", 202)
+	request("ADMIN", draft, "send", "different-key", "", 409)
 }

@@ -22,6 +22,9 @@ func TestRetentionCommandScope(t *testing.T) {
 	if err != nil || cfg.MaxConns != 1 || b.Apply || b.RecordClass != "origin_nonce" {
 		t.Fatal("valid bounded role policy rejected")
 	}
+	if _, b, err := policy([]byte(strings.Replace(config, "origin_nonce", "send_key", 1))); err != nil || b.RecordClass != "send_key" {
+		t.Fatal("send key class rejected")
+	}
 	for _, invalid := range []string{strings.Replace(config, "origin_nonce", "audit", 1), strings.Replace(config, "verify-full", "disable", 1),
 		strings.Replace(config, id, "00000000-0000-0000-0000-000000000000", 1), strings.Replace(config, "{", `{"force":true,`, 1)} {
 		if _, _, err := policy([]byte(invalid)); err == nil {

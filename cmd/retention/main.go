@@ -91,7 +91,7 @@ func policy(data []byte) (*pgxpool.Config, sqlc.RunRetentionBatchParams, error) 
 		"database_url": &dsn, "grant_id": &grant, "application_id": &project,
 		"origin_epoch": &origin, "source_epoch": &source, "record_class": &batch.RecordClass,
 	})
-	if err != nil || (batch.RecordClass != "origin_nonce" && batch.RecordClass != "receipt_request") ||
+	if err != nil || (batch.RecordClass != "origin_nonce" && batch.RecordClass != "receipt_request" && batch.RecordClass != "send_key") ||
 		!parseID(grant, &batch.GrantID) || !parseID(project, &batch.ApplicationPublicID) ||
 		!parseID(origin, &batch.OriginEpoch) || !parseID(source, &batch.SourceEpoch) {
 		return nil, sqlc.RunRetentionBatchParams{}, deployment.ErrConfiguration

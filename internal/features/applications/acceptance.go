@@ -139,8 +139,12 @@ func (s *Service) AcceptCampaign(ctx context.Context, id pgtype.UUID, campaignID
 			return err
 		}
 		if err == nil {
-			if err := q.DeleteSendKey(ctx, sqlc.DeleteSendKeyParams{ApplicationID: app.ID, StaffUserID: scope.Staff.ID, KeySource: source, Key: key}); err != nil {
+			removed, err := q.DeleteSendKey(ctx, sqlc.DeleteSendKeyParams{ApplicationID: app.ID, StaffUserID: scope.Staff.ID, KeySource: source, Key: key})
+			if err != nil {
 				return err
+			}
+			if removed != 1 {
+				return errKeyConflict
 			}
 		}
 		policy, err := acceptancePolicy(ctx, q, runtime, app.ID)

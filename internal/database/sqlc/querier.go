@@ -194,7 +194,7 @@ type Querier interface {
 	// ==========================================
 	DeleteSegmentMember(ctx context.Context, id int64) error
 	DeleteSegmentMemberBySegmentAndUser(ctx context.Context, arg DeleteSegmentMemberBySegmentAndUserParams) error
-	DeleteSendKey(ctx context.Context, arg DeleteSendKeyParams) error
+	DeleteSendKey(ctx context.Context, arg DeleteSendKeyParams) (int64, error)
 	// ==========================================
 	// DELETE
 	// ==========================================
