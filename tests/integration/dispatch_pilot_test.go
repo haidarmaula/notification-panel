@@ -57,7 +57,8 @@ CREATE TRIGGER guard_application_lifecycle BEFORE INSERT OR UPDATE ON applicatio
 		})
 		executionSQL(t, ctx, f, "GRANT "+group+" TO "+login+"; GRANT USAGE ON SCHEMA "+schema+" TO "+login)
 		if purpose == "issuer" {
-			executionSQL(t, ctx, f, "GRANT INSERT ON application_dispatch_grants TO "+login)
+			executionSQL(t, ctx, f, `GRANT INSERT(id,project_id,operator_role,application_revision,expected_revision,previous_mode,
+destination,cohort_id,origin_epoch,source_epoch,reason,legacy_evidence,consent_evidence,coverage_evidence,quota_evidence,expires_at) ON application_dispatch_grants TO `+login)
 		} else {
 			executionSQL(t, ctx, f, "GRANT EXECUTE ON FUNCTION apply_application_dispatch(uuid,uuid) TO "+login)
 		}
