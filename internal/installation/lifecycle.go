@@ -91,7 +91,7 @@ func installationState(row sqlc.MobileInstallation) State {
 	return State{PublicID: row.PublicID, Version: row.Version, OwnerEpoch: row.OwnerEpoch}
 }
 
-func requireLifecycleActor(ctx context.Context, q *sqlc.Queries, actor Principal) error {
+func requireLifecycleActor(ctx context.Context, q *sqlc.Queries, actor Principal, session *MobileSession) error {
 	if actor.ApplicationID <= 0 || actor.UserID <= 0 {
 		return ErrNotFound
 	}
@@ -109,16 +109,32 @@ func requireLifecycleActor(ctx context.Context, q *sqlc.Queries, actor Principal
 	if errors.Is(err, pgx.ErrNoRows) {
 		return ErrNotFound
 	}
+	if err == nil && session != nil {
+		return session.LockIdentity(ctx, q, session.project)
+	}
 	return err
 }
 
-// Enroll atomically creates an installation and its first active binding.
+// Enroll atomically creates an installation and its first active binding for trusted internal callers.
 // The actor must already have verified enrollment origin and the route must be server-selected.
+// Mounted mobile routes use EnrollSession to retain the bearer identity through commit.
 // Proof is returned only after commit; an active address collision rolls back creation.
 func (s *Lifecycle) Enroll(ctx context.Context, actor Principal, route Route, address string) (Enrollment, error) {
+	return s.enroll(ctx, actor, nil, route, address)
+}
+
+// EnrollSession retains the verified origin and bearer identity through commit.
+func (s *Lifecycle) EnrollSession(ctx context.Context, session MobileSession, route Route, address string) (Enrollment, error) {
+	if !session.enrollmentVerified {
+		return Enrollment{}, ErrMobileOrigin
+	}
+	return s.enroll(ctx, session.Principal(), &session, route, address)
+}
+
+func (s *Lifecycle) enroll(ctx context.Context, actor Principal, session *MobileSession, route Route, address string) (Enrollment, error) {
 	var result Enrollment
-	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
-		if err := requireLifecycleActor(ctx, q, actor); err != nil {
+	err := s.write(ctx, session, func(ctx context.Context, q *sqlc.Queries) error {
+		if err := requireLifecycleActor(ctx, q, actor, session); err != nil {
 			return err
 		}
 		proof, verifier, err := NewProof()
@@ -145,14 +161,23 @@ func (s *Lifecycle) Enroll(ctx context.Context, actor Principal, route Route, ad
 // Refresh and logout require the current owner; switching uses the verified destination user.
 // An unchanged refresh touches last-seen time without advancing the version.
 func (s *Lifecycle) Apply(ctx context.Context, actor Principal, change Change) (State, error) {
+	return s.apply(ctx, actor, nil, change)
+}
+
+// ApplySession rechecks the authenticated subject mapping before changing ownership or binding.
+func (s *Lifecycle) ApplySession(ctx context.Context, session MobileSession, change Change) (State, error) {
+	return s.apply(ctx, session.Principal(), &session, change)
+}
+
+func (s *Lifecycle) apply(ctx context.Context, actor Principal, session *MobileSession, change Change) (State, error) {
 	switch change.Operation {
 	case Refresh, Logout, SwitchOwner:
 	default:
 		return State{}, ErrTransition
 	}
 	var result State
-	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
-		if err := requireLifecycleActor(ctx, q, actor); err != nil {
+	err := s.write(ctx, session, func(ctx context.Context, q *sqlc.Queries) error {
+		if err := requireLifecycleActor(ctx, q, actor, session); err != nil {
 			return err
 		}
 		row, err := q.LockMobileInstallation(ctx, sqlc.LockMobileInstallationParams{ApplicationID: actor.ApplicationID, PublicID: change.InstallationID})
@@ -161,6 +186,11 @@ func (s *Lifecycle) Apply(ctx context.Context, actor Principal, change Change) (
 		}
 		if err != nil {
 			return err
+		}
+		if session != nil {
+			if err := session.LockIdentity(ctx, q, session.project); err != nil {
+				return err
+			}
 		}
 		sameOwner := row.OwnerUserID.Valid && row.OwnerUserID.Int64 == actor.UserID
 		if !VerifyProof(change.Proof, row.ProofVerifier) || (change.Operation != SwitchOwner && !sameOwner) {
@@ -262,11 +292,11 @@ func (s *Lifecycle) insertBinding(ctx context.Context, q *sqlc.Queries, row sqlc
 	return err
 }
 
-func (s *Lifecycle) write(ctx context.Context, fn func(context.Context, *sqlc.Queries) error) error {
+func (s *Lifecycle) write(ctx context.Context, session *MobileSession, fn func(context.Context, *sqlc.Queries) error) error {
 	ctx, cancel := context.WithTimeout(ctx, operationTimeout)
 	defer cancel()
 	for attempt := 0; attempt < 3; attempt++ {
-		err := s.attempt(ctx, fn)
+		err := s.attempt(ctx, session, fn)
 		var pgErr *pgconn.PgError
 		if !errors.As(err, &pgErr) || (pgErr.Code != "40001" && pgErr.Code != "40P01") || ctx.Err() != nil || attempt == 2 {
 			return err
@@ -275,7 +305,7 @@ func (s *Lifecycle) write(ctx context.Context, fn func(context.Context, *sqlc.Qu
 	panic("unreachable")
 }
 
-func (s *Lifecycle) attempt(ctx context.Context, fn func(context.Context, *sqlc.Queries) error) error {
+func (s *Lifecycle) attempt(ctx context.Context, session *MobileSession, fn func(context.Context, *sqlc.Queries) error) error {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return err
@@ -286,8 +316,16 @@ func (s *Lifecycle) attempt(ctx context.Context, fn func(context.Context, *sqlc.
 		// Cleanup needs an uncanceled budget even after the operation expires.
 		_ = tx.Rollback(cleanup)
 	}()
-	if err := fn(ctx, sqlc.New(tx)); err != nil {
+	q := sqlc.New(tx)
+	if err := fn(ctx, q); err != nil {
 		return err
+	}
+	// The identity lock is already held. Recheck database time after any
+	// installation, binding or unique-address wait before committing.
+	if session != nil {
+		if err := session.LockIdentity(ctx, q, session.project); err != nil {
+			return err
+		}
 	}
 	return tx.Commit(ctx)
 }

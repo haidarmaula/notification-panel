@@ -160,6 +160,11 @@ func TestStaffSessionFamilies(t *testing.T) {
 		current(p, 401)
 		require.Equal(t, 401, renew("refresh", p.RefreshToken).Code)
 	}
+	disabled := login()
+	exec("UPDATE staff_users SET is_active=false WHERE id=$1", staffID)
+	require.Equal(t, 401, renew("refresh", disabled.RefreshToken).Code)
+	exec("UPDATE staff_users SET is_active=true WHERE id=$1", staffID)
+
 	p := login()
 	exec("UPDATE staff_sessions SET expires_at=created_at+interval '1 microsecond' WHERE revoked_at IS NULL")
 	current(p, 401)

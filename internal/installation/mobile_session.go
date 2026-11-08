@@ -17,6 +17,7 @@ type MobileSession struct {
 	project            pgtype.UUID
 	namespace, subject string
 	expires            time.Time
+	enrollmentVerified bool
 }
 
 // Principal returns the identity resolved at bearer authentication.
@@ -25,6 +26,12 @@ func (s MobileSession) Principal() Principal { return s.actor }
 // AuthenticateSession verifies the configured bearer and resolves its current project user.
 func (a *MobileAuthority) AuthenticateSession(ctx context.Context, project pgtype.UUID, credential string) (MobileSession, error) {
 	return a.authenticate(ctx, project, credential, nil)
+}
+
+// AuthenticateEnrollmentSession also verifies origin evidence for this bearer.
+// A consumed origin assertion may require replacement if enrollment later fails.
+func (a *MobileAuthority) AuthenticateEnrollmentSession(ctx context.Context, project pgtype.UUID, credential, evidence string) (MobileSession, error) {
+	return a.authenticate(ctx, project, credential, &evidence)
 }
 
 // LockIdentity rechecks the subject mapping and expiry against database time.

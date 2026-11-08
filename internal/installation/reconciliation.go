@@ -18,9 +18,18 @@ type StateSnapshot struct {
 // ReadState permits reconciliation after logout using retained proof. A current
 // owner belonging to another account remains hidden from the authenticated user.
 func (s *Lifecycle) ReadState(ctx context.Context, actor Principal, id pgtype.UUID, proof string) (StateSnapshot, error) {
+	return s.readState(ctx, actor, nil, id, proof)
+}
+
+// ReadSessionState rechecks the bearer identity before returning installation state.
+func (s *Lifecycle) ReadSessionState(ctx context.Context, session MobileSession, id pgtype.UUID, proof string) (StateSnapshot, error) {
+	return s.readState(ctx, session.Principal(), &session, id, proof)
+}
+
+func (s *Lifecycle) readState(ctx context.Context, actor Principal, session *MobileSession, id pgtype.UUID, proof string) (StateSnapshot, error) {
 	var result StateSnapshot
-	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
-		if err := requireLifecycleActor(ctx, q, actor); err != nil {
+	err := s.write(ctx, session, func(ctx context.Context, q *sqlc.Queries) error {
+		if err := requireLifecycleActor(ctx, q, actor, session); err != nil {
 			return err
 		}
 		row, err := q.LockMobileInstallation(ctx, sqlc.LockMobileInstallationParams{ApplicationID: actor.ApplicationID, PublicID: id})
@@ -29,6 +38,11 @@ func (s *Lifecycle) ReadState(ctx context.Context, actor Principal, id pgtype.UU
 		}
 		if err != nil {
 			return err
+		}
+		if session != nil {
+			if err := session.LockIdentity(ctx, q, session.project); err != nil {
+				return err
+			}
 		}
 		if !VerifyProof(proof, row.ProofVerifier) || (row.OwnerUserID.Valid && row.OwnerUserID.Int64 != actor.UserID) {
 			return ErrNotFound
@@ -53,7 +67,7 @@ func (s *Lifecycle) Invalidate(ctx context.Context, applicationID int64, id pgty
 		return false, ErrTransition
 	}
 	changed := false
-	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
+	err := s.write(ctx, nil, func(ctx context.Context, q *sqlc.Queries) error {
 		changed = false
 		if _, err := q.LockInstallationProject(ctx, applicationID); err != nil {
 			if errors.Is(err, pgx.ErrNoRows) {

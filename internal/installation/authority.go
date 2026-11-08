@@ -99,7 +99,7 @@ func (a *MobileAuthority) Authenticate(ctx context.Context, project pgtype.UUID,
 // The configured verifier owns replay protection; consumed evidence may need replacement
 // if the subsequent enrollment fails.
 func (a *MobileAuthority) AuthenticateEnrollment(ctx context.Context, project pgtype.UUID, credential, evidence string) (Principal, error) {
-	session, err := a.authenticate(ctx, project, credential, &evidence)
+	session, err := a.AuthenticateEnrollmentSession(ctx, project, credential, evidence)
 	return session.Principal(), err
 }
 
@@ -149,5 +149,6 @@ func (a *MobileAuthority) authenticate(ctx context.Context, project pgtype.UUID,
 			return MobileSession{}, err
 		}
 	}
-	return MobileSession{actor: Principal{ApplicationID: app.ID, UserID: userID}, project: project, namespace: policy.Namespace, subject: claims.Subject, expires: claims.ExpiresAt.Time}, nil
+	return MobileSession{actor: Principal{ApplicationID: app.ID, UserID: userID}, project: project, namespace: policy.Namespace,
+		subject: claims.Subject, expires: claims.ExpiresAt.Time, enrollmentVerified: evidence != nil}, nil
 }

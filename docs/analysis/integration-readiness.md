@@ -44,6 +44,22 @@ the next campaign prepared. Logical sealed restore passed, and the independent
 encrypted recovery drill on schema 40 again rejected a wrong key and missing
 WAL. [Capacity evidence](delivery-load.md).
 
+## Scheduler progress and mobile authorization verification
+
+The combined race-enabled integration run passed all 40 migrations, scheduled
+promotion, staff session rotation, mobile lifecycle authorization and sealed
+restore. PostgreSQL and Kafka tests finished in 148.732 s. FCM tests finished
+in 3.512 s and the simulator recorded 76 SDK HTTP requests.
+
+The scheduler regression injected a persistent failure in the first of two
+equally due campaigns. The next tick promoted the second campaign, and the
+following pass promoted the first after the fault cleared. The sweep also
+passed under the restricted scheduler login. Mounted mobile HTTP tests
+removed or reassigned the authenticated subject while each lifecycle
+operation waited on the project lock. All ten requests returned 401.
+A separate test proved the subject mapping was locked during an installation
+wait and that an expired bearer could not change the installation or binding.
+
 ## Rerunning
 
 Tested prerequisites: Go 1.26.10, Docker 28.1.1 with a running daemon, Compose

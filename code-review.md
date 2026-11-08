@@ -54,6 +54,7 @@ all historical findings or establish production readiness.
 | GA1 | P2 | Mobile identity/origin database calls and lifecycle transactions inherited caller contexts without an internal deadline; lifecycle rollback used unbounded Background. A held project row or stalled pool could retain connections indefinitely. Fixed with five-second operation budgets, context propagation through transaction callbacks/retries, and independent one-second cleanup. Earlier caller deadlines and ownership checks are preserved. |
 | GA2 | P2 | Kafka source approval during Fetch could wait on PostgreSQL for the entire generation lifetime. Fixed with a five-second database-check budget; idle Kafka waiting still follows generation cancellation. |
 | GA3 | P2 — fixed | A send record could use case aliases to overwrite an earlier JSON field in Go's decoder. Admission now checks exact wire names before decoding. Regression tests cover aliases alone and alongside their canonical names. |
+| GA4 | P2 — fixed | Mounted mobile lifecycle handlers reduced verified JWT sessions to app/user IDs before waiting for database locks. A removed or reassigned subject could still act as the previous owner. The transaction now checks and locks the exact mapping and rechecks expiry. PostgreSQL HTTP regressions cover enrollment, refresh, logout, owner switch, and state lookup, plus rollback after expiry during a lock wait. |
 
 Regression evidence and the remaining review boundary are recorded in
 [the modern Go audit](docs/analysis/modern-go-audit.md).
@@ -214,12 +215,12 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 | # | Location | Issue |
 |---|----------|-------|
 | H1 | `internal/features/staff/handler.go` — `Update` | Fixed locally. Staff update exposes email conflicts as 409, including the actual unique-constraint violation. |
-| H2 | `internal/features/auth/handler.go` — `RefreshToken` | `ErrInvalidCredentials` is not mapped — a deactivated account's refresh attempt returns 500 instead of 401 |
+| H2 | `internal/features/auth/handler.go` — `RefreshToken` | Fixed on the mounted route. An inactive staff account or invalid session returns 401. Database errors use the generic 500 response. |
 | H3 | Feature-handler unknown 500 branches | **Original broad claim superseded:** reviewed current feature-handler 500 branches use literal internal server error; M02a/b authz error tests verify scoped failures | Source review is not complete redaction coverage for all mapped 4xx, DTOs, logs or future branches. See M02 assessment; production error/security review remains required. |
 | H4 | `internal/features/notifications/processor.go` | Status-update errors on the `FAILED` and `COMPLETED` paths are discarded with `_ =` |
 | H5 | `internal/features/profile/service.go` — `GetProfile`, `UpdateProfile` | Fixed locally. Missing profile reads map to 404. Database failures propagate as internal errors. Profile writes recheck the active session under lock. |
-| H6 | `internal/features/segments/service.go` — `GetByID`, `Create`, `Update` | Same collapse pattern for `ErrSegmentNotFound` |
-| H7 | `internal/features/users/service.go` — `GetByID` | Same pattern — a transient DB failure is reported as 404 |
+| H6 | Segment lookup error mapping | The mounted scoped lookup converts only `pgx.ErrNoRows` to 404 and propagates other errors. The original finding describes the legacy module. |
+| H7 | User lookup error mapping | The mounted scoped lookup converts only `pgx.ErrNoRows` to 404 and propagates other errors. The original finding describes the legacy module. |
 | H8 | `internal/features/staff/service.go` — all read methods | Fixed locally. Staff operations distinguish missing rows and invalid roles from database errors. |
 
 ### List & Pagination
@@ -269,10 +270,10 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 
 | # | Location | Issue |
 |---|----------|-------|
-| H38 | `internal/features/segments/service.go` — `Update` | A failure of the post-update re-fetch returns 500 even though the write has already committed |
+| H38 | Segment updates | The mounted scoped mutation reads the updated row through `RETURNING` and commits it with the audit record. The original finding describes the legacy module. |
 | H39 | `internal/features/staff/service.go` — `Update`, `UpdateStatus` | Fixed locally. The mutation, re-fetch, redacted audit and final-active-administrator check share one transaction. A failure rolls back the write. |
-| H40 | `internal/features/notifications/service.go` — `Update` | Post-update re-fetch failure is mapped to `ErrNotificationNotFound` (404) despite the write having landed |
-| H41 | `internal/features/notifications/service.go` — `Create` | Parent notification and target rows are inserted without a transaction; the compensating delete is best-effort and its error is discarded, leaving orphaned notifications on failure |
+| H40 | Campaign updates | The mounted draft replacement checks the campaign and changes the draft, targets and audit in one transaction. The HTTP integration test verifies rollback after an invalid target. |
+| H41 | Campaign creation | The mounted scoped creation inserts the campaign, targets and audit in one transaction. Cross-project references fail without partial records. |
 | H42 | `internal/features/segments/service.go` — `Create` | Same pattern — no transaction around the parent and target inserts |
 
 ### Configuration & Lifecycle

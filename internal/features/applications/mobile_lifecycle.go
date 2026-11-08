@@ -122,12 +122,12 @@ func (h mobileLifecycle) serve(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if enroll {
-		actor, err := h.runtime.Authority.AuthenticateEnrollment(r.Context(), id, credential, input.Origin)
+		session, err := h.runtime.Authority.AuthenticateEnrollmentSession(r.Context(), id, credential, input.Origin)
 		if err != nil {
 			mobileError(w, err)
 			return
 		}
-		result, err := h.runtime.Lifecycle.Enroll(r.Context(), actor, route, input.Address)
+		result, err := h.runtime.Lifecycle.EnrollSession(r.Context(), session, route, input.Address)
 		if err != nil {
 			mobileError(w, err)
 			return
@@ -136,12 +136,12 @@ func (h mobileLifecycle) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if stateRead {
-		actor, err := h.runtime.Authority.Authenticate(r.Context(), id, credential)
+		session, err := h.runtime.Authority.AuthenticateSession(r.Context(), id, credential)
 		if err != nil {
 			mobileError(w, err)
 			return
 		}
-		snapshot, err := h.runtime.Lifecycle.ReadState(r.Context(), actor, installationID, input.Proof)
+		snapshot, err := h.runtime.Lifecycle.ReadSessionState(r.Context(), session, installationID, input.Proof)
 		if err != nil {
 			mobileError(w, err)
 			return
@@ -157,12 +157,12 @@ func (h mobileLifecycle) serve(w http.ResponseWriter, r *http.Request) {
 		badBody(w)
 		return
 	}
-	actor, err := h.runtime.Authority.Authenticate(r.Context(), id, credential)
+	session, err := h.runtime.Authority.AuthenticateSession(r.Context(), id, credential)
 	if err != nil {
 		mobileError(w, err)
 		return
 	}
-	state, err := h.runtime.Lifecycle.Apply(r.Context(), actor, installation.Change{InstallationID: installationID,
+	state, err := h.runtime.Lifecycle.ApplySession(r.Context(), session, installation.Change{InstallationID: installationID,
 		Proof: input.Proof, ExpectedVersion: version.Int64, Operation: operation, Route: route, Address: input.Address})
 	if err != nil {
 		mobileError(w, err)

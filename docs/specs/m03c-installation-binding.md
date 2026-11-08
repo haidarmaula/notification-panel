@@ -128,6 +128,17 @@ adapter, key provisioning, subject provisioning and HTTP wiring follow
 once the project policies are supplied. The lifecycle rechecks project
 and user status within its write transaction.
 
+Mounted lifecycle routes retain the opaque verified mobile session through
+enrollment, refresh, logout, owner switch and state reconciliation. They lock
+the application, active user and exact namespace/subject mapping before locking
+the installation and binding. A removed or remapped subject fails with 401 even
+when it changes after HTTP authentication. The mapping remains share-locked
+through commit. Bearer expiry is checked against database time after installation
+waits and before commit, so a credential that expires during a blocking write
+rolls back that write. Enrollment additionally requires a session whose origin
+assertion was verified. Trusted internal Principal-based operations remain
+available for internally established identity and fixture setup.
+
 ### Signed origin adapter
 
 The server adapter pins an EdDSA broker public key, issuer and audience.
