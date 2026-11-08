@@ -5,6 +5,7 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -109,7 +110,15 @@ func TestWholeTransactionRetryPolicy(t *testing.T) {
 			db := &retryDB{attempts: txs}
 			s := NewService(principalQueries{}, db)
 			calls := 0
-			err := s.write(context.Background(), func(*sqlc.Queries) error {
+			var firstDeadline time.Time
+			err := s.write(context.Background(), func(ctx context.Context, _ *sqlc.Queries) error {
+				deadline, ok := ctx.Deadline()
+				require.True(t, ok)
+				require.LessOrEqual(t, time.Until(deadline), 5*time.Second)
+				if calls == 0 {
+					firstDeadline = deadline
+				}
+				require.Equal(t, firstDeadline, deadline, "retries must share the original budget")
 				calls++
 				if calls < 3 {
 					return &pgconn.PgError{Code: code}
@@ -128,7 +137,7 @@ func TestWholeTransactionRetryPolicy(t *testing.T) {
 	t.Run("bounded exhaustion", func(t *testing.T) {
 		db := &retryDB{attempts: []*retryTx{{}, {}, {}}}
 		s := NewService(principalQueries{}, db)
-		err := s.write(context.Background(), func(*sqlc.Queries) error { return &pgconn.PgError{Code: "40001"} })
+		err := s.write(context.Background(), func(context.Context, *sqlc.Queries) error { return &pgconn.PgError{Code: "40001"} })
 		require.Error(t, err)
 		require.Equal(t, 3, db.begins)
 	})
@@ -138,7 +147,7 @@ func TestWholeTransactionRetryPolicy(t *testing.T) {
 		db := &retryDB{attempts: []*retryTx{first, second}}
 		s := NewService(principalQueries{}, db)
 		calls := 0
-		require.NoError(t, s.write(context.Background(), func(*sqlc.Queries) error { calls++; return nil }))
+		require.NoError(t, s.write(context.Background(), func(context.Context, *sqlc.Queries) error { calls++; return nil }))
 		require.Equal(t, 2, calls)
 		require.Equal(t, 2, db.begins)
 		require.Equal(t, 1, first.rollbacks)
@@ -150,7 +159,7 @@ func TestWholeTransactionRetryPolicy(t *testing.T) {
 		tx := &retryTx{commitErr: uncertain}
 		db := &retryDB{attempts: []*retryTx{tx}}
 		s := NewService(principalQueries{}, db)
-		err := s.write(context.Background(), func(*sqlc.Queries) error { return nil })
+		err := s.write(context.Background(), func(context.Context, *sqlc.Queries) error { return nil })
 		require.ErrorIs(t, err, uncertain)
 		require.Equal(t, 1, db.begins)
 	})
@@ -159,7 +168,7 @@ func TestWholeTransactionRetryPolicy(t *testing.T) {
 		defer cancel()
 		db := &retryDB{attempts: []*retryTx{{}}}
 		s := NewService(principalQueries{}, db)
-		err := s.write(ctx, func(*sqlc.Queries) error { cancel(); return &pgconn.PgError{Code: "40001"} })
+		err := s.write(ctx, func(context.Context, *sqlc.Queries) error { cancel(); return &pgconn.PgError{Code: "40001"} })
 		require.ErrorIs(t, err, context.Canceled)
 		require.Equal(t, 1, db.begins)
 	})

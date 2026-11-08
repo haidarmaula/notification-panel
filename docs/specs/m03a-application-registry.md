@@ -166,6 +166,12 @@ before principal/child/FK locks. New application insertion has no staff FK;
 recheck current actor before audit/commit. Audit actor comes from checked identity.
 Use READ COMMITTED and bounded whole-transaction retries for 40001/40P01 (at most
 3 attempts, context-aware); never retry only the audit/write after a partial commit.
+Registry and project business write transactions share one five-second operation
+budget across pool acquisition, resource locks, callback queries, audit, commit
+and retries. An earlier caller deadline wins. Every transaction callback receives
+the bounded context. Rollback uses a separate one-second cleanup budget that
+survives request cancellation. Timeout failures retain the generic 500 mapping
+and leave uncommitted resource and audit changes rolled back.
 No external effects occur inside the transaction. Response loss after commit is
 still possible and uses the reconciliation rules above.
 

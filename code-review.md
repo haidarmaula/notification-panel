@@ -55,6 +55,8 @@ all historical findings or establish production readiness.
 | GA2 | P2 | Kafka source approval during Fetch could wait on PostgreSQL for the entire generation lifetime. Fixed with a five-second database-check budget; idle Kafka waiting still follows generation cancellation. |
 | GA3 | P2 — fixed | A send record could use case aliases to overwrite an earlier JSON field in Go's decoder. Admission now checks exact wire names before decoding. Regression tests cover aliases alone and alongside their canonical names. |
 | GA4 | P2 — fixed | Mounted mobile lifecycle handlers reduced verified JWT sessions to app/user IDs before waiting for database locks. A removed or reassigned subject could still act as the previous owner. The transaction now checks and locks the exact mapping and rechecks expiry. PostgreSQL HTTP regressions cover enrollment, refresh, logout, owner switch, and state lookup, plus rollback after expiry during a lock wait. |
+| GA5 | P2 — fixed | A case alias such as `ID` could override a campaign target's `id` during Go struct decoding. The nested decoder now requires the exact target keys. Scoped draft create and replace return 400 and preserve campaign, target and audit state. |
+| GA6 | P2 — fixed | Project and registry mutations could wait on database locks after the HTTP write deadline. The five-second transaction context now reaches connection acquisition, queries, commit and retries. PostgreSQL tests verify that both the internal budget and an earlier caller deadline release the connection without a resource or audit change. |
 
 Regression evidence and the remaining review boundary are recorded in
 [the modern Go audit](docs/analysis/modern-go-audit.md).

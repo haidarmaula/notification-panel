@@ -15,7 +15,7 @@ func (s *Service) PromoteSchedule(ctx context.Context, project pgtype.UUID, camp
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	changed := false
-	err := s.write(ctx, func(q *sqlc.Queries) error {
+	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		changed = false
 		runtime, err := q.LockNotificationRuntime(ctx)
 		if err != nil {

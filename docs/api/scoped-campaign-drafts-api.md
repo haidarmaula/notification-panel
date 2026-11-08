@@ -10,7 +10,9 @@ string or null. An active template supplies a reference and name snapshot.
 The request supplies the final title and body.
 
 Supply 1–100 unique targets. Each target is an object with type and, when
-required, a positive decimal string id. BROADCAST takes no ID and must be the
+required, a positive decimal string id. Use the exact field names `type` and
+`id`. Case aliases, duplicate keys and unknown target fields return 400.
+BROADCAST takes no ID and must be the
 only target. SEGMENT takes a segment ID. INDIVIDUAL takes a user ID. Invalid
 input returns 400. Missing or foreign references and inactive templates return 404.
 The route accepts no query parameters.

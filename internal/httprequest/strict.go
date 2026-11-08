@@ -13,10 +13,8 @@ import (
 	"hello/pkg/response"
 )
 
-// DecodeStrictJSONObject is opt-in for new APIs: UTF-8 JSON object, known fields,
-// exact top-level field names supplied by the caller and no duplicate keys (including escaped spellings), one complete value. Existing
-// DecodeJSON callers retain their compatibility semantics. Nesting is bounded
-// during duplicate detection; current registry DTOs contain only scalar fields.
+// DecodeStrictJSONObject reads one bounded UTF-8 JSON object with exact field
+// names at the object boundary and unique keys throughout.
 func DecodeStrictJSONObject(w http.ResponseWriter, r *http.Request, dst any, limit int64, fields ...string) bool {
 	if !jsonMediaType(r) {
 		response.JSON(w, http.StatusUnsupportedMediaType, nil, "unsupported media type")
@@ -26,17 +24,22 @@ func DecodeStrictJSONObject(w http.ResponseWriter, r *http.Request, dst any, lim
 	if !ok {
 		return false
 	}
-	if !utf8.Valid(data) || !uniqueObject(data, fields) {
-		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
-		return false
-	}
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(dst); err != nil {
+	if err := UnmarshalStrictJSONObject(data, dst, fields...); err != nil {
 		response.JSON(w, http.StatusBadRequest, nil, "invalid request body")
 		return false
 	}
 	return true
+}
+
+// UnmarshalStrictJSONObject also supports nested DTOs with their own closed
+// field sets. The caller supplies an already bounded input.
+func UnmarshalStrictJSONObject(data []byte, dst any, fields ...string) error {
+	if !utf8.Valid(data) || !uniqueObject(data, fields) {
+		return errors.New("invalid JSON object")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	return decoder.Decode(dst)
 }
 func jsonMediaType(r *http.Request) bool {
 	values := r.Header.Values("Content-Type")

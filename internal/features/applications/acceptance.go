@@ -120,7 +120,7 @@ func (s *Service) AcceptCampaign(ctx context.Context, id pgtype.UUID, campaignID
 	defer cancel()
 	var result Acceptance
 	replayed := false
-	err = s.write(ctx, func(q *sqlc.Queries) error {
+	err = s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		replayed = false
 		runtime, app, scope, err := lockAcceptanceScope(ctx, q, id, authz.NotificationsSend)
 		if err != nil {
@@ -191,7 +191,7 @@ func (s *Service) ScheduleCampaign(ctx context.Context, id pgtype.UUID, campaign
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var result ScheduledCampaign
-	err := s.write(ctx, func(q *sqlc.Queries) error {
+	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		runtime, app, _, err := lockAcceptanceScope(ctx, q, id, authz.NotificationsSchedule)
 		if err != nil {
 			return err

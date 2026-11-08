@@ -24,11 +24,11 @@ var (
 	errSegmentMemberMissing = errors.New("segment membership not found")
 )
 
-func (s *Service) writeInProject(ctx context.Context, id pgtype.UUID, perm authz.Permission, fn func(*sqlc.Queries, sqlc.Application, authz.Principal) error) error {
+func (s *Service) writeInProject(ctx context.Context, id pgtype.UUID, perm authz.Permission, fn func(context.Context, *sqlc.Queries, sqlc.Application, authz.Principal) error) error {
 	if _, err := authz.NewApplicationAuthorizer(s.q).RequireApplication(ctx, id, perm); err != nil {
 		return err
 	}
-	return s.write(ctx, func(q *sqlc.Queries) error {
+	return s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		app, err := repository.NewApplicationRepository(q).LockByPublicID(ctx, id)
 		if err != nil {
 			return appError(err)
@@ -37,7 +37,7 @@ func (s *Service) writeInProject(ctx context.Context, id pgtype.UUID, perm authz
 		if err != nil {
 			return err
 		}
-		return fn(q, app, scope.Staff)
+		return fn(ctx, q, app, scope.Staff)
 	})
 }
 
@@ -56,7 +56,7 @@ func (s *Service) saveSegment(ctx context.Context, id pgtype.UUID, segmentID int
 		return sqlc.GetScopedSegmentRow{}, err
 	}
 	var result sqlc.GetScopedSegmentRow
-	err = s.writeInProject(ctx, id, authz.SegmentsWrite, func(q *sqlc.Queries, app sqlc.Application, actor authz.Principal) error {
+	err = s.writeInProject(ctx, id, authz.SegmentsWrite, func(ctx context.Context, q *sqlc.Queries, app sqlc.Application, actor authz.Principal) error {
 		var before any
 		action := audit.ACTION_SEGMENT_CREATE
 		if segmentID != 0 {
@@ -96,7 +96,7 @@ func (s *Service) saveSegment(ctx context.Context, id pgtype.UUID, segmentID int
 }
 
 func (s *Service) deleteSegment(ctx context.Context, id pgtype.UUID, segmentID int64) error {
-	return s.writeInProject(ctx, id, authz.SegmentsWrite, func(q *sqlc.Queries, app sqlc.Application, _ authz.Principal) error {
+	return s.writeInProject(ctx, id, authz.SegmentsWrite, func(ctx context.Context, q *sqlc.Queries, app sqlc.Application, _ authz.Principal) error {
 		row, err := lockSegment(ctx, q, app.ID, segmentID)
 		if err != nil {
 			return err
@@ -116,7 +116,7 @@ func (s *Service) deleteSegment(ctx context.Context, id pgtype.UUID, segmentID i
 }
 
 func (s *Service) changeSegmentMember(ctx context.Context, id pgtype.UUID, segmentID, userID int64, add bool) error {
-	return s.writeInProject(ctx, id, authz.MembersWrite, func(q *sqlc.Queries, app sqlc.Application, _ authz.Principal) error {
+	return s.writeInProject(ctx, id, authz.MembersWrite, func(ctx context.Context, q *sqlc.Queries, app sqlc.Application, _ authz.Principal) error {
 		if _, err := lockSegment(ctx, q, app.ID, segmentID); err != nil {
 			return err
 		}

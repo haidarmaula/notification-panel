@@ -116,6 +116,10 @@ func TestScopedSegmentWrites(t *testing.T) {
 		request(http.MethodPost, campaigns, draft(foreignTemplate, segment, user), 404)
 		request(http.MethodPost, campaigns, draft(template, foreignSegment, user), 404)
 		request(http.MethodPost, campaigns, draft(template, segment, foreign), 404)
+		// Go's case-insensitive struct decoding previously let ID override id.
+		aliasedTarget := fmt.Sprintf(`{"title":"Title","body":"Body","targets":[{"type":"INDIVIDUAL","id":"%d","ID":"%d"}]}`, foreign, user)
+		request(http.MethodPost, campaigns, aliasedTarget, 400)
+		request(http.MethodPost, campaigns, `{"title":"Title","body":"Body","targets":[{"TYPE":"BROADCAST"}]}`, 400)
 		assertEmpty()
 		exec("ALTER TABLE audit_logs ADD CONSTRAINT reject_fixture_campaign CHECK(action <> 'NOTIFICATION_CREATE') NOT VALID")
 		request(http.MethodPost, campaigns, draft(template, segment, user), 500)
@@ -136,6 +140,7 @@ func TestScopedSegmentWrites(t *testing.T) {
 		require.Contains(t, request(http.MethodGet, campaignPath, "", 200).Body.String(), "INDIVIDUAL")
 
 		request(http.MethodPut, campaignPath, draft(template, segment, foreign), 404)
+		request(http.MethodPut, campaignPath, aliasedTarget, 400)
 		require.EqualValues(t, 2, number("SELECT count(*) FROM notification_targets WHERE notification_id=$1", campaignID))
 		require.Zero(t, number("SELECT count(*) FROM audit_logs WHERE application_id=$1 AND action='NOTIFICATION_UPDATE'", appID))
 		exec("UPDATE notifications SET status='QUEUED' WHERE id=$1", campaignID)

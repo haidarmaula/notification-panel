@@ -163,7 +163,7 @@ func (s *Service) Create(ctx context.Context, key, name string) (sqlc.Applicatio
 		return sqlc.Application{}, err
 	}
 	var result sqlc.Application
-	err = s.write(ctx, func(q *sqlc.Queries) error {
+	err = s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		app, err := repository.NewApplicationRepository(q).Create(ctx, key, name)
 		if err != nil {
 			var pgErr *pgconn.PgError
@@ -203,7 +203,7 @@ func (s *Service) Rename(ctx context.Context, id pgtype.UUID, name string, c Pre
 		return sqlc.Application{}, err
 	}
 	var result sqlc.Application
-	err = s.write(ctx, func(q *sqlc.Queries) error {
+	err = s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		repo := repository.NewApplicationRepository(q)
 		app, err := locked(ctx, q, id)
 		if err != nil {
@@ -247,7 +247,7 @@ func (s *Service) EnableGrant(ctx context.Context, id pgtype.UUID, staffID int64
 		return GrantResult{}, err
 	}
 	var result GrantResult
-	err := s.write(ctx, func(q *sqlc.Queries) error {
+	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		app, err := locked(ctx, q, id)
 		if err != nil {
 			return err
@@ -322,7 +322,7 @@ func (s *Service) RevokeGrant(ctx context.Context, id pgtype.UUID, staffID int64
 	if err := c.validate(false); err != nil {
 		return err
 	}
-	return s.write(ctx, func(q *sqlc.Queries) error {
+	return s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
 		app, err := locked(ctx, q, id)
 		if err != nil {
 			return err
@@ -367,7 +367,9 @@ func locked(ctx context.Context, q *sqlc.Queries, id pgtype.UUID) (sqlc.Applicat
 	}
 	return app, nil
 }
-func (s *Service) write(ctx context.Context, fn func(*sqlc.Queries) error) error {
+func (s *Service) write(ctx context.Context, fn func(context.Context, *sqlc.Queries) error) error {
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
 	for attempt := 0; attempt < 3; attempt++ {
 		if err := ctx.Err(); err != nil {
 			return err
@@ -390,7 +392,7 @@ func (s *Service) write(ctx context.Context, fn func(*sqlc.Queries) error) error
 	}
 	return errors.New("application transaction retry exhausted")
 }
-func (s *Service) attempt(ctx context.Context, fn func(*sqlc.Queries) error) error {
+func (s *Service) attempt(ctx context.Context, fn func(context.Context, *sqlc.Queries) error) error {
 	tx, err := s.db.BeginTx(ctx, pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
 	if err != nil {
 		return fmt.Errorf("begin application transaction: %w", err)
@@ -403,7 +405,7 @@ func (s *Service) attempt(ctx context.Context, fn func(*sqlc.Queries) error) err
 		defer cancel()
 		_ = tx.Rollback(cleanup)
 	}()
-	if err := fn(sqlc.New(tx)); err != nil {
+	if err := fn(ctx, sqlc.New(tx)); err != nil {
 		return err
 	}
 	if err := tx.Commit(ctx); err != nil {

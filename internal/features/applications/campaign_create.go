@@ -23,6 +23,11 @@ type campaignTargetInput struct {
 	ID   *string `json:"id,omitempty"`
 }
 
+func (target *campaignTargetInput) UnmarshalJSON(data []byte) error {
+	type wireTarget campaignTargetInput
+	return httprequest.UnmarshalStrictJSONObject(data, (*wireTarget)(target), "type", "id")
+}
+
 type campaignDraftInput struct {
 	Title      string                `json:"title"`
 	Body       string                `json:"body"`
@@ -90,7 +95,7 @@ func (in campaignDraftInput) validate() (pgtype.Int8, []sqlc.CreateScopedCampaig
 
 func (s *Service) createCampaignDraft(ctx context.Context, id pgtype.UUID, input campaignDraftInput, templateID pgtype.Int8, targets []sqlc.CreateScopedCampaignTargetParams) (campaignDraftResult, error) {
 	var result campaignDraftResult
-	err := s.writeInProject(ctx, id, authz.NotificationsWrite, func(q *sqlc.Queries, app sqlc.Application, actor authz.Principal) error {
+	err := s.writeInProject(ctx, id, authz.NotificationsWrite, func(ctx context.Context, q *sqlc.Queries, app sqlc.Application, actor authz.Principal) error {
 		templateName, err := scopedCampaignTemplate(ctx, q, app.ID, templateID)
 		if err != nil {
 			return err

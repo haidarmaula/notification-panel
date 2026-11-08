@@ -66,7 +66,7 @@ func (s *Service) getTemplate(ctx context.Context, id pgtype.UUID, templateID in
 
 func (s *Service) saveTemplate(ctx context.Context, id pgtype.UUID, templateID int64, input templateInput) (sqlc.GetScopedTemplateRow, error) {
 	var result sqlc.GetScopedTemplateRow
-	err := s.writeInProject(ctx, id, authz.NotificationsWrite, func(q *sqlc.Queries, app sqlc.Application, actor authz.Principal) error {
+	err := s.writeInProject(ctx, id, authz.NotificationsWrite, func(ctx context.Context, q *sqlc.Queries, app sqlc.Application, actor authz.Principal) error {
 		action := audit.ACTION_TEMPLATE_CREATE
 		if templateID == 0 {
 			row, err := q.CreateScopedTemplate(ctx, sqlc.CreateScopedTemplateParams{ApplicationID: app.ID, Name: input.Name, TitleTemplate: input.Title, BodyTemplate: input.Body, IsActive: *input.Active, CreatedBy: actor.ID})

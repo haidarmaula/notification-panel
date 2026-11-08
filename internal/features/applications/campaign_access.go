@@ -57,7 +57,7 @@ func (s *Service) getCampaign(ctx context.Context, id pgtype.UUID, campaignID in
 }
 
 func (s *Service) mutateCampaign(ctx context.Context, id pgtype.UUID, campaignID int64, input *campaignDraftInput, templateID pgtype.Int8, targets []sqlc.CreateScopedCampaignTargetParams) error {
-	return s.writeInProject(ctx, id, authz.NotificationsWrite, func(q *sqlc.Queries, app sqlc.Application, _ authz.Principal) error {
+	return s.writeInProject(ctx, id, authz.NotificationsWrite, func(ctx context.Context, q *sqlc.Queries, app sqlc.Application, _ authz.Principal) error {
 		status, err := q.LockScopedCampaign(ctx, sqlc.LockScopedCampaignParams{ApplicationID: app.ID, CampaignID: campaignID})
 		if err != nil {
 			return campaignLookupError(err)
