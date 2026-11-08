@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/require"
+	"hello/pkg/response"
 )
 
 func TestAccessRecordsWireOutcome(t *testing.T) {
@@ -85,6 +86,46 @@ func TestAccessPanic(t *testing.T) {
 				require.Empty(t, w.Header().Get("Set-Cookie"))
 				require.Equal(t, event.ID, w.Header().Get("X-Request-ID"))
 			}
+		})
+	}
+}
+
+type disconnectedWriter struct {
+	*httptest.ResponseRecorder
+	writes int
+}
+
+func (w *disconnectedWriter) Write([]byte) (int, error) {
+	w.writes++
+	return 0, io.ErrClosedPipe
+}
+
+func TestAccessRecordsFailedJSONWrite(t *testing.T) {
+	for _, tc := range []struct {
+		name, outcome string
+		status        int
+		handler       http.HandlerFunc
+	}{
+		{"ordinary", "aborted", 201, func(w http.ResponseWriter, _ *http.Request) {
+			response.JSON(w, 201, nil, "created")
+		}},
+		{"panic recovery", "panic", 500, func(http.ResponseWriter, *http.Request) {
+			panic("private panic")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var events []Request
+			w := &disconnectedWriter{ResponseRecorder: httptest.NewRecorder()}
+			handler := Access(tc.handler, func(event Request) { events = append(events, event) })
+			require.PanicsWithValue(t, http.ErrAbortHandler, func() {
+				handler.ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+			})
+			require.Equal(t, 1, w.writes)
+			require.Equal(t, tc.status, w.Code)
+			require.Len(t, events, 1)
+			require.Equal(t, tc.status, events[0].Status)
+			require.Equal(t, tc.outcome, events[0].Outcome)
+			require.Zero(t, events[0].Bytes)
 		})
 	}
 }

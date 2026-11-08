@@ -43,6 +43,11 @@ The local suites cover cross-project routes, rollback, revocation, grant expiry
 and recovery. These findings apply to the mounted backend routes.
 [Staff sessions](../specs/staff-sessions.md) · [Gateway](../specs/m02-gateway.md) · [Contracts](../contracts/README.md)
 
+The common response helper encodes JSON before committing its status. Invalid
+response data produces the generic JSON 500. If writing the response fails
+after commit, the server aborts the response and records the observed status
+without exposing payload or transport error details.
+
 Retention now has explicit holds and expiring grants for spent origin nonces,
 receipt request markers and terminal send keys. Physical and logical restore
 fixtures verify missing WAL, stale sessions, post-backup Kafka ambiguity and

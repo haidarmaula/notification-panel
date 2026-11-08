@@ -60,6 +60,21 @@ func Access(next http.Handler, observe func(Request)) http.Handler {
 		defer func() {
 			recovered := recover()
 			abort := false
+			// Record the committed status even if the recovery response fails
+			// to write and aborts the connection.
+			defer func() {
+				if event.Status == 0 && !hijacked && !abort {
+					event.Status = http.StatusOK
+				}
+				event.Route = "unmatched"
+				// ServeMux's redirect/clean-path patterns can contain raw request text.
+				// Only method-qualified application registrations are route templates.
+				if method, path, ok := strings.Cut(r.Pattern, " "); ok && methodBucket(method) != "other" && strings.HasPrefix(path, "/api/") {
+					event.Route = path
+				}
+				event.Duration = time.Since(start)
+				observe(event)
+			}()
 			if recovered != nil {
 				event.Outcome = "panic"
 				abort = event.Status != 0 || hijacked || recovered == http.ErrAbortHandler
@@ -75,17 +90,6 @@ func Access(next http.Handler, observe func(Request)) http.Handler {
 			} else if r.Context().Err() != nil {
 				event.Outcome = "cancelled"
 			}
-			if event.Status == 0 && !hijacked && !abort {
-				event.Status = http.StatusOK
-			}
-			event.Route = "unmatched"
-			// ServeMux's redirect/clean-path patterns can contain raw request text.
-			// Only method-qualified application registrations are route templates.
-			if method, path, ok := strings.Cut(r.Pattern, " "); ok && methodBucket(method) != "other" && strings.HasPrefix(path, "/api/") {
-				event.Route = path
-			}
-			event.Duration = time.Since(start)
-			observe(event)
 			if abort {
 				panic(http.ErrAbortHandler)
 			}

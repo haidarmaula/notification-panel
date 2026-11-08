@@ -57,56 +57,33 @@ type APIResponse struct {
 	Data any `json:"data,omitempty"`
 }
 
-// JSON writes an APIResponse envelope to w with the given HTTP status code,
-// payload, and message.
-//
-// # Behavior
-//
-// The function sets the Content-Type header to application/json, writes the
-// status code, and encodes an APIResponse whose Success field is computed as
-// status < 400. Callers therefore control the success flag indirectly by
-// choosing the status code — passing a 2xx or 3xx status yields success=true,
-// while any 4xx or 5xx status yields success=false.
-//
-// # Parameters
-//
-//   - w: the response writer. Must not be nil. The function must be called
-//     before any other write to w; calling it after headers have already been
-//     flushed will result in a "superfluous WriteHeader call" warning from
-//     net/http and the status code will not take effect.
-//   - status: the HTTP status code to send. Any value accepted by
-//     http.ResponseWriter.WriteHeader is valid; the conventional inputs are
-//     the http.Status* constants.
-//   - data: the response payload. May be nil, in which case the "data" field
-//     is omitted from the JSON body. Any value accepted by encoding/json may
-//     be passed.
-//   - message: an optional human-readable note. Pass an empty string to omit
-//     the "message" field entirely.
-//
-// # Error handling
-//
-// The function does not return an error. If json.Encoder.Encode fails (for
-// example, because data contains a channel, function, or cyclic reference),
-// the failure is currently ignored: the status code and headers have already
-// been sent, so the client will receive a truncated body with no indication
-// that encoding failed. Callers whose payloads could plausibly fail to encode
-// should validate them before invoking JSON, or write directly to w if they
-// need to surface the error.
-//
-// # Concurrency
-//
-// JSON is safe for concurrent use provided each invocation targets a distinct
-// http.ResponseWriter. As with all net/http handlers, a single
-// http.ResponseWriter must not be written to from multiple goroutines
-// simultaneously; that constraint is inherited from the standard library and
-// is not relaxed by this function.
+// JSON writes the canonical response envelope. It encodes the payload before
+// committing headers so an invalid payload can return a generic JSON 500.
+// A transport failure after commit aborts the response with http.ErrAbortHandler.
 func JSON(w http.ResponseWriter, status int, data any, message string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
+	header := w.Header()
+	header.Set("Content-Type", "application/json")
+	if status == http.StatusNoContent || status == http.StatusNotModified || status/100 == 1 {
+		w.WriteHeader(status)
+		return
+	}
 
-	json.NewEncoder(w).Encode(APIResponse{
+	body, err := json.Marshal(APIResponse{
 		Success: status < 400,
 		Message: message,
 		Data:    data,
 	})
+	if err != nil {
+		status = http.StatusInternalServerError
+		body = []byte(`{"success":false,"message":"internal server error"}`)
+		header.Del("Content-Length")
+		header.Del("ETag")
+		header.Del("Location")
+		header.Set("Cache-Control", "no-store")
+	}
+	w.WriteHeader(status)
+	body = append(body, '\n')
+	if n, err := w.Write(body); err != nil || n != len(body) {
+		panic(http.ErrAbortHandler)
+	}
 }

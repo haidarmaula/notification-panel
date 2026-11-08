@@ -405,7 +405,7 @@ Cosmetic issues, minor divergences, and code smells.
 | L14 | `internal/features/users/dto.go` — `OpenedAt` | `*string` instead of `*time.Time` — the only such case in the codebase |
 | L15 | `internal/features/users/model.go` — `UserNotification.OpenedAt` | Same divergence in the domain model |
 | L16 | `internal/features/staff/handler.go` — `List` | Pre-computes `TotalPages` — the only list response in the codebase that does so |
-| L17 | `pkg/response/response.go` | JSON encoding errors are silently discarded — a truncated response is served with no indication |
+| L17 | `pkg/response/response.go` | Fixed. The shared response helper encodes before committing headers and emits the generic JSON 500 on invalid data. A failed transport write aborts the response. The access observer records the committed status even when an error response cannot be sent. |
 | L18 | `internal/kafka/events.go` | Event structs carry no event ID or schema version |
 | L19 | `internal/features/notifications/dto.go` — `NotificationListItem` | `Type` defaults to `"SEGMENT"` on the unfiltered list path — misleading when the actual type is different |
 | L20 | `internal/features/segments/service.go` — `Update` | Writes and audits even when no field has changed, producing a no-op audit entry |
