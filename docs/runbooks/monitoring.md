@@ -52,6 +52,42 @@ snapshot. During a restore or source incident, keep dispatch sealed while
 reconciling offsets and stable event IDs. Follow the
 [sealed restore](sealed-restore.md) and [replay](operator-replay.md) procedures.
 
+## Kafka replication
+
+Install the checksum-verified JMX Exporter Java agent on each broker and KRaft
+controller. Use the checked-in Kafka MBean allowlist. Bind the agent's HTTP
+listener to loopback and expose it through an approved management proxy that
+authenticates Prometheus with mTLS. Keep remote JMX and direct agent access
+off the management network. The TLS scraper template assumes a verified
+proxy hostname, a trusted server CA and a dedicated client identity.
+[MBean allowlist](../../deploy/observability/kafka-jmx.yml) ·
+[JMX Exporter Java agent](https://prometheus.github.io/jmx_exporter/1.6.0/deployment/java-agent/) ·
+[Kafka metrics](https://kafka.apache.org/43/operations/monitoring/).
+
+Add the hello-kafka scrape job and Kafka rule file to the Prometheus instance
+used by the application dashboard. Inventory every broker and controller
+with distinct addresses and matching environment and cluster labels for
+one Kafka cluster. Agree on the alert delays and route alerts to the approved
+receiver. A scrape outage alert depends on keeping the expected nodes in the
+inventory during maintenance.
+[Kafka scraper template](../../deploy/observability/kafka-prometheus.yml) ·
+[Kafka alerts](../../deploy/observability/kafka-rules.yml).
+
+- Under-replication indicates lost redundancy. Check replica placement,
+  broker reachability and storage.
+- Below-minimum ISR means affected partitions cannot accept all-replica writes
+  under the configured policy. Keep the durable outbox while resolving the
+  broker failure.
+- The offline-partition alert reads the active controller. If no active
+  controller is observable, check quorum and management scrapes before
+  drawing a conclusion about partition state. Missing samples appear as gaps.
+- Confirm recovery with a fresh scrape from every configured node, one observed
+  active controller, full ISR and reconciled consumer offsets.
+
+The operator drill checks numeric consumer checkpoints separately. Target
+consumer lag and notification-path evidence remain release checks.
+[Kafka replication and offset drill](kafka-replication-drill.md).
+
 ## Provider and receipts
 
 Inspect normalized quota, credential, APNs and sender-mismatch outcomes and

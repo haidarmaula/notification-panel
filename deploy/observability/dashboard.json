@@ -8,7 +8,7 @@
   },
   "refresh": "30s",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 2,
   "tags": [
     "notification-service"
   ],
@@ -28,7 +28,7 @@
           "type": "prometheus",
           "uid": "${DS_PROMETHEUS}"
         },
-        "query": "label_values(up{job=\"hello\"}, environment)",
+        "query": "label_values(up{job=~\"hello|hello-kafka\"}, environment)",
         "refresh": 1,
         "includeAll": true,
         "allValue": ".*",
@@ -519,6 +519,103 @@
           "expr": "hello_dispatch_held{environment=~\"$environment\"} and on(environment,job,instance) (hello_db_check_healthy{environment=~\"$environment\"} == 1) and on(environment,job,instance) (time() - hello_db_last_check_timestamp_seconds{environment=~\"$environment\"} < 15)",
           "refId": "A",
           "legendFormat": "{{role}} {{instance}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 15,
+      "type": "timeseries",
+      "title": "Kafka replication",
+      "gridPos": {
+        "x": 0,
+        "y": 56,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (environment, cluster) (hello_kafka_under_replicated_partitions{job=\"hello-kafka\",environment=~\"$environment\"})",
+          "refId": "A",
+          "legendFormat": "{{environment}} {{cluster}} under-replicated"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (environment, cluster) (hello_kafka_under_min_isr_partitions{job=\"hello-kafka\",environment=~\"$environment\"})",
+          "refId": "B",
+          "legendFormat": "{{environment}} {{cluster}} below min ISR"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "max by (environment, cluster) (hello_kafka_offline_partitions{job=\"hello-kafka\",environment=~\"$environment\"} and (hello_kafka_active_controller{job=\"hello-kafka\",environment=~\"$environment\"} == 1))",
+          "refId": "C",
+          "legendFormat": "{{environment}} {{cluster}} offline"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 16,
+      "type": "timeseries",
+      "title": "Kafka scrape and controller health",
+      "gridPos": {
+        "x": 12,
+        "y": 56,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (environment, cluster, role) (up{job=\"hello-kafka\",environment=~\"$environment\"} == bool 0)",
+          "refId": "A",
+          "legendFormat": "{{environment}} {{cluster}} {{role}} scrapes down"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_PROMETHEUS}"
+          },
+          "expr": "sum by (environment, cluster) (hello_kafka_active_controller{job=\"hello-kafka\",environment=~\"$environment\"})",
+          "refId": "B",
+          "legendFormat": "{{environment}} {{cluster}} active controllers"
         }
       ],
       "fieldConfig": {

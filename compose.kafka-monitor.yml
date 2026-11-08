@@ -1,0 +1,19 @@
+# Opt-in monitoring for the existing private Kafka fixture.
+x-agent: &agent
+  KAFKA_OPTS: '-javaagent:/fixture/jmx-agent.jar=9404:/fixture/kafka-jmx.yml'
+
+services:
+  b1: {environment: *agent}
+  b2: {environment: *agent}
+  b3: {environment: *agent}
+  c1: {environment: *agent}
+  c2: {environment: *agent}
+  c3: {environment: *agent}
+  monitor:
+    image: prom/prometheus@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
+    networks: [private]
+    read_only: true
+    tmpfs: ["/prometheus:uid=65534,size=32m"]
+    volumes:
+      - ./scripts/kafka-drill/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./deploy/observability/kafka-rules.yml:/etc/prometheus/kafka-rules.yml:ro

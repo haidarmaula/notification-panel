@@ -1,0 +1,20 @@
+# Scrape each authenticated management proxy. Replace the example inventory.
+global:
+  scrape_interval: 15s
+  scrape_timeout: 4s
+  evaluation_interval: 15s
+rule_files: [kafka-rules.yml]
+scrape_configs:
+  - job_name: hello-kafka
+    scheme: https
+    metrics_path: /metrics
+    tls_config:
+      min_version: TLS13
+      ca_file: /etc/hello-monitor/kafka-ca.pem
+      cert_file: /etc/hello-monitor/scraper.pem
+      key_file: /etc/hello-monitor/scraper.key
+    static_configs:
+      - targets: [broker-1.management.invalid:9405, broker-2.management.invalid:9405, broker-3.management.invalid:9405]
+        labels: {environment: staging, cluster: example-kafka, role: broker}
+      - targets: [controller-1.management.invalid:9405, controller-2.management.invalid:9405, controller-3.management.invalid:9405]
+        labels: {environment: staging, cluster: example-kafka, role: controller}

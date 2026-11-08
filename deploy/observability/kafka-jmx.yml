@@ -1,0 +1,20 @@
+# Selected broker and controller MBeans. No topic or client identifiers.
+excludeJvmMetrics: true
+includeObjectNames:
+  - kafka.server:type=ReplicaManager,name=UnderReplicatedPartitions
+  - kafka.server:type=ReplicaManager,name=UnderMinIsrPartitionCount
+  - kafka.controller:type=KafkaController,name=ActiveControllerCount
+  - kafka.controller:type=KafkaController,name=OfflinePartitionsCount
+rules:
+  - pattern: 'kafka.server<type=ReplicaManager, name=UnderReplicatedPartitions><>Value'
+    name: hello_kafka_under_replicated_partitions
+    type: GAUGE
+  - pattern: 'kafka.server<type=ReplicaManager, name=UnderMinIsrPartitionCount><>Value'
+    name: hello_kafka_under_min_isr_partitions
+    type: GAUGE
+  - pattern: 'kafka.controller<type=KafkaController, name=ActiveControllerCount><>Value'
+    name: hello_kafka_active_controller
+    type: GAUGE
+  - pattern: 'kafka.controller<type=KafkaController, name=OfflinePartitionsCount><>Value'
+    name: hello_kafka_offline_partitions
+    type: GAUGE

@@ -1,6 +1,34 @@
-rule_files: [rules.yml]
+rule_files: [rules.yml, kafka-rules.yml]
 evaluation_interval: 15s
 tests:
+  - name: controller metrics lost and recovered
+    interval: 15s
+    input_series:
+      - series: 'up{job="hello-kafka",instance="c1",environment="test",cluster="sample",role="controller"}'
+        values: '1+0x6'
+      - series: 'hello_kafka_active_controller{job="hello-kafka",instance="c1",environment="test",cluster="sample",role="controller"}'
+        values: '1 stale _ _ 1+0x2'
+    alert_rule_test:
+      - eval_time: 45s
+        alertname: HelloKafkaControllerNotObserved
+        exp_alerts:
+          - exp_labels: {environment: test, cluster: sample, severity: critical}
+            exp_annotations:
+              summary: The scraper cannot verify one active Kafka controller
+              runbook: monitoring.md#kafka-replication
+      - eval_time: 45s
+        alertname: HelloKafkaMetricsUnavailable
+        exp_alerts:
+          - exp_labels: {job: hello-kafka, instance: c1, environment: test, cluster: sample, role: controller, severity: warning}
+            exp_annotations:
+              summary: Kafka node metrics are unavailable
+              runbook: monitoring.md#kafka-replication
+      - eval_time: 1m
+        alertname: HelloKafkaControllerNotObserved
+        exp_alerts: []
+      - eval_time: 1m
+        alertname: HelloKafkaMetricsUnavailable
+        exp_alerts: []
   - name: eligible outbox fires clears and omits stale replicas
     interval: 15s
     input_series:

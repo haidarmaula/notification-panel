@@ -17,6 +17,16 @@ GOCACHE=/tmp/hello-go-review-cache bash scripts/kafka-drill.sh
 
 ## What the drill verifies
 
+Run the command with `--monitor` to add a disposable Prometheus to the
+private network. This mode needs curl, access to the pinned release asset and
+the digest-pinned Prometheus image used by the monitoring fixture.
+Set `HELLO_KAFKA_JMX_JAR` to the path of the release jar for an offline run
+with the images already available.
+The script checks the SHA-256 before starting Kafka and mounts the jar and
+MBean allowlist read-only. Prometheus scrapes on the internal network with
+zero published ports. Target deployments use an authenticated management path.
+[Monitoring runbook](monitoring.md#kafka-replication).
+
 - The checked-in fixture profile pins an environment, cluster ID, three explicit
   replica placements per partition, three partitions per topic, minimum ISR 2,
   delete retention, append-time timestamps, size limits, unclean election policy
@@ -67,6 +77,18 @@ writes were explicitly refused. Restarting the two brokers through verified
 full ISR, replayed records, group checkpoints and topic IDs took 11 seconds.
 Each group finished at next offsets `[2,0,3]` for partitions 0–2. These elapsed
 times describe one synthetic run on a single host.
+
+## Monitored broker failure and recovery
+
+In the November 8 isolated run, Prometheus scraped all six nodes and observed
+one active controller. The replication alert fired with two in-sync replicas
+while the minimum ISR gauge stayed at zero. At one in-sync replica, both
+topics refused all-replica writes and the below-minimum ISR alert fired.
+Stopping the last broker fired the active controller's offline-partition alert
+and the broker scrape alert. Restart restored full ISR, acknowledged writes,
+numeric group checkpoints and the original topic IDs. All six scrapes
+returned and the Kafka alerts cleared. Kafka traffic used synthetic
+credentials and an internal Docker network.
 
 ## Evidence required for deployment
 

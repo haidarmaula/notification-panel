@@ -6,14 +6,15 @@ promtool=(docker run -i --rm --network none --read-only --tmpfs /tmp:rw,noexec,n
   --mount "type=bind,src=$PWD,dst=/rules,readonly" --workdir /rules --entrypoint /bin/promtool
   prom/prometheus@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996)
 "${promtool[@]}" check config --syntax-only prometheus.yml
-"${promtool[@]}" check rules rules.yml
+"${promtool[@]}" check config --syntax-only kafka-prometheus.yml
+"${promtool[@]}" check rules rules.yml kafka-rules.yml
 "${promtool[@]}" test rules rules_test.yml
 # Verify each checked-in panel's PromQL with Grafana's environment variable expanded.
 python3 - <<'PY' | "${promtool[@]}" check rules /dev/stdin
 import json
 with open("dashboard.json") as source:
     dashboard = json.load(source)
-rules = [{"record": "hello_panel_%d" % p["id"], "expr": t["expr"].replace("$environment", ".*")}
+rules = [{"record": "hello_panel_%d_%s" % (p["id"], t["refId"]), "expr": t["expr"].replace("$environment", ".*")}
          for p in dashboard["panels"] for t in p["targets"]]
 print(json.dumps({"groups": [{"name": "dashboard", "rules": rules}]}))
 PY

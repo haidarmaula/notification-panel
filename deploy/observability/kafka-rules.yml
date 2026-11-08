@@ -1,0 +1,44 @@
+groups:
+  - name: hello-kafka
+    rules:
+      - alert: HelloKafkaMetricsUnavailable
+        expr: |
+          up{job="hello-kafka"} == 0
+          or (up{job="hello-kafka",role="broker"} == 1 unless hello_kafka_under_min_isr_partitions)
+          or (up{job="hello-kafka",role="controller"} == 1 unless hello_kafka_active_controller)
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: Kafka node metrics are unavailable
+          runbook: monitoring.md#kafka-replication
+      - alert: HelloKafkaUnderReplicated
+        expr: max by (environment, cluster) (hello_kafka_under_replicated_partitions) > 0
+        for: 15s
+        labels: {severity: warning}
+        annotations:
+          summary: Kafka partitions have lost replica redundancy
+          runbook: monitoring.md#kafka-replication
+      - alert: HelloKafkaBelowMinISR
+        expr: max by (environment, cluster) (hello_kafka_under_min_isr_partitions) > 0
+        for: 15s
+        labels: {severity: critical}
+        annotations:
+          summary: Kafka partitions cannot satisfy minimum ISR
+          runbook: monitoring.md#kafka-replication
+      - alert: HelloKafkaOfflinePartitions
+        expr: max by (environment, cluster) (hello_kafka_offline_partitions and (hello_kafka_active_controller == 1)) > 0
+        for: 15s
+        labels: {severity: critical}
+        annotations:
+          summary: The active Kafka controller reports offline partitions
+          runbook: monitoring.md#kafka-replication
+      - alert: HelloKafkaControllerNotObserved
+        expr: |
+          sum by (environment, cluster) (hello_kafka_active_controller) != 1
+          or (count by (environment, cluster) (up{job="hello-kafka",role="controller"})
+              unless sum by (environment, cluster) (hello_kafka_active_controller))
+        for: 30s
+        labels: {severity: critical}
+        annotations:
+          summary: The scraper cannot verify one active Kafka controller
+          runbook: monitoring.md#kafka-replication
