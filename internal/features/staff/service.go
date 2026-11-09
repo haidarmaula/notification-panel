@@ -10,6 +10,7 @@ import (
 	"hello/internal/audit"
 	"hello/internal/authz"
 	"hello/internal/database/sqlc"
+	"hello/internal/stafffields"
 	"hello/internal/staffmutation"
 
 	"golang.org/x/crypto/bcrypt"
@@ -287,6 +288,9 @@ func (s *operations) Create(ctx context.Context, params CreateStaffParams) (*Sta
 	if _, err := s.permissions.Require(ctx, authz.StaffManage); err != nil {
 		return nil, err
 	}
+	if err := stafffields.ValidateText(params.Name, params.Email); err != nil {
+		return nil, err
+	}
 
 	exists, err := s.staffRepo.ExistsByEmail(ctx, params.Email)
 	if err != nil {
@@ -469,6 +473,9 @@ func (s *operations) List(ctx context.Context, page, limit int32, search string)
 // Update applies partial fields to the locked target, then records its before and after snapshots.
 func (s *operations) Update(ctx context.Context, params UpdateStaffParams) (*Staff, error) {
 	if _, err := s.permissions.Require(ctx, authz.StaffManage); err != nil {
+		return nil, err
+	}
+	if err := stafffields.ValidateText(params.Name, params.Email); err != nil {
 		return nil, err
 	}
 	existing, err := s.staffRepo.FindByID(ctx, params.ID)

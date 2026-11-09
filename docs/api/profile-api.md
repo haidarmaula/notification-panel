@@ -111,8 +111,8 @@ Updates the name and/or email of the currently authenticated staff user. At leas
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `name` | string | ❌ | New staff name (at least one of `name` or `email` required) |
-| `email` | string | ❌ | New staff email (must be unique if changed) |
+| `name` | string | ❌ | New staff name (maximum 255 Unicode characters; at least one of `name` or `email` required) |
+| `email` | string | ❌ | New staff email (must be unique if changed; maximum 255 Unicode characters) |
 
 ### Success Response (200 OK)
 
@@ -133,6 +133,7 @@ Updates the name and/or email of the currently authenticated staff user. At leas
 | Status | Message | Condition |
 |--------|---------|-----------|
 | `400` | at least one field (name or email) must be provided | Both `name` and `email` are empty |
+| `400` | name and email must not exceed 255 characters | A supplied name or email exceeds the staff column limit |
 | `400` | invalid request body | Malformed JSON |
 | `401` | unauthorized | Missing or invalid JWT token |
 | `404` | profile not found | Staff user does not exist |

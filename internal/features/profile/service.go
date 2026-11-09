@@ -8,6 +8,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 	"hello/internal/database/sqlc"
+	"hello/internal/stafffields"
 	"hello/internal/staffmutation"
 )
 
@@ -57,6 +58,9 @@ func (s *ProfileService) GetProfile(ctx context.Context, staffID int64) (*Profil
 // UpdateProfile writes only supplied profile fields. The statement cannot change account authority.
 func (s *ProfileService) UpdateProfile(ctx context.Context, p UpdateProfileParams) (*Profile, error) {
 	return staffmutation.Run(ctx, s.db, p.ID, false, func(q *sqlc.Queries) (*Profile, error) {
+		if err := stafffields.ValidateText(p.Name, p.Email); err != nil {
+			return nil, err
+		}
 		row, err := q.GetStaffUserByID(ctx, p.ID)
 		if err != nil {
 			return nil, fmt.Errorf("get account for profile update: %w", err)

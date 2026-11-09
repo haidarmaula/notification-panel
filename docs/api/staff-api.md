@@ -188,8 +188,8 @@ Creates a new staff user. The email must be unique and the role name must exist 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `role` | string | ✅ | Role name (must exist in roles table) |
-| `name` | string | ✅ | Staff full name |
-| `email` | string | ✅ | Staff email (must be unique) |
+| `name` | string | ✅ | Staff full name (maximum 255 Unicode characters) |
+| `email` | string | ✅ | Staff email (must be unique; maximum 255 Unicode characters) |
 | `password` | string | ✅ | Password (will be hashed) |
 
 ### Success Response (201 Created)
@@ -212,6 +212,7 @@ Creates a new staff user. The email must be unique and the role name must exist 
 | Status | Message | Condition |
 |--------|---------|-----------|
 | `400` | missing required fields | Role, name, email, or password missing |
+| `400` | name and email must not exceed 255 characters | A supplied name or email exceeds the staff column limit |
 | `400` | password must not exceed 72 characters | Password exceeds 72 UTF-8 bytes |
 | `400` | invalid request body | Malformed JSON |
 | `400` | invalid role | Role name does not exist |
@@ -245,8 +246,8 @@ Updates a staff user's role, name, or email. At least one field must be provided
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `role` | string | ❌ | New role name (must exist if provided) |
-| `name` | string | ❌ | New staff name |
-| `email` | string | ❌ | New staff email (must be unique if changed) |
+| `name` | string | ❌ | New staff name (maximum 255 Unicode characters) |
+| `email` | string | ❌ | New staff email (must be unique if changed; maximum 255 Unicode characters) |
 
 ### Success Response (200 OK)
 
@@ -271,6 +272,7 @@ Updates a staff user's role, name, or email. At least one field must be provided
 | `400` | at least one field must be provided | No fields provided for update |
 | `400` | invalid request body | Malformed JSON |
 | `400` | invalid role | Role name does not exist |
+| `400` | name and email must not exceed 255 characters | A supplied name or email exceeds the staff column limit |
 | `404` | staff user not found | Staff does not exist |
 | `409` | email already used by another staff | New email is already taken |
 | `409` | at least one active super administrator is required | The change would remove the final active super administrator |

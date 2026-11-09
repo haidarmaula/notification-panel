@@ -5,6 +5,7 @@ import (
 	"errors"
 	"hello/internal/authz"
 	"hello/internal/httprequest"
+	"hello/internal/stafffields"
 	"net/http"
 	"strconv"
 	"time"
@@ -189,7 +190,7 @@ func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, ErrEmailAlreadyRegistered):
 			response.JSON(w, http.StatusConflict, nil, err.Error())
-		case errors.Is(err, ErrInvalidRole), errors.Is(err, ErrPasswordTooLong):
+		case errors.Is(err, ErrInvalidRole), errors.Is(err, ErrPasswordTooLong), errors.Is(err, stafffields.ErrTextTooLong):
 			response.JSON(w, http.StatusBadRequest, nil, err.Error())
 		case errors.Is(err, ErrForbidden):
 			response.JSON(w, http.StatusForbidden, nil, err.Error())
@@ -328,7 +329,7 @@ func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, ErrStaffNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
-		case errors.Is(err, ErrInvalidRole):
+		case errors.Is(err, ErrInvalidRole), errors.Is(err, stafffields.ErrTextTooLong):
 			response.JSON(w, http.StatusBadRequest, nil, err.Error())
 		case errors.Is(err, ErrEmailAlreadyUsed), errors.Is(err, ErrLastActiveSuperAdmin):
 			response.JSON(w, http.StatusConflict, nil, err.Error())

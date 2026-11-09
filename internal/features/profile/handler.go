@@ -4,6 +4,7 @@ import (
 	"errors"
 	"hello/internal/authz"
 	"hello/internal/httprequest"
+	"hello/internal/stafffields"
 	"net/http"
 	"time"
 
@@ -132,6 +133,8 @@ func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		switch {
+		case errors.Is(err, stafffields.ErrTextTooLong):
+			response.JSON(w, http.StatusBadRequest, nil, err.Error())
 		case errors.Is(err, ErrProfileNotFound):
 			response.JSON(w, http.StatusNotFound, nil, err.Error())
 		case errors.Is(err, ErrEmailAlreadyUsed):

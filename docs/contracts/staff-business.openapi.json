@@ -2113,10 +2113,12 @@
             "type": "string"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 255
           },
           "email": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 255
           },
           "is_active": {
             "type": "boolean"
@@ -2181,10 +2183,12 @@
             "type": "string"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 255
           },
           "email": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 255
           },
           "password": {
             "type": "string",
@@ -2209,10 +2213,12 @@
             "type": "string"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 255
           },
           "email": {
-            "type": "string"
+            "type": "string",
+            "maxLength": 255
           }
         },
         "required": [],

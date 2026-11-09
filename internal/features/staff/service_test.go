@@ -18,6 +18,7 @@ import (
 	"hello/internal/database/sqlc"
 	"hello/internal/features/staff/mocks"
 	"hello/internal/middleware"
+	"hello/internal/stafffields"
 	"hello/internal/token"
 )
 
@@ -138,6 +139,25 @@ func TestStaffService_Create(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStaffService_CreateRejectsTextOverColumnLimitBeforePersistence(t *testing.T) {
+	t.Parallel()
+
+	service := newOperations(
+		mocks.NewMockStaffUserRepository(t),
+		mocks.NewMockRoleRepository(t),
+		mocks.NewMockAuditService(t),
+		testAuthority("SUPER_ADMIN"),
+	)
+
+	_, err := service.Create(ctxWithStaffID(99), CreateStaffParams{
+		Name:     strings.Repeat("界", 256),
+		Email:    "within-limit@example.com",
+		Password: "password123",
+		Role:     "ADMIN",
+	})
+	require.ErrorIs(t, err, stafffields.ErrTextTooLong)
 }
 
 // ============================================
@@ -391,6 +411,23 @@ func TestStaffService_Update(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStaffService_UpdateRejectsTextOverColumnLimitBeforePersistence(t *testing.T) {
+	t.Parallel()
+
+	service := newOperations(
+		mocks.NewMockStaffUserRepository(t),
+		mocks.NewMockRoleRepository(t),
+		mocks.NewMockAuditService(t),
+		testAuthority("SUPER_ADMIN"),
+	)
+
+	_, err := service.Update(ctxWithStaffID(99), UpdateStaffParams{
+		ID:   1,
+		Name: strings.Repeat("界", 256),
+	})
+	require.ErrorIs(t, err, stafffields.ErrTextTooLong)
 }
 
 // ============================================
