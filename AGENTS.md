@@ -4,193 +4,86 @@ The project profile explicitly supersedes conflicting community defaults.
 Maintained documentation and explanatory code comments must be in English.
 Skill provenance and update rules are in `docs/tooling/go-skills.md`.
 
-# AGENTS.md
+# Project instructions
 
-Go notification-delivery backend (API server + Kafka worker + scheduler). Read this before editing code.
+Go notification backend; module/import prefix `hello`, not `notification-panel`.
+Use code and symbol Godoc as the map; implementation wins over stale comments.
+README paths/tree are stale; config is split into `internal/config/*.config.go`.
+Before fixing a bug, search `code-review.md`; update the finding when fixed.
 
-## Orientation facts that are easy to get wrong
+## Navigation
 
-- **The Go module is `hello`, not `notification-panel`.** Every internal import is
-  `hello/internal/...`. The `notification-panel` name in `README.md` is only the upstream repo name.
-- **`README.md` is stale in several places. Trust the code:**
-  - it points at `internal/config/config.go` — that file is split into `base|server|worker|scheduler|bootstrap.config.go`;
-  - its project tree lists files that no longer match `git ls-files`.
-- **Godoc here is unusually thorough and is the best map of the system** — it records known bugs,
-  provider contract details, and concurrency constraints nowhere else. Read the comment on the
-  symbol you are touching. But it is **only as fresh as the last fix**: where a finding was closed
-  in code, the interface-level comment was often left behind (see *Known landmines*). When the
-  comment and the implementation disagree, the implementation wins — verify by reading the body.
-- **`code-review.md` is a live findings inventory** (C1–C29, H1–H26, …), not a closed document.
-  Recent `main` commits are point-fixes against it. Before "fixing" something, check whether a
-  finding already describes it; when you fix one, update `code-review.md`.
-
-## Commands
-
-```bash
-go build ./...          # compiles clean on main
-go test ./...           # unit tests; green baseline restored on 2026-11-02
-go tool mockery         # regenerate mocks; NOT a global binary, and NOT in the Makefile
-make sqlc               # regenerate internal/database/sqlc from db/{migrations,queries}
-```
-
-Focused verification of a single package:
-
-```bash
-go test ./internal/features/notifications/...
-go test -run TestProcessor ./internal/features/notifications/...
-```
-
-**The unit-test baseline was restored on 2026-11-02 (production plan step 17).**
-Staff tests use authenticated actors, the four-argument UpdatePassword contract,
-real bcrypt fixtures and pgx.ErrNoRows for missing rows. Segment mocks are
-regenerated; list tests expect CountSearch and batched CountBySegmentIDs rather
-than obsolete per-row counts. Tests cover authorization/password rejection and
-repository failures without changing service behavior. The original five tested packages
-(staff, segments, notifications, middleware, token) pass; M02a also adds authz unit tests. These are unit tests,
-not PostgreSQL/Kafka/FCM integration or production-readiness evidence.
-
-In restricted environments use `GOCACHE=/tmp/hello-go-review-cache` if the default
-Go build cache is not writable.
-
-Dependency integration smoke is opt-in: `bash scripts/integration.sh` with Docker
-Desktop/daemon, Python 3, migrate and Postman CLI installed. It uses its own
-Compose project, hardcoded local fixture DSN/ports, temporary storage and local
-HTTP simulation; it does not load `.env` or start server/worker/scheduler. The
-tagged tests refuse to run without explicit opt-in. See
-`docs/analysis/integration-readiness.md`: repository/Kafka producer + Firebase SDK
-Send are exercised, not the production FCMProvider SendAll adapter or new pipeline.
-
-**If you change a repository interface** consumed by a mocked package, regenerate
-(`go tool mockery`) or the affected test package will not compile.
-
-## Generated code and migrations
-
-- `internal/database/sqlc/` (17 files) is **generated but committed**. `make sqlc` currently
-  produces no diff. Never hand-edit it; change `db/queries/*.sql` or `db/migrations/*.sql`
-  and regenerate, then commit both sides.
-- `db/sqlc.yaml` reads `./migrations` as the schema. **A new migration must exist before you
-  regenerate sqlc**, or sqlc cannot see the new columns/tables and will emit stale or failing code.
-- Migrations are `golang-migrate` seq format, 6-digit prefix, `.up.sql` + `.down.sql` pairs
-  (`make migrate-create NAME=...`). Add a **down** migration with every up migration.
-- `.github/workflows/ci.yml` runs format/module/build/unit-test/vet and reachable
-  vulnerability gates on main pushes, optional PRs, manual runs and weekly scans.
-  Run the same checks via `bash scripts/ci.sh <format|modules|build|test|vet|vuln>`;
-  no `.env` or Make target is needed. The workflow was validated locally on
-  2026-11-02; a hosted Actions run/branch protection is not yet verified.
-  Go version comes from go.mod; scanner is pinned in the script. Do not suppress
-  vulnerability/network errors or infer production readiness from green checks.
-
-## Local environment gotchas
-
-- **`Makefile:1` is `include .env`.** With no `.env`, *every* target fails — including
-  `make help` and `make sqlc`. Copy `.env.example` first. Do not "fix" this by removing the include.
-- **Kafka topics must be created by hand.** `kafka.NewProducer` sets
-  `AllowAutoTopicCreation: false` and `RequiredAcks: RequireAll`, so a publish to a
-  non-existent topic fails loudly. `docker-compose.yml` provisions no topics and there is no
-  init script. Create both before the worker/scheduler do anything useful:
-  `notification.send.requested` and `notification.delivery.updated` (names from `.env`).
-  The separate integration runner provisions these names only on its disposable
-  fixture broker; it does not initialize the development broker.
-- `make migrate-*` runs against `localhost:$(DB_PORT)` with `sslmode=disable` regardless of
-  `DB_HOST`/`DB_SSLMODE` in `.env`. `.env` sets `DB_HOST=postgres` for the container network;
-  that is expected and does not affect the migrate targets.
-- `make up` runs three Air-hot-reload services (`server-dev`, `worker-dev`, `scheduler-dev`)
-  from one `Dockerfile.dev`, selected by the `AIR_CONFIG` build arg. Air builds
-  `./cmd/<name>/main.go` into `./tmp/` and excludes `_test.go`.
-- `docker-compose.yml` does **not** pass `ONESIGNAL_APP_ID`/`ONESIGNAL_API_KEY` to `server-dev`
-  or `scheduler-dev` — only `worker-dev` gets them. The worker is the only process that talks
-  to the push provider.
-- Local binaries that exist and are needed: `sqlc`, `migrate`, `docker`, `air`.
-  `mockery` is deliberately absent — use `go tool mockery` (wired via the `tool` directive in `go.mod`).
-
-## Architecture
-
-Single binary set, one shared `*pgxpool.Pool` and one `sqlc.Queries` per process:
-
-| Entry point | Role |
+| Task | Start here |
 |---|---|
-| `cmd/server` | REST API on `:8080`; composes all 7 feature modules; publishes `notification.send.requested` |
-| `cmd/worker` | Kafka consumer, group `notification-worker-group`; OneSignal delivery; publishes `notification.delivery.updated` |
-| `cmd/scheduler` | ticker (`SCHEDULER_INTERVAL`) promoting `SCHEDULED` → `QUEUED` |
-| `cmd/bootstrap` | one-shot: seeds roles + first `SUPER_ADMIN` from `BOOTSTRAP_SUPER_ADMIN_*` |
+| HTTP behavior | `internal/features/<feature>/{routes,handler,service,dto,model}.go` |
+| Composition | `cmd/{server,worker,scheduler,bootstrap}/main.go`; feature `module.go` |
+| Persistence | feature interfaces → `internal/database/repository/` → generated `internal/database/sqlc/` |
+| SQL/schema | `db/queries/`, `db/migrations/`, `db/sqlc.yaml` |
+| Permissions/errors | `internal/authz/`, `internal/middleware/`, `pkg/response/` |
+| API/schema docs | `docs/api/<module>-api.md`, `docs/database.md` |
 
-Request flow: `routes.go` → `handler.go` → `service.go` → `internal/database/repository/` →
-`internal/database/sqlc` → PostgreSQL. Services hold repository **interfaces** (declared in
-each feature's `interfaces.go` for staff/segments) — that indirection is what makes mocks possible.
-`pkg/response` is the only non-internal package and owns the JSON envelope.
+Server composes seven features and publishes send requests; worker consumes Kafka,
+sends via OneSignal, and publishes delivery updates; scheduler queues due work;
+bootstrap seeds roles/first super-admin. Each process shares one pool/query set.
+Config is loaded once per binary and must remain immutable.
 
-Config is per-binary (`config.LoadServerConfig` etc.), never a global. Each loader calls
-`godotenv.Load()` then **`log.Fatal`s on any missing required var** — there is no error return.
-Config structs are read-once and must not be mutated after startup.
+## Required context, on demand
 
-### Notification status state machine
+`docs/agent-reference.md` preserves the detailed project instructions. Search its
+headings and read the relevant sections before the corresponding work:
 
-Enforced by `CHECK` constraints in the migrations, and repeated as string literals all over the
-Go code. A `CHECK` violation surfaces as a pgx error, not a Go type error.
+- Tests, mocks, integrations: **Commands** (fixtures, coverage limits, opt-in setup).
+- SQL, repository interfaces, CI: **Generated code and migrations** and **Commands**.
+- Local startup, containers, config: **Local environment gotchas** and **Architecture**.
+- Notifications, providers, worker, Kafka, scheduling, status, authz, audit,
+  DB URLs, or list/filter changes: **Known landmines** and **Architecture**.
 
-- `notifications.status`: `DRAFT → SCHEDULED → QUEUED → PROCESSING → COMPLETED | FAILED`
-  (plus `CANCELLED`)
-- `notification_deliveries.status`: `PENDING → SENT → DELIVERED | OPENED`, or `FAILED`
+Read touched symbols' comments and bodies; provider/Kafka interface comments
+contain known stale claims.
 
-Only `DRAFT` notifications are editable or deletable. `CANCELLED` appears in the constraint but
-is never written by any Go code — treat adding a cancel path as new work, not a wiring fix.
+## Context budget
 
-## Known landmines (do not "simplify" these)
+Tool results, not prose, dominate token spend. These apply to every task:
 
-- **`notifications/provider.go`'s interface Godoc is STALE — do not trust it.** It still claims
-  `OneSignalProvider` drops short tokens (returning a shorter slice), returns `nil, err` on batch
-  failure, and hardcodes `click_action`; and that `FCMProvider` never returns a non-nil
-  function-level error. All of that was fixed in the H19–H26 pass. The current `Send`
-  implementations honour the contract: `OneSignalProvider.Send` pre-allocates
-  `results := make([]SendResult, len(req.Tokens))` and marks rejected tokens `FAILED` **in place**,
-  so the slice is always full-length. Read `onesignal_provider.go` / `fcm_provider.go` /
-  `processor.go` — not the interface comment — when reasoning about provider behaviour.
-- **Delivery attribution is `PushToken`-keyed, not positional.** `Processor.ProcessSendRequested`
-  matches each `SendResult.PushToken` against the tokens slice it dispatched (finding H28's fix;
-  the old code matched on `UserID` and broke at the first hit, collapsing every delivery for a
-  multi-device user onto one device). It still *depends* on one result per input token in input
-  order. On no match it inserts with `deviceTokenID = 0` and logs a warning — so a provider that
-  returns results out of order or with rewritten tokens corrupts attribution silently rather than
-  erroring.
-- **`MockProvider` lives in the production package**, not behind a build tag or `_test.go`.
-  It is not wired into any binary — the worker hardcodes `NewOneSignalProvider`
-  (`cmd/worker/main.go`). Do not assume swapping providers is config-driven; it is a code edit.
-- **The worker is at-least-once.** Offsets commit only after the processor returns nil, so
-  `ProcessSendRequested` must stay idempotent. H27 is fixed: the guard treats `COMPLETED`/`FAILED`
-  as terminal outright, and `PROCESSING` as terminal **only when at least one delivery row already
-  exists**. `PROCESSING` with zero delivery rows is deliberately treated as a crashed predecessor
-  and re-dispatched — do not "tighten" that into a blanket `PROCESSING` guard, which would strand
-  notifications that crashed before their first delivery insert.
-- **`internal/kafka/producer.go` has deterministic keys but NO current key-based partition
-  affinity.** `NewProducer` uses `kafka.LeastBytes`; the pinned kafka-go v0.4.51 balancer
-  routes by byte count, not key hash. Its Godoc claims otherwise and is stale (finding H47).
-  Preserve the existing `notification_<id>` / `delivery_<id>` key formats. ADR-07 proposes
-  an explicit hash balancer plus a reviewed mapping migration; this is not implemented yet.
-- **`GetDatabaseURL` does not percent-encode** the password. DB passwords must stay alphanumeric.
-- **Audit action strings are persisted schema.** They live in `internal/audit/constants.go`
-  (`ACTION_*`, `ENTITY_TYPE_*`); changing a value breaks downstream log-search tooling.
-  Register new actions there, not inline.
-- **Notification/segment/member permissions use `internal/authz` current DB authority.**
-  M02a fixed C21 with independent route/service guards, including non-null scheduling
-  fields. Do not replace them with token RoleName checks or an allow-all test fallback.
-  Legacy staff administration/session guards and transaction-time revocation/audit remain
-  separate follow-up; authorization is currently a statement snapshot, not a lock through mutation.
-- **500 responses must use the literal `"internal server error"`, never `err.Error()`.**
-  `err.Error()` is correct only on mapped 4xx branches (401/403/404/409/400), where it surfaces a
-  domain sentinel. M02a also fixed the three remaining members-handler unknown-500
-  leaks; new handlers must keep the same safe generic-error convention.
-- **Several list endpoints historically computed `Total` from an unfiltered `Count`, and some
-  filters did not compose.** Fixes landed for users/staff/segments (search-aware `CountSearch`,
-  batched `CountBySegmentIDs`). `members_service.go` is still the weakest area — check
-  `code-review.md` before assuming any list endpoint is correct.
+- Never `Read` a whole file to get oriented. Grep the symbol, then read with
+  offset/limit around the hit. Whole-file reads are for files the task rewrites.
+- `.rgignore` keeps generated sqlc/mocks, skill eval fixtures, API contracts and
+  diagrams out of exploratory search. Name the path explicitly to search them.
+- `code-review.md` is long: grep the finding or keyword, never read it whole.
+- Load at most one `.agents/skills/` body per task, and only the section that
+  applies. Never read the collection or its `references/` speculatively.
+- Delegate multi-file exploration to a search subagent and ask for a conclusion
+  under 200 words, so file dumps stay out of the main context.
+- Run the narrowest test that proves the change before any broader sweep.
+- Do not re-read a file you just edited, and do not restate diffs or narrate the
+  search; report findings, decisions and results.
+
+## Checks and invariants
+
+- Start with `go test ./internal/features/<feature>/...` or a relevant `-run` test;
+  broaden to `go test ./...` and `go build ./...` for shared changes/required checks.
+  Use `GOCACHE=/tmp/hello-go-review-cache` if the default cache is unwritable.
+- Keep tests quiet. For verbose/JSON diagnostics use
+  `python3 scripts/quiet-go-test.py -- <go test arguments>`; it retains full logs
+  and exit status. Limits/retrieval: `docs/analysis/codex-log-pilot.md`.
+- CI exists: `bash scripts/ci.sh <format|modules|build|test|vet|vuln>`; these checks
+  need no `.env`. Go version is in `go.mod`; do not suppress network/scanner failures.
+  Unit checks do not establish integration or production readiness.
+- Interface changes consumed by mocks require `go tool mockery`; no global binary.
+- Never hand-edit `internal/database/sqlc/`. Change SQL, create migrations before
+  `make sqlc`, and retain generated changes. Migrations need paired six-digit
+  `.up.sql`/`.down.sql` files. Every Make target requires `.env`; keep its include.
+- Keep current DB-backed authz guards at routes and services; never substitute
+  token RoleName or an allow-all test fallback. Unknown 500 errors must return
+  literal `"internal server error"`; `err.Error()` is for mapped domain 4xx only.
+- Register audit actions in `internal/audit/constants.go`; existing values persist
+  in storage. Preserve worker idempotency and Kafka key formats; read landmines first.
+- Only DRAFT notifications may be edited/deleted. CANCELLED is schema-only;
+  implementing cancellation is new work.
 
 ## Conventions
 
-- Commit directly to `main`. History is linear; no PR/branch workflow, no CI.
-- Conventional Commits with a scope: `fix(segments): ...`, `feat(audit): ...`,
-  `perf(notifications): ...`, `docs(staff): ...`, `refactor(config): ...`.
-- Feature modules follow a fixed file layout (`module.go`, `routes.go`, `handler.go`,
-  `service.go`, `dto.go`, `model.go`, plus `interfaces.go` where mocking is needed). New
-  features copy the nearest existing module rather than inventing a shape.
-- Endpoints are documented in `docs/api/<module>-api.md`; schema rationale in `docs/database.md`.
-  README's "Contributing Guidelines" requires updating the API doc alongside a new endpoint.
+Commit directly to `main`; linear history, no PR/branch workflow. Use scoped
+Conventional Commits. Copy the nearest feature layout; staff/segments repository
+interfaces live in `interfaces.go`. Update API docs with new endpoints and schema
+rationale in `docs/database.md`.

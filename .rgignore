@@ -1,0 +1,23 @@
+# Search-noise exclusions for ripgrep-based agent tools.
+# Everything here is still readable by naming the path explicitly; these rules
+# only stop exploratory greps and globs from pulling large generated or
+# machine-readable content into context.
+
+# Vendored skill evaluation fixtures (~780 KB JSON, never used for project work)
+.agents/skills/*/evals/
+
+# Generated code: sqlc (~370 KB) and mocks (~110 KB).
+# db/queries/ and each feature's interfaces.go are the sources of truth.
+internal/database/sqlc/
+internal/**/mocks/
+
+# Machine-readable contracts and diagram sources; use docs/api/*.md instead
+docs/contracts/
+docs/diagrams/
+
+# Dependency checksums; go.mod carries the useful version data
+go.sum
+
+# Local scratch and prior-tool history
+tmp/
+.aider*
