@@ -5,12 +5,15 @@ package integration
 import (
 	"context"
 	"errors"
+	"testing"
 
 	"hello/internal/database/sqlc"
+	"hello/internal/middleware"
 	"hello/internal/token"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/stretchr/testify/require"
 )
 
 // authz fixtures can vary the JWT's descriptive role independently of the DB.
@@ -44,4 +47,14 @@ func fixtureStaffPair(ctx context.Context, q *sqlc.Queries, m *token.TokenManage
 func fixtureAccess(ctx context.Context, q *sqlc.Queries, m *token.TokenManager, staffID int64, role, email string) (string, error) {
 	p, err := fixtureStaffPair(ctx, q, m, staffID, role, email)
 	return p.AccessToken, err
+}
+
+func fixtureStaffContext(t *testing.T, ctx context.Context, q *sqlc.Queries, staffID int64) context.Context {
+	t.Helper()
+	manager := token.NewTokenManager("fixture-access", "fixture-refresh")
+	raw, err := fixtureAccess(ctx, q, manager, staffID, "VIEWER", "")
+	require.NoError(t, err)
+	claims, err := manager.ParseAccessToken(raw)
+	require.NoError(t, err)
+	return context.WithValue(ctx, middleware.UserContextKey, claims)
 }

@@ -100,7 +100,9 @@ func TestDurableAcceptance(t *testing.T) {
 		tokens[role], err = fixtureAccess(ctx, q, manager, id, "VIEWER", "")
 		require.NoError(t, err)
 	}
-	actorCtx := context.WithValue(ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: actors["ADMIN"]})
+	claims, err := manager.ParseAccessToken(tokens["ADMIN"])
+	require.NoError(t, err)
+	actorCtx := context.WithValue(ctx, middleware.UserContextKey, claims)
 	userID := count("INSERT INTO users(application_id,external_id) VALUES($1,'acceptance-user') RETURNING id", appID)
 	protector, err := installation.NewProtector(1, map[int32][]byte{1: bytes.Repeat([]byte{1}, 32)}, bytes.Repeat([]byte{2}, 32))
 	require.NoError(t, err)
@@ -116,12 +118,11 @@ func TestDurableAcceptance(t *testing.T) {
 	}
 	mux := http.NewServeMux()
 	applications.NewModule(q, pool, middleware.NewAPIKeyMiddleware("fixture-key").Use, middleware.NewJWTMiddleware(manager, repository.NewStaffUserRepository(q)).Use, middleware.NewAuditMiddleware().Use).RegisterRoutes(mux)
-	request := func(role string, id int64, operation, key, body string, want int) *httptest.ResponseRecorder {
-		t.Helper()
+	serve := func(raw string, id int64, operation, key, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/api/v1/apps/"+project.String()+"/campaigns/"+strconv.FormatInt(id, 10)+"/"+operation, bytes.NewBufferString(body)).WithContext(ctx)
 		r.Header.Set("X-API-Key", "fixture-key")
-		if role != "" {
-			r.Header.Set("Authorization", "Bearer "+tokens[role])
+		if raw != "" {
+			r.Header.Set("Authorization", "Bearer "+raw)
 		}
 		if key != "" {
 			r.Header.Set("Idempotency-Key", key)
@@ -131,6 +132,11 @@ func TestDurableAcceptance(t *testing.T) {
 		}
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, r)
+		return w
+	}
+	request := func(role string, id int64, operation, key, body string, want int) *httptest.ResponseRecorder {
+		t.Helper()
+		w := serve(tokens[role], id, operation, key, body)
 		require.Equal(t, want, w.Code, w.Body.String())
 		require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
 		if want == 202 {
@@ -270,4 +276,70 @@ func TestDurableAcceptance(t *testing.T) {
 	exec("DELETE FROM retention_policies WHERE application_id=$1 AND record_class='send_key'", appID)
 	request("ADMIN", nextDraft, "send", "concurrent-key", "", 202)
 	request("ADMIN", draft, "send", "different-key", "", 409)
+
+	for _, tc := range []struct {
+		name, operation string
+		expire          bool
+	}{
+		{name: "send revoked while waiting for project lock", operation: "send"},
+		{name: "schedule revoked while waiting for project lock", operation: "schedule"},
+		{name: "send expired while waiting for campaign lock", operation: "send", expire: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			id := newDraft()
+			raw, err := fixtureAccess(ctx, q, manager, actors["ADMIN"], "VIEWER", "")
+			require.NoError(t, err)
+			session, err := manager.ParseAccessToken(raw)
+			require.NoError(t, err)
+			if tc.expire {
+				exec("UPDATE staff_sessions SET expires_at=clock_timestamp()+interval '2 seconds' WHERE id=$1::uuid", session.SessionID)
+			}
+			blocker, err := pool.Begin(ctx)
+			require.NoError(t, err)
+			defer blocker.Rollback(context.Background())
+			if tc.expire {
+				_, err = blocker.Exec(ctx, "SELECT id FROM notifications WHERE id=$1 FOR UPDATE", id)
+			} else {
+				_, err = blocker.Exec(ctx, "SELECT id FROM applications WHERE id=$1 FOR UPDATE", appID)
+			}
+			require.NoError(t, err)
+			before := count("SELECT count(*) FROM audit_logs")
+			result := make(chan *httptest.ResponseRecorder, 1)
+			go func() {
+				if tc.operation == "send" {
+					result <- serve(raw, id, tc.operation, fmt.Sprintf("rejected-session-%d", id), "")
+				} else {
+					result <- serve(raw, id, tc.operation, "", body)
+				}
+			}()
+			require.Eventually(t, func() bool {
+				var blocked bool
+				err := pool.QueryRow(ctx, "SELECT EXISTS(SELECT FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)))",
+					int32(blocker.Conn().PgConn().PID())).Scan(&blocked)
+				return err == nil && blocked
+			}, 2*time.Second, 20*time.Millisecond)
+			if tc.expire {
+				require.Eventually(t, func() bool {
+					var expired bool
+					err := pool.QueryRow(ctx, "SELECT expires_at<=clock_timestamp() FROM staff_sessions WHERE id=$1::uuid",
+						session.SessionID).Scan(&expired)
+					return err == nil && expired
+				}, 3*time.Second, 20*time.Millisecond)
+			} else {
+				_, err = blocker.Exec(ctx, "UPDATE staff_sessions SET revoked_at=clock_timestamp(),revocation_reason='logout' WHERE id=$1::uuid", session.SessionID)
+				require.NoError(t, err)
+			}
+			require.NoError(t, blocker.Commit(ctx))
+			select {
+			case w := <-result:
+				require.Equal(t, http.StatusUnauthorized, w.Code, w.Body.String())
+			case <-ctx.Done():
+				t.Fatal("request did not return after releasing the lock")
+			}
+			require.EqualValues(t, 1, count("SELECT count(*) FROM notifications WHERE id=$1 AND status='DRAFT'", id))
+			require.Zero(t, count("SELECT count(*) FROM notification_send_outbox WHERE notification_id=$1", id))
+			require.Zero(t, count("SELECT count(*) FROM notification_send_keys WHERE notification_id=$1", id))
+			require.Equal(t, before, count("SELECT count(*) FROM audit_logs"))
+		})
+	}
 }

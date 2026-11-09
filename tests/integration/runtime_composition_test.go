@@ -28,9 +28,7 @@ import (
 	"hello/internal/features/applications"
 	"hello/internal/installation"
 	"hello/internal/kafka"
-	"hello/internal/middleware"
 	"hello/internal/runloop"
-	"hello/internal/token"
 )
 
 func TestSourceOutboxHoldsInactiveRegistration(t *testing.T) {
@@ -92,7 +90,7 @@ func TestSchedulerAndAuthenticatedWorkerComposeDurablePipeline(t *testing.T) {
 	approveFixtureBindings(t, ctx, f.pool, f.app)
 	_, err = f.pool.Exec(ctx, "INSERT INTO notification_targets(application_id,notification_id,target_type) VALUES($1,$2,'BROADCAST')", f.app, f.campaign)
 	require.NoError(t, err)
-	staffCtx := context.WithValue(ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: f.staff})
+	staffCtx := fixtureStaffContext(t, ctx, f.q, f.staff)
 	scheduled, err := applications.NewService(f.q, f.pool).ScheduleCampaign(staffCtx, f.project, f.campaign, time.Now().UTC().Add(time.Second))
 	require.NoError(t, err)
 	transport := &broker.Transport{DialTimeout: time.Second}

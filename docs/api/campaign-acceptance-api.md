@@ -34,8 +34,9 @@ received the notification. No provider request occurs in these handlers.
 Sealed deployments, migration holds, project holds, or missing dispatch policy
 reject new work with 503 and `Retry-After: 5`. Unapproved or incomplete modern
 audience coverage returns 409 for immediate sends. Status/key conflicts also
-return 409. Invalid inputs return 400, absent authentication 401, forbidden
-roles 403, and unavailable/ungranted projects 404. Unknown failures return the
+return 409. Invalid inputs return 400. Missing, expired or revoked credentials
+return 401, forbidden roles return 403, and unavailable or ungranted projects
+return 404. Unknown failures return the
 literal `internal server error` with 500. No acceptance state survives a failed
 transaction, including audit failure.
 

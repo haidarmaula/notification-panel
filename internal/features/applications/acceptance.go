@@ -16,6 +16,8 @@ import (
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 	"hello/internal/httprequest"
+	"hello/internal/middleware"
+	"hello/internal/token"
 	"hello/pkg/response"
 )
 
@@ -60,8 +62,12 @@ func acceptanceSnapshot(id int64, queued, deadline pgtype.Timestamptz) Acceptanc
 	return Acceptance{strconv.FormatInt(id, 10), "QUEUED", queued, deadline}
 }
 
-func lockAcceptanceScope(ctx context.Context, q *sqlc.Queries, id pgtype.UUID, permission authz.Permission) (sqlc.LockNotificationRuntimeRow, sqlc.Application, authz.ApplicationPrincipal, error) {
+func lockAcceptanceScope(ctx context.Context, q *sqlc.Queries, id pgtype.UUID, permission authz.Permission, actorID int64, session pgtype.UUID) (sqlc.LockNotificationRuntimeRow, sqlc.Application, authz.ApplicationPrincipal, error) {
 	runtime, err := q.LockNotificationRuntime(ctx)
+	if err != nil {
+		return runtime, sqlc.Application{}, authz.ApplicationPrincipal{}, err
+	}
+	epoch, err := q.LockStaffMutationLineage(ctx)
 	if err != nil {
 		return runtime, sqlc.Application{}, authz.ApplicationPrincipal{}, err
 	}
@@ -69,11 +75,15 @@ func lockAcceptanceScope(ctx context.Context, q *sqlc.Queries, id pgtype.UUID, p
 	if err != nil {
 		return runtime, app, authz.ApplicationPrincipal{}, appError(err)
 	}
-	actorID, ok := audit.GetStaffID(ctx)
-	if !ok {
-		return runtime, app, authz.ApplicationPrincipal{}, authz.ErrUnauthenticated
-	}
 	if _, err := q.LockAcceptanceStaff(ctx, actorID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			err = authz.ErrUnauthenticated
+		}
+		return runtime, app, authz.ApplicationPrincipal{}, err
+	}
+	if _, err := q.LockStaffMutationSession(ctx, sqlc.LockStaffMutationSessionParams{
+		Actor: actorID, SessionID: session, SessionEpoch: epoch,
+	}); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			err = authz.ErrUnauthenticated
 		}
@@ -81,6 +91,39 @@ func lockAcceptanceScope(ctx context.Context, q *sqlc.Queries, id pgtype.UUID, p
 	}
 	scope, err := authz.NewApplicationAuthorizer(q).RequireApplication(ctx, id, permission)
 	return runtime, app, scope, err
+}
+
+func (s *Service) writeAcceptance(ctx context.Context, id pgtype.UUID, permission authz.Permission,
+	work func(context.Context, *sqlc.Queries, sqlc.LockNotificationRuntimeRow, sqlc.Application, authz.ApplicationPrincipal) error,
+) error {
+	claims, ok := ctx.Value(middleware.UserContextKey).(*token.AccessClaims)
+	var session pgtype.UUID
+	if !ok || claims == nil || claims.ExpiresAt == nil ||
+		session.Scan(claims.SessionID) != nil || !session.Valid || session.Bytes == [16]byte{} {
+		return authz.ErrUnauthenticated
+	}
+	return s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
+		runtime, app, scope, err := lockAcceptanceScope(ctx, q, id, permission, claims.StaffID, session)
+		if err != nil {
+			return err
+		}
+		if !time.Now().Before(claims.ExpiresAt.Time) {
+			return authz.ErrUnauthenticated
+		}
+		if err := work(ctx, q, runtime, app, scope); err != nil {
+			return err
+		}
+		// Locks fence revocation and epoch changes. Expiry can still pass while
+		// waiting for a campaign row or recording the acceptance and audit.
+		active, err := q.StaffSessionActive(ctx, sqlc.StaffSessionActiveParams{SessionID: session, StaffID: claims.StaffID})
+		if err != nil {
+			return err
+		}
+		if !active || !time.Now().Before(claims.ExpiresAt.Time) {
+			return authz.ErrUnauthenticated
+		}
+		return nil
+	})
 }
 
 func acceptancePolicy(ctx context.Context, q *sqlc.Queries, runtime sqlc.LockNotificationRuntimeRow, applicationID int64) (sqlc.GetApplicationDispatchPolicyRow, error) {
@@ -120,12 +163,8 @@ func (s *Service) AcceptCampaign(ctx context.Context, id pgtype.UUID, campaignID
 	defer cancel()
 	var result Acceptance
 	replayed := false
-	err = s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
+	err = s.writeAcceptance(ctx, id, authz.NotificationsSend, func(ctx context.Context, q *sqlc.Queries, runtime sqlc.LockNotificationRuntimeRow, app sqlc.Application, scope authz.ApplicationPrincipal) error {
 		replayed = false
-		runtime, app, scope, err := lockAcceptanceScope(ctx, q, id, authz.NotificationsSend)
-		if err != nil {
-			return err
-		}
 		stored, err := q.GetSendKey(ctx, sqlc.GetSendKeyParams{ApplicationID: app.ID, StaffUserID: scope.Staff.ID, KeySource: source, Key: key})
 		if err == nil && stored.Unexpired {
 			if stored.NotificationID != campaignID {
@@ -191,11 +230,7 @@ func (s *Service) ScheduleCampaign(ctx context.Context, id pgtype.UUID, campaign
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	var result ScheduledCampaign
-	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
-		runtime, app, _, err := lockAcceptanceScope(ctx, q, id, authz.NotificationsSchedule)
-		if err != nil {
-			return err
-		}
+	err := s.writeAcceptance(ctx, id, authz.NotificationsSchedule, func(ctx context.Context, q *sqlc.Queries, runtime sqlc.LockNotificationRuntimeRow, app sqlc.Application, _ authz.ApplicationPrincipal) error {
 		policy, err := acceptancePolicy(ctx, q, runtime, app.ID)
 		if err != nil {
 			return err

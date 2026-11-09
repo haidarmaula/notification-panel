@@ -20,8 +20,6 @@ import (
 	"hello/internal/fcm"
 	"hello/internal/features/applications"
 	"hello/internal/kafka"
-	"hello/internal/middleware"
-	"hello/internal/token"
 )
 
 const pilotCohort = "7a000000-0000-4000-8000-000000000001"
@@ -99,7 +97,7 @@ func TestManagedDispatchPilotScope(t *testing.T) {
 	f := readySubmission(t, ctx)
 	approve := dispatchApprovers(t, f)
 	service := applications.NewService(f.q, f.pool)
-	actor := context.WithValue(ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: f.staff})
+	actor := fixtureStaffContext(t, ctx, f.q, f.staff)
 	prep, err := dispatch.NewPreparer(f.pool)
 	require.NoError(t, err)
 	var segment, empty int64

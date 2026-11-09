@@ -11,9 +11,12 @@ is deployment-owned and has no client override. A missing policy fails closed.
 TTL bounds are 1–604800 seconds for this implementation. These are input limits,
 not delivery SLOs or approved production defaults.
 
-Immediate acceptance locks deployment control for share, project control for
-update, current staff authority, the existing app/actor/source/key row, then the
-campaign. Replays require current operation permission and grant. An unexpired
+Immediate acceptance locks deployment control and staff session lineage for
+share, project control for update, and the actor and active session for share.
+It then checks current operation permission and grant before accessing the
+existing app/actor/source/key row and the campaign. Scheduling uses the same
+authority locks. Both operations check session and access-token expiry again
+before commit. Replays require the same current authority. An unexpired
 key for the same campaign returns its immutable QUEUED snapshot, even during a
 new-send hold. A different campaign using that key returns 409. Expired keys are
 removed under the same lock before a new DRAFT claim. App control serializes the

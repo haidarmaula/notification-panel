@@ -202,8 +202,23 @@ func (e *experiment) prepare(outbox *dispatch.Outbox, requests *broker.Conn) {
 	e.exec("INSERT INTO notification_targets(application_id,notification_id,target_type) VALUES($1,$2,'BROADCAST')", e.app, campaign)
 	var project pgtype.UUID
 	check(project.Scan(e.public))
-	actor := context.WithValue(e.ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: e.staff})
-	service := applications.NewService(sqlc.New(e.db), e.db)
+	q := sqlc.New(e.db)
+	staff, err := q.GetStaffUserByID(e.ctx, e.staff)
+	check(err)
+	manager := token.NewTokenManager("load-fixture-access", "load-fixture-refresh")
+	family := token.NewFamily()
+	pair, err := manager.Issue(staff.ID, "ADMIN", staff.Email, family)
+	check(err)
+	opened, err := q.OpenStaffSession(e.ctx, sqlc.OpenStaffSessionParams{
+		SessionID: family.ID, StaffID: staff.ID, AuthEpoch: staff.AuthEpoch, RefreshDigest: pair.RefreshDigest[:],
+		ExpiresAt: pgtype.Timestamptz{Time: family.ExpiresAt, Valid: true},
+	})
+	check(err)
+	verify(opened == 1, "synthetic staff session did not open")
+	claims, err := manager.ParseAccessToken(pair.AccessToken)
+	check(err)
+	actor := context.WithValue(e.ctx, middleware.UserContextKey, claims)
+	service := applications.NewService(q, e.db)
 	t := time.Now()
 	_, replayed, err := service.AcceptCampaign(actor, project, campaign, "")
 	check(err)
