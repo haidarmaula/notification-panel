@@ -3,7 +3,6 @@ package observability
 import (
 	"context"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -46,7 +45,7 @@ func TestProviderSeriesAndCancel(t *testing.T) {
 	provider.PermitDeferred(fcm.DeferralQuota)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	handler := Access(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "done") }), s.Observe)
+	handler := Access(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}), s.Observe)
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(ctx, "POST", "/", nil))
 	w := httptest.NewRecorder()
 	s.handlers().ServeHTTP(w, httptest.NewRequest("GET", "/metrics", nil))
@@ -55,7 +54,7 @@ func TestProviderSeriesAndCancel(t *testing.T) {
 		`hello_provider_results_total{disposition="rejected",reason="quota"} 1`,
 		`hello_provider_permit_deferrals_total{reason="quota"} 1`,
 		`hello_provider_permit_deferrals_total{reason="breaker"} 0`,
-		"hello_provider_inflight 0", `outcome="cancelled"`,
+		"hello_provider_inflight 0", `outcome="cancelled"`, `status_class="none"`,
 	} {
 		require.Contains(t, w.Body.String(), expected)
 	}

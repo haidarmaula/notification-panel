@@ -63,7 +63,7 @@ func Access(next http.Handler, observe func(Request)) http.Handler {
 			// Record the committed status even if the recovery response fails
 			// to write and aborts the connection.
 			defer func() {
-				if event.Status == 0 && !hijacked && !abort {
+				if event.Status == 0 && !hijacked && !abort && r.Context().Err() == nil {
 					event.Status = http.StatusOK
 				}
 				event.Route = "unmatched"
