@@ -310,7 +310,7 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 | H39 | `internal/features/staff/service.go` — `Update`, `UpdateStatus` | Fixed locally. The mutation, re-fetch, redacted audit and final-active-administrator check share one transaction. A failure rolls back the write. |
 | H40 | Campaign updates | The mounted draft replacement checks the campaign and changes the draft, targets and audit in one transaction. The HTTP integration test verifies rollback after an invalid target. |
 | H41 | Campaign creation | The mounted scoped creation inserts the campaign, targets and audit in one transaction. Cross-project references fail without partial records. |
-| H42 | `internal/features/segments/service.go` — `Create` | Same pattern — no transaction around the parent and target inserts |
+| H42 | `internal/features/notifications/service.go` — `Create` | **Confirmed in unmounted legacy code.** The method inserts a notification and its target rows without one transaction; on a target failure it best-effort deletes the parent and ignores any delete error (`service.go:648–695`). A failed compensation can leave a partial draft/target set. The mounted application campaign creation inserts campaign, targets and audit atomically (H41). |
 
 ### Configuration & Lifecycle
 
@@ -559,7 +559,8 @@ Focus: user-visible bugs and contract divergences.
 - [x] H10–H18 — totals, pagination and result caps are all corrected. Only H11 (staff `List`) is mounted and it was already reconciled; H10 and H12–H18 sit in unmounted `segments`, `users` and `notifications`. Clamping an out-of-range `limit` to 100 in mounted staff still exists, but that is cross-cutting pattern 6 rather than one of these findings
 - [x] H19–H26 — provider result cardinality, error signaling, partial acceptance and FCM configuration are corrected and focused package tests pass. H22 remains a documented OneSignal batch-ID limitation; pinned SDK SendAll deprecation is a future-upgrade consideration.
 - [ ] H27, H29–H32, H34–H35, H37 — remaining findings are confined to unmounted legacy paths and must be fixed or retired before remount. H28, H33 and H36 are fixed in existing code; H35's exact `ON DELETE CASCADE` outcome is recorded above.
-- [ ] H38–H42 — fix the partial-commit paths, either with transactions or with corrected response semantics
+- [x] H38–H41 — mounted campaign mutations, campaign creation and staff changes use transactions for their critical writes and audit evidence
+- [ ] H42 — the old notification feature still creates the parent and targets with best-effort compensation; it is unmounted and must be fixed or retired before remount
 - [x] C19 — notification history already pages and counts per-notification in `ListUserNotifications` / `CountUserNotifications`; the previous open claim was based on an incorrect reading of the repository queries
 - [x] C20 — the device-token update now runs inside a transaction with tx-bound reads (`users/service.go:762`)
 
@@ -610,7 +611,11 @@ Move the per-handler error switches into a shared mapper that takes a domain err
 
 ### 4. Transaction Boundaries for Multi-Write Operations
 
-Segment creation, notification creation, device-token update, and mobile sync all perform multiple writes that must commit together. Wrapping them in explicit `pgx.Tx` transactions would resolve C20, H41, H42, and several TOCTOU findings.
+The mounted application campaign, segment and staff mutation paths use explicit
+transactions for their critical writes and audit evidence. The unmounted legacy
+notification creation and mobile sync paths still need transactional fixes or
+retirement before remount; do not treat their partial-commit behavior as a live
+mounted defect.
 
 ### 5. Kafka Event Schema Versioning
 
