@@ -100,7 +100,7 @@ The next repository-verifiable slice is an inventory, not target acceptance:
 
 | Decision | Verified in repository | Still requires target or owner evidence |
 | --- | --- | --- |
-| Service levels | [ADR-08 A-6](../adr/adr-08-observability.md#a-6-lifecycle-timing-sparse-traffic-and-slo-evidence) defines lifecycle timing, sparse-traffic treatment and measurement boundaries; the project owner approved initial values above. | Platform/operations sign-off, selected-deployment feasibility and observed staging SLIs. |
+| Service levels | [ADR-08 A-6](../adr/adr-08-observability.md#a-6-lifecycle-timing-sparse-traffic-and-slo-evidence) defines lifecycle timing, sparse-traffic treatment and measurement boundaries; the project owner approved initial values above. HTTP telemetry now has the 300 ms p95 bucket and records canceled requests without a fabricated 200; focused tests pass. | Platform/operations sign-off, selected-deployment feasibility and observed staging SLIs. |
 | Recovery | The [physical PITR runbook](../runbooks/physical-pitr.md) records isolated restore and fencing drills; the project owner approved initial RPO/RTO/PITR values above. | Failure scenarios, retained off-host backups, operator/key custody and target restore observations that meet the approved objectives. |
 | Acceptance | The [load report](delivery-load.md) records two isolated 20,000-device runs (49.424 s and 51.450 s); the project owner approved the five-minute objective and initial pass/pause/rollback criteria above. | Actual quota/headroom, numeric throttling trigger, campaign soak/burst, cohort denominator, rollback destination, and real Android/iOS observations. |
 
