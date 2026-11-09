@@ -1,6 +1,6 @@
 # M03 application-scope implementation plan
 
-Date: 2026-11-03. Status: **M03a.1–3 registry locally implemented/verified; M03b.1 inventory/design complete; M03b.2a expansion locally verified; business isolation and M03c/d pending**.
+Date: 2026-11-09. Status: **M03a.1–3 registry and M03b.1–5 scope/caller/retirement slices are implemented and locally verified; production cutover and M03c/d integration remain open**.
 Normative design: [ADR-12](../adr/adr-12-multi-application-isolation.md).
 Each implementation slice needs its exact transaction/API/migration SPEC.
 [M03a registry SPEC](m03a-application-registry.md) and its

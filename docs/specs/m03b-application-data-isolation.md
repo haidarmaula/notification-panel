@@ -1,7 +1,8 @@
 # M03b — Existing data, queries and API application isolation
 
-2026-11-03. **M03b.1 inventory/design complete; M03b.2a additive schema/tooling locally verified.**
-Business query/API/worker isolation is not implemented.
+2026-11-09. **M03b.1–5 are implemented and locally verified in the repository.**
+Production ownership transition, deployed legacy-writer retirement and activation
+remain open; local verification does not establish target-environment isolation.
 [Expansion contract](m03b2-business-scope-expansion.md),
 [verification](../analysis/m03b2a-verification.md).
 [M03a registry](m03a-application-registry.md) is locally implemented; every project

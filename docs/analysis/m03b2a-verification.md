@@ -41,8 +41,8 @@ changed, so mockery regeneration was unnecessary. Existing queries remain global
   Nine SDK-to-local-simulation requests remain baseline coverage: 200×2, 404×1,
   429×1, 503×5. They are not real FCM/APNs delivery or tests of a new provider.
 - Regeneration with sqlc v1.31.1 is reproducible (hash comparison across generated
-  Go files), inventory still matches 16 tables / 135 query names / 46 routes /
-  four binaries, formatting and diff whitespace pass.
+  Go files), and the inventory matched the 2026-11-03 checkpoint of 16 tables /
+  135 query names / 46 routes / four binaries; formatting and diff whitespace pass.
 
 The new rollback-only PostgreSQL test populates all eleven tables before expanding
 and round-trips down/up without changing business data. It verifies missing

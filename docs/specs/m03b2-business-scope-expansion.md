@@ -123,7 +123,8 @@ turns former whole-model projections into generated Row types. The affected SQL
 projections explicitly include application_id so repository signatures remain
 stable; no optional scope filter or service interface changes are introduced.
 The current legacy queries remain global and **must not be reused as scoped
-queries**. The inventory checker still enumerates the same 135 query names.
+queries**. At the 2026-11-03 checkpoint, the inventory checker enumerated 135
+query names; the refreshed 2026-11-09 inventory covers 287 names across 42 files.
 
 Apply 000017 before deploying the new binary because those projections and model
 scans now require application_id. Test upgrades and rollback on disposable data

@@ -129,12 +129,11 @@ The [exact M03a SPEC](../specs/m03a-application-registry.md) and registry OpenAP
 been written; [M03a.1 persistence](m03a1-verification.md) is implemented/locally verified.
 [M03a.2 resolver/services/atomic audit](m03a2-verification.md) is also implemented/
 locally verified. [M03a.3 HTTP](m03a3-verification.md) is also implemented/locally verified:
-ten registry/grant endpoints, PROVISIONING only. Next are M03b scoped
-schema/queries/APIs and the legacy worker/scheduler/fanout gate before a second app's data.
-[M03b.1 inventory/design](m03b1-scope-inventory.md) is complete without runtime changes;
-[M03b.2a expansion/preflight/backfill](m03b2a-verification.md) now passes locally;
-next are M03b.3 scoped callers, then constraint finalization with cutover. The [transition SPEC](../specs/m03b-application-data-isolation.md)
-details five M03b groups; it is not yet evidence of isolation.
+ten registry/grant endpoints, PROVISIONING only. M03b.1–5 are implemented and
+locally verified, including scoped callers, ownership finalization support and
+legacy entry-point retirement; see the [transition SPEC](../specs/m03b-application-data-isolation.md)
+and [cutover procedure](../specs/m03b-cutover.md). Production ownership mapping,
+writer revocation and deployment verification remain open.
 M02 release controls have not been declared complete. Hosted execution,
 production adapters/pipeline, real providers/devices, and production infrastructure
 have not been proven by completion of these foundations.
