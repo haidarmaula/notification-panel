@@ -37,9 +37,15 @@ reconciliation; timeouts do not authorize automatic replay of external effects.
   are not reached by this build; those are not claimed to be remediated.
 
 No other concrete P1/P2 defect was confirmed in the reviewed modern paths.
-Additional coverage opportunities include concurrent quarantine sealing/source
-deactivation, explicit preparation retry exhaustion and partial recovery reports.
-Those are test gaps, not evidence that the current contracts are broken.
+
+Follow-up on 2026-11-09: `TestSerialAdmissionRetryAndAckFailure` already covers
+preparation retry exhaustion and allowlisted quarantine reasons. PostgreSQL
+integration tests in `tests/integration/preparation_test.go` and
+`replay_recovery_test.go` cover recovery report counts and committed partial
+progress. Added `TestQuarantineRechecksOperatorHoldsAfterLockWait` for concurrent
+runtime sealing and source deactivation; the full isolated
+`bash scripts/integration.sh` run passed with that regression. These checks
+verify the state is re-read after the corresponding row lock is released.
 
 ## Readability pass
 

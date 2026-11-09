@@ -76,3 +76,53 @@ func TestSourceAwareQuarantine(t *testing.T) {
 	require.Error(t, store.Store(ctx, message, dispatch.InvalidEnvelope, 1), "failed evidence is unsafe for offset commit")
 	require.EqualValues(t, 4, count())
 }
+
+func TestQuarantineRechecksOperatorHoldsAfterLockWait(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		lockSQL    string
+		queryMatch string
+	}{
+		{name: "runtime seal", lockSQL: "UPDATE notification_runtime SET sealed=true", queryMatch: "%notification_runtime%"},
+		{name: "source deactivation", lockSQL: "UPDATE notification_log_sources SET active=false WHERE id=$1", queryMatch: "%notification_log_sources%"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+			defer cancel()
+			pool := acceptanceFixture(t, ctx)
+			_, err := pool.Exec(ctx, "UPDATE notification_runtime SET sealed=false")
+			require.NoError(t, err)
+			var source pgtype.UUID
+			require.NoError(t, pool.QueryRow(ctx, "INSERT INTO notification_log_sources(id,topic,cluster_identity,topic_incarnation,active) VALUES(gen_random_uuid(),'send','fixture-cluster','generation-a',true) RETURNING id").Scan(&source))
+			store, err := dispatch.NewQuarantine(pool)
+			require.NoError(t, err)
+
+			blocker, err := pool.Begin(ctx)
+			require.NoError(t, err)
+			if test.name == "source deactivation" {
+				_, err = blocker.Exec(ctx, test.lockSQL, source)
+			} else {
+				_, err = blocker.Exec(ctx, test.lockSQL)
+			}
+			require.NoError(t, err)
+
+			result := make(chan error, 1)
+			go func() {
+				result <- store.Store(ctx, dispatch.SourceMessage{LogSourceID: source, Topic: "send", Partition: 0, Offset: 42}, dispatch.InvalidEnvelope, 1)
+			}()
+			require.Eventually(t, func() bool {
+				var waiting bool
+				err := pool.QueryRow(ctx, `SELECT EXISTS (
+					SELECT 1 FROM pg_stat_activity
+					WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE $1
+				)`, test.queryMatch).Scan(&waiting)
+				return err == nil && waiting
+			}, 5*time.Second, 20*time.Millisecond, "quarantine should wait on the operator's row lock")
+			require.NoError(t, blocker.Commit(ctx))
+			require.ErrorIs(t, <-result, dispatch.ErrQuarantineSource)
+			var count int
+			require.NoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM notification_send_dead_letters").Scan(&count))
+			require.Zero(t, count, "a quarantine must not commit after a concurrent hold change")
+		})
+	}
+}
