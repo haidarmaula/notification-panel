@@ -23,6 +23,31 @@ type Request struct {
 	Duration                   time.Duration
 }
 
+// requestSLOOutcome applies the initial staff API SLO request classification.
+// The mapping is deliberately finite so it remains safe as a Prometheus label.
+func requestSLOOutcome(r Request) string {
+	if r.Outcome != "complete" || r.Status == 0 || r.Status == http.StatusRequestTimeout ||
+		r.Status == http.StatusTooManyRequests || r.Status >= http.StatusInternalServerError {
+		return "bad"
+	}
+	if r.Route == "unmatched" || excludedClientStatus(r.Status) {
+		return "excluded"
+	}
+	return "good"
+}
+
+func excludedClientStatus(status int) bool {
+	switch status {
+	case http.StatusBadRequest, http.StatusUnauthorized, http.StatusForbidden,
+		http.StatusRequestURITooLong, http.StatusRequestEntityTooLarge,
+		http.StatusUnsupportedMediaType, http.StatusUnprocessableEntity,
+		http.StatusRequestHeaderFieldsTooLarge:
+		return true
+	default:
+		return false
+	}
+}
+
 // Access records the actual committed status and aborts a partial response on panic.
 // The wrapper retains optional writer interfaces supported by the underlying server.
 func Access(next http.Handler, observe func(Request)) http.Handler {

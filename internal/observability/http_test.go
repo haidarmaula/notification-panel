@@ -167,7 +167,7 @@ func TestUnknownPathsStayBounded(t *testing.T) {
 	state.handlers().ServeHTTP(w, httptest.NewRequest("GET", "/metrics", nil))
 	body := w.Body.String()
 	require.NotContains(t, body, "private-")
-	require.Contains(t, body, `hello_http_requests_total{method="other",outcome="complete",route="unmatched",status_class="4xx"} 1024`)
+	require.Contains(t, body, `hello_http_requests_total{method="other",outcome="complete",route="unmatched",slo_outcome="excluded",status_class="4xx"} 1024`)
 	require.Contains(t, body, "hello_telemetry_dropped_total 768")
 	var logs bytes.Buffer
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Millisecond)

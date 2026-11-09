@@ -8,7 +8,7 @@
   },
   "refresh": "30s",
   "schemaVersion": 41,
-  "version": 2,
+  "version": 3,
   "tags": [
     "notification-service"
   ],
@@ -149,7 +149,7 @@
     {
       "id": 4,
       "type": "timeseries",
-      "title": "HTTP p95 duration by route",
+      "title": "HTTP p95 duration by route (valid requests)",
       "gridPos": {
         "x": 12,
         "y": 8,
@@ -166,9 +166,9 @@
             "type": "prometheus",
             "uid": "${DS_PROMETHEUS}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le,route) (rate(hello_http_request_duration_seconds_bucket{environment=~\"$environment\"}[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (environment,le,route) (rate(hello_http_request_duration_seconds_bucket{environment=~\"$environment\",slo_outcome=~\"good|bad\"}[5m])))",
           "refId": "A",
-          "legendFormat": "{{route}}"
+          "legendFormat": "{{environment}} {{route}}"
         }
       ],
       "fieldConfig": {
@@ -729,7 +729,7 @@
     {
       "id": 20,
       "type": "timeseries",
-      "title": "HTTP p99 duration by route (all requests)",
+      "title": "HTTP p99 duration by route (valid requests)",
       "gridPos": {
         "h": 8,
         "w": 12,
@@ -742,14 +742,47 @@
       },
       "targets": [
         {
-          "expr": "histogram_quantile(0.99, sum by (le,route) (rate(hello_http_request_duration_seconds_bucket{environment=~\"$environment\"}[5m])))",
-          "legendFormat": "{{route}}",
+          "expr": "histogram_quantile(0.99, sum by (environment,le,route) (rate(hello_http_request_duration_seconds_bucket{environment=~\"$environment\",slo_outcome=~\"good|bad\"}[5m])))",
+          "legendFormat": "{{environment}} {{route}}",
           "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "s",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "HTTP availability (valid requests, rolling 30d)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 80
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "expr": "1 - (sum by (environment) (increase(hello_http_requests_total{job=\"hello\",role=\"server\",environment=~\"$environment\",slo_outcome=\"bad\"}[30d])) / sum by (environment) (increase(hello_http_requests_total{job=\"hello\",role=\"server\",environment=~\"$environment\",slo_outcome=~\"good|bad\"}[30d])))",
+          "legendFormat": "{{environment}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
           "custom": {
             "spanNulls": false
           }

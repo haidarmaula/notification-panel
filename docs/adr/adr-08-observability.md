@@ -232,7 +232,7 @@ Families below are proposed names/semantics, fixed to exact labels/types in SPEC
 
 | Signal family | Type / source | Operational purpose |
 | --- | --- | --- |
-| hello_http_requests_total, hello_http_request_duration_seconds | Process counters/histogram, normalized route/outcome | API errors/latency, including panic and cancellation |
+| hello_http_requests_total, hello_http_request_duration_seconds | Process counters/histogram, normalized route/outcome and finite SLO outcome | API errors/latency, including panic and cancellation; valid-request inclusion is explicit |
 | hello_role_ready, hello_component_healthy, hello_loop_heartbeat_timestamp_seconds | Cached role/component gauges, finite loop names | Readiness vs local progress vs dependency degradation |
 | hello_phase_oldest_active_seconds | Process max gauge per finite phase | Lease renewal/heartbeat cannot hide a hung provider/DB operation |
 | hello_db_pool_connections, hello_db_acquire_duration_seconds | pgx pool/instrumentation | Pool saturation and bounded connection wait |

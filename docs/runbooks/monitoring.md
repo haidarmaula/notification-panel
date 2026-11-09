@@ -138,11 +138,20 @@ gates are visible on the dashboard. Check the affected worker's recent provider
 outcomes, actual quota allocation and pending campaign deadlines. Confirm recovery
 with a closed gate and successful provider outcomes when work resumes.
 
-The HTTP p95 and p99 dashboard panels are diagnostic and include all observed
-requests. The current latency histogram has no request-validity dimension, so
-these panels do not establish the approved valid-request latency SLO or its
-availability denominator. Add reviewed request classification and sparse-traffic
-synthetic checks before treating a dashboard value as SLO evidence.
+The HTTP metrics attach one finite `slo_outcome` to each request. `good` means a
+matched request completed without a timeout, service rate limit, server error,
+panic or aborted response. `bad` means timeout, HTTP 429, HTTP 5xx, cancellation,
+panic, abort or no committed response. `excluded` means an unmatched route or
+HTTP 400, 401, 403, 413, 414, 415, 422 or 431. Other matched responses, including
+resource-level 404 and conflict 409, count as good. This is the initial local
+interpretation of the approved SLO boundaries; platform/operations must review
+the status mapping before relying on it for release acceptance.
+
+The p95 and p99 panels include `good` and `bad` requests, excluding malformed,
+unauthorized and unmatched requests. The availability panel measures
+`good / (good + bad)` over a rolling 30 days. A sparse or absent series is not
+evidence of zero errors; use synthetic checks and verify the monitoring window
+has enough samples before reporting the SLO.
 
 ## Diagnostic output
 
