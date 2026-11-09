@@ -1,6 +1,54 @@
 rule_files: [rules.yml, kafka-rules.yml]
 evaluation_interval: 15s
 tests:
+  - name: provider gate alerts require repeated work and fresh unheld runtime
+    interval: 15s
+    input_series:
+      - series: 'up{job="hello",role="delivery",instance="a",environment="test"}'
+        values: '1+0x10'
+      - series: 'hello_db_check_healthy{job="hello",role="delivery",instance="a",environment="test"}'
+        values: '1+0x10'
+      - series: 'hello_db_last_check_timestamp_seconds{job="hello",role="delivery",instance="a",environment="test"}'
+        values: '0+15x8 120+0x2'
+      - series: 'hello_dispatch_held{job="hello",role="delivery",instance="a",environment="test"}'
+        values: '0+0x7 1 0 0'
+      - series: 'hello_provider_quota_cooldown{job="hello",role="delivery",instance="a",environment="test"}'
+        values: '1+0x3 0+0x6'
+      - series: 'hello_provider_breaker_open{job="hello",role="delivery",instance="a",environment="test"}'
+        values: '1+0x10'
+      - series: 'hello_provider_permit_deferrals_total{job="hello",role="delivery",instance="a",environment="test",reason="quota"}'
+        values: '0 4+0x9'
+      - series: 'hello_provider_permit_deferrals_total{job="hello",role="delivery",instance="a",environment="test",reason="breaker"}'
+        values: '0+0x4 4+0x5'
+      - series: 'hello_provider_permit_deferrals_total{job="hello",role="delivery",instance="a",environment="test",reason="concurrency"}'
+        values: '0+10x10'
+    alert_rule_test:
+      - eval_time: 30s
+        alertname: HelloProviderDispatchDeferred
+        exp_alerts: []
+      - eval_time: 45s
+        alertname: HelloProviderDispatchDeferred
+        exp_alerts:
+          - exp_labels: {job: hello, role: delivery, instance: a, environment: test, reason: quota, severity: warning}
+            exp_annotations:
+              summary: The provider gate is repeatedly deferring delivery attempts
+              runbook: docs/runbooks/monitoring.md#provider-and-receipts
+      - eval_time: 1m
+        alertname: HelloProviderDispatchDeferred
+        exp_alerts: []
+      - eval_time: 1m45s
+        alertname: HelloProviderDispatchDeferred
+        exp_alerts:
+          - exp_labels: {job: hello, role: delivery, instance: a, environment: test, reason: breaker, severity: warning}
+            exp_annotations:
+              summary: The provider gate is repeatedly deferring delivery attempts
+              runbook: docs/runbooks/monitoring.md#provider-and-receipts
+      - eval_time: 2m
+        alertname: HelloProviderDispatchDeferred
+        exp_alerts: []
+      - eval_time: 2m30s
+        alertname: HelloProviderDispatchDeferred
+        exp_alerts: []
   - name: Kafka checkpoint alerts distinguish unsafe offsets from missing samples
     interval: 15s
     input_series:

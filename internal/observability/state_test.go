@@ -43,13 +43,20 @@ func TestProviderSeriesAndCancel(t *testing.T) {
 	provider.PhysicalStart()
 	provider.PhysicalFinish(429, time.Millisecond)
 	provider.LogicalResult(fcm.Rejected, fcm.Quota, time.Millisecond)
+	provider.PermitDeferred(fcm.DeferralQuota)
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
 	handler := Access(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = io.WriteString(w, "done") }), s.Observe)
 	handler.ServeHTTP(httptest.NewRecorder(), httptest.NewRequestWithContext(ctx, "POST", "/", nil))
 	w := httptest.NewRecorder()
 	s.handlers().ServeHTTP(w, httptest.NewRequest("GET", "/metrics", nil))
-	for _, expected := range []string{`hello_provider_requests_total{status_class="4xx"} 1`, `hello_provider_results_total{disposition="rejected",reason="quota"} 1`, "hello_provider_inflight 0", `outcome="cancelled"`} {
+	for _, expected := range []string{
+		`hello_provider_requests_total{status_class="4xx"} 1`,
+		`hello_provider_results_total{disposition="rejected",reason="quota"} 1`,
+		`hello_provider_permit_deferrals_total{reason="quota"} 1`,
+		`hello_provider_permit_deferrals_total{reason="breaker"} 0`,
+		"hello_provider_inflight 0", `outcome="cancelled"`,
+	} {
 		require.Contains(t, w.Body.String(), expected)
 	}
 }

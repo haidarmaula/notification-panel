@@ -188,6 +188,28 @@ func (c *Client) Close() {
 	})
 }
 
+// BreakerOpen reports whether the local circuit awaits a successful probe.
+func (c *Client) BreakerOpen() bool {
+	b := &c.s.breaker
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return !b.until.IsZero()
+}
+
+// QuotaCooldown reports whether the local client is honoring a provider quota hold.
+func (c *Client) QuotaCooldown() bool {
+	c.s.mu.Lock()
+	defer c.s.mu.Unlock()
+	return time.Now().Before(c.s.cooldown)
+}
+
+func (s *clientState) deferPermit(reason DeferralReason, at time.Time) error {
+	if s.config.Observer != nil {
+		s.config.Observer.PermitDeferred(reason)
+	}
+	return &Deferred{RetryAt: at}
+}
+
 type permitState struct {
 	client *clientState
 	token  breakerToken
@@ -218,17 +240,17 @@ func (c *Client) Acquire(parent context.Context) (*Permit, error) {
 	cooldown := s.cooldown
 	s.mu.Unlock()
 	if time.Now().Before(cooldown) {
-		return nil, &Deferred{RetryAt: cooldown}
+		return nil, s.deferPermit(DeferralQuota, cooldown)
 	}
 	select {
 	case s.sem <- struct{}{}:
 	default:
-		return nil, &Deferred{RetryAt: time.Now().Add(s.logical.interval)}
+		return nil, s.deferPermit(DeferralConcurrency, time.Now().Add(s.logical.interval))
 	}
 	token, until, ok := s.breaker.acquire(time.Now())
 	if !ok {
 		<-s.sem
-		return nil, &Deferred{RetryAt: until}
+		return nil, s.deferPermit(DeferralBreaker, until)
 	}
 	if err := s.logical.wait(ctx); err != nil {
 		s.breaker.finish(token, Outcome{}, time.Now())
@@ -250,7 +272,7 @@ func (c *Client) Acquire(parent context.Context) (*Permit, error) {
 	if time.Now().Before(cooldown) {
 		s.breaker.finish(token, Outcome{}, time.Now())
 		<-s.sem
-		return nil, &Deferred{RetryAt: cooldown}
+		return nil, s.deferPermit(DeferralQuota, cooldown)
 	}
 	return &Permit{state: &permitState{client: s, token: token}}, nil
 }

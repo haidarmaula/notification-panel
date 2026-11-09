@@ -123,6 +123,21 @@ period is expected. Use campaign statistics for unique provider acceptance,
 device reports and user reads. The receipt HTTP panel counts requests, including
 retries. Avoid resubmitting an entire campaign after an uncertain result.
 
+The delivery worker reports its local circuit breaker, provider quota cooldown
+and permit deferrals by gate. Deferrals occur before an attempt is charged.
+The counter measures permit decisions, so repeated decisions for one device
+can contribute more than once. A breaker can stay open while waiting for a
+successful probe. The quota gauge follows the provider's cooldown deadline.
+
+`HelloProviderDispatchDeferred` warns when a delivery worker repeatedly defers
+permits for quota or breaker reasons and the same gate stays active. The local
+rule uses an estimated increase of three in two minutes and a 30-second wait.
+It requires a fresh, healthy runtime sample and suppresses the warning during
+an observed global dispatch hold. Ordinary concurrency deferrals and idle open
+gates are visible on the dashboard. Check the affected worker's recent provider
+outcomes, actual quota allocation and pending campaign deadlines. Confirm recovery
+with a closed gate and successful provider outcomes when work resumes.
+
 ## Diagnostic output
 
 A slow log pipe can fill the server's 256-record access buffer or exceed its

@@ -66,6 +66,9 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 			return startupFailure(ctx, ErrConfiguration)
 		}
 		defer client.Close()
+		if c.monitoring != nil {
+			state.ObserveProviderAdmission(client)
+		}
 		outbox, err := dispatch.NewApplicationUpdateOutbox(pool, sourcePublisher{producer, c.source}, c.source, c.delivery.application)
 		if err != nil {
 			return ErrConfiguration

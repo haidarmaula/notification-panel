@@ -146,6 +146,60 @@ func TestTransportUncertaintyBoundsAndQuotaDeferral(t *testing.T) {
 		t.Fatal("quota advice did not defer new claims")
 	}
 }
+
+type deferralObserver struct {
+	reasons []DeferralReason
+}
+
+func (*deferralObserver) LogicalResult(Disposition, Reason, time.Duration) {}
+func (*deferralObserver) PhysicalStart()                                   {}
+func (*deferralObserver) PhysicalFinish(int, time.Duration)                {}
+func (o *deferralObserver) PermitDeferred(r DeferralReason)                { o.reasons = append(o.reasons, r) }
+
+func TestProviderAdmissionEvidenceSeparatesGates(t *testing.T) {
+	config, request := transportFixture(t)
+	config.BreakerThreshold = 1
+	config.Concurrency = 1
+	observer := new(deferralObserver)
+	config.Observer = observer
+	status := http.StatusServiceUnavailable
+	c := makeClient(t, config, roundTripFunc(func(*http.Request) (*http.Response, error) {
+		if status == http.StatusTooManyRequests {
+			return response(status, `{"error":{"code":429,"status":"RESOURCE_EXHAUSTED"}}`), nil
+		}
+		return response(status, `{"error":{"code":503,"status":"UNAVAILABLE"}}`), nil
+	}))
+	if c.BreakerOpen() || c.QuotaCooldown() {
+		t.Fatal("fresh client reported a hold")
+	}
+	permit, err := c.Acquire(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	checkDeferral := func(want DeferralReason) {
+		t.Helper()
+		count := len(observer.reasons)
+		if p, err := c.Acquire(t.Context()); p != nil || !errors.Is(err, ErrDeferred) {
+			t.Fatalf("expected %s deferral, got %v", want, err)
+		}
+		if len(observer.reasons) != count+1 || observer.reasons[count] != want {
+			t.Fatalf("expected %s evidence, got %v", want, observer.reasons)
+		}
+	}
+	checkDeferral(DeferralConcurrency)
+	permit.Release()
+	if out := send(t, c, request); out.Reason != Unavailable || !c.BreakerOpen() || c.QuotaCooldown() {
+		t.Fatalf("503 did not open only the breaker: %v", out)
+	}
+	checkDeferral(DeferralBreaker)
+	// Advance the breaker into its probe phase without a real-time sleep.
+	c.s.breaker.until = time.Now().Add(-time.Second)
+	status = http.StatusTooManyRequests
+	if out := send(t, c, request); out.Reason != Quota || !c.QuotaCooldown() {
+		t.Fatalf("429 did not start the quota cooldown: %v", out)
+	}
+	checkDeferral(DeferralQuota)
+}
 func TestPermitCopiesAndBoundedConcurrency(t *testing.T) {
 	config, request := transportFixture(t)
 	config.Concurrency = 4

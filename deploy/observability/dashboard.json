@@ -658,6 +658,73 @@
         },
         "overrides": []
       }
+    },
+    {
+      "id": 18,
+      "type": "timeseries",
+      "title": "Provider permit deferrals",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 72
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "expr": "sum by (environment, instance, reason) (increase(hello_provider_permit_deferrals_total{environment=~\"$environment\"}[2m]))",
+          "legendFormat": "{{environment}} {{instance}} {{reason}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "Provider admission gates",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 72
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "expr": "hello_provider_breaker_open{environment=~\"$environment\"}",
+          "legendFormat": "{{environment}} {{instance}} breaker",
+          "refId": "A"
+        },
+        {
+          "expr": "hello_provider_quota_cooldown{environment=~\"$environment\"}",
+          "legendFormat": "{{environment}} {{instance}} quota cooldown",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
     }
   ]
 }

@@ -83,6 +83,24 @@ groups:
         annotations:
           summary: Provider rejected application or credential configuration
           runbook: docs/runbooks/monitoring.md#provider-and-receipts
+      - alert: HelloProviderDispatchDeferred
+        expr: |
+          (
+            (increase(hello_provider_permit_deferrals_total{job="hello",role="delivery",reason="quota"}[2m]) >= 3
+             and on(job,instance,environment) (hello_provider_quota_cooldown == 1))
+            or
+            (increase(hello_provider_permit_deferrals_total{job="hello",role="delivery",reason="breaker"}[2m]) >= 3
+             and on(job,instance,environment) (hello_provider_breaker_open == 1))
+          )
+          and on(job,instance,environment) (up{job="hello",role="delivery"} == 1)
+          and on(job,instance,environment) (hello_db_check_healthy == 1)
+          and on(job,instance,environment) (time() - hello_db_last_check_timestamp_seconds < 15)
+          and on(job,instance,environment) (hello_dispatch_held == 0)
+        for: 30s
+        labels: {severity: warning}
+        annotations:
+          summary: The provider gate is repeatedly deferring delivery attempts
+          runbook: docs/runbooks/monitoring.md#provider-and-receipts
       - alert: HelloTelemetryDrops
         expr: increase(hello_telemetry_dropped_total[5m]) > 0
         labels: {severity: warning}

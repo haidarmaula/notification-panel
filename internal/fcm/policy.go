@@ -18,12 +18,22 @@ var (
 )
 
 // Observer receives bounded local transport evidence. Implementations must return
-// promptly. Neither callback receives provider identifiers, credentials or payloads.
+// promptly. Callbacks receive no provider identifiers, credentials or payloads.
 type Observer interface {
 	LogicalResult(Disposition, Reason, time.Duration)
+	PermitDeferred(DeferralReason)
 	PhysicalStart()
 	PhysicalFinish(int, time.Duration)
 }
+
+// DeferralReason identifies the local gate that deferred a provider permit.
+type DeferralReason string
+
+const (
+	DeferralQuota       DeferralReason = "quota"
+	DeferralBreaker     DeferralReason = "breaker"
+	DeferralConcurrency DeferralReason = "concurrency"
+)
 
 // Config is explicit per-project policy; replica/client quota allocation is external.
 type Config struct {
