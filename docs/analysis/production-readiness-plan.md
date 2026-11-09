@@ -2,7 +2,7 @@
 
 Updated 2026-11-09 (Asia/Jakarta). Step 23 is complete. The current phase is pre-production acceptance. Production dispatch remains on hold.
 
-The first unchecked roadmap item is Step 05. Its measurement definitions are recorded below and its numeric targets await owner approval. Independent implementation and verification may proceed in parallel. Step 40 remains the staging device gate, and Step 41 capacity evidence informs the Step 05 decisions.
+The first unchecked roadmap item is Step 05. The project owner approved initial numeric objectives on 2026-11-09; quota/headroom, failure scenarios, operational ownership, feasibility and target-environment evidence remain open. Independent implementation and verification may proceed in parallel. Step 40 remains the staging device gate, and Step 41 capacity evidence informs the Step 05 decisions.
 
 The [cutover evidence register](cutover-readiness.md) records the outstanding device, provider, operations and approval gates. The [capacity report](delivery-load.md) records the measured results for the current authorization path.
 
@@ -41,7 +41,7 @@ If each of the five campaigns reaches 20,000 devices, the baseline
 estimate is approximately 100,000 device deliveries/month before retries. This is
 a scenario calculation, not a measurement of production traffic.
 
-## 2. Initial scope and targets still under proposal
+## 2. Initial scope and targets; deployment evidence pending
 
 Confirmed v1 scope: auth/staff/profile, user/device lifecycle, segments, campaigns
 with broadcast/segment/individual targeting, scheduling, delivery ledger, idempotency,
@@ -61,28 +61,38 @@ Auth contract verification remains open; do not assume Laravel server
 inspection/deployment has been authorized or make server access a prerequisite
 for starting backend baseline fixes.
 
-Initial benchmark proposal (not an SLA and not approved): fan out to 20,000
-eligible devices within <=60 seconds from durable queue acceptance until all provider
-submission results are recorded, while the system and provider are healthy. Permanent token
-failures count as explicit results; retries for provider disruptions are measured
-separately. This requires an average of approximately 334 device results/second.
+Owner-approved initial fan-out objective: record durable provider outcomes for all
+20,000 eligible devices within five minutes from queue acceptance while the system
+and provider are healthy. Permanent token failures count as explicit terminal
+outcomes; retries for provider disruptions are measured separately. The previously
+proposed 60-second objective remains a stretch benchmark, not the production SLO.
 
-These numbers are only experimental candidates. Local load tests measure the pipeline
-against a simulated provider; real-provider tests use only test devices with
-appropriate quotas and traffic controls. Simulation results do not establish
-provider capacity or arrival times on phones. Set final targets after
-baseline benchmarks and the pilot; avoid uncontrolled traffic spikes.
+Local load tests measure the pipeline against a simulated provider; real-provider
+tests use only test devices with appropriate quotas and traffic controls. Simulation
+results do not establish provider capacity or arrival times on phones. Firebase's
+[current scale guidance](https://firebase.google.com/docs/cloud-messaging/scale-fcm)
+recommends smoothing traffic and considering a five-minute window. The approved
+five-minute objective is for durable provider outcomes, not device receipt or
+display; avoid uncontrolled traffic spikes.
 
 ### Step 05 decision record
 
 | Decision | What to approve | Evidence available |
 | --- | --- | --- |
-| Service levels | Staff API latency and availability, schedule delay and healthy campaign fan-out. Record the numeric targets, measurement windows, denominators, error budgets and dependency conditions. | The observability ADR defines the measurement boundaries and treatment of sparse traffic. [ADR-08](../adr/adr-08-observability.md#a-6-lifecycle-timing-sparse-traffic-and-slo-evidence) |
-| Recovery objectives | Maximum tolerable data loss (RPO), maximum time to safe service resumption (RTO), and required point-in-time recovery window. Record the failure scenarios and the reconciliation and canary checks that end the recovery clock. | The isolated restore drills verify recovery and fencing. Business and operations owners approve the objectives. [Recovery runbook](../runbooks/physical-pitr.md) |
-| Acceptance thresholds | Healthy fan-out deadline, sustained volume, approved quota and headroom, and pilot pass, pause and rollback criteria. Record the cohort denominator, observation period and treatment of failures, held devices and unknown outcomes. | The proposed 60 seconds measures 20,000 durable provider outcomes from queue acceptance. Local trials provide calibration data. [Load evidence](delivery-load.md) · [Cutover ADR](../adr/adr-06-onesignal-fcm-cutover.md) |
+| Service levels | Staff API availability 99.9% per rolling 30 days (43.2 minutes of error budget); p95 latency ≤300 ms and p99 ≤1 s for valid requests. Server errors and timeouts are bad outcomes; malformed and unauthorized client requests are excluded from the availability denominator. Use synthetic checks during sparse traffic. For scheduled campaigns not under an explicit hold, 99% reach durable queue acceptance within 60 seconds of `scheduled_for` over a rolling 12 months, and none exceed 5 minutes. Report each scheduled campaign because traffic is sparse. | Project owner approved these initial targets on 2026-11-09. ADR-08 defines lifecycle measurement and sparse-traffic treatment. [ADR-08](../adr/adr-08-observability.md#a-6-lifecycle-timing-sparse-traffic-and-slo-evidence) |
+| Recovery objectives | RPO ≤5 minutes; RTO ≤4 hours through safe, reconciled resumption; PITR window ≥30 days. | Project owner approved these initial objectives on 2026-11-09. The isolated restore drills verify recovery mechanics, not target objectives. [Recovery runbook](../runbooks/physical-pitr.md) |
+| Acceptance thresholds | All 20,000 eligible devices receive a durable provider outcome within 5 minutes under healthy conditions; 60 seconds remains a stretch benchmark. Require three consecutive staging campaigns and a multi-campaign burst to pass with every eligible device accounted for, no cross-application send, and no unexplained missing or duplicate outcomes. Pause on an ownership/isolation violation or sustained throttling. Roll back on a correctness/security violation or two consecutive runs exceeding 5 minutes. | Project owner approved these initial thresholds on 2026-11-09. Local trials provide calibration only. [Load evidence](delivery-load.md) · [Cutover ADR](../adr/adr-06-onesignal-fcm-cutover.md) |
 
-Record each approved value with its owner, date and evidence reference.
-Step 05 remains open until the owners approve all three decisions.
+Approval record: the user approved the initial targets above in this conversation
+on 2026-11-09 (Asia/Jakarta). This records project-owner approval only; it does
+not represent approval by platform/operations owners or target-environment
+evidence.
+
+Step 05 remains open pending the deployment project's actual FCM quota and reserved
+headroom, numeric sustained-throttling trigger, agreed campaign soak/burst profile,
+pilot dwell/cohort criteria, rollback destination, named operational sign-off and
+staging validation. Report schedule delays and held campaigns by their explicit
+status; do not treat an excluded hold as a successful on-time schedule.
 
 ### Step 05 repository evidence preflight (2026-11-09)
 
@@ -90,9 +100,9 @@ The next repository-verifiable slice is an inventory, not target acceptance:
 
 | Decision | Verified in repository | Still requires target or owner evidence |
 | --- | --- | --- |
-| Service levels | [ADR-08 A-6](../adr/adr-08-observability.md#a-6-lifecycle-timing-sparse-traffic-and-slo-evidence) defines lifecycle timing, sparse-traffic treatment and measurement boundaries. | Named owners must approve numeric targets, windows and error budgets against the selected deployment. |
-| Recovery | The [physical PITR runbook](../runbooks/physical-pitr.md) records isolated restore and fencing drills and explicitly reserves numeric RPO/RTO/PITR decisions for business and operations owners. | Approved failure scenarios, recovery windows, retained backups and target restore observations. |
-| Acceptance | The [load report](delivery-load.md) records two isolated 20,000-device runs (49.424 s and 51.450 s); the [cutover ADR](../adr/adr-06-onesignal-fcm-cutover.md#a-5-safe-comparison-real-device-pilot-and-staged-ramp) requires pilot dwell and stop thresholds before promotion. | Approved quota/headroom and soak, cohort denominator, numeric pause/rollback criteria, and real Android/iOS observations. |
+| Service levels | [ADR-08 A-6](../adr/adr-08-observability.md#a-6-lifecycle-timing-sparse-traffic-and-slo-evidence) defines lifecycle timing, sparse-traffic treatment and measurement boundaries; the project owner approved initial values above. | Platform/operations sign-off, selected-deployment feasibility and observed staging SLIs. |
+| Recovery | The [physical PITR runbook](../runbooks/physical-pitr.md) records isolated restore and fencing drills; the project owner approved initial RPO/RTO/PITR values above. | Failure scenarios, retained off-host backups, operator/key custody and target restore observations that meet the approved objectives. |
+| Acceptance | The [load report](delivery-load.md) records two isolated 20,000-device runs (49.424 s and 51.450 s); the project owner approved the five-minute objective and initial pass/pause/rollback criteria above. | Actual quota/headroom, numeric throttling trigger, campaign soak/burst, cohort denominator, rollback destination, and real Android/iOS observations. |
 
 The [Step 40 staging prerequisites](../runbooks/delivery-worker.md#step-40-staging-prerequisites)
 remain the operator setup checklist. Repository fixtures cannot demonstrate
@@ -101,9 +111,9 @@ real-device behavior. Do not mark Steps 05, 06 or 40 complete on this preflight.
 
 | Open decision | What must be determined | Blocks |
 | --- | --- | --- |
-| API, scheduling, fan-out, availability SLOs | p95/p99 values, measurement windows, conditions, and error budgets | Final sizing and production go/no-go |
+| API, scheduling, fan-out, availability SLOs | Initial project-owner targets are recorded in Step 05; platform validation, actual quota/headroom and deployment evidence remain | Final sizing and production go/no-go |
 | Infrastructure | Self-hosted Kafka is confirmed; hosts/failure domains, PostgreSQL, resource budget, staging, and TLS are undetermined | ADR-07/08/11 and deployment |
-| Recovery | RPO/RTO, backups, restore, operators, and alert escalation | Release gate |
+| Recovery | Initial project-owner RPO/RTO/PITR targets are recorded in Step 05; backup custody, restore operators and alert escalation remain | Release gate |
 | Mobile | First client source and dependencies are verified at a recorded revision. Signed builds, release schedule, adoption and actual identifiers remain open | ADR-06 and cutover |
 | Token lifecycle | Login/logout/account switch, multi-device, refresh, and invalidation | Mobile contract and security tests |
 | Retention | Delivery, audit, dead-letter, keys, outbox, PII deletion | ADR-10 and production maintenance |
@@ -292,7 +302,7 @@ work on unchecked rows has started, as noted.
 - [x] 11. Write ADR-06 cutover and its evidence checklist: React Native enrollment, exclusive cohorts, coverage, pilot, per-stage rollback, and retirement; still proposed, not executed.
 - [x] 12. Write ADR-07 self-hosted Kafka topology/provisioning and its evidence checklist; the isolated three-controller/three-broker drill passes. Company host placement and release approval remain open.
 - [x] 13. Write ADR-08 observability, signal/alert catalog, and evidence checklist; local monitoring installation, alert rules and dashboard queries now have evidence in Step 36.
-- [x] 14. Write minimum ADR-09/10/11 decisions and the API/data/security readiness register; still proposed, policy/identity/RPO/RTO pending approval. Local controls and recovery evidence are recorded in Steps 32 and 37–38.
+- [x] 14. Write minimum ADR-09/10/11 decisions and the API/data/security readiness register; still proposed, policy/identity and target recovery implementation/acceptance remain open. Initial RPO/RTO/PITR objectives were approved by the project owner on 2026-11-09. Local controls and recovery evidence are recorded in Steps 32 and 37–38.
 - [ ] 15. Cross-ADR review: technical CR1–CR9 checks and revisions are complete at the design level; acceptance remains conditional on G2–G7. No ADR is automatically accepted.
 
 ### Phase 3 — implementation foundations
@@ -328,7 +338,7 @@ work on unchecked rows has started, as noted.
 - [x] 35. Server, worker, scheduler and one-shot commands now bound startup and join or cancel outstanding work on shutdown. Local tests cover active HTTP drain, forced cancellation, inherited pipes and closing PostgreSQL connections. See the [lifecycle specification](../specs/process-lifecycle.md).
 - [ ] 36. Private mTLS health/readiness, redacted structured HTTP logs, provider/outbox metrics, a provisioned Grafana dashboard and Prometheus firing/recovery fixtures are implemented. Delivery workers distinguish quota, breaker and concurrency deferrals. Local rule tests verify quota and breaker alert firing and suppression for idle gates, ordinary concurrency, global holds and stale samples. The local Kafka drill verifies replication, insufficient ISR, offline partition and scrape alerts. The admission collector reports committed checkpoint lag and range validity using its scoped credentials. The isolated drill verifies missing checkpoints, measurable lag, zero lag, group denial and recovery. Prometheus and Alertmanager deliver the firing and resolved offline-partition notifications to an isolated webhook. Target scrape inventory, admission and downstream checkpoints, the on-call route and watchdog checks remain open. See the [monitoring runbook](../runbooks/monitoring.md).
 - [ ] 37. A [protected retention job](../runbooks/retention.md) expires spent origin nonces, receipt request markers and reviewed terminal send keys in bounded authorized batches with holds and crash-safe progress. A [read-only subject impact preview](../runbooks/subject-erasure.md) inventories dependent records and incomplete coverage. The PostgreSQL 17 command-line fixture verifies bound selection input over TLS with the restricted reader, including safe unresolved results for malformed selections. Archive behavior, actual erasure across systems and owner-approved lifetimes remain open.
-- [ ] 38. [Sealed Kafka reconciliation](../runbooks/sealed-restore.md), [physical PITR and missing-WAL denial](../runbooks/physical-pitr.md), and [credential rollover](../runbooks/credential-rotation.md) pass isolated checks. The physical PITR drill passed locally on 2026-11-09 against PostgreSQL 17.10 at migration 000040: target LSN `0/D5A948` on timeline 1 restored through security reconciliation in 2.200 s; wrong-key and missing-WAL recovery were rejected. Credential-rotation integration regressions also passed in the race-enabled isolated suite. These synthetic fixtures do not establish organizational RPO/RTO, backup custody, or target credential retirement. Target recovery objectives, backup custody and credential retirement remain open.
+- [ ] 38. [Sealed Kafka reconciliation](../runbooks/sealed-restore.md), [physical PITR and missing-WAL denial](../runbooks/physical-pitr.md), and [credential rollover](../runbooks/credential-rotation.md) pass isolated checks. The physical PITR drill passed locally on 2026-11-09 against PostgreSQL 17.10 at migration 000040: target LSN `0/D5A948` on timeline 1 restored through security reconciliation in 2.200 s; wrong-key and missing-WAL recovery were rejected. Credential-rotation integration regressions also passed in the race-enabled isolated suite. These synthetic fixtures do not establish target RPO/RTO, backup custody, or target credential retirement. Recovery objectives are approved as initial targets; meeting them, backup custody and credential retirement remain open.
 - [ ] 39. Operator grants and alert delivery through a synthetic webhook have isolated evidence. The company service owners, on-call receivers, escalation paths and operator access still require verification.
 
 ### Phase 7 — production evidence
