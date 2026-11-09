@@ -244,30 +244,29 @@ and broker policy.
 
 ## Five-campaign aggregate burst
 
-One healthy burst queued five campaigns of 20,000 devices each before worker
-startup, using one synthetic provider allocation of 400 starts/s and an
-eight-connection worker DB pool:
+Two healthy bursts queued five campaigns of 20,000 devices each before worker
+startup, with an eight-connection worker DB pool. The synthetic project
+allocation was the only changed setting:
 
-| Measure | Result |
-|---|---:|
-| Total devices / campaigns | 100,000 / 5 |
-| First queue record to last committed result | 360.177 s |
-| Per-device result p95 / p99 | 340.574 / 354.918 s |
-| First queue record to drained Kafka outbox | 360.707 s |
-| Average durable results per second | 277.23 |
-| Sampled peak outbox / worker peak RSS | 103 / 47,176 KiB |
-| Durable outcomes / verified distinct Kafka IDs | 100,000 / 100,000 |
+| Configured starts/s | Last provider response | Last durable result | Result p95 / p99 | Kafka drain | Peak provider starts/s / in flight | Sampled peak outbox | Avg durable results/s | Worker peak RSS |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 400 | 360.175 s | 360.177 s | 340.574 / 354.918 s | 360.707 s | 357 / 14 | 103 | 277.23 | 47,176 KiB |
+| 1,000 | 222.241 s | 222.242 s | 209.475 / 218.519 s | 262.611 s | 569 / 16 | 23,416 | 380.79 | 48,476 KiB |
 
-The run completed all five campaigns with no failed or deferred devices and
-verified every distinct delivery ID in Kafka. The combined 100,000-device
-workload took just over six minutes. This is one local synthetic observation;
-the project-approved five-minute objective applies to 20,000 eligible devices,
-and this fixture does not report per-campaign completion times. Do not classify
-it as a pass or failure for that objective. The target multi-campaign burst
-denominator and shared-project provider allocation still need agreement.
+Both runs completed 100,000 provider outcomes with no failed or deferred
+devices, then verified all 100,000 distinct delivery IDs in Kafka. The 1,000/s
+configuration reduced last-result time by 137.935 s but raised the sampled
+outbox peak from 103 to 23,416. These are two single-host synthetic observations
+using the same 8-vCPU, 8-GiB Docker VM, private provider, local PostgreSQL and
+single broker. The aggregate 100,000 outcomes finished within five minutes at
+1,000/s; the report does not provide per-campaign completion times. The
+project-approved five-minute objective applies to each 20,000-device campaign,
+and the target burst denominator and shared-project rate allocation remain
+unapproved. Do not classify these trials as staging acceptance.
 
 ```sh
 bash scripts/delivery-load.sh 20000 5 healthy burst 400 8
+bash scripts/delivery-load.sh 20000 5 healthy burst 1000 8
 ```
 
 ```sh
