@@ -39,6 +39,14 @@ The dependency scan does not close runtime findings; C21 is separately remediate
 | AUTH3 | P2 | Send, send replay and schedule trusted the HTTP session check after waiting for project and campaign locks. Acceptance now locks session lineage, actor and session in its transaction and checks expiry again before commit. PostgreSQL regressions cover revocation during a project lock wait and expiry during a campaign lock wait, with no persisted acceptance, key, audit or outbox changes. |
 | AUTH4 | P2 | Registry and scoped draft, segment, membership and template writes trusted the earlier HTTP session check. Both transaction paths now lock and recheck the current staff session. Grant writes also lock the actor and target in staff ID order, and an enable checks target activity after obtaining those locks. Local PostgreSQL tests cover revocation during a project lock wait and deactivation during a grant write. |
 
+## Subject erasure preview — 2026-11-09
+
+The subject erasure preview's one-shot PostgreSQL plan could attempt the JSON
+cast on malformed bound input before evaluating its guard. It now validates
+the bounded selection through a materialized input before casting. The
+restricted `psql` fixture also verifies that malformed input returns an
+unresolved report without echoing the selection.
+
 ---
 
 ## Severity Legend

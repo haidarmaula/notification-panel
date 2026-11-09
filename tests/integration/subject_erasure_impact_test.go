@@ -7,6 +7,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -129,6 +131,9 @@ func TestSubjectErasureImpactScopesAndBounds(t *testing.T) {
 	}
 	primary := selectFor(f.project, namespace)
 	report := run(primary)
+	checkErasurePreviewPSQL(t, ctx, role, query, primary, report)
+	uppercase := strings.Replace(primary, f.project.String(), strings.ToUpper(f.project.String()), 1)
+	require.Equal(t, report, run(uppercase))
 	require.Equal(t, "matched", report.Selection)
 	require.True(t, report.DispatchHold)
 	require.Equal(t, 1, report.HeldClasses)
@@ -155,7 +160,8 @@ func TestSubjectErasureImpactScopesAndBounds(t *testing.T) {
 		require.Equal(t, 1, other.Groups["identity_aliases"].Counts["mappings"])
 		require.Zero(t, other.Groups["delivery_intents"].Counts["total"])
 	}
-	for _, bad := range []string{"{}", selectFor(f.project, "unknown"), `{"subject":"a","subject":"b"}`, "not-json", strings.Replace(primary, `"application_id":`, `"extra":true,"application_id":`, 1)} {
+	for _, bad := range []string{"{}", selectFor(f.project, "unknown"), `{"subject":"a","subject":"b"}`, "not-json",
+		strings.Replace(primary, `"application_id":`, `"extra":true,"application_id":`, 1), primary + strings.Repeat(" ", 4096)} {
 		missing := run(bad)
 		require.Equal(t, "unresolved", missing.Selection)
 		require.Nil(t, missing.Groups)
@@ -170,4 +176,41 @@ func TestSubjectErasureImpactScopesAndBounds(t *testing.T) {
 	require.Equal(t, "lower_bound", large.Groups["linked_campaigns"].Coverage)
 	require.Equal(t, "lower_bound", large.Groups["attributed_replay_attempts"].Coverage)
 	require.Equal(t, "exact", large.Groups["delivery_intents"].Coverage)
+}
+
+func checkErasurePreviewPSQL(t *testing.T, ctx context.Context, role, query, selection string, want erasurePreview) {
+	t.Helper()
+	fixtureDir := os.Getenv("HELLO_INTEGRATION_CERTS_DIR")
+	require.NotEmpty(t, fixtureDir)
+	dir, err := os.MkdirTemp(fixtureDir, "erasure-preview-")
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, os.RemoveAll(dir)) })
+	wrapper, err := os.ReadFile("../../scripts/sql/preview-subject-erasure.psql")
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "preview-subject-erasure.psql"), wrapper, 0644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "subject-erasure-impact.sql"), []byte(query), 0644))
+	path := "/fixtures/" + filepath.Base(dir) + "/preview-subject-erasure.psql"
+	dsn := "host=127.0.0.1 dbname=notification_integration sslmode=verify-full sslrootcert=/fixtures/ca.crt user=" + role
+
+	for _, tc := range []struct {
+		name, input string
+		want        erasurePreview
+	}{
+		{name: "exact quoted identity", input: selection, want: want},
+		{name: "duplicate field", input: `{"subject":"private-first","subject":"private-second"}`, want: erasurePreview{Selection: "unresolved"}},
+		{name: "untrusted command text", input: `\! private-command`, want: erasurePreview{Selection: "unresolved"}},
+		{name: "oversize", input: strings.Repeat(" ", 4096) + selection, want: erasurePreview{Selection: "unresolved"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := exec.CommandContext(ctx, "docker", "compose", "--env-file", "/dev/null", "-f", "../../compose.integration.yml", "-p", "hello-integration",
+				"exec", "-T", "-e", "PGPASSWORD=inventory-fixture", "postgres", "psql", "-XqAtw", "-v", "ON_ERROR_STOP=1", "-f", path, dsn)
+			cmd.Stdin = strings.NewReader(tc.input + "\n")
+			output, err := cmd.CombinedOutput()
+			require.NoError(t, err, "%s", output)
+			require.NotContains(t, string(output), "private-")
+			var report erasurePreview
+			require.NoError(t, json.Unmarshal(output, &report))
+			require.Equal(t, tc.want, report)
+		})
+	}
 }

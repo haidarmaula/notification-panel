@@ -1,12 +1,16 @@
 -- $1 is one bound selection object. No user, installation, message, token or
 -- subject identifier is projected. Each source stops at its 501st match.
-WITH input AS MATERIALIZED (
-    SELECT CASE WHEN octet_length($1::text)<=4096 AND $1::text IS JSON OBJECT WITH UNIQUE KEYS AND pg_input_is_valid($1::text,'jsonb')
-                THEN $1::text::jsonb END AS v
+-- Keep the bound text separate from its cast. A custom plan can otherwise
+-- fold a supplied constant into the cast before evaluating the CASE guard.
+WITH raw_input AS MATERIALIZED (
+    SELECT $1::text AS selection WHERE octet_length($1::text)<=4096
+), input AS MATERIALIZED (
+    SELECT CASE WHEN pg_input_is_valid(selection,'jsonb') AND selection IS JSON OBJECT WITH UNIQUE KEYS
+                THEN selection::jsonb END AS v FROM raw_input
 ), subject AS MATERIALIZED (
     SELECT a.id AS app,u.id AS recipient,a.status AS app_status,u.status AS user_status
     FROM input JOIN public.applications a ON a.public_id=CASE
-        WHEN v->>'application_id' COLLATE "C" ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        WHEN v->>'application_id' COLLATE "C" ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
         THEN (v->>'application_id')::uuid END
     JOIN public.mobile_identities m ON m.application_id=a.id AND m.identity_namespace=v->>'identity_namespace' AND m.subject=v->>'subject'
     JOIN public.users u ON (u.application_id,u.id)=(m.application_id,m.user_id)

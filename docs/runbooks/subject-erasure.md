@@ -8,7 +8,10 @@ Obtain the deployment privacy and security owners’ case authorization, list of
 
 The optional [reader grants](../../scripts/sql/subject-erasure-reader-grants.sql) select only the columns used by the report. A database owner can apply them to a separately provisioned, reviewed reader with `psql -X -v ON_ERROR_STOP=1 -v preview_reader=APPROVED_READER -f scripts/sql/subject-erasure-reader-grants.sql service=notification_owner`. Keep the role free of schema creation, table writes, elevated memberships and inherited access to restricted columns. Pseudonymous identity lookup still needs restricted access. Configure database auditing to record the case/actor, query template, time, target and outcome without capturing bound identity values. Check statement logging, bind/error parameter logging, proxy logs and the evidence store before using a real subject.
 
-Have the authorized case system supply one compact UTF-8 JSON object through protected standard input. It must contain exactly the following string fields. Encode control characters as JSON escapes inside the single record.
+Have the authorized case system supply one compact UTF-8 JSON object of at most
+4,096 bytes through protected standard input. It must contain exactly the
+following string fields. Use a hyphenated UUID in either hex case. Encode
+control characters as JSON escapes inside the single record.
 
 ```json
 {"application_id":"11111111-1111-4000-8000-000000000001","identity_namespace":"synthetic-application-issuer","subject":"synthetic-subject"}
@@ -20,7 +23,7 @@ From the repository root, run the [psql wrapper](../../scripts/sql/preview-subje
 psql -X -qAt -v ON_ERROR_STOP=1 -f scripts/sql/preview-subject-erasure.psql service=notification_privacy_reader < /protected/cases/selection.json
 ```
 
-The wrapper binds the JSON through PostgreSQL’s extended protocol. The [query](../../scripts/sql/subject-erasure-impact.sql) returns one JSON object without echoing identifiers, addresses, proof verifiers, fingerprints, token material, Kafka bytes, provider IDs or profile fields. The transaction is read-only, uses a fixed search path and has a three-second statement limit and 250 ms lock limit. A timeout ends the attempt. Some owner lookups may scan existing indexes or tables before finding their matches. Measure IO on a representative protected replica before scheduling repeated previews. Review snapshot staleness against the authoritative writer before any later action. [psql parameter binding](https://www.postgresql.org/docs/17/app-psql.html).
+The wrapper binds the JSON through PostgreSQL’s extended protocol. The [query](../../scripts/sql/subject-erasure-impact.sql) returns one JSON object without echoing identifiers, addresses, proof verifiers, fingerprints, token material, Kafka bytes, provider IDs or profile fields. The transaction is read-only, uses a fixed search path and has a three-second statement limit and 250 ms lock limit. A timeout ends the attempt. Some owner lookups may scan existing indexes or tables before finding their matches. Measure IO on a representative protected replica before scheduling repeated previews. Review snapshot staleness against the authoritative writer before any later action. The isolated integration suite runs the actual wrapper over verified TLS with the restricted reader and checks quoted identities, malformed input, duplicate fields and the size limit. [psql parameter binding](https://www.postgresql.org/docs/17/app-psql.html).
 
 Record the timestamp, case reference, authorized operator, database/restore identity and count report in the restricted case record. The case record maintains the link to the original selection. An unresolved selection returns `groups: null`. This includes an unknown project, namespace or subject and an ambiguous or malformed selection. Reconcile the identity mapping before proceeding.
 
