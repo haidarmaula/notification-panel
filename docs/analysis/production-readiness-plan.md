@@ -81,7 +81,7 @@ display; avoid uncontrolled traffic spikes.
 | --- | --- | --- |
 | Service levels | Staff API availability 99.9% per rolling 30 days (43.2 minutes of error budget); p95 latency ≤300 ms and p99 ≤1 s for valid requests. Server errors and timeouts are bad outcomes; malformed and unauthorized client requests are excluded from the availability denominator. Use synthetic checks during sparse traffic. For scheduled campaigns not under an explicit hold, 99% reach durable queue acceptance within 60 seconds of `scheduled_for` over a rolling 12 months, and none exceed 5 minutes. Report each scheduled campaign because traffic is sparse. | Project owner approved these initial targets on 2026-11-09. ADR-08 defines lifecycle measurement and sparse-traffic treatment. [ADR-08](../adr/adr-08-observability.md#a-6-lifecycle-timing-sparse-traffic-and-slo-evidence) |
 | Recovery objectives | RPO ≤5 minutes; RTO ≤4 hours through safe, reconciled resumption; PITR window ≥30 days. | Project owner approved these initial objectives on 2026-11-09. The isolated restore drills verify recovery mechanics, not target objectives. [Recovery runbook](../runbooks/physical-pitr.md) |
-| Acceptance thresholds | All 20,000 eligible devices receive a durable provider outcome within 5 minutes under healthy conditions; 60 seconds remains a stretch benchmark. Require three consecutive staging campaigns and a multi-campaign burst to pass with every eligible device accounted for, no cross-application send, and no unexplained missing or duplicate outcomes. Pause on an ownership/isolation violation or sustained throttling. Roll back on a correctness/security violation or two consecutive runs exceeding 5 minutes. | Project owner approved these initial thresholds on 2026-11-09. Local trials provide calibration only. [Load evidence](delivery-load.md) · [Cutover ADR](../adr/adr-06-onesignal-fcm-cutover.md) |
+| Acceptance thresholds | All 20,000 eligible devices receive a durable provider outcome within 5 minutes under healthy conditions; 60 seconds remains a stretch benchmark. Require three consecutive staging campaigns and a multi-campaign burst to pass with every eligible device accounted for, no cross-application send, and no unexplained missing or duplicate outcomes. Pause on an ownership/isolation violation or sustained throttling. Roll back on a correctness/security violation or two consecutive runs exceeding 5 minutes. | Project owner approved these initial thresholds on 2026-11-09. The local provider alert warns after at least three quota deferrals in two minutes while cooldown remains active, with a healthy fresh DB sample, no global hold, and a 30-second firing delay; this warning does not itself enact or prove a production pause. Local trials provide calibration only. [Load evidence](delivery-load.md) · [Monitoring runbook](../runbooks/monitoring.md#provider-and-receipts) · [Cutover ADR](../adr/adr-06-onesignal-fcm-cutover.md) |
 
 Approval record: the user approved the initial targets above in this conversation
 on 2026-11-09 (Asia/Jakarta). This records project-owner approval only; it does
@@ -89,10 +89,11 @@ not represent approval by platform/operations owners or target-environment
 evidence.
 
 Step 05 remains open pending the deployment project's actual FCM quota and reserved
-headroom, numeric sustained-throttling trigger, agreed campaign soak/burst profile,
-pilot dwell/cohort criteria, rollback destination, named operational sign-off and
-staging validation. Report schedule delays and held campaigns by their explicit
-status; do not treat an excluded hold as a successful on-time schedule.
+headroom, platform/operations approval of the local throttling warning and its
+pause/escalation action, agreed campaign soak/burst profile, pilot dwell/cohort
+criteria, rollback destination, named operational sign-off and staging validation.
+Report schedule delays and held campaigns by their explicit status; do not treat
+an excluded hold as a successful on-time schedule.
 
 ### Step 05 repository evidence preflight (2026-11-09)
 
