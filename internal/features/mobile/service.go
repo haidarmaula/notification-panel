@@ -249,11 +249,11 @@ func (s *MobileService) Sync(ctx context.Context, params SyncParams) (*MobileSyn
 // asserts that the token's signing method is HMAC-based, rejecting any
 // token whose header declares a different algorithm family.
 //
-// This algorithm restriction is a hardening that internal/token's parsers
-// do *not* currently implement. A future refactor of the token package
-// should copy this pattern — restricting to the HMAC family (or, ideally,
-// to HS256 specifically) closes the algorithm-agility gap noted in that
-// package's documentation.
+// This legacy verifier accepts any HMAC method and does not enforce issuer,
+// audience or subject. The staff parsers in internal/token now pin HS256 and
+// validate their configured issuer and audience, but they are not mobile
+// verifiers. If this legacy flow is reactivated, it needs an explicit mobile
+// issuer, audience and algorithm policy before it is mounted.
 //
 // # Expiry and registered claims
 //

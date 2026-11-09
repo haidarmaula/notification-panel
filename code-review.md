@@ -409,7 +409,7 @@ Design inconsistencies, duplication, contract drift, and maintainability hazards
 | M44 | All 17 JSON input handlers, including profile | **Fixed in local code, M02d:** 64KiB small JSON / 1MiB campaign limits, complete bounded reads and single-value decoding. [Evidence](docs/analysis/m02d-verification.md): boundary/direct-handler/real-DB route tests; no rejected mutation or Kafka event. Other abuse controls remain open. |
 | M45 | Protected HTTP API | **Fixed locally.** Login, refresh and logout share per-IP and aggregate authentication budgets before reaching the handler. [Gateway contract](docs/specs/m02-gateway.md). |
 | M46 | HTTP layer | No CORS configuration for the admin portal |
-| M47 | `internal/features/mobile/service.go` — `verifyJWT` | Correctly enforces HMAC signing — but `internal/token` does not apply the same hardening |
+| M47 | `internal/features/mobile/service.go` — `verifyJWT` | **Scoped to the unmounted legacy mobile service.** It accepts the HMAC family instead of pinning HS256 and does not enforce issuer, audience or subject. The comparison in the legacy Godoc was stale: `internal/token` staff parsers now pin HS256 and validate their configured issuer/audience, but do not verify mobile tokens. The mounted mobile lifecycle uses a separate protected identity policy. Keep the legacy gap open if that module is ever reactivated. |
 
 ### Kafka Client Configuration
 
