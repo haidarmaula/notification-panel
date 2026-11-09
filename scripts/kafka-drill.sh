@@ -50,6 +50,8 @@ if hashlib.sha256(pathlib.Path(sys.argv[1]).read_bytes()).hexdigest() != expecte
 PY
   chmod 644 "$agent"
   cp deploy/observability/kafka-jmx.yml "$HELLO_KAFKA_DRILL_DIR/node/kafka-jmx.yml"
+  GOOS=linux GOARCH="$arch" CGO_ENABLED=0 GOFLAGS= GOWORK=off go build -mod=readonly -trimpath \
+    -o "$HELLO_KAFKA_DRILL_DIR/receiver" ./scripts/kafka-drill/receiver.go
   compose+=(-f compose.kafka-monitor.yml)
 fi
 GOOS=linux GOARCH="$arch" CGO_ENABLED=0 GOFLAGS= GOWORK=off go test -c -mod=readonly -tags=integration -trimpath -o "$HELLO_KAFKA_DRILL_DIR/probe" ./scripts/kafka-drill
@@ -122,6 +124,21 @@ monitor_healthy() {
   monitor_wait 'three controllers report one active controller' 'count(hello_kafka_active_controller) == 3 and sum(hello_kafka_active_controller) == 1'
   monitor_wait 'Kafka alerts clear' 'absent(ALERTS{alertname=~"HelloKafka.*",alertstate="firing"})'
 }
+receiver_wait() {
+  local state=$1 fingerprint
+  for _ in {1..45}; do
+    "${compose[@]}" logs --no-color --no-log-prefix receiver > "$HELLO_KAFKA_DRILL_DIR/receiver.log"
+    fingerprint=$(awk -v state="$state" '$1=="fixture" && $2=="webhook" && $3=="accepted" && $4==state {id=$5} END {print id}' "$HELLO_KAFKA_DRILL_DIR/receiver.log")
+    if [[ -n "$fingerprint" ]]; then
+      echo "$fingerprint"
+      return
+    fi
+    sleep 1
+  done
+  echo "Timed out waiting for the $state webhook notification" >&2
+  "${compose[@]}" logs --tail 30 monitor alertmanager receiver >&2
+  return 1
+}
 eventually ready
 probe plan
 probe apply
@@ -159,6 +176,8 @@ if [[ "$monitor" == true ]]; then
   "${compose[@]}" stop -t 5 b1
   monitor_wait 'offline partitions alert fires with all brokers stopped' 'ALERTS{alertname="HelloKafkaOfflinePartitions",alertstate="firing"}'
   monitor_wait 'broker scrape outage is visible' 'ALERTS{alertname="HelloKafkaMetricsUnavailable",alertstate="firing",role="broker"}'
+  fired=$(receiver_wait firing)
+  echo 'Monitoring verified: fixture receiver accepted the firing offline-partition alert'
 fi
 start_recovery=$SECONDS
 if [[ "$monitor" == true ]]; then
@@ -171,4 +190,9 @@ topic_ids > "$HELLO_KAFKA_DRILL_DIR/restored-topic-ids"
 cmp "$HELLO_KAFKA_DRILL_DIR/topic-ids" "$HELLO_KAFKA_DRILL_DIR/restored-topic-ids"
 echo "Restart through restored full ISR, canaries, checkpoints and topic IDs: $((SECONDS - start_recovery))s"
 monitor_healthy
+if [[ "$monitor" == true ]]; then
+  resolved=$(receiver_wait resolved)
+  [[ "$fired" == "$resolved" ]] || { echo 'The resolved webhook had a different alert fingerprint' >&2; exit 1; }
+  echo 'Monitoring verified: fixture receiver accepted resolution for the same alert'
+fi
 echo 'Verified both physical topic IDs, RF3/minISR2, authenticated role boundaries and resumed offsets after broker recovery.'

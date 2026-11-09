@@ -6,7 +6,7 @@ Design: [ADR-08](../adr/adr-08-observability.md).
 
 ## Local implementation update
 
-The [implementation spec](../specs/adr-08-observability.md) and [runbook](../runbooks/monitoring.md) supersede the original design-only inventory below. The local rule and dashboard validation uses digest-pinned containers. Target receiver, watchdog, broker exporters, access governance, load and SLO evidence remain open.
+The [implementation spec](../specs/adr-08-observability.md) and [runbook](../runbooks/monitoring.md) supersede the original design-only inventory below. The local rule and dashboard validation uses digest-pinned containers. The monitored Kafka drill verified that Prometheus and Alertmanager delivered a firing notification and its matching resolution to a synthetic webhook. Target receiver, watchdog, broker exporters, access governance, load and SLO evidence remain open.
 
 ## Original evidence
 

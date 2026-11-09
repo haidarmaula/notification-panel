@@ -17,3 +17,22 @@ services:
     volumes:
       - ./scripts/kafka-drill/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - ./deploy/observability/kafka-rules.yml:/etc/prometheus/kafka-rules.yml:ro
+  alertmanager:
+    image: prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a
+    networks: [private]
+    read_only: true
+    tmpfs: ["/alertmanager:uid=65534,size=16m"]
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --cluster.listen-address=
+    volumes:
+      - ./scripts/kafka-drill/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+  receiver:
+    image: prom/prometheus@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
+    networks: [private]
+    read_only: true
+    cap_drop: [ALL]
+    entrypoint: [/fixture-receiver]
+    volumes:
+      - '${HELLO_KAFKA_DRILL_DIR:?fixture directory required}/receiver:/fixture-receiver:ro'

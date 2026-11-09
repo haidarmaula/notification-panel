@@ -17,9 +17,10 @@ GOCACHE=/tmp/hello-go-review-cache bash scripts/kafka-drill.sh
 
 ## What the drill verifies
 
-Run the command with `--monitor` to add a disposable Prometheus to the
-private network. This mode needs curl, access to the pinned release asset and
-the digest-pinned Prometheus image used by the monitoring fixture.
+Run the command with `--monitor` to add disposable Prometheus, Alertmanager
+and a synthetic webhook receiver to the private network. Have the
+digest-pinned images in [the monitoring overlay](../../compose.kafka-monitor.yml)
+available locally. Fetching the pinned JMX Exporter release asset requires curl.
 Set `HELLO_KAFKA_JMX_JAR` to the path of the release jar for an offline run
 with the images already available.
 The script checks the SHA-256 before starting Kafka and mounts the jar and
@@ -27,6 +28,11 @@ MBean allowlist read-only. Prometheus scrapes on the internal network with
 zero published ports. Target deployments use an authenticated management path.
 [Monitoring runbook](monitoring.md#kafka-replication).
 
+- When all brokers stop, the real offline-partition rule must produce a
+  firing notification at the fixture webhook through Alertmanager. After
+  broker recovery, the webhook must accept a resolved notification with the
+  same fingerprint. The receiver validates the fixture scope, alert name,
+  severity and runbook reference before returning success.
 - The checked-in fixture profile pins an environment, cluster ID, three explicit
   replica placements per partition, three partitions per topic, minimum ISR 2,
   delete retention, append-time timestamps, size limits, unclean election policy
@@ -94,6 +100,11 @@ In the November 9 isolated repeat, the checkpoint sampler distinguished missing
 commits, a one-offset lag and zero lag for both scoped fixture groups. The
 groups' credentials could not inspect an unrelated group. Both readers resumed
 with their committed offsets after the leader election and full broker restore.
+
+A separate November 9 run added Alertmanager 0.34.1. The synthetic webhook
+accepted the firing offline-partition alert during full broker loss and the
+resolved alert with the same fingerprint after all brokers returned. The
+wrapper exited successfully and removed its containers and private network.
 
 ## Evidence required for deployment
 

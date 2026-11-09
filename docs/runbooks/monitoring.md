@@ -129,8 +129,27 @@ A slow log pipe can fill the server's 256-record access buffer or exceed its
 250 ms write deadline. Check the local logging driver, disk and collector.
 The access counter still records requests that lost their log entry. A derivative
 alert can be grouped under a confirmed infrastructure outage. Keep deadline risk
-visible, time-limit any silences and record their owner. Test the real escalation
-and independent watchdog with the team's designated receiver before activation.
+visible, time-limit any silences and record their owner.
+
+## Alert delivery and watchdog
+
+Before activation, ask the on-call owner to identify an approved test receiver
+and an independent path for detecting missing monitoring heartbeats.
+
+1. Record the environment, expected scrape inventory, alert route and on-call
+   owner. Agree on how the test signal will be triggered and who will observe it.
+2. Trigger an approved staging test signal. Record when the rule fired and when
+   the receiver got it, with matching severity, scope and runbook. Exercise the
+   escalation and maintenance behavior using the agreed test route.
+3. Clear the test signal. Verify resolution at the same receiver and reconcile
+   the firing and resolved notifications by alert identity.
+4. In an approved monitoring drill, interrupt the heartbeat or delivery path.
+   Verify that the independent watchdog detects the interruption and reports
+   recovery when the path returns. Record both timestamps and the receiver.
+
+The local Kafka drill checks firing and resolution through a disposable webhook
+on the internal network. The deployed receiver, escalation and watchdog still
+require their own evidence. [Local drill](kafka-replication-drill.md#what-the-drill-verifies).
 
 ## Local validation
 

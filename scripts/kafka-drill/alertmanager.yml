@@ -1,0 +1,18 @@
+route:
+  receiver: discard
+  routes:
+    - receiver: fixture-webhook
+      matchers:
+        - alertname="HelloKafkaOfflinePartitions"
+        - environment="fixture"
+        - cluster="fixture"
+      group_by: [alertname, environment, cluster]
+      group_wait: 1s
+      group_interval: 5s
+      repeat_interval: 1h
+receivers:
+  - name: discard
+  - name: fixture-webhook
+    webhook_configs:
+      - url: http://receiver:9080/notifications
+        send_resolved: true
