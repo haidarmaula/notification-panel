@@ -739,25 +739,13 @@ func (s *SegmentService) Update(ctx context.Context, params UpdateParams) (*Segm
 //
 // # The member-count guard is not atomic
 //
-// The count at step 3 and the delete at step 5 are two separate database
-// operations with no locking between them. A concurrent AddMember that
-// commits between the two will succeed against a segment that is about
-// to be deleted; the membership row's foreign key will either prevent
-// the delete (producing a wrapped error the handler serves as 500) or
-// be orphaned, depending on the schema's referential integrity
-// configuration. The guard is therefore an optimistic check, not a
-// guarantee; the authoritative protection is whatever the schema
-// enforces on segment_members' foreign key to segments.
-//
-// # The delete is not cascaded by the service
-//
-// The service deletes only the segment row itself. If the schema declares
-// ON DELETE CASCADE on segment_members' segment_id, the member rows are
-// removed at the database level as a side effect — but since the guard at
-// step 4 requires zero members, this path is not exercised in practice.
-// If the schema does not declare a cascade and a race produces a member
-// between steps 3 and 5, the delete will fail with a foreign-key
-// violation, which is wrapped and served as a 500.
+// The count at step 3 and delete at step 5 are separate database
+// operations. A concurrent AddMember can commit after the count returns
+// zero but before the delete. The schema declares ON DELETE CASCADE for
+// segment_members.segment_id, so the delete removes that new membership.
+// AddMember can therefore report success immediately before the segment
+// deletion removes its row. This legacy service is not mounted; the current
+// application segment writes use a separate scoped implementation.
 //
 // # Errors
 //
