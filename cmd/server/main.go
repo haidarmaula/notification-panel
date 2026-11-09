@@ -98,7 +98,7 @@ func runServer(ctx context.Context, cfg *config.ServerConfig) (err error) {
 			handler = cfg.Gateway.Protect(mux)
 		} else {
 			var lc net.ListenConfig
-			listener, err = lc.Listen(ctx, "tcp", ":8080")
+			listener, err = lc.Listen(ctx, "tcp", cfg.ListenAddress)
 		}
 		if err != nil {
 			return errors.New("server listener startup failed")

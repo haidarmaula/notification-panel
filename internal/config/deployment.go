@@ -47,7 +47,7 @@ func parseServerDeployment(data []byte) (*ServerConfig, error) {
 		return nil, deployment.ErrConfiguration
 	}
 	c.Gateway, err = ingress.Parse(gateway)
-	if err != nil {
+	if err != nil || c.Gateway == nil {
 		return nil, deployment.ErrConfiguration
 	}
 	c.Monitoring, err = observability.ParseAdmin(admin)

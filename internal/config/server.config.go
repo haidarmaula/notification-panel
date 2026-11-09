@@ -20,6 +20,7 @@ import (
 type ServerConfig struct {
 	Gateway          *ingress.Gateway
 	Monitoring       *observability.Admin
+	ListenAddress    string
 	mobilePolicyFile string
 	staffTokens      *token.TokenManager
 
@@ -92,6 +93,7 @@ func LoadServerConfig() *ServerConfig {
 
 	cfg := &ServerConfig{
 		BaseConfig:       *base,
+		ListenAddress:    os.Getenv("HTTP_LISTEN_ADDRESS"),
 		mobilePolicyFile: os.Getenv("MOBILE_POLICY_FILE"),
 
 		APIKey:          os.Getenv("API_KEY"),
@@ -102,6 +104,9 @@ func LoadServerConfig() *ServerConfig {
 
 		KafkaBroker: os.Getenv("KAFKA_BROKER"),
 		SendTopic:   os.Getenv("KAFKA_SEND_TOPIC"),
+	}
+	if cfg.ListenAddress == "" {
+		cfg.ListenAddress = "127.0.0.1:8080"
 	}
 
 	if cfg.APIKey == "" {

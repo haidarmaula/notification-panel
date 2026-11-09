@@ -87,6 +87,11 @@ func TestProtectedServerDatabaseAndMobilePolicy(t *testing.T) {
 			t.Fatal("unsafe transport accepted")
 		}
 	}
+	delete(p, "ingress")
+	if cfg, err := parse(); cfg != nil || err != deployment.ErrConfiguration {
+		t.Fatal("protected server accepted a missing mTLS gateway")
+	}
+	p["ingress"] = fixtureIngress(t)
 	p["database_url"] = dbURL
 	trust["refresh"] = purpose("refresh", strings.Repeat("b", 32))
 	if cfg, err := parse(); cfg != nil || err != deployment.ErrConfiguration {
@@ -100,6 +105,27 @@ func TestProtectedServerDatabaseAndMobilePolicy(t *testing.T) {
 	p["access_secret"], p["refresh_secret"] = strings.Repeat("b", 32), strings.Repeat("c", 32)
 	if cfg, err := parse(); cfg != nil || err != deployment.ErrConfiguration {
 		t.Fatal("legacy protected config accepted")
+	}
+}
+
+func TestLocalServerListenerDefaultsToLoopback(t *testing.T) {
+	for name, value := range map[string]string{
+		"DB_HOST": "localhost", "DB_PORT": "5432", "DB_USER": "fixture",
+		"DB_PASSWORD": "fixture-only", "DB_NAME": "hello", "DB_SSLMODE": "disable",
+		"API_KEY": "fixture-api-key", "ACCESS_SECRET": "fixture-access-secret",
+		"REFRESH_SECRET": "fixture-refresh-secret", "MOBILE_JWT_SECRET": "fixture-mobile-secret",
+		"SUPER_ADMIN_ROLE": "SUPER_ADMIN", "KAFKA_BROKER": "localhost:9092",
+		"KAFKA_SEND_TOPIC": "notification.send.requested", "HTTP_LISTEN_ADDRESS": "",
+	} {
+		t.Setenv(name, value)
+	}
+	cfg := LoadServerConfig()
+	if cfg.ListenAddress != "127.0.0.1:8080" {
+		t.Fatalf("local listener = %q, want loopback default", cfg.ListenAddress)
+	}
+	t.Setenv("HTTP_LISTEN_ADDRESS", "0.0.0.0:8080")
+	if cfg := LoadServerConfig(); cfg.ListenAddress != "0.0.0.0:8080" {
+		t.Fatalf("explicit local listener = %q, want configured address", cfg.ListenAddress)
 	}
 }
 
