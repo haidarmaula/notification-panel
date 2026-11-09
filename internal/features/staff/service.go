@@ -577,7 +577,8 @@ func (s *operations) UpdatePassword(ctx context.Context, id int64, currentPasswo
 		return err
 	}
 
-	if err := bcrypt.CompareHashAndPassword([]byte(actor.PasswordHash), []byte(currentPassword)); err != nil {
+	if len(currentPassword) > maxPasswordLength ||
+		bcrypt.CompareHashAndPassword([]byte(actor.PasswordHash), []byte(currentPassword)) != nil {
 		return ErrInvalidCurrentPassword
 	}
 

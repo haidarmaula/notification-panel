@@ -347,7 +347,7 @@ Updates the password of a staff user.
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
 | `password` | string | ✅ | New password, 8–72 UTF-8 bytes |
-| `current_password` | string | ✅ | Acting administrator’s current password |
+| `current_password` | string | ✅ | Acting administrator’s current password, up to 72 UTF-8 bytes |
 
 ### Success Response (200 OK)
 

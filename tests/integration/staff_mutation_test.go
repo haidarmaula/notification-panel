@@ -151,4 +151,31 @@ func TestStaffMutationSerializesRecoveryAuthority(t *testing.T) {
 	row, err = q.GetStaffUserByID(ctx, target.id)
 	require.NoError(t, err)
 	require.NoError(t, bcrypt.CompareHashAndPassword([]byte(row.PasswordHash), []byte(passwords[slices.Index(results[:], 200)])))
+
+	boundaryPassword := strings.Repeat("é", 36)
+	hash, err = bcrypt.GenerateFromPassword([]byte(boundaryPassword), bcrypt.MinCost)
+	require.NoError(t, err)
+	boundary := seed("SUPER_ADMIN", "bcrypt-boundary")
+	for _, tc := range []struct {
+		name, path, field string
+		reject            int
+		targetID          int64
+	}{
+		{name: "admin reset", path: path(target) + "/password", field: "password", reject: http.StatusForbidden, targetID: target.id},
+		{name: "profile change", path: "/api/v1/profile/password", field: "new_password", reject: http.StatusUnauthorized, targetID: boundary.id},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			body := func(proof string) string {
+				return fmt.Sprintf(`{"current_password":%q,%q:"new-fixture-password"}`, proof, tc.field)
+			}
+			before, err := q.GetStaffUserByID(ctx, tc.targetID)
+			require.NoError(t, err)
+			require.Equal(t, tc.reject, request(boundary, "PATCH", tc.path, body(boundaryPassword+"x")).Code)
+			after, err := q.GetStaffUserByID(ctx, tc.targetID)
+			require.NoError(t, err)
+			require.Equal(t, before.PasswordHash, after.PasswordHash)
+			require.Equal(t, before.AuthEpoch, after.AuthEpoch)
+			require.Equal(t, http.StatusOK, request(boundary, "PATCH", tc.path, body(boundaryPassword)).Code)
+		})
+	}
 }

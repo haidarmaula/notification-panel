@@ -79,6 +79,30 @@ func TestStaffSessionFamilies(t *testing.T) {
 		_, err := pool.Exec(ctx, query, args...)
 		require.NoError(t, err)
 	}
+	exec(`INSERT INTO staff_users(role_id,name,email,password_hash,is_active)
+		SELECT id,'Inactive','inactive@fixture.test',$1,false FROM roles WHERE name='ADMIN'`, string(hash))
+	exec(`INSERT INTO staff_users(role_id,name,email,password_hash)
+		SELECT id,'Invalid hash','invalid-hash@fixture.test','invalid' FROM roles WHERE name='ADMIN'`)
+	var rejected []byte
+	for _, input := range []auth.LoginRequest{
+		{Email: "sessions@fixture.test", Password: "wrong"},
+		{Email: "unknown@fixture.test", Password: "fixture-login"},
+		{Email: "inactive@fixture.test", Password: "fixture-login"},
+		{Email: "invalid-hash@fixture.test", Password: "fixture-login"},
+	} {
+		body, err := json.Marshal(input)
+		require.NoError(t, err)
+		w := do("POST", "/api/v1/auth/login", body, "")
+		require.Equal(t, http.StatusUnauthorized, w.Code)
+		require.Equal(t, "no-store", w.Header().Get("Cache-Control"))
+		if rejected == nil {
+			rejected = w.Body.Bytes()
+		}
+		require.Equal(t, rejected, w.Body.Bytes())
+	}
+	var sessions int
+	require.NoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM staff_sessions").Scan(&sessions))
+	require.Zero(t, sessions)
 	first, second, oldSignerFamily := login(), login(), login()
 	current(first, 204)
 	// A rolling restart changes the issuer's active keys without modifying

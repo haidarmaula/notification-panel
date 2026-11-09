@@ -29,6 +29,12 @@ Serialize refresh calls per family and atomically replace both credentials with 
 
 Invalid JSON returns 400, a body above 64 KiB returns 413 and invalid/expired/revoked credentials return 401. Database failures return 500 with `internal server error`. Login and rotation require successful session persistence before credentials are released. A restored database requires a new session recovery epoch and reconciliation before exposure.
 
+Login rejects passwords above 72 UTF-8 bytes. Wrong passwords, unknown or
+inactive accounts, and invalid stored hashes share a generic 401. Rejected
+attempts for missing or inactive accounts and malformed hashes perform a
+bcrypt comparison at the cost used for new passwords. Older stored hashes
+may have different costs.
+
 ## Cutover
 
 Deploy migration 000033 and drain every older server before restarting shared ingress. Tokens issued before session binding or without the configured issuer, audience and signing key ID require fresh login. Clients should treat both JWTs as opaque credentials. Roll out clients that consume both tokens before enabling the new refresh contract. Downgrading to a stateless server could re-enable legacy credentials. Keep old servers out of service and rotate signing material if a compatible rollback requires it. For database recovery and outstanding deployment decisions, see the [staff session specification](../specs/staff-sessions.md).

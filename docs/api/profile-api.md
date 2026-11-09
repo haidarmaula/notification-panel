@@ -156,7 +156,7 @@ Changes the password for the currently authenticated staff user. The current pas
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `current_password` | string | ✅ | Current password for verification |
+| `current_password` | string | ✅ | Current password for verification, up to 72 UTF-8 bytes |
 | `new_password` | string | ✅ | New password to set, at most 72 UTF-8 bytes |
 
 ### Success Response (200 OK)

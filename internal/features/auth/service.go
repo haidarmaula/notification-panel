@@ -16,6 +16,10 @@ import (
 // ErrInvalidCredentials covers unknown, inactive, expired and revoked accounts or sessions.
 var ErrInvalidCredentials = errors.New("invalid email or password")
 
+// The fallback uses the same bcrypt cost as newly stored staff passwords.
+// Its comparison result is always discarded.
+const rejectedLoginHash = "$2a$10$7khxPcFmRStPXr0xYDPcpuC3uHkLwTfBH4Wnlq4PWmE6JFDRIT3OW"
+
 // AuthService binds signed staff tokens to a current database session.
 type AuthService struct {
 	q      *sqlc.Queries
@@ -23,14 +27,14 @@ type AuthService struct {
 }
 
 func (s *AuthService) Login(ctx context.Context, email, password string) (*LoginResponse, error) {
-	staff, err := s.q.GetStaffUserByEmail(ctx, email)
-	if errors.Is(err, pgx.ErrNoRows) {
+	if len(password) > 72 {
 		return nil, ErrInvalidCredentials
 	}
-	if err != nil {
+	staff, err := s.q.GetStaffUserByEmail(ctx, email)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		return nil, err
 	}
-	if !staff.IsActive || len(password) > 72 || bcrypt.CompareHashAndPassword([]byte(staff.PasswordHash), []byte(password)) != nil {
+	if !validLoginPassword(staff, password) {
 		return nil, ErrInvalidCredentials
 	}
 	family := token.NewFamily()
@@ -47,6 +51,21 @@ func (s *AuthService) Login(ctx context.Context, email, password string) (*Login
 		return nil, ErrInvalidCredentials
 	}
 	return &LoginResponse{AccessToken: pair.AccessToken, RefreshToken: pair.RefreshToken}, nil
+}
+
+func validLoginPassword(staff sqlc.StaffUser, password string) bool {
+	if staff.IsActive {
+		err := bcrypt.CompareHashAndPassword([]byte(staff.PasswordHash), []byte(password))
+		if err == nil {
+			return true
+		}
+		if errors.Is(err, bcrypt.ErrMismatchedHashAndPassword) {
+			return false
+		}
+	}
+	// Missing or inactive accounts and malformed hashes still incur bcrypt work.
+	_ = bcrypt.CompareHashAndPassword([]byte(rejectedLoginHash), []byte(password))
+	return false
 }
 
 func (s *AuthService) issue(ctx context.Context, staff sqlc.StaffUser, family token.Family) (token.Pair, error) {

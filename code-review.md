@@ -2,7 +2,7 @@
 
 **Version:** 1.7
 
-**Last Updated:** 2026-11-08
+**Last Updated:** 2026-11-09
 
 **Scope:** Full codebase audit conducted during the Godoc documentation pass  
 **Coverage:** `cmd/`, `internal/`, `pkg/` — every non-test, non-generated `.go` file
@@ -29,6 +29,13 @@ advisories initially. Go/module security updates and a final scan reduced the
 reachable result to zero; uncalled dependency advisories remain informational.
 See [CI evidence](docs/analysis/ci-readiness.md) for versions and limitations.
 The dependency scan does not close runtime findings; C21 is separately remediated by M02a code/tests. H47/H48/M48 and unreconciled older rows remain separate.
+
+## Mounted staff credential review — 2026-11-09
+
+| ID | Severity | Finding and remediation |
+| --- | --- | --- |
+| AUTH1 | P2 | The pinned bcrypt comparison accepted a valid 72-byte password with extra bytes appended. The mounted admin reset and profile change now reject overlong current proofs before comparing. Both keep their existing authentication status and leave the hash and authentication epoch unchanged on rejection. |
+| AUTH2 | P2 | Login returned before bcrypt for unknown or inactive staff and invalid stored hashes. Those paths now perform a default-cost fallback comparison and retain the same generic 401. Historical valid hashes keep their stored cost. Gateway and fleet throttling budgets remain target checks. |
 
 ---
 

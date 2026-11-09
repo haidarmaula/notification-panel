@@ -86,7 +86,7 @@ func (s *ProfileService) UpdatePassword(ctx context.Context, staffID int64, curr
 		if err != nil {
 			return struct{}{}, fmt.Errorf("get account for password change: %w", err)
 		}
-		if bcrypt.CompareHashAndPassword([]byte(row.PasswordHash), []byte(currentPassword)) != nil {
+		if len(currentPassword) > 72 || bcrypt.CompareHashAndPassword([]byte(row.PasswordHash), []byte(currentPassword)) != nil {
 			return struct{}{}, ErrInvalidCredentials
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
