@@ -1,6 +1,6 @@
 # OneSignal → FCM cutover readiness
 
-Updated 2026-11-08 (Asia/Jakarta). **Production cutover is on hold.**
+Updated 2026-11-09 (Asia/Jakarta). **Production cutover is on hold.**
 Design: [ADR-06](../adr/adr-06-onesignal-fcm-cutover.md).
 
 React Native, Android+iOS, current OneSignal use and the FCM destination have been confirmed.
@@ -12,7 +12,7 @@ means evidence is missing, not that the user's system necessarily has a problem.
 
 | Gate | Evidence to record | Role owner | Status |
 | --- | --- | --- | --- |
-| C01 Firebase inventory | Project/app/package/bundle/environment IDs, IAM owner, quota and APNs setup; evidence location without secrets | Mobile + ops | Not verified |
+| C01 Firebase inventory | Project/app/package/bundle/environment IDs, IAM owner, quota and APNs setup; evidence location without secrets | Mobile + ops | User confirms an isolated staging Firebase project and signed Android/iOS test builds are available. Exact project/app IDs, IAM access, quota and APNs setup remain unverified. |
 | C02 React Native compatibility | RN/package/native versions, supported address types and enrollment callbacks | Mobile | [Source revision inspected](mobile-source-checkpoint.md); release builds and callbacks pending |
 | C03 Legacy behavior | Whether production sends/scheduled automation exist, operators and cohort exclusion/pause | Product + ops | Not verified |
 | C04 Registry/consent census | User/device/installation counts, owner/epoch, unknown legacy, permissions/opt-out and activity | Backend + mobile | Scoped, read-only census available. Target counts, permission state, legacy-only devices and exact physical population require independent evidence. |
@@ -20,8 +20,8 @@ means evidence is missing, not that the user's system necessarily has a problem.
 | C06 Delivery reliability | Atomic intent/outbox, budget/TTL, lease, safe offset, fault/replay evidence | Backend | Local PostgreSQL, Kafka and synthetic provider drills pass; target evidence pending |
 | C07 Receipt/events | Device capability, early/late receipt, stats units, event v2 and consumer compatibility | Backend + mobile + consumer owner | Local receipt/statistics and reference-consumer fixtures pass; real reader acceptance pending |
 | C08 Isolation | No identical business campaign reaches overlapping cohorts across providers | Product + ops | Backend route grants, held and retired generations and final pre-send rechecks pass locally. Pilot membership and broadcast approval have separate controls. External OneSignal exclusion remains unverified. |
-| C09 Real devices | Android/iOS release builds: permissions, foreground/background/terminated behavior, tap/deep-link, offline and upgrade | Mobile + QA | Not tested |
-| C10 Capacity/observability | Agreed numeric SLO, rate/quota, load/soak, dashboards, tested alerts and unknown-outcome accounting | Backend + ops | Two isolated 20k runs recorded all results in 49.424 s and 51.450 s, within the proposed 60 s. Private metrics, dashboard and alert checks pass. Target SLO, quotas, receivers and soak remain open. |
+| C09 Real devices | Android/iOS release builds: permissions, foreground/background/terminated behavior, tap/deep-link, offline and upgrade | Mobile + QA | Signed test builds are reported available; device ownership/availability and on-device behavior have not been verified. |
+| C10 Capacity/observability | Agreed numeric SLO, rate/quota, load/soak, dashboards, tested alerts and unknown-outcome accounting | Backend + ops | Project owner approved the five-minute per-20k objective. Two isolated 20k runs completed in 49.424 s and 51.450 s. Five-campaign/100k synthetic bursts completed in 360.177 s at 400/s and 222.242 s at 1,000/s, with all Kafka IDs verified. These runs are local calibration only. Platform sign-off, target quota/headroom, approved burst profile, staging SLIs, receivers and soak remain open. |
 | C11 Security/retention | Auth/ownership, key/installation secret lifecycle, logs, limits, deletion and backup/restore | Security + ops | Protected sessions, ingress, scoped retention, erasure impact preview and sealed restore have local evidence. Owner approval and erasure/retention gates remain. |
 | C12 Stage rollback | Hold/drain/reconcile/compatible-backend rollback, client capability and restore drill | Backend + mobile + ops | Per-binding holds, project rollback, stale-grant rejection and isolated sealed restore exercised. Full deployment rollback and mobile compatibility remain open. |
 | C13 Ramp decision | Cohort, count, dwell time, stop threshold, sign-off record and observation window | Product + mobile + ops | Backend accepts a separately reviewed cohort grant; named owners, thresholds and observation window remain open. |
