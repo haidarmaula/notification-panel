@@ -290,9 +290,9 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 
 | # | Location | Issue |
 |---|----------|-------|
-| H27 | `internal/features/notifications/processor.go` | Idempotency guard covers only `"COMPLETED"` and `"FAILED"` — a notification left in `"PROCESSING"` by a crashed predecessor is re-dispatched on retry |
-| H28 | `internal/features/notifications/processor.go` | Device attribution iterates by `UserID` and breaks on first match — every delivery row for a multi-device user is recorded against the same device |
-| H29 | `internal/features/notifications/processor.go` | `expandTargets` uses `10,000` for target rows and `1,000,000` for user and member lists — effectively unbounded pagination with silent truncation above those thresholds |
+| H27 | `internal/features/notifications/processor.go` | **Legacy limitation remains.** `alreadyProcessed` retries `PROCESSING` only when no delivery rows exist (`processor.go:481`). A crash after provider acceptance but before the first delivery insert can duplicate a push; a crash after partial inserts causes the retry to skip and can lose remaining devices. The module is unmounted; the modern dispatch path uses per-device attempts and recovery. |
+| H28 | `internal/features/notifications/processor.go` | **Fixed in existing code.** Delivery attribution matches the returned `PushToken` to the dispatched token (`processor.go:391`) and records that token's ID, so multiple devices for one user do not collapse onto the first match. The package is unmounted and has no direct processor regression test. |
+| H29 | `internal/features/notifications/processor.go` | **Still open in legacy code.** Target, broadcast-user and segment-member reads stop at 10,000/1,000,000 rows (`processor.go:603–647`). Reaching a cap emits a warning but still proceeds with a truncated audience. The module is unmounted; the modern dispatch path uses bounded pages. |
 | H30 | `internal/features/mobile/service.go` — `Sync` | Platform validation runs **after** the user upsert — an invalid platform produces a 400 with a user row already created or modified |
 | H31 | `internal/features/mobile/service.go` — `registerDeviceToken` | Device tokens are not transferred between users — a device handed to a new owner remains attributed to the original owner |
 | H32 | `internal/features/mobile/service.go` — `registerDeviceToken` | The `Exists → Create` sequence is not transactional — two concurrent syncs with the same push token can both attempt an insert |
