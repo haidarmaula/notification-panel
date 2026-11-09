@@ -25,11 +25,14 @@
 //
 // # Partitioning
 //
-// The producer sets a message key so that related events route to the same
-// partition, and therefore preserve order within a partition. Keys are
-// built as "<prefix>_<id>" — see Producer.PublishSendRequested and
-// Producer.PublishDeliveryUpdated for the prefixes and the caveats around
-// the latter.
+// Both producers set a message key built as "<prefix>_<id>" — see
+// Producer.PublishSendRequested and Producer.PublishDeliveryUpdated for the
+// prefixes and the caveats around the latter. Only ScopedProducer honours that
+// key: its kafka.Hash balancer hashes it, so related events share a partition
+// and keep their relative order. The legacy Producer uses kafka.LeastBytes,
+// which picks the partition with the fewest accumulated bytes and counts only
+// len(msg.Key) toward that total, so its keys provide neither partition
+// affinity nor ordering. See finding H47.
 //
 // # Concurrency
 //
