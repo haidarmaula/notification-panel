@@ -46,15 +46,21 @@ type Producer struct {
 // NewProducer creates a new Kafka producer with the given broker and topic.
 // For development, you can pass "localhost:9092" and "notification.send.requested".
 //
+// This is the legacy producer. No cmd/ binary mounts it: its only caller is
+// internal/features/notifications, which test files alone import. Deployed
+// paths use NewScopedProducer or NewAuthenticatedScopedProducer, which hash
+// message keys and take a validated broker slice.
+//
 // # Configuration choices
 //
-// The writer is constructed with two non-default settings, each of which
+// The writer is constructed with three non-default settings, each of which
 // has an operational consequence:
 //
-//   - Balancer: kafka.LeastBytes. Message keys still determine partition
-//     assignment when present (kafka-go hashes the key), so this balancer
-//     only affects messages published without a key. In this codebase every
-//     publish sets a key, so the balancer is effectively inert.
+//   - Balancer: kafka.LeastBytes. This balancer does not hash the message key.
+//     LeastBytes.Balance picks the partition with the fewest accumulated bytes
+//     and counts len(msg.Key) only toward that total, so the deterministic
+//     "notification_<id>" keys give neither partition affinity nor an ordering
+//     guarantee. See finding H47; the scoped producer uses kafka.Hash instead.
 //   - RequiredAcks: kafka.RequireAll. The producer waits for the leader and
 //     all in-sync replicas to acknowledge before returning from
 //     WriteMessages. This provides durability at the cost of additional
@@ -69,9 +75,10 @@ type Producer struct {
 //
 // # Parameters
 //
-// broker is the Kafka broker address in "host:port" form (or a
-// comma-separated list, which kafka.TCP accepts and interprets as a seed
-// list). topic is the target topic name. Neither is validated here; an
+// broker is a single Kafka broker address in "host:port" form. kafka.TCP is
+// variadic but never splits a comma-separated string, so a CSV value here is
+// dialled as one literal hostname rather than used as a seed list; see finding
+// M48. topic is the target topic name. Neither is validated here; an
 // unreachable broker surfaces on the first publish attempt, not at
 // construction. An empty topic name will cause the first publish to fail
 // with a broker error.
@@ -96,10 +103,10 @@ func NewProducer(broker, topic string) *Producer {
 // PublishSendRequested publishes a send requested event.
 //
 // The event is JSON-marshalled and written to the producer's configured
-// topic with a message key of the form "notification_<id>". Because the key
-// is derived deterministically from the notification ID, all send-request
-// events for the same notification route to the same partition, preserving
-// their relative order.
+// topic with a message key of the form "notification_<id>". The key is
+// deterministic, but the LeastBytes balancer ignores it when selecting a
+// partition, so events for one notification carry no relative ordering
+// guarantee on this legacy path. See finding H47.
 //
 // # Errors
 //
@@ -138,17 +145,17 @@ func (p *Producer) PublishSendRequested(ctx context.Context, event NotificationS
 // PublishDeliveryUpdated publishes a delivery updated event.
 //
 // The event is JSON-marshalled and written to the producer's configured
-// topic. The message key is derived from the notification ID and is
-// intended to route all delivery updates for the same notification to the
-// same partition, preserving their relative order for downstream analytics.
+// topic. The message key is derived from the notification ID.
 //
 // # Message key
 //
 // The key is derived from the notification ID in the same way as
-// PublishSendRequested, using strconv.FormatInt. All delivery-update events
-// for a particular notification therefore share a deterministic key, and
-// Kafka routes them to the same partition while preserving their relative
-// order for downstream consumers.
+// PublishSendRequested, using strconv.FormatInt, so every delivery-update
+// event for a particular notification shares a deterministic key. The
+// LeastBytes balancer ignores that key when selecting a partition, so the
+// same-partition routing and relative ordering it would otherwise provide do
+// not hold on this legacy path and downstream analytics must not rely on
+// them. See finding H47.
 //
 // # Errors
 //
