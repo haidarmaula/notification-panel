@@ -429,6 +429,23 @@ func (e *experiment) run(waves int, shape string) {
 	log.Printf("provider %+v configured_rps=%d concurrency=%d database_connections=%d active_poll_ms=%d", s, e.rate, concurrency, e.dbConnections, e.activePollMS)
 	log.Printf("timing first_queue_to_provider_complete_ms=%d first_queue_to_last_result_ms=%d result_p95_ms=%d result_p99_ms=%d first_queue_to_drain=%s avg_devices_per_s=%.2f",
 		providerMS, recordedMS, p95MS, p99MS, elapsed, float64(total)/elapsed.Seconds())
+	rows, err := e.db.Query(e.ctx, `SELECT n.id, count(d.*),
+		round(extract(epoch FROM (max(d.attempt_resolved_at)-min(n.queued_at)))*1000)::bigint
+		FROM notifications n JOIN notification_delivery_intents d ON d.notification_id=n.id
+		GROUP BY n.id ORDER BY min(n.queued_at), n.id`)
+	check(err)
+	campaignCount := 0
+	for rows.Next() {
+		var campaignID int64
+		var devices, queueToLastResultMS int64
+		check(rows.Scan(&campaignID, &devices, &queueToLastResultMS))
+		verify(devices == int64(e.devices) && queueToLastResultMS > 0, "campaign result timing is incomplete")
+		log.Printf("campaign id=%d devices=%d queue_to_last_result_ms=%d", campaignID, devices, queueToLastResultMS)
+		campaignCount++
+	}
+	check(rows.Err())
+	rows.Close()
+	verify(campaignCount == waves, "campaign result timing count mismatch")
 
 	for line := range strings.SplitSeq(readFile(fmt.Sprintf("/proc/%d/status", w.Process.Pid)), "\n") {
 		if strings.HasPrefix(line, "VmHWM:") {

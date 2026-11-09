@@ -89,7 +89,9 @@ the first queue record to the last result. It samples outbox depth and drain
 every 500 ms. The current drain measurement uses the first persisted queue
 timestamp and the observation of committed completion with an empty outbox.
 Earlier runs started the drain stopwatch just before inserting the queue row.
-The worker memory field is its kernel-reported peak resident set.
+For multi-campaign runs it also reports each campaign's time from its persisted
+`queued_at` to its last committed device result, ordered by queue time. The worker
+memory field is its kernel-reported peak resident set.
 
 ## Local baseline and selector diagnosis
 
@@ -258,11 +260,24 @@ devices, then verified all 100,000 distinct delivery IDs in Kafka. The 1,000/s
 configuration reduced last-result time by 137.935 s but raised the sampled
 outbox peak from 103 to 23,416. These are two single-host synthetic observations
 using the same 8-vCPU, 8-GiB Docker VM, private provider, local PostgreSQL and
-single broker. The aggregate 100,000 outcomes finished within five minutes at
-1,000/s; the report does not provide per-campaign completion times. The
-project-approved five-minute objective applies to each 20,000-device campaign,
-and the target burst denominator and shared-project rate allocation remain
-unapproved. Do not classify these trials as staging acceptance.
+single broker. A rerun at 1,000/s with per-campaign reporting completed the last
+durable result at 216.022 s and Kafka drain at 254.623 s. Each of its five
+20,000-device campaigns completed within the approved five-minute interval:
+
+| Campaign order | Devices | Queue to last durable result |
+|---:|---:|---:|
+| 1 | 20,000 | 214.969 s |
+| 2 | 20,000 | 214.456 s |
+| 3 | 20,000 | 213.891 s |
+| 4 | 20,000 | 213.473 s |
+| 5 | 20,000 | 213.082 s |
+
+The rerun had 100,000 accepted provider outcomes, no failed or deferred devices,
+100,000 distinct Kafka delivery IDs, a sampled peak outbox of 22,950 and worker
+peak RSS of 49,100 KiB. It is one local synthetic observation, not any of the
+three consecutive staging campaigns required for acceptance. The target burst
+denominator, shared-project rate allocation and provider quota/headroom remain
+unverified. Do not classify these trials as staging acceptance.
 
 ```sh
 bash scripts/delivery-load.sh 20000 5 healthy burst 400 8
