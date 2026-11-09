@@ -61,6 +61,22 @@ func TestProviderSeriesAndCancel(t *testing.T) {
 	}
 }
 
+func TestHTTPHistogramExposesApprovedP95Boundary(t *testing.T) {
+	s := New()
+	s.Observe(Request{
+		Method:   http.MethodGet,
+		Route:    "/api/v1/staff",
+		Outcome:  "complete",
+		Status:   http.StatusOK,
+		Duration: 300 * time.Millisecond,
+	})
+
+	w := httptest.NewRecorder()
+	s.handlers().ServeHTTP(w, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+
+	require.Contains(t, w.Body.String(), `hello_http_request_duration_seconds_bucket{route="/api/v1/staff",le="0.3"} 1`)
+}
+
 func TestRejectPublicManagementAddresses(t *testing.T) {
 	for _, addr := range []string{"localhost:9095", "0.0.0.0:9095", "[::]:9095", "8.8.8.8:443", "127.0.0.1:0"} {
 		data := fmt.Sprintf(`{"listen":%q,"server_certificate_pem":"","server_key_pem":"","client_ca_pem":""}`, addr)

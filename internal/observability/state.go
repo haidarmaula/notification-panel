@@ -61,7 +61,7 @@ func New(names ...string) *State {
 		}
 	}
 	s.httpCount = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "hello_http_requests_total", Help: "Completed requests by route and status class."}, []string{"method", "route", "status_class", "outcome"})
-	s.latency = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "hello_http_request_duration_seconds", Help: "Elapsed HTTP handling time.", Buckets: []float64{.005, .025, .1, .5, 1, 5, 15, 30}}, []string{"route"})
+	s.latency = prometheus.NewHistogramVec(prometheus.HistogramOpts{Name: "hello_http_request_duration_seconds", Help: "Elapsed HTTP handling time.", Buckets: []float64{.005, .025, .1, .3, .5, 1, 5, 15, 30}}, []string{"route"})
 	s.loopTime = prometheus.NewGaugeVec(prometheus.GaugeOpts{Name: "hello_loop_heartbeat_timestamp_seconds", Help: "Last actual loop phase transition."}, []string{"loop"})
 	s.operations = prometheus.NewCounterVec(prometheus.CounterOpts{Name: "hello_loop_operations_total", Help: "Polling and supervision outcomes, including retries."}, []string{"loop", "outcome"})
 	s.dropped = prometheus.NewCounter(prometheus.CounterOpts{Name: "hello_telemetry_dropped_total", Help: "Diagnostic records dropped at the access buffer or its output sink."})
