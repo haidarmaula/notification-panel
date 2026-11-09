@@ -30,6 +30,18 @@ var (
 )
 var keyPattern = regexp.MustCompile(`^[a-z][a-z0-9-]{1,61}[a-z0-9]$`)
 
+const (
+	maxNotificationTitleBytes = 255
+	maxNotificationBodyBytes  = 4096
+)
+
+func validNotificationContent(title, body string) bool {
+	return utf8.ValidString(title) && utf8.ValidString(body) &&
+		strings.TrimSpace(title) != "" && strings.TrimSpace(body) != "" &&
+		len(title) <= maxNotificationTitleBytes && len(body) <= maxNotificationBodyBytes &&
+		!strings.ContainsRune(title, 0) && !strings.ContainsRune(body, 0)
+}
+
 func validateKey(key string) error {
 	if !keyPattern.MatchString(key) {
 		return ErrInvalidKey

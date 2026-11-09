@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -46,9 +45,7 @@ func campaignReferenceID(value string) (pgtype.Int8, bool) {
 }
 
 func (in campaignDraftInput) validate() (pgtype.Int8, []sqlc.CreateScopedCampaignTargetParams, bool) {
-	if strings.TrimSpace(in.Title) == "" || strings.TrimSpace(in.Body) == "" ||
-		len(in.Title) > 255 || len(in.Body) > 4096 || strings.ContainsRune(in.Title, 0) || strings.ContainsRune(in.Body, 0) ||
-		len(in.Targets) < 1 || len(in.Targets) > 100 {
+	if !validNotificationContent(in.Title, in.Body) || len(in.Targets) < 1 || len(in.Targets) > 100 {
 		return pgtype.Int8{}, nil, false
 	}
 	var templateID pgtype.Int8

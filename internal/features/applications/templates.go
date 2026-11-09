@@ -5,7 +5,6 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
-	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
@@ -170,8 +169,7 @@ func (h *Handler) WriteTemplate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	input.Name, err = cleanName(input.Name)
-	if err != nil || input.Active == nil || strings.TrimSpace(input.Title) == "" || strings.TrimSpace(input.Body) == "" ||
-		len(input.Title) > 255 || len(input.Body) > 4096 || strings.ContainsRune(input.Title, 0) || strings.ContainsRune(input.Body, 0) {
+	if err != nil || input.Active == nil || !validNotificationContent(input.Title, input.Body) {
 		badBody(w)
 		return
 	}

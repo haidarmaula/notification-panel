@@ -44,6 +44,8 @@ Verification: exact/over boundaries, UTF-8 byte counts, known/unknown/inaccurate
 length, bounded read counts, oversized valid-prefix/trailing-data inputs,
 17 direct handlers, authenticated real-module routes and unchanged DB/Kafka
 snapshots on rejection. Staff/profile name and email additionally enforce the
-schema-backed 255-character column bound. Request rate/time/header/depth and
-other field-specific limits, total concurrent memory limits and ingress
-configuration remain separate work.
+schema-backed 255-character column bound. Campaign and template title/body
+limits share one UTF-8 byte validator (255/4096 bytes) with exact, over-limit
+and multibyte boundary coverage. Request rate/time/header/depth and other
+field-specific limits, total concurrent memory limits and ingress configuration
+remain separate work.
