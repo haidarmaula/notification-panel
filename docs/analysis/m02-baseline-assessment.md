@@ -1,6 +1,6 @@
 # M02 development baseline assessment
 
-Reviewed 2026-11-03 against current code and local evidence, after M02a–M02e.
+Reviewed 2026-11-09 against current code and local evidence, after M02a–M02e.
 This is a development dependency decision, not a production security sign-off.
 
 ## Decision
@@ -21,7 +21,7 @@ not completion of future transaction/session/operations features in advance.
 | Current operation permissions, including schedule fields | Locally verified | M02a: 14 notification/segment/member routes, independent service guards, denied mutation/DB/Kafka tests. VIEWER can still perform permitted self-profile/device operations; the role matrix is per operation, not a blanket ban on every write. |
 | Staff management only current active SUPER_ADMIN | Locally verified | M02b: seven staff routes/services, stale JWT and committed demotion/lifecycle tests. No last-admin or transactional revocation guarantee. |
 | No password hashes in new staff audits | Locally verified | M02c safe projections and strict staff payload guard. Production historical cleanup/backups remain unverified; other entity payloads are not certified. |
-| Bounded JSON before service work | Locally verified | M02d: 16 handlers, 64KiB/1MiB caps, actual chunked HTTP, 48 rejection route cases. No aggregate/rate/time/depth/field policy claim. |
+| Bounded JSON before service work | Locally verified | M02d: 17 handlers, 64KiB/1MiB caps, actual chunked HTTP, 48 rejection route cases. M43 additionally requires JSON media type and identity encoding on staff login, refresh and logout. No depth/field-specific policy claim. |
 | Staff JWT purpose/algorithm/expiry/identity | Locally verified after M02e | HS256-only, required exp, positive user_id, correct purpose/secret; malformed-policy tokens rejected before lookup. M33 adds subject, token ID, session binding and current generation checks. The protected server verifies an exact issuer, purpose-specific audience, key ID, expiry and maximum lifetime. Immutable rolling key snapshots support explicit verification cutoffs and immediate removal. |
 | Inactive/deleted staff denied | Locally verified in guarded routes | JWT active-status checks plus current-authority checks; M02a/b committed/lifecycle tests. Migration 000033 now also checks family expiry/revocation and account/recovery generations. |
 | Unknown 500 errors are generic | Reviewed current branches; scoped regression coverage | Feature-handler 500 branches inspected use literal internal server error. M02a/b tests cover authz errors; not a proof that every mapped 4xx, log or DTO is redacted. |
@@ -42,7 +42,7 @@ introduce a new sensitive path must implement its applicable controls then.
 | Laravel/mobile verified-claims contract, installation proof, immutable binding, account switch/logout and closing legacy sync bypass | M03, G3/G5 | New enrollment activation and later dispatch/receipt ownership acceptance |
 | Content-Type, protected/duplicate fields and field/item/depth limits | Remaining API baseline plus owning M03/M04/M07 DTO contracts | Activation of the affected new/changed endpoints; full request security review before release |
 | Target count and provider payload limits | M04/M06 | Campaign acceptance/execution release; request byte caps alone are insufficient |
-| Auth/endpoint abuse limits, aggregate bounds, HTTP timeouts, exact trusted proxy policy, secrets validation | Remaining M02 abuse SPEC and M08 deployment/runtime | Any production exposure; a single-process limiter must not be described as fleet-wide protection |
+| Auth/endpoint abuse limits, aggregate bounds, HTTP timeouts, exact trusted proxy policy, secrets validation | Local server limits and gateway checks are implemented; deployment values and fleet policy remain M08/target work | Any production exposure; a single-process limiter must not be described as fleet-wide protection |
 | Atomic current-authority mutation/audit and transactional failure windows | Owning M03/M04 transactions using CR1 lock order | Acceptance of those mutations and pipeline crash/recovery tests |
 | Historical audit sanitization, restricted copies, retention/restore | M02c operator gate and M09 recovery/retention | A claim of existing-data remediation and restored-data exposure |
 | Real devices, numeric SLO, multi-host Kafka, load/fault/restore/pilot | G2–G7, M08–M10 | Production go/no-go; local fixture tests are insufficient |
@@ -50,10 +50,16 @@ introduce a new sensitive path must implement its applicable controls then.
 Current mobile verification is split: device-token middleware pins HS256 but
 still does not require exp/issuer/audience; legacy body-JWT sync accepts HMAC
 variants and also lacks required exp/issuer/audience. M02e changes neither path.
-Audit IP extraction checks peer trust, but the default includes broad private
-CIDRs; actual allowed proxy addresses/topology remain an operator requirement.
-The HTTP server still has no explicit header/read/write/idle timeout settings.
-These source findings explain the remaining gates; they are not new runtime fixes.
+Audit IP extraction checks peer trust. The environment-based development server
+still uses broad private CIDRs; protected deployment ingress instead checks the
+configured exact gateway peers, and the receipt policy accepts explicit trusted
+TLS proxy addresses. Actual addresses/topology remain an operator requirement.
+The business HTTP server sets a 32 KiB header limit, 5-second header-read
+timeout, 30-second read/write timeouts and a 60-second idle timeout. The gateway
+enforces bounded per-IP/concurrent traffic and per-IP plus aggregate auth
+budgets; those in-process limits do not establish fleet-wide or account-level
+protection. These source findings explain the remaining gates; they are not
+production security sign-off.
 
 ## Concrete next sequence
 
