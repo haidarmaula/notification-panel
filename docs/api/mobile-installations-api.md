@@ -19,6 +19,11 @@ one-time enrollment proof securely. An invalid JWT or origin assertion returns
 conflict and non-ACTIVE project return 409. Invalid input returns 400.
 Responses use the existing envelope and Cache-Control: no-store.
 
+The signed mobile JWT and broker origin assertion must use unique lowercase
+JSON field names in both compact-token header and payload. Duplicate names,
+uppercase names, and case aliases are rejected before identity lookup or origin
+nonce consumption.
+
 Authentication (including origin verification) and each lifecycle operation have
 separate five-second server budgets. Lifecycle retries share the same operation
 deadline, covering pool acquisition, locking, SQL and commit. A shorter caller

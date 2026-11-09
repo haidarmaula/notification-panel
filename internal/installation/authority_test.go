@@ -5,6 +5,9 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/base64"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,10 +21,13 @@ import (
 type identityFixture struct {
 	app          sqlc.Application
 	last         sqlc.ResolveMobileIdentityParams
+	appCalls     int
+	resolveCalls int
 	checkContext func(context.Context)
 }
 
 func (f *identityFixture) GetApplicationByPublicID(ctx context.Context, id pgtype.UUID) (sqlc.Application, error) {
+	f.appCalls++
 	if f.checkContext != nil {
 		f.checkContext(ctx)
 	}
@@ -31,6 +37,7 @@ func (f *identityFixture) GetApplicationByPublicID(ctx context.Context, id pgtyp
 }
 
 func (f *identityFixture) ResolveMobileIdentity(ctx context.Context, p sqlc.ResolveMobileIdentityParams) (int64, error) {
+	f.resolveCalls++
 	if f.checkContext != nil {
 		f.checkContext(ctx)
 	}
@@ -39,6 +46,15 @@ func (f *identityFixture) ResolveMobileIdentity(ctx context.Context, p sqlc.Reso
 		return 0, pgx.ErrNoRows
 	}
 	return 42, nil
+}
+
+func signedRawJWT(t *testing.T, signer ed25519.PrivateKey, header, payload string) string {
+	t.Helper()
+	encodedHeader := base64.RawURLEncoding.EncodeToString([]byte(header))
+	encodedPayload := base64.RawURLEncoding.EncodeToString([]byte(payload))
+	input := encodedHeader + "." + encodedPayload
+	signature := ed25519.Sign(signer, []byte(input))
+	return input + "." + base64.RawURLEncoding.EncodeToString(signature)
 }
 
 type originFixture struct {
@@ -170,4 +186,36 @@ func TestMobileAuthorityRejectsWeakTrustKey(t *testing.T) {
 	authority, err := NewMobileAuthority(&identityFixture{}, map[pgtype.UUID]MobilePolicy{project: {Issuer: "issuer", Audience: "audience", Purpose: "mobile", Namespace: "namespace", VerificationKey: key, Origin: &originFixture{}}})
 	require.ErrorIs(t, err, ErrConfiguration)
 	require.Nil(t, authority)
+}
+
+func TestMobileAuthorityRejectsJWTFieldAliasesBeforeStoreAccess(t *testing.T) {
+	key, signer, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	project := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
+	store := &identityFixture{app: sqlc.Application{ID: 9, Status: "ACTIVE"}}
+	authority, err := NewMobileAuthority(store, map[pgtype.UUID]MobilePolicy{
+		project: {Issuer: "issuer", Audience: "app", Purpose: "mobile", Namespace: "users", VerificationKey: key, Origin: &originFixture{}},
+	})
+	require.NoError(t, err)
+
+	expires := time.Now().Add(time.Minute).Unix()
+	payload := `{"iss":"issuer","sub":"known","aud":"app","exp":` + strconv.FormatInt(expires, 10) + `,"purpose":"mobile"}`
+	for _, tc := range []struct {
+		name   string
+		header string
+		body   string
+	}{
+		{name: "header case alias", header: `{"alg":"EdDSA","ALG":"EdDSA","typ":"JWT"}`, body: payload},
+		{name: "uppercase-only claim name", header: `{"alg":"EdDSA","typ":"JWT"}`, body: strings.TrimSuffix(payload, "}") + `,"X-Claim":"unused"}`},
+		{name: "payload case alias", header: `{"alg":"EdDSA","typ":"JWT"}`, body: strings.Replace(payload, `"sub":"known"`, `"sub":"known","SUB":"known"`, 1)},
+		{name: "payload duplicate", header: `{"alg":"EdDSA","typ":"JWT"}`, body: strings.Replace(payload, `"purpose":"mobile"`, `"purpose":"mobile","purpose":"mobile"`, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			credential := signedRawJWT(t, signer, tc.header, tc.body)
+			_, err := authority.Authenticate(context.Background(), project, credential)
+			require.ErrorIs(t, err, ErrMobileCredential)
+			require.Zero(t, store.appCalls)
+			require.Zero(t, store.resolveCalls)
+		})
+	}
 }

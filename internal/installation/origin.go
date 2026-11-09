@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"hello/internal/cryptokey"
 	"hello/internal/database/sqlc"
+	"hello/internal/token"
 )
 
 const originPurpose = "mobile_installation_enrollment"
@@ -60,7 +61,8 @@ func (v *SignedOrigin) VerifyOrigin(ctx context.Context, binding OriginContext, 
 		return v.key, nil
 	}, jwt.WithValidMethods([]string{"EdDSA"}), jwt.WithIssuer(v.issuer), jwt.WithAudience(v.audience),
 		jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithStrictDecoding())
-	if err != nil || !parsed.Valid || len(claims.Audience) != 1 || claims.IssuedAt == nil ||
+	if err != nil || parsed == nil || !parsed.Valid || !token.HasUniqueJWTFields(evidence) ||
+		len(claims.Audience) != 1 || claims.IssuedAt == nil ||
 		claims.Purpose != originPurpose || claims.ProjectID != binding.ProjectID.String() ||
 		claims.Namespace != binding.Namespace || claims.Subject != binding.Subject || !validIdentityText(claims.ID) {
 		return ErrMobileOrigin

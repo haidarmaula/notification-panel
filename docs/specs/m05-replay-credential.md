@@ -36,7 +36,9 @@ before actual publication.
 | `selection_hash` | Unpadded base64url SHA-256 request fingerprint |
 | `iat`, `exp`, `auth_time`, `amr` | Bounded issuance, lifetime and trusted MFA evidence |
 
-Tokens are bounded to 8 KiB. Verification failures expose fixed errors rather
+Tokens are bounded to 8 KiB. The signed header and claims must use unique
+lowercase JSON member names, including names encoded with JSON escapes.
+Verification failures expose fixed errors rather
 than raw tokens, claims or decoder messages. Successful verification copies and
 normalizes the request; caller mutation cannot change verified selection.
 

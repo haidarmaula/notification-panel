@@ -6,6 +6,8 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -85,4 +87,37 @@ func TestSignedOriginRejectsWeakTrustKey(t *testing.T) {
 	verifier, err := NewSignedOrigin(&originUseFixture{}, "issuer", "audience", key)
 	require.ErrorIs(t, err, ErrConfiguration)
 	require.Nil(t, verifier)
+}
+
+func TestSignedOriginRejectsJWTFieldAliasesBeforeNonceConsumption(t *testing.T) {
+	key, signer, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	store := &originUseFixture{result: 1}
+	verifier, err := NewSignedOrigin(store, "broker", "enrollment", key)
+	require.NoError(t, err)
+	project := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
+	binding := OriginContext{ProjectID: project, Namespace: "users", Subject: "user", CredentialDigest: sha256.Sum256([]byte("jwt"))}
+	now := time.Now()
+	expires := now.Add(time.Minute).Unix()
+	digest := base64.RawURLEncoding.EncodeToString(binding.CredentialDigest[:])
+	payload := `{"iss":"broker","aud":"enrollment","sub":"user","jti":"broker-jti","iat":` +
+		strconv.FormatInt(now.Unix(), 10) + `,"exp":` + strconv.FormatInt(expires, 10) +
+		`,"app_id":"` + project.String() + `","namespace":"users","credential_digest":"` + digest +
+		`","purpose":"` + originPurpose + `"}`
+	for _, tc := range []struct {
+		name   string
+		header string
+		body   string
+	}{
+		{name: "header case alias", header: `{"alg":"EdDSA","ALG":"EdDSA","typ":"JWT"}`, body: payload},
+		{name: "uppercase-only claim name", header: `{"alg":"EdDSA","typ":"JWT"}`, body: strings.TrimSuffix(payload, "}") + `,"X-Claim":"unused"}`},
+		{name: "payload case alias", header: `{"alg":"EdDSA","typ":"JWT"}`, body: strings.Replace(payload, `"app_id":"`, `"app_id":"`+project.String()+`","APP_ID":"`, 1)},
+		{name: "payload duplicate", header: `{"alg":"EdDSA","typ":"JWT"}`, body: strings.Replace(payload, `"jti":"broker-jti"`, `"jti":"broker-jti","jti":"broker-jti"`, 1)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			evidence := signedRawJWT(t, signer, tc.header, tc.body)
+			require.ErrorIs(t, verifier.VerifyOrigin(context.Background(), binding, evidence), ErrMobileOrigin)
+			require.Zero(t, store.calls)
+		})
+	}
 }

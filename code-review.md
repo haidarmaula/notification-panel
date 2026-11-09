@@ -47,6 +47,15 @@ the bounded selection through a materialized input before casting. The
 restricted `psql` fixture also verifies that malformed input returns an
 unresolved report without echoing the selection.
 
+## Signed credential parsing — 2026-11-09
+
+The operational replay verifier accepted correctly signed duplicate or
+case-aliased header and claim names. It now uses the same unique lowercase
+field check as staff JWTs. The regression signs conflicting algorithm and
+subject fields with the fixture key and verifies generic denial. Protected
+mobile JWTs and enrollment assertions apply the same check before identity
+lookup or nonce consumption.
+
 ---
 
 ## Severity Legend

@@ -3,6 +3,7 @@
 package token
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
@@ -139,20 +140,31 @@ func (t *TokenManager) parse(raw string, claims jwt.Claims, keys purposeKeys) er
 	_, err := jwt.ParseWithClaims(raw, claims, keys.keyFor,
 		jwt.WithValidMethods([]string{"HS256"}), jwt.WithExpirationRequired(), jwt.WithIssuedAt(),
 		jwt.WithStrictDecoding(), jwt.WithIssuer(t.issuer), jwt.WithAudience(keys.audience))
-	if err != nil {
+	if err != nil || !HasUniqueJWTFields(raw) {
 		return ErrInvalidToken
 	}
-	// encoding/json otherwise accepts duplicate names and case aliases. Require
-	// one interpretation of the signed header and payload across consumers.
+	return nil
+}
+
+// HasUniqueJWTFields requires unique lowercase JSON members in the compact JWT
+// header and payload. It does not verify the token's signature or claims.
+func HasUniqueJWTFields(raw string) bool {
+	if len(raw) == 0 || len(raw) > 16384 {
+		return false
+	}
 	header, rest, _ := strings.Cut(raw, ".")
-	payload, _, _ := strings.Cut(rest, ".")
+	payload, signature, ok := strings.Cut(rest, ".")
+	if !ok || signature == "" || strings.Contains(signature, ".") {
+		return false
+	}
 	for _, segment := range []string{header, payload} {
 		data, err := base64.RawURLEncoding.Strict().DecodeString(segment)
-		if err != nil || !jsonobject.UniqueLowercaseFields(data) {
-			return ErrInvalidToken
+		data = bytes.TrimLeft(data, " \t\r\n")
+		if err != nil || len(data) == 0 || data[0] != '{' || !jsonobject.UniqueLowercaseFields(data) {
+			return false
 		}
 	}
-	return nil
+	return true
 }
 
 // ParseAccessToken enforces a signed staff identity, an expiry and family and

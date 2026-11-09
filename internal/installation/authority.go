@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"hello/internal/cryptokey"
 	"hello/internal/database/sqlc"
+	"hello/internal/token"
 )
 
 var (
@@ -114,7 +115,8 @@ func (a *MobileAuthority) authenticate(ctx context.Context, project pgtype.UUID,
 	parsed, err := jwt.ParseWithClaims(credential, &claims, func(_ *jwt.Token) (any, error) {
 		return policy.VerificationKey, nil
 	}, jwt.WithValidMethods([]string{"EdDSA"}), jwt.WithIssuer(policy.Issuer), jwt.WithAudience(policy.Audience), jwt.WithExpirationRequired(), jwt.WithStrictDecoding())
-	if err != nil || !parsed.Valid || len(claims.Audience) != 1 || claims.Purpose != policy.Purpose || !validIdentityText(claims.Subject) {
+	if err != nil || parsed == nil || !parsed.Valid || !token.HasUniqueJWTFields(credential) ||
+		len(claims.Audience) != 1 || claims.Purpose != policy.Purpose || !validIdentityText(claims.Subject) {
 		return MobileSession{}, ErrMobileCredential
 	}
 	app, err := a.store.GetApplicationByPublicID(ctx, project)

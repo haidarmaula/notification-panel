@@ -5,6 +5,7 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -36,6 +37,33 @@ func signReplayCredential(t *testing.T, claims replayClaims, key ed25519.Private
 	credential, err := jwt.NewWithClaims(jwt.SigningMethodEdDSA, claims).SignedString(key)
 	require.NoError(t, err)
 	return credential
+}
+
+func TestReplayVerifierRejectsAmbiguousSignedFields(t *testing.T) {
+	verifier, key, request, claims := replayCredentialFixture(t)
+	body, err := json.Marshal(claims)
+	require.NoError(t, err)
+	encode := base64.RawURLEncoding.EncodeToString
+	const header = `{"alg":"EdDSA","typ":"JWT"}`
+	sign := func(header, payload string) string {
+		message := encode([]byte(header)) + "." + encode([]byte(payload))
+		return message + "." + encode(ed25519.Sign(key, []byte(message)))
+	}
+	_, err = verifier.Verify(request, sign(" "+header, "\n"+string(body)))
+	require.NoError(t, err, "JSON whitespace is valid")
+	for _, tc := range []struct{ name, header, payload string }{
+		{name: "duplicate header", header: `{"alg":"none","alg":"EdDSA","typ":"JWT"}`, payload: string(body)},
+		{name: "case alias header", header: `{"ALG":"none","alg":"EdDSA","typ":"JWT"}`, payload: string(body)},
+		{name: "duplicate claim", header: header, payload: `{"sub":"8",` + string(body[1:])},
+		{name: "case alias claim", header: header, payload: `{"SUB":"8",` + string(body[1:])},
+		{name: "escaped duplicate claim", header: header, payload: `{"\u0073ub":"8",` + string(body[1:])},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			verified, err := verifier.Verify(request, sign(tc.header, tc.payload))
+			require.ErrorIs(t, err, ErrReplayCredential)
+			require.Zero(t, verified)
+		})
+	}
 }
 
 func TestReplayVerifierBindsCompleteRequest(t *testing.T) {

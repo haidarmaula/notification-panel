@@ -12,6 +12,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"hello/internal/cryptokey"
+	"hello/internal/token"
 )
 
 var ErrReplayCredential = errors.New("invalid operational replay credential")
@@ -88,7 +89,7 @@ func (v *ReplayVerifier) Verify(request ReplayRequest, credential string) (Verif
 	parsed, err := jwt.ParseWithClaims(credential, &claims, func(_ *jwt.Token) (any, error) { return v.key, nil },
 		jwt.WithValidMethods([]string{"EdDSA"}), jwt.WithIssuer(v.issuer), jwt.WithAudience(v.audience),
 		jwt.WithExpirationRequired(), jwt.WithIssuedAt(), jwt.WithStrictDecoding())
-	if err != nil || parsed == nil || !parsed.Valid {
+	if err != nil || parsed == nil || !parsed.Valid || !token.HasUniqueJWTFields(credential) {
 		return invalid, ErrReplayCredential
 	}
 	now := time.Now()
