@@ -160,10 +160,12 @@ transaction; audit insert failure rolls back metadata/grant changes. Precheck
 permission before target I/O; inside transaction recheck using transaction-bound
 queries. Construct both repositories/authorizer and audit writer from the same
 transaction-bound query set; never call a pool-bound audit service from inside
-the transaction. For existing resources lock the application row first, then recheck
-principal authority and resolve target staff/grant, preserving CR1 control/policy
-before principal/child/FK locks. New application insertion has no staff FK;
-recheck current actor before audit/commit. Audit actor comes from checked identity.
+the transaction. Lock the staff session lineage, then the application for
+existing resources, before locking staff and session rows. Grant mutations
+lock the actor and target in ascending staff ID order, then check current
+authority and target state before changing the grant. New application
+creation checks and locks the actor and session before inserting the row.
+Audit actor comes from checked identity.
 Use READ COMMITTED and bounded whole-transaction retries for 40001/40P01 (at most
 3 attempts, context-aware); never retry only the audit/write after a partial commit.
 Registry and project business write transactions share one five-second operation
@@ -175,11 +177,10 @@ and leave uncommitted resource and audit changes rolled back.
 No external effects occur inside the transaction. Response loss after commit is
 still possible and uses the reconciliation rules above.
 
-Authority is checked at statement time; role definition/deactivation/grant changes
-after that check do not retroactively cancel in-flight work. This SPEC promises
-atomic mutation/audit and locked resource preconditions, not full session or
-transaction-time revocation of every authority source. Later owned transactions
-must explicitly define stronger locks if required; do not silently claim them.
+The transaction holds the actor, session and lineage locks through commit.
+It checks session and access-token expiry again before commit. An expired or
+revoked session returns 401 and the transaction rolls back. The application
+lock also serializes grant writers and protected project lifecycle changes.
 
 For application audit entities use entity_id = internal application ID; for
 application_grant use entity_id = target staff ID, disambiguated by the mandatory

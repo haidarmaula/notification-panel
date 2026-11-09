@@ -52,10 +52,10 @@ func TestProjectWriteBudgetCancelsLocks(t *testing.T) {
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			call := func(ctx context.Context) *httptest.ResponseRecorder {
+			call := func(ctx context.Context, raw string) *httptest.ResponseRecorder {
 				r := httptest.NewRequestWithContext(ctx, tc.method, tc.path, strings.NewReader(tc.body))
 				r.Header.Set("Content-Type", "application/json")
-				r.Header.Set("Authorization", "Bearer "+bearer)
+				r.Header.Set("Authorization", "Bearer "+raw)
 				r.Header.Set("X-API-Key", "fixture-key")
 				if tc.method == http.MethodPatch {
 					r.Header.Set("If-Match", applications.ApplicationETag(app))
@@ -73,6 +73,35 @@ func TestProjectWriteBudgetCancelsLocks(t *testing.T) {
 				return state
 			}
 			before := snapshot()
+			t.Run("session revoked while waiting", func(t *testing.T) {
+				raw, err := fixtureAccess(setup, q, manager, staff, "SUPER_ADMIN", "")
+				require.NoError(t, err)
+				claims, err := manager.ParseAccessToken(raw)
+				require.NoError(t, err)
+				blocker, err := pool.Begin(setup)
+				require.NoError(t, err)
+				defer blocker.Rollback(context.Background())
+				_, err = blocker.Exec(setup, "SELECT id FROM applications WHERE id=$1 FOR UPDATE", app.ID)
+				require.NoError(t, err)
+				result := make(chan *httptest.ResponseRecorder, 1)
+				go func() { result <- call(setup, raw) }()
+				require.Eventually(t, func() bool {
+					var waiting bool
+					err := pool.QueryRow(setup, "SELECT EXISTS(SELECT FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)))",
+						int32(blocker.Conn().PgConn().PID())).Scan(&waiting)
+					return err == nil && waiting
+				}, 2*time.Second, 10*time.Millisecond)
+				_, err = blocker.Exec(setup, "UPDATE staff_sessions SET revoked_at=clock_timestamp(),revocation_reason='logout' WHERE id=$1::uuid", claims.SessionID)
+				require.NoError(t, err)
+				require.NoError(t, blocker.Commit(setup))
+				select {
+				case w := <-result:
+					require.Equal(t, http.StatusUnauthorized, w.Code, w.Body.String())
+				case <-setup.Done():
+					t.Fatal("request did not return after releasing the project lock")
+				}
+				require.Equal(t, before, snapshot())
+			})
 			blocker, err := pool.Begin(setup)
 			require.NoError(t, err)
 			defer blocker.Rollback(context.Background())
@@ -87,7 +116,7 @@ func TestProjectWriteBudgetCancelsLocks(t *testing.T) {
 			}
 			result := make(chan *httptest.ResponseRecorder, 1)
 			started := time.Now()
-			go func() { result <- call(caller) }()
+			go func() { result <- call(caller, bearer) }()
 			require.Eventually(t, func() bool {
 				var waiting bool
 				err := pool.QueryRow(setup, "SELECT EXISTS(SELECT FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)))",
@@ -113,7 +142,7 @@ func TestProjectWriteBudgetCancelsLocks(t *testing.T) {
 			require.Eventually(t, func() bool { return pool.Stat().AcquiredConns() == 1 }, time.Second, 10*time.Millisecond)
 			require.Equal(t, before, snapshot(), "timed-out writes must leave resource and audit unchanged")
 			require.NoError(t, blocker.Rollback(setup))
-			response := call(setup)
+			response := call(setup, bearer)
 			require.Equal(t, tc.success, response.Code, response.Body.String())
 			require.NotEqual(t, before, snapshot(), "the released pool and resource remain usable")
 		})

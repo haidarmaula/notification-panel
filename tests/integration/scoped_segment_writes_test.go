@@ -17,8 +17,6 @@ import (
 	"hello/internal/database"
 	"hello/internal/database/sqlc"
 	"hello/internal/features/applications"
-	"hello/internal/middleware"
-	"hello/internal/token"
 )
 
 // Each service transaction is a savepoint inside an isolated fixture transaction.
@@ -57,13 +55,15 @@ func TestScopedSegmentWrites(t *testing.T) {
 	foreign := number("INSERT INTO users(application_id,external_id) VALUES($1,'scoped-write-foreign') RETURNING id", other)
 	exec("INSERT INTO application_staff_grants(application_id,staff_id) VALUES($1,$2)", appID, staff)
 	mux := http.NewServeMux()
-	applications.NewModule(sqlc.New(tx), segmentWriteFixture{tx}).RegisterRoutes(mux)
+	q := sqlc.New(tx)
+	actor := fixtureStaffContext(t, ctx, q, staff)
+	applications.NewModule(q, segmentWriteFixture{tx}).RegisterRoutes(mux)
 	base := "/api/v1/apps/" + public + "/segments"
 	request := func(method, path, body string, status int) *httptest.ResponseRecorder {
 		t.Helper()
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
-		r = r.WithContext(context.WithValue(ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: staff}))
+		r = r.WithContext(actor)
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, r)
 		require.Equal(t, status, w.Code, w.Body.String())

@@ -16,8 +16,6 @@ import (
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
 	"hello/internal/httprequest"
-	"hello/internal/middleware"
-	"hello/internal/token"
 	"hello/pkg/response"
 )
 
@@ -62,7 +60,7 @@ func acceptanceSnapshot(id int64, queued, deadline pgtype.Timestamptz) Acceptanc
 	return Acceptance{strconv.FormatInt(id, 10), "QUEUED", queued, deadline}
 }
 
-func lockAcceptanceScope(ctx context.Context, q *sqlc.Queries, id pgtype.UUID, permission authz.Permission, actorID int64, session pgtype.UUID) (sqlc.LockNotificationRuntimeRow, sqlc.Application, authz.ApplicationPrincipal, error) {
+func lockAcceptanceScope(ctx context.Context, q *sqlc.Queries, id pgtype.UUID, permission authz.Permission, session staffWriteSession) (sqlc.LockNotificationRuntimeRow, sqlc.Application, authz.ApplicationPrincipal, error) {
 	runtime, err := q.LockNotificationRuntime(ctx)
 	if err != nil {
 		return runtime, sqlc.Application{}, authz.ApplicationPrincipal{}, err
@@ -75,18 +73,7 @@ func lockAcceptanceScope(ctx context.Context, q *sqlc.Queries, id pgtype.UUID, p
 	if err != nil {
 		return runtime, app, authz.ApplicationPrincipal{}, appError(err)
 	}
-	if _, err := q.LockAcceptanceStaff(ctx, actorID); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			err = authz.ErrUnauthenticated
-		}
-		return runtime, app, authz.ApplicationPrincipal{}, err
-	}
-	if _, err := q.LockStaffMutationSession(ctx, sqlc.LockStaffMutationSessionParams{
-		Actor: actorID, SessionID: session, SessionEpoch: epoch,
-	}); err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			err = authz.ErrUnauthenticated
-		}
+	if err := session.lockActor(ctx, q, epoch); err != nil {
 		return runtime, app, authz.ApplicationPrincipal{}, err
 	}
 	scope, err := authz.NewApplicationAuthorizer(q).RequireApplication(ctx, id, permission)
@@ -96,33 +83,19 @@ func lockAcceptanceScope(ctx context.Context, q *sqlc.Queries, id pgtype.UUID, p
 func (s *Service) writeAcceptance(ctx context.Context, id pgtype.UUID, permission authz.Permission,
 	work func(context.Context, *sqlc.Queries, sqlc.LockNotificationRuntimeRow, sqlc.Application, authz.ApplicationPrincipal) error,
 ) error {
-	claims, ok := ctx.Value(middleware.UserContextKey).(*token.AccessClaims)
-	var session pgtype.UUID
-	if !ok || claims == nil || claims.ExpiresAt == nil ||
-		session.Scan(claims.SessionID) != nil || !session.Valid || session.Bytes == [16]byte{} {
-		return authz.ErrUnauthenticated
+	session, err := projectWriteSession(ctx)
+	if err != nil {
+		return err
 	}
 	return s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
-		runtime, app, scope, err := lockAcceptanceScope(ctx, q, id, permission, claims.StaffID, session)
+		runtime, app, scope, err := lockAcceptanceScope(ctx, q, id, permission, session)
 		if err != nil {
 			return err
-		}
-		if !time.Now().Before(claims.ExpiresAt.Time) {
-			return authz.ErrUnauthenticated
 		}
 		if err := work(ctx, q, runtime, app, scope); err != nil {
 			return err
 		}
-		// Locks fence revocation and epoch changes. Expiry can still pass while
-		// waiting for a campaign row or recording the acceptance and audit.
-		active, err := q.StaffSessionActive(ctx, sqlc.StaffSessionActiveParams{SessionID: session, StaffID: claims.StaffID})
-		if err != nil {
-			return err
-		}
-		if !active || !time.Now().Before(claims.ExpiresAt.Time) {
-			return authz.ErrUnauthenticated
-		}
-		return nil
+		return session.checkActive(ctx, q)
 	})
 }
 

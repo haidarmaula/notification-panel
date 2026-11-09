@@ -37,6 +37,7 @@ The dependency scan does not close runtime findings; C21 is separately remediate
 | AUTH1 | P2 | The pinned bcrypt comparison accepted a valid 72-byte password with extra bytes appended. The mounted admin reset and profile change now reject overlong current proofs before comparing. Both keep their existing authentication status and leave the hash and authentication epoch unchanged on rejection. |
 | AUTH2 | P2 | Login returned before bcrypt for unknown or inactive staff and invalid stored hashes. Those paths now perform a default-cost fallback comparison and retain the same generic 401. Historical valid hashes keep their stored cost. Gateway and fleet throttling budgets remain target checks. |
 | AUTH3 | P2 | Send, send replay and schedule trusted the HTTP session check after waiting for project and campaign locks. Acceptance now locks session lineage, actor and session in its transaction and checks expiry again before commit. PostgreSQL regressions cover revocation during a project lock wait and expiry during a campaign lock wait, with no persisted acceptance, key, audit or outbox changes. |
+| AUTH4 | P2 | Registry and scoped draft, segment, membership and template writes trusted the earlier HTTP session check. Both transaction paths now lock and recheck the current staff session. Grant writes also lock the actor and target in staff ID order, and an enable checks target activity after obtaining those locks. Local PostgreSQL tests cover revocation during a project lock wait and deactivation during a grant write. |
 
 ---
 

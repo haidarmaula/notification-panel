@@ -28,10 +28,13 @@ func (s *Service) writeInProject(ctx context.Context, id pgtype.UUID, perm authz
 	if _, err := authz.NewApplicationAuthorizer(s.q).RequireApplication(ctx, id, perm); err != nil {
 		return err
 	}
-	return s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
+	return s.writeAsStaff(ctx, func(ctx context.Context, q *sqlc.Queries, session staffWriteSession, epoch pgtype.UUID) error {
 		app, err := repository.NewApplicationRepository(q).LockByPublicID(ctx, id)
 		if err != nil {
 			return appError(err)
+		}
+		if err := session.lockActor(ctx, q, epoch); err != nil {
+			return err
 		}
 		scope, err := authz.NewApplicationAuthorizer(q).RequireApplication(ctx, id, perm)
 		if err != nil {

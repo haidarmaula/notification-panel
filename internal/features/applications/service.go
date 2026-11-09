@@ -163,16 +163,19 @@ func (s *Service) Create(ctx context.Context, key, name string) (sqlc.Applicatio
 		return sqlc.Application{}, err
 	}
 	var result sqlc.Application
-	err = s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
+	err = s.writeAsStaff(ctx, func(ctx context.Context, q *sqlc.Queries, session staffWriteSession, epoch pgtype.UUID) error {
+		if err := session.lockActor(ctx, q, epoch); err != nil {
+			return err
+		}
+		if _, err := authority(q).Require(ctx, authz.ApplicationsManage); err != nil {
+			return err
+		}
 		app, err := repository.NewApplicationRepository(q).Create(ctx, key, name)
 		if err != nil {
 			var pgErr *pgconn.PgError
 			if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "applications_key_key" {
 				return ErrKeyExists
 			}
-			return err
-		}
-		if _, err := authority(q).Require(ctx, authz.ApplicationsManage); err != nil {
 			return err
 		}
 		if err := logChange(ctx, q, app, audit.ACTION_APPLICATION_CREATE, audit.ENTITY_TYPE_APPLICATION, app.ID, nil, appSnapshot(app)); err != nil {
@@ -203,9 +206,9 @@ func (s *Service) Rename(ctx context.Context, id pgtype.UUID, name string, c Pre
 		return sqlc.Application{}, err
 	}
 	var result sqlc.Application
-	err = s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
+	err = s.writeAsStaff(ctx, func(ctx context.Context, q *sqlc.Queries, session staffWriteSession, epoch pgtype.UUID) error {
 		repo := repository.NewApplicationRepository(q)
-		app, err := locked(ctx, q, id)
+		app, err := lockManagedProject(ctx, q, id, session, epoch, 0)
 		if err != nil {
 			return err
 		}
@@ -247,8 +250,8 @@ func (s *Service) EnableGrant(ctx context.Context, id pgtype.UUID, staffID int64
 		return GrantResult{}, err
 	}
 	var result GrantResult
-	err := s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
-		app, err := locked(ctx, q, id)
+	err := s.writeAsStaff(ctx, func(ctx context.Context, q *sqlc.Queries, session staffWriteSession, epoch pgtype.UUID) error {
+		app, err := lockManagedProject(ctx, q, id, session, epoch, staffID)
 		if err != nil {
 			return err
 		}
@@ -322,8 +325,8 @@ func (s *Service) RevokeGrant(ctx context.Context, id pgtype.UUID, staffID int64
 	if err := c.validate(false); err != nil {
 		return err
 	}
-	return s.write(ctx, func(ctx context.Context, q *sqlc.Queries) error {
-		app, err := locked(ctx, q, id)
+	return s.writeAsStaff(ctx, func(ctx context.Context, q *sqlc.Queries, session staffWriteSession, epoch pgtype.UUID) error {
+		app, err := lockManagedProject(ctx, q, id, session, epoch, staffID)
 		if err != nil {
 			return err
 		}
@@ -357,10 +360,23 @@ func appError(err error) error {
 
 // Lock control parent before principal lookup; the precheck already denied callers
 // without management permission before any target lookup. No cached grant is used.
-func locked(ctx context.Context, q *sqlc.Queries, id pgtype.UUID) (sqlc.Application, error) {
+func lockManagedProject(ctx context.Context, q *sqlc.Queries, id pgtype.UUID, session staffWriteSession, epoch pgtype.UUID, target int64) (sqlc.Application, error) {
 	app, err := repository.NewApplicationRepository(q).LockByPublicID(ctx, id)
 	if err != nil {
 		return sqlc.Application{}, appError(err)
+	}
+	if target == 0 {
+		err = session.lockActor(ctx, q, epoch)
+	} else {
+		// Staff administration uses the same ID order. Grant writes also
+		// fence target deactivation and deletion through the grant change.
+		_, err = q.LockStaffMutationUsers(ctx, sqlc.LockStaffMutationUsersParams{Actor: session.actorID, Target: target})
+		if err == nil {
+			err = session.lockSession(ctx, q, epoch)
+		}
+	}
+	if err != nil {
+		return sqlc.Application{}, err
 	}
 	if _, err := authority(q).Require(ctx, authz.ApplicationsManage); err != nil {
 		return sqlc.Application{}, err

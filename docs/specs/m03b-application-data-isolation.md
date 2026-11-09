@@ -185,7 +185,10 @@ Use one eligible SQL snapshot for count/page where that is the documented promis
 
 For mutating operations use transaction-bound queries and atomic scoped audit;
 acquire app/control locks before resource/child locks in a documented order. Check
-current DB authority inside the transaction. Preserve DRAFT-only campaign edit/
+current DB authority inside the transaction. Staff business writes lock the
+session lineage and project before the actor and session, then check the current
+project grant. Recheck session and access-token expiry before committing the
+mutation and audit. Preserve DRAFT-only campaign edit/
 delete and role send/schedule rules. Exact CAS/retry/claim semantics belong to
 aggregate SPECs and M04/M05; do not port unsafe best-effort multi-write compensation
 as the new contract. Regenerate mockery when changing mocked interfaces.

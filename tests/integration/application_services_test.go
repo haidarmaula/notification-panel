@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -41,6 +40,8 @@ func TestApplicationServices(t *testing.T) {
 		require.NoError(t, err)
 		_, err = pool.Exec(context.Background(), "DELETE FROM applications WHERE key=ANY($1)", keys)
 		require.NoError(t, err)
+		_, err = pool.Exec(context.Background(), "DELETE FROM staff_sessions WHERE staff_user_id=ANY($1)", ids)
+		require.NoError(t, err)
 		_, err = pool.Exec(context.Background(), "DELETE FROM staff_users WHERE id=ANY($1)", ids)
 		require.NoError(t, err)
 	}()
@@ -57,7 +58,7 @@ func TestApplicationServices(t *testing.T) {
 	identity := func(id int64) context.Context {
 		return context.WithValue(ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: id, RoleName: "SUPER_ADMIN"})
 	}
-	super := context.WithValue(ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: actors["SUPER_ADMIN"], RoleName: "VIEWER"})
+	super := fixtureStaffContext(t, ctx, q, actors["SUPER_ADMIN"])
 	create := func(key, name string) sqlc.Application {
 		keys = append(keys, key)
 		v, err := service.Create(super, key, name)
@@ -295,14 +296,35 @@ func TestApplicationServices(t *testing.T) {
 		require.ErrorIs(t, e, applications.ErrStaffNotFound)
 		require.Equal(t, before, snapshot())
 	})
-	t.Run("target deletion after lookup", func(t *testing.T) {
+	t.Run("target deactivation while enabling a grant", func(t *testing.T) {
 		target := seed("VIEWER")
-		wrapped := applications.NewService(q, deletingTransactor{pool: pool, target: target})
-		before := snapshot()
-		result, e := wrapped.EnableGrant(super, b.PublicID, target, applications.Preconditions{IfNoneMatch: "*"})
-		require.ErrorIs(t, e, applications.ErrStaffNotFound)
-		require.Zero(t, result.Grant.ApplicationID)
-		require.Equal(t, before, snapshot())
+		before := auditCount()
+		blocker, err := pool.Begin(ctx)
+		require.NoError(t, err)
+		defer blocker.Rollback(context.Background())
+		_, err = blocker.Exec(ctx, "UPDATE staff_users SET is_active=false WHERE id=$1", target)
+		require.NoError(t, err)
+		result := make(chan error, 1)
+		go func() {
+			_, err := service.EnableGrant(super, b.PublicID, target, applications.Preconditions{IfNoneMatch: "*"})
+			result <- err
+		}()
+		require.Eventually(t, func() bool {
+			var blocked bool
+			err := pool.QueryRow(ctx, "SELECT EXISTS(SELECT FROM pg_stat_activity WHERE $1=ANY(pg_blocking_pids(pid)))",
+				int32(blocker.Conn().PgConn().PID())).Scan(&blocked)
+			return err == nil && blocked
+		}, 2*time.Second, 10*time.Millisecond)
+		require.NoError(t, blocker.Commit(ctx))
+		select {
+		case err := <-result:
+			require.ErrorIs(t, err, applications.ErrStaffInactive)
+		case <-ctx.Done():
+			t.Fatal("grant did not return after target deactivation")
+		}
+		_, err = service.GetGrant(super, b.PublicID, target)
+		require.ErrorIs(t, err, applications.ErrGrantNotFound)
+		require.Equal(t, before, auditCount())
 	})
 
 	t.Run("audit safe scope and actor", func(t *testing.T) {
@@ -346,7 +368,7 @@ func TestApplicationServices(t *testing.T) {
 		}()
 		before := snapshot()
 		result, e := wrapped.Create(super, "m03-service-recheck", "Denied after precheck")
-		require.ErrorIs(t, e, authz.ErrForbidden)
+		require.ErrorIs(t, e, authz.ErrUnauthenticated)
 		require.Zero(t, result.ID)
 		require.Equal(t, before, snapshot())
 	})
@@ -380,43 +402,4 @@ func (d demotingTransactor) BeginTx(ctx context.Context, opts pgx.TxOptions) (pg
 		return nil, err
 	}
 	return d.pool.BeginTx(ctx, opts)
-}
-
-type deletingTransactor struct {
-	pool   *pgxpool.Pool
-	target int64
-}
-
-func (d deletingTransactor) BeginTx(ctx context.Context, opts pgx.TxOptions) (pgx.Tx, error) {
-	tx, err := d.pool.BeginTx(ctx, opts)
-	if err != nil {
-		return nil, err
-	}
-	return deletingTx{Tx: tx, pool: d.pool, target: d.target}, nil
-}
-
-type deletingTx struct {
-	pgx.Tx
-	pool   *pgxpool.Pool
-	target int64
-}
-
-func (d deletingTx) QueryRow(ctx context.Context, query string, args ...any) pgx.Row {
-	row := d.Tx.QueryRow(ctx, query, args...)
-	if strings.Contains(query, "-- name: GetStaffAuthority") && len(args) == 1 && args[0] == d.target {
-		return afterScanRow{row: row, after: func() error { _, err := d.pool.Exec(ctx, "DELETE FROM staff_users WHERE id=$1", d.target); return err }}
-	}
-	return row
-}
-
-type afterScanRow struct {
-	row   pgx.Row
-	after func() error
-}
-
-func (r afterScanRow) Scan(dest ...any) error {
-	if err := r.row.Scan(dest...); err != nil {
-		return err
-	}
-	return r.after()
 }

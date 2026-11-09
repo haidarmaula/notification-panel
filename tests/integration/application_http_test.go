@@ -61,7 +61,9 @@ func TestApplicationHTTP(t *testing.T) {
 		tokens[role], err = fixtureAccess(ctx, q, manager, id, claim, "")
 		require.NoError(t, err)
 	}
-	super := context.WithValue(ctx, middleware.UserContextKey, &token.AccessClaims{StaffID: actors["SUPER_ADMIN"]})
+	claims, err := manager.ParseAccessToken(tokens["SUPER_ADMIN"])
+	require.NoError(t, err)
+	super := context.WithValue(ctx, middleware.UserContextKey, claims)
 	a, err := service.Create(super, keys[0], "Aplikasi A")
 	require.NoError(t, err)
 	b, err := service.Create(super, keys[1], "Aplikasi B")
