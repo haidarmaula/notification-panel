@@ -158,6 +158,9 @@ func TestStaffRejectsAmbiguousSignedMembers(t *testing.T) {
 			segment int
 			prefix  string
 		}{
+			{"unsupported critical extension", 0, `"crit":["unsupported"],"unsupported":true,`},
+			{"unencoded payload mode", 0, `"b64":false,"crit":["b64"],`},
+			{"explicit encoded payload mode disallowed by staff key policy", 0, `"b64":true,"crit":["b64"],`},
 			{"duplicate kid", 0, `"kid":"unknown",`},
 			{"duplicate subject", 1, `"sub":"8",`},
 			{"case-aliased issuer", 1, `"Iss":"other",`},

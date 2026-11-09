@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"strconv"
 	"strings"
@@ -146,8 +147,10 @@ func (t *TokenManager) parse(raw string, claims jwt.Claims, keys purposeKeys) er
 	return nil
 }
 
-// HasUniqueJWTFields requires unique lowercase JSON members in the compact JWT
-// header and payload. It does not verify the token's signature or claims.
+// HasUniqueJWTFields requires unique lowercase JSON members and supported
+// protected-header semantics in a compact JWT. It does not verify the signature
+// or claims. Only encoded payloads are supported; explicit b64:true requires
+// crit:["b64"]. Other critical extensions are not supported.
 func HasUniqueJWTFields(raw string) bool {
 	if len(raw) == 0 || len(raw) > 16384 {
 		return false
@@ -157,10 +160,13 @@ func HasUniqueJWTFields(raw string) bool {
 	if !ok || signature == "" || strings.Contains(signature, ".") {
 		return false
 	}
-	for _, segment := range []string{header, payload} {
+	for index, segment := range []string{header, payload} {
 		data, err := base64.RawURLEncoding.Strict().DecodeString(segment)
 		data = bytes.TrimLeft(data, " \t\r\n")
 		if err != nil || len(data) == 0 || data[0] != '{' || !jsonobject.UniqueLowercaseFields(data) {
+			return false
+		}
+		if index == 0 && !supportedJWTHeader(data) {
 			return false
 		}
 	}
@@ -184,4 +190,24 @@ func (t *TokenManager) ParseRefreshToken(raw string) (*RefreshClaims, error) {
 		return nil, ErrInvalidToken
 	}
 	return &c, nil
+}
+
+// supportedJWTHeader recognizes the only critical extension this verifier can
+// process. RFC 7797 requires b64 in crit whenever b64 is present; JWTs cannot
+// use b64:false. Unknown noncritical headers remain the caller's policy.
+func supportedJWTHeader(data []byte) bool {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(data, &fields) != nil {
+		return false
+	}
+	b64, hasB64 := fields["b64"]
+	crit, hasCrit := fields["crit"]
+	if !hasB64 && !hasCrit {
+		return true
+	}
+	if !hasB64 || !hasCrit || !bytes.Equal(bytes.TrimSpace(b64), []byte("true")) {
+		return false
+	}
+	var names []string
+	return json.Unmarshal(crit, &names) == nil && len(names) == 1 && names[0] == "b64"
 }

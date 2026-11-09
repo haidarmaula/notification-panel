@@ -1,7 +1,18 @@
 # M03c installation and binding contract
 
-Status: schema migration 000018 implemented. Protected enrollment, refresh, logout and owner switch are implemented. The project JWT verifier and identity lookup are implemented. Signed origin assertions and replay protection are implemented. Mobile HTTP wiring is available through an explicit operator policy file. Deployment evidence remains pending. Production issuer, origin verification,
-provider route and secret configuration require per-project evidence.
+Status: schema migration 000018 implemented. Protected enrollment, refresh,
+logout and owner switch are implemented. The project JWT verifier and identity
+lookup, signed origin assertions and replay protection are implemented. Mobile
+HTTP wiring is available through an explicit operator policy file. Deployment
+evidence remains pending. Production issuer, origin verification, provider route
+and secret configuration require per-project evidence.
+
+Protected mobile JWTs and signed enrollment assertions reject unsupported
+critical headers and `b64:false` before identity lookup or nonce consumption.
+Explicit `b64:true` requires `crit:["b64"]` and preserves encoded-payload
+processing; ordinary noncritical headers remain permitted. Issuers should omit
+`b64` for the default mode (RFC 7515 §4.1.11; RFC 7797 §§6–7).
+
 See [ADR-04](../adr/adr-04-provider-selection.md) and the
 [application scope plan](m03a-application-scope-plan.md).
 

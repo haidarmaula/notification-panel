@@ -38,6 +38,11 @@ before actual publication.
 
 Tokens are bounded to 8 KiB. The signed header and claims must use unique
 lowercase JSON member names, including names encoded with JSON escapes.
+The verifier rejects unsupported critical header parameters and `b64:false`,
+even if the compact payload is encoded and the signature verifies. Explicit
+`b64:true` is allowed only with `crit:["b64"]`; unknown noncritical headers
+remain permitted. This follows RFC 7515 §4.1.11 and RFC 7797 §§6–7; the
+operational issuer should omit `b64` when using the default encoded payload.
 Verification failures expose fixed errors rather
 than raw tokens, claims or decoder messages. Successful verification copies and
 normalizes the request; caller mutation cannot change verified selection.

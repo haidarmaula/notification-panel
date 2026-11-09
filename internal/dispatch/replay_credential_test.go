@@ -51,7 +51,19 @@ func TestReplayVerifierRejectsAmbiguousSignedFields(t *testing.T) {
 	}
 	_, err = verifier.Verify(request, sign(" "+header, "\n"+string(body)))
 	require.NoError(t, err, "JSON whitespace is valid")
+	_, err = verifier.Verify(request, sign(`{"alg":"EdDSA","typ":"JWT","note":"noncritical"}`, string(body)))
+	require.NoError(t, err, "ordinary noncritical headers remain permitted")
+	_, err = verifier.Verify(request, sign(`{"alg":"EdDSA","typ":"JWT","b64":true,"crit":["b64"]}`, string(body)))
+	require.NoError(t, err, "explicit encoded-payload mode is supported")
 	for _, tc := range []struct{ name, header, payload string }{
+		{name: "unsupported critical extension", header: `{"alg":"EdDSA","typ":"JWT","crit":["unsupported"],"unsupported":true}`, payload: string(body)},
+		{name: "unencoded mode with encoded payload", header: `{"alg":"EdDSA","typ":"JWT","b64":false,"crit":["b64"]}`, payload: string(body)},
+		{name: "unencoded mode without crit", header: `{"alg":"EdDSA","typ":"JWT","b64":false}`, payload: string(body)},
+		{name: "malformed critical list", header: `{"alg":"EdDSA","typ":"JWT","crit":"unsupported"}`, payload: string(body)},
+		{name: "empty critical list", header: `{"alg":"EdDSA","typ":"JWT","crit":[]}`, payload: string(body)},
+		{name: "b64 missing crit", header: `{"alg":"EdDSA","typ":"JWT","b64":true}`, payload: string(body)},
+		{name: "b64 wrong type", header: `{"alg":"EdDSA","typ":"JWT","b64":"true","crit":["b64"]}`, payload: string(body)},
+		{name: "unknown alongside b64", header: `{"alg":"EdDSA","typ":"JWT","b64":true,"crit":["b64","unknown"],"unknown":true}`, payload: string(body)},
 		{name: "duplicate header", header: `{"alg":"none","alg":"EdDSA","typ":"JWT"}`, payload: string(body)},
 		{name: "case alias header", header: `{"ALG":"none","alg":"EdDSA","typ":"JWT"}`, payload: string(body)},
 		{name: "duplicate claim", header: header, payload: `{"sub":"8",` + string(body[1:])},

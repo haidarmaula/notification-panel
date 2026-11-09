@@ -54,7 +54,15 @@ case-aliased header and claim names. It now uses the same unique lowercase
 field check as staff JWTs. The regression signs conflicting algorithm and
 subject fields with the fixture key and verifies generic denial. Protected
 mobile JWTs and enrollment assertions apply the same check before identity
-lookup or nonce consumption.
+lookup or nonce consumption. A follow-up found that golang-jwt/jwt/v5 v5.3.1
+ignores signed `crit` and `b64` header parameters. Correctly signed assertions
+with unsupported critical extensions or `b64:false` and an encoded payload
+were accepted by the replay and mobile verifiers. The shared compact JWT format
+check now rejects them before identity lookup or nonce consumption. It permits
+explicit `b64:true` only with `crit:["b64"]`; the staff key policy continues to
+reject all extra headers. Signed red/green tests cover both failures and
+noncritical header compatibility. RFC 7515 §4.1.11 and RFC 7797 §§6–7 govern
+this policy; no real issuer or device acceptance is implied.
 
 ---
 

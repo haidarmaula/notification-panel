@@ -104,17 +104,28 @@ func TestSignedOriginRejectsJWTFieldAliasesBeforeNonceConsumption(t *testing.T) 
 		strconv.FormatInt(now.Unix(), 10) + `,"exp":` + strconv.FormatInt(expires, 10) +
 		`,"app_id":"` + project.String() + `","namespace":"users","credential_digest":"` + digest +
 		`","purpose":"` + originPurpose + `"}`
+	for _, header := range []string{
+		`{"alg":"EdDSA","typ":"JWT","note":"noncritical"}`,
+		`{"alg":"EdDSA","typ":"JWT","b64":true,"crit":["b64"]}`,
+	} {
+		evidence := signedRawJWT(t, signer, header, payload)
+		require.NoError(t, verifier.VerifyOrigin(context.Background(), binding, evidence))
+	}
+	store.calls = 0
 	for _, tc := range []struct {
 		name   string
 		header string
 		body   string
 	}{
+		{name: "unsupported critical extension", header: `{"alg":"EdDSA","typ":"JWT","crit":["unsupported"],"unsupported":true}`, body: payload},
+		{name: "unencoded mode with encoded payload", header: `{"alg":"EdDSA","typ":"JWT","b64":false,"crit":["b64"]}`, body: payload},
 		{name: "header case alias", header: `{"alg":"EdDSA","ALG":"EdDSA","typ":"JWT"}`, body: payload},
 		{name: "uppercase-only claim name", header: `{"alg":"EdDSA","typ":"JWT"}`, body: strings.TrimSuffix(payload, "}") + `,"X-Claim":"unused"}`},
 		{name: "payload case alias", header: `{"alg":"EdDSA","typ":"JWT"}`, body: strings.Replace(payload, `"app_id":"`, `"app_id":"`+project.String()+`","APP_ID":"`, 1)},
 		{name: "payload duplicate", header: `{"alg":"EdDSA","typ":"JWT"}`, body: strings.Replace(payload, `"jti":"broker-jti"`, `"jti":"broker-jti","jti":"broker-jti"`, 1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			store.calls = 0
 			evidence := signedRawJWT(t, signer, tc.header, tc.body)
 			require.ErrorIs(t, verifier.VerifyOrigin(context.Background(), binding, evidence), ErrMobileOrigin)
 			require.Zero(t, store.calls)

@@ -84,6 +84,21 @@ baseline benchmarks and the pilot; avoid uncontrolled traffic spikes.
 Record each approved value with its owner, date and evidence reference.
 Step 05 remains open until the owners approve all three decisions.
 
+### Step 05 repository evidence preflight (2026-11-09)
+
+The next repository-verifiable slice is an inventory, not target acceptance:
+
+| Decision | Verified in repository | Still requires target or owner evidence |
+| --- | --- | --- |
+| Service levels | [ADR-08 A-6](../adr/adr-08-observability.md#a-6-lifecycle-timing-sparse-traffic-and-slo-evidence) defines lifecycle timing, sparse-traffic treatment and measurement boundaries. | Named owners must approve numeric targets, windows and error budgets against the selected deployment. |
+| Recovery | The [physical PITR runbook](../runbooks/physical-pitr.md) records isolated restore and fencing drills and explicitly reserves numeric RPO/RTO/PITR decisions for business and operations owners. | Approved failure scenarios, recovery windows, retained backups and target restore observations. |
+| Acceptance | The [load report](delivery-load.md) records two isolated 20,000-device runs (49.424 s and 51.450 s); the [cutover ADR](../adr/adr-06-onesignal-fcm-cutover.md#a-5-safe-comparison-real-device-pilot-and-staged-ramp) requires pilot dwell and stop thresholds before promotion. | Approved quota/headroom and soak, cohort denominator, numeric pause/rollback criteria, and real Android/iOS observations. |
+
+The [Step 40 staging prerequisites](../runbooks/delivery-worker.md#step-40-staging-prerequisites)
+remain the operator setup checklist. Repository fixtures cannot demonstrate
+staging identity provisioning, signed client builds, Firebase/APNs access or
+real-device behavior. Do not mark Steps 05, 06 or 40 complete on this preflight.
+
 | Open decision | What must be determined | Blocks |
 | --- | --- | --- |
 | API, scheduling, fan-out, availability SLOs | p95/p99 values, measurement windows, conditions, and error budgets | Final sizing and production go/no-go |

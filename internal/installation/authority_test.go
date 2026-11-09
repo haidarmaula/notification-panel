@@ -200,17 +200,31 @@ func TestMobileAuthorityRejectsJWTFieldAliasesBeforeStoreAccess(t *testing.T) {
 
 	expires := time.Now().Add(time.Minute).Unix()
 	payload := `{"iss":"issuer","sub":"known","aud":"app","exp":` + strconv.FormatInt(expires, 10) + `,"purpose":"mobile"}`
+	for _, header := range []string{
+		`{"alg":"EdDSA","typ":"JWT","note":"noncritical"}`,
+		`{"alg":"EdDSA","typ":"JWT","b64":true,"crit":["b64"]}`,
+	} {
+		credential := signedRawJWT(t, signer, header, payload)
+		_, err := authority.Authenticate(context.Background(), project, credential)
+		require.NoError(t, err)
+	}
+	store.appCalls = 0
+	store.resolveCalls = 0
 	for _, tc := range []struct {
 		name   string
 		header string
 		body   string
 	}{
+		{name: "unsupported critical extension", header: `{"alg":"EdDSA","typ":"JWT","crit":["unsupported"],"unsupported":true}`, body: payload},
+		{name: "unencoded mode with encoded payload", header: `{"alg":"EdDSA","typ":"JWT","b64":false,"crit":["b64"]}`, body: payload},
 		{name: "header case alias", header: `{"alg":"EdDSA","ALG":"EdDSA","typ":"JWT"}`, body: payload},
 		{name: "uppercase-only claim name", header: `{"alg":"EdDSA","typ":"JWT"}`, body: strings.TrimSuffix(payload, "}") + `,"X-Claim":"unused"}`},
 		{name: "payload case alias", header: `{"alg":"EdDSA","typ":"JWT"}`, body: strings.Replace(payload, `"sub":"known"`, `"sub":"known","SUB":"known"`, 1)},
 		{name: "payload duplicate", header: `{"alg":"EdDSA","typ":"JWT"}`, body: strings.Replace(payload, `"purpose":"mobile"`, `"purpose":"mobile","purpose":"mobile"`, 1)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
+			store.appCalls = 0
+			store.resolveCalls = 0
 			credential := signedRawJWT(t, signer, tc.header, tc.body)
 			_, err := authority.Authenticate(context.Background(), project, credential)
 			require.ErrorIs(t, err, ErrMobileCredential)
