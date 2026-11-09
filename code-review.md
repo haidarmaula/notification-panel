@@ -224,7 +224,7 @@ Crashes, security bypasses, data corruption, or issues that affect every user of
 |---|----------|-------|--------|
 | C9 | `internal/token/jwt.go` — `ParseAccessToken` | Fixed. Parsing uses typed destination claims and checks the parser result before use. | Malformed, wrong-key and wrong-token-type tests pass. |
 | C10 | `internal/token/jwt.go` — `ParseRefreshToken` | Fixed. Parsing into typed refresh claims returns a domain error on malformed input. | Malformed, wrong-key and wrong-token-type tests pass. |
-| C11 | `internal/features/notifications/mock_provider.go` — `Send` | Slices `token.PushToken[:8]` without a length guard | Panic for any push token shorter than 8 bytes |
+| C11 | `internal/features/notifications/mock_provider.go` — `Send` | Fixed. The log preview is sliced only when `len(preview) > 8` (`mock_provider.go:99`), so short and empty tokens are logged whole instead of panicking. | `TestMockProvider_Send_ShortTokens_NoPanic` is the recorded regression for this finding. The package is unmounted. |
 
 ### Data Correctness (High Blast Radius)
 
@@ -235,7 +235,7 @@ Crashes, security bypasses, data corruption, or issues that affect every user of
 | C14 | `internal/features/segments/members_service.go` — `AddMember` | Existence check uses `ListBySegment(..., 0, 1)` — only the first member is inspected | Duplicate membership rows or unique-violation responses (served as 500) for any segment with more than one member |
 | C15 | `internal/features/segments/members_service.go` — `RemoveMember` | Assumes `DeleteBySegmentAndUser` returns an error for a missing row | `ErrMemberNotFound` is unreachable; removing a non-member returns 200 "member removed" for a removal that never occurred |
 | C16 | `internal/features/users/service.go` — `List` (external_id fast path) | Every repository error is swallowed and replaced with `([]User{}, 0, nil)` | A database failure is indistinguishable from "no such external_id" — clients receive a successful 200 with empty results |
-| C17 | `internal/kafka/producer.go` — `PublishDeliveryUpdated` | Message key built with `string(rune(event.NotificationID))` — a Unicode code point, not the decimal representation | Partitioning contract violated: ID 65 produces `"delivery_A"`; IDs in the surrogate range collapse to `U+FFFD`. Events for the same notification may land on different partitions |
+| C17 | `internal/kafka/producer.go` — `PublishDeliveryUpdated` | Fixed. Both keys are built with `strconv.FormatInt` (`producer.go:136` and `producer.go:175`), and no `string(rune(...))` construction remains anywhere in the tree. | The decimal key format is now correct, but the second half of the original consequence still stands for a different reason: the legacy writer's `LeastBytes` balancer ignores key content, so events for one notification can still land on different partitions. See H47. |
 | C18 | `internal/features/segments/service.go` — `GetByID`, `Create`, `Update` | `Actor.ID` reads `actor.ID` even when the staff lookup failed | Responses carry `{id: 0, name: ""}` for the creator reference, discarding the correct value held in `seg.CreatedBy` |
 | C19 | `internal/features/users/service.go` — `GetUserNotifications` | Paginates over `notification_deliveries` rows (one per device) rather than distinct notifications | A user with N devices over-counts by a factor of N in both the page and the `Total` field |
 | C20 | `internal/features/users/service.go` — `UpdateDeviceToken` | Metadata and status are written by two separate repository calls with no transaction | A failure on the second write leaves the token with updated metadata but an unchanged active flag; the client receives an error naming only the second step |
@@ -452,83 +452,81 @@ Cosmetic issues, minor divergences, and code smells.
 
 Recurring issues that appear across multiple features. Fixing each pattern once eliminates a class of findings rather than a single instance.
 
+Reconciled 2026-11-09 against current code. Mounting was verified independently: `cmd/server/main.go` composes only `applications`, `auth`, `profile` and `staff` plus the configured installation/receipt routes, and no other `cmd/` binary imports a feature package, so `notifications`, `mobile`, `users` and `segments` are unmounted. Each pattern therefore states whether it still holds in mounted code, because a pattern confined to unmounted packages is a remount prerequisite rather than a live defect.
+
 ### 1. Repository Error Collapse
 
-Every feature maps all repository failures from a by-ID lookup into its `ErrXxxNotFound` sentinel. A database connectivity failure, a query error, or a driver-level problem is therefore reported to clients as 404.
+**Partially remediated.** Mounted features distinguish the two cases: `internal/features/staff/service.go:476` returns `ErrStaffNotFound` only for `pgx.ErrNoRows` and wraps everything else so the handler can produce a 500; `profile`, `auth` and `applications` follow the same convention. The collapse survives in unmounted code — `internal/features/notifications/service.go:397` returns `ErrNotificationNotFound` for any `FindByID` error without testing `pgx.ErrNoRows`, so a connectivity failure would be reported to clients as 404.
 
-**Affected:** `auth`, `mobile`, `notifications`, `profile`, `segments`, `staff`, `users`.
+**Affected now:** unmounted `notifications`, `mobile`, `users`, `segments`.
 
-**Recommended fix:** Distinguish `pgx.ErrNoRows` from other errors. Return the not-found sentinel only for the former; propagate everything else as a wrapped error so the handler can produce a 500.
+**Remaining fix:** apply the mounted convention before remounting any legacy feature.
 
 ---
 
 ### 2. `err.Error()` Disclosure on the Default 500 Branch
 
-Every handler except `auth` serves `err.Error()` as the message body of its 500 responses. Repository errors, wrapped driver messages, and future internal sentinels are therefore disclosed verbatim.
-
-**Affected:** `mobile`, `notifications`, `profile`, `segments`, `staff`, `users`.
-
-**Recommended fix:** Adopt the `auth` handler's convention of replacing the 500 message with a generic string. Log the underlying error server-side.
+**Remediated, verified 2026-11-09.** No 500 path serves `err.Error()`. Every `StatusInternalServerError` response in the tree passes the literal `"internal server error"`, including the mounted features (`internal/features/applications/handler.go:162`, `internal/features/staff/handler.go:197`, `internal/features/profile/handler.go:100`), the legacy feature handlers, and the shared middleware (`internal/authz/http.go:31`, `internal/middleware/jwt.go:76`, `internal/observability/http.go:88`). `response.JSON` substitutes the same literal when marshalling the envelope fails (`pkg/response/response.go:78`). The surviving `err.Error()` calls are confined to mapped domain 4xx statuses (400/401/404/409), which is the intended contract rather than a disclosure.
 
 ---
 
 ### 3. TOCTOU on Uniqueness Checks
 
-Every uniqueness check (`ExistsByEmail`, `ExistsByName`, `ExistsByPushToken`) runs as a separate query before the write. Two concurrent requests can both pass the check and both attempt the write. The outcome depends entirely on whether the schema enforces a UNIQUE constraint, and on what the handler does with the resulting error.
+**Partially remediated.** In mounted code the schema constraint is now authoritative and the violation is translated: `internal/features/staff/service.go:516` routes the write error through `staffmutation.EmailConflict`, which recognises the 23505 unique violation raised by the constraint in `db/migrations/000004_create_staff_users.up.sql:8` and yields `ErrEmailAlreadyUsed` (a 409) rather than a 500. Unmounted code still relies on an advisory pre-check with no 23505 translation — `internal/features/users/service.go:580` — so two concurrent requests can both pass the check and one then fails unmapped.
 
-**Affected:** `profile`, `segments`, `staff`, `users`, `mobile`.
+**Affected now:** unmounted `users`, `mobile`, `segments`.
 
-**Recommended fix:** Rely on the schema constraint as the authoritative guard. Catch the unique-violation error at the repository layer and translate it into the corresponding sentinel before the handler sees it.
+**Remaining fix:** translate the unique violation in the legacy features before remounting them.
 
 ---
 
 ### 4. Post-Write Re-Fetch Failures Produce 500
 
-Every `Update` method re-reads the row after the write and uses the result for the response and the audit entry. A failure of that second read returns an error that the handler serves as a 500, even though the write has already committed.
+**Still holds, including in mounted code.** `internal/features/staff/service.go:522` re-reads the row after the `Update` committed at line 515, and line 536 returns that read's error, so the handler serves a 500 for a mutation that already succeeded. The audit write is correctly skipped when the re-read fails, being guarded by `if err == nil`, so no partial audit entry is produced; the client simply cannot distinguish a failed update from a failed response. Unmounted `internal/features/mobile/service.go:520` has the same shape.
 
-**Affected:** `notifications`, `profile`, `segments`, `staff`, `users`.
+**Affected:** mounted `staff` and unmounted `mobile` are confirmed. The other originally listed features (`notifications`, `profile`, `segments`, `users`) were not individually re-verified.
 
-**Recommended fix:** Either accept the write's success as the operation's outcome and construct the response from the update params, or make the re-fetch failure non-fatal — fall back to returning the update params as the response state.
+**Recommended fix:** treat the committed write as the operation's outcome and construct the response from the update params, or make the re-fetch failure non-fatal. This is the highest-value remaining pattern because it is live in mounted code.
 
 ---
 
 ### 5. Five Copies of `getStaffIDFromContext`
 
-The staff-identity extraction helper is duplicated across five packages. Any change to the context representation must be applied in all five places, or in the four if the dead copy in `users` is removed.
+**Still holds.** Five definitions of the same extraction remain and no shared helper was extracted. They are not all named alike: `internal/features/profile/context.go:81` exports `GetStaffIDFromContext`, `internal/audit/context.go:23` exports `GetStaffID`, and `internal/features/segments/helpers.go:122`, `internal/features/notifications/handler.go:557` and `internal/features/users/handler.go:545` each define an unexported `getStaffIDFromContext`. All five bodies are identical — a `middleware.UserContextKey` type assertion to `*token.AccessClaims` returning `claims.StaffID` — so a change to the context representation must still be applied in five places, two of them mounted. A search for the unexported name alone finds only three copies.
 
-**Affected:** `audit`, `notifications`, `profile`, `segments`, `users`.
+**Affected:** mounted `profile`, `audit`; unmounted `segments`, `notifications`, `users`.
 
-**Recommended fix:** Extract into a small dependency-free helper package (for example, `pkg/identity` or `internal/ctxutil`). All features import it. Removes the duplication and the dead code in one step.
+**Recommended fix:** extract into a small dependency-free helper package (for example `pkg/identity` or `internal/ctxutil`), have all five call sites use it and retire the divergent names in the same change. This is a maintainability hazard rather than a correctness defect.
 
 ---
 
 ### 6. Silent Pagination Clamping
 
-Every `getPaginationParams` clamps `limit` to 100 and defaults to 10, without informing the client that its request was rejected or adjusted. The response echoes the applied values, but a client cannot distinguish "you asked for 10" from "you asked for 5000 and got 10".
+**Still holds, unchanged.** `internal/features/staff/handler.go:563` accepts a `limit` only when it parses and satisfies `v > 0 && v <= 100`; any other value silently falls back to the default of 10, and an unparseable or non-positive `page` keeps its default. The response echoes the applied `Page` and `Limit` (`staff/handler.go:295`), which the original finding already noted, so a client still cannot distinguish "you asked for 10" from "you asked for 5000 and got 10". No 400 is returned.
 
-**Affected:** `notifications`, `segments`, `staff`, `users`.
+**Affected:** mounted `staff` is confirmed. The other originally listed features (`notifications`, `segments`, `users`) are unmounted and were not individually re-verified.
 
-**Recommended fix:** Either reject out-of-range values with a 400, or include both the requested and applied limits in the response metadata.
+**Recommended fix:** either reject out-of-range values with a 400 or report both the requested and applied limits in the response metadata. Rejecting is the smaller code change but is a client-visible contract change, so `docs/api/` must be updated in the same commit.
 
 ---
 
 ### 7. Create-Only vs Upsert Divergence for Device Tokens
 
-The mobile feature upserts an existing push token; the users feature returns a conflict. A client that uses the two endpoints interchangeably sees different results for the "device already registered" case.
+**Still holds, but only in unmounted code.** `internal/features/mobile/service.go:498` upserts an existing push token while `internal/features/users/service.go:585` returns a conflict, so a client using the two endpoints interchangeably still sees different results for the "device already registered" case. Neither feature is mounted: device enrollment in the running system goes through `applications.RegisterMobileLifecycle` and `internal/installation`, which is a single contract with no competing endpoint. The divergence is therefore a remount prerequisite, not a live inconsistency.
 
-**Affected:** `mobile`, `users`.
+**Affected:** unmounted `mobile`, `users`.
 
-**Recommended fix:** Standardise on one behaviour. The upsert is generally correct for client-initiated registration, because the mobile client cannot know whether the server has already seen the device.
+**Recommended fix:** standardise on one behaviour before either feature is remounted. The upsert is generally correct for client-initiated registration, because the mobile client cannot know whether the server has already seen the device.
 
 ---
 
 ### 8. Nullable Timestamps as `*string` vs `*time.Time`
 
-The majority of the codebase uses `*time.Time` for nullable timestamps. The users feature carries them as `*string` in both the domain model and the DTO, with formatting performed at the service layer.
+**Still holds, unmounted only, and documented as deliberate.** `internal/features/users/dto.go:245` (`DeviceTokenResponse.LastSeenAt`) and `internal/features/users/dto.go:353` (`UserNotification.OpenedAt`) are both `*string` with `omitempty`, while the rest of the codebase uses `*time.Time`. The DTO Godoc at `users/dto.go:209` explains the choice as preserving an absent-versus-empty distinction. That rationale does not by itself require `*string`: a `*time.Time` carrying `omitempty` is also omitted when nil. The real difference is that formatting happens in the service layer instead of at marshalling, so this is a convention divergence rather than a latent bug.
 
-**Affected:** `users`.
+**Affected:** unmounted `users`.
 
-**Recommended fix:** Convert `UserNotification.OpenedAt` and `DeviceTokenResponse.LastSeenAt` to `*time.Time` and move the formatting to the handler. Brings the users feature in line with the rest of the codebase.
+**Recommended fix:** settle the convention before any remount — either convert both fields to `*time.Time` and move formatting to the handler, or record `*string` as intentional and apply it consistently. Do not change it while the package is unmounted, since either choice alters a wire contract that no current client consumes.
 
 ---
 
@@ -538,14 +536,14 @@ The majority of the codebase uses `*time.Time` for nullable timestamps. The user
 
 Focus: crashes, security bypasses, data corruption.
 
-- [ ] C9, C10, C11 — eliminate the three panic paths in the token and mock-provider code
+- [x] C9, C10, C11 — the three panic paths are closed: typed destination claims with the parser result checked before use in `internal/token/jwt.go`, and a length-guarded preview slice at `mock_provider.go:99`. `TestMockProvider_Send_ShortTokens_NoPanic` is the C11 regression.
 - [x] C2 — existing staff.RoleID refresh lookup reverified with a real-DB regression in M02e
 - [ ] C3, C4 — add ownership checks to the device-token register and delete endpoints
 - [ ] C12 — add the missing `QUEUED` transition and its guard in `NotificationService.Send`
 - [ ] C13 — wire the delivery-update producer or remove the field and the README claim
 - [ ] C14, C15 — replace the defective membership checks with proper existence queries
-- [ ] C1 — switch the API key comparison to `crypto/subtle.ConstantTimeCompare`
-- [ ] C17 — fix the `string(rune(...))` message-key construction in the Kafka producer
+- [x] C1 — the mounted middleware compares with `subtle.ConstantTimeCompare` behind an explicit empty-header check that fails closed (`internal/middleware/api_key.go:125`)
+- [x] C17 — both message keys now use `strconv.FormatInt` and no `string(rune(...))` construction remains. Partition affinity on the legacy path is still absent, for the separate reason recorded in H47
 
 ### Sprint 2 — High
 
@@ -642,6 +640,7 @@ need reconciliation.
 | 1.0 | 2026-09-14 | Initial findings inventory compiled from the full-codebase Godoc pass |
 | 1.1 | 2026-11-02 | Add open Kafka findings H47/H48/M48 from source/dependency review and key-partition probe; see `docs/analysis/kafka-readiness.md`. No runtime fix applied. |
 | 1.2 | 2026-11-02 | Add open role-permission finding C21 from route/service/seed review and recalculate summary counts from distinct IDs; see `docs/analysis/api-data-security-readiness.md`. No runtime fix applied. |
+| 2.1 | 2026-11-09 | Reconcile the Cross-Cutting Patterns section and four stale Sprint 1 rows against current code, recording for each pattern whether it still holds in mounted features or only in the unmounted `notifications`, `mobile`, `users` and `segments` packages. Pattern 2 is fully remediated; patterns 1 and 3 are remediated in mounted code only; patterns 4, 5 and 6 still hold in mounted code, with pattern 4 the only live correctness defect; patterns 7 and 8 are unmounted-only. C9/C10/C11, C1 and C17 were already fixed in code but still carried open checkboxes. No runtime change. |
 | 2.0 | 2026-11-09 | Correct the package-level `# Partitioning` doc in `internal/kafka/events.go`, which claimed message keys route related events to the same partition and preserve order. That holds only for `ScopedProducer` (`kafka.Hash`); the legacy `Producer` uses `kafka.LeastBytes` and ignores key content, per H47. The doc now states both behaviors. Comment-only; found by auditing the remaining Kafka/provider comments after 1.9. |
 | 1.9 | 2026-11-09 | Correct the legacy `NewProducer` Godoc, which asserted key-based partition affinity, per-notification ordering on both publish methods, an inert balancer and comma-separated seed support. All four claims are disproved by the pinned kafka-go source recorded in H47/M48. Comment-only; the `LeastBytes` balancer and single-string `kafka.TCP` call are unchanged, so the legacy defects remain and the module stays unmounted. |
 | 1.8 | 2026-11-09 | Reconcile H47/H48/M48 against pinned kafka-go v0.4.51 source and the mounted scoped transport. Each remediation is satisfied on the mounted path; the residual defects are confined to the unmounted legacy `NewProducer`, whose Godoc still asserts the disproved key-hashing and CSV seed behavior. No runtime change. |
