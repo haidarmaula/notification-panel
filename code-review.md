@@ -230,15 +230,15 @@ Crashes, security bypasses, data corruption, or issues that affect every user of
 
 | # | Location | Issue | Impact |
 |---|----------|-------|--------|
-| C12 | `internal/features/notifications/service.go` — `Send` | Publishes the Kafka event but does not transition the notification to `QUEUED` — status remains `DRAFT` | Two consecutive `Send` calls publish two events and trigger two delivery rounds; concurrent processing can double-deliver to every device. Between publish and worker processing, the row remains editable and deletable |
-| C13 | `internal/features/notifications/processor.go` — `ProcessSendRequested` | `producer` field is injected but never invoked | The worker never publishes `NotificationDeliveryUpdated` events, contradicting the README. Downstream analytics receives nothing |
-| C14 | `internal/features/segments/members_service.go` — `AddMember` | Existence check uses `ListBySegment(..., 0, 1)` — only the first member is inspected | Duplicate membership rows or unique-violation responses (served as 500) for any segment with more than one member |
-| C15 | `internal/features/segments/members_service.go` — `RemoveMember` | Assumes `DeleteBySegmentAndUser` returns an error for a missing row | `ErrMemberNotFound` is unreachable; removing a non-member returns 200 "member removed" for a removal that never occurred |
+| C12 | `internal/features/notifications/service.go` — `Send` | Fixed. `UpdateStatusIfDraft(ctx, id, "QUEUED")` claims the transition (`service.go:1030`) and the `claimed == 0` guard aborts when the row is no longer a draft (`service.go:1034`), so a second `Send` cannot re-publish. | The package is unmounted, so this is a remount prerequisite rather than a live protection. |
+| C13 | `internal/features/notifications/processor.go` — `ProcessSendRequested` | Fixed. The injected producer is now invoked once per delivery row (`processor.go:424`). | A publish failure is logged rather than returned (`processor.go:425`), so delivery-update publication remains best-effort. Unmounted. |
+| C14 | `internal/features/segments/members_service.go` — `AddMember` | Fixed. The existence check calls `memberRepo.Exists(ctx, segmentID, userID)` (`members_service.go:226`) instead of inspecting only the first row of a page. | The mounted equivalent is `applications/segment_writes.go`, which maps the 23505 `uq_segment_member` violation (`:131`). Unmounted. |
+| C15 | `internal/features/segments/members_service.go` — `RemoveMember` | Fixed. An `Exists` guard before the delete (`members_service.go:292`) makes `ErrMemberNotFound` reachable, so removing a non-member no longer reports success. | The mounted equivalent uses `DELETE ... RETURNING`. Unmounted. |
 | C16 | `internal/features/users/service.go` — `List` (external_id fast path) | Every repository error is swallowed and replaced with `([]User{}, 0, nil)` | A database failure is indistinguishable from "no such external_id" — clients receive a successful 200 with empty results |
 | C17 | `internal/kafka/producer.go` — `PublishDeliveryUpdated` | Fixed. Both keys are built with `strconv.FormatInt` (`producer.go:136` and `producer.go:175`), and no `string(rune(...))` construction remains anywhere in the tree. | The decimal key format is now correct, but the second half of the original consequence still stands for a different reason: the legacy writer's `LeastBytes` balancer ignores key content, so events for one notification can still land on different partitions. See H47. |
 | C18 | `internal/features/segments/service.go` — `GetByID`, `Create`, `Update` | `Actor.ID` reads `actor.ID` even when the staff lookup failed | Responses carry `{id: 0, name: ""}` for the creator reference, discarding the correct value held in `seg.CreatedBy` |
-| C19 | `internal/features/users/service.go` — `GetUserNotifications` | Paginates over `notification_deliveries` rows (one per device) rather than distinct notifications | A user with N devices over-counts by a factor of N in both the page and the `Total` field |
-| C20 | `internal/features/users/service.go` — `UpdateDeviceToken` | Metadata and status are written by two separate repository calls with no transaction | A failure on the second write leaves the token with updated metadata but an unchanged active flag; the client receives an error naming only the second step |
+| C19 | `internal/features/users/service.go` — `GetUserNotifications` | **Still open, verified 2026-11-09.** Pagination uses `deliveryRepo.ListByUser` (`service.go:1097`) and the total uses `deliveryRepo.CountByUser` (`service.go:1102`), both over `notification_deliveries` rows rather than distinct notifications. | A user with N devices over-counts by a factor of N in both the page and the `Total` field. The package is unmounted, so no current client is affected; this must be fixed before a remount. |
+| C20 | `internal/features/users/service.go` — `UpdateDeviceToken` | Fixed. The method begins a transaction (`service.go:762`), binds a tx-scoped device repository (`service.go:774`) and performs its reads inside that transaction, so the metadata and status writes commit or roll back together. | Unmounted. |
 
 ---
 
@@ -458,7 +458,7 @@ Reconciled 2026-11-09 against current code. Mounting was verified independently:
 
 **Partially remediated.** Mounted features distinguish the two cases: `internal/features/staff/service.go:476` returns `ErrStaffNotFound` only for `pgx.ErrNoRows` and wraps everything else so the handler can produce a 500; `profile`, `auth` and `applications` follow the same convention. The collapse survives in unmounted code — `internal/features/notifications/service.go:397` returns `ErrNotificationNotFound` for any `FindByID` error without testing `pgx.ErrNoRows`, so a connectivity failure would be reported to clients as 404.
 
-**Affected now:** unmounted `notifications`, `mobile`, `users`, `segments`.
+**Affected now:** unmounted `notifications` and `mobile`, which contain no `pgx.ErrNoRows` check anywhere in the package, so every lookup failure collapses into a not-found sentinel. `users` (29 such checks) and `segments` (9) do discriminate in general and were wrongly listed here before; individual call sites in those two packages were not exhaustively verified.
 
 **Remaining fix:** apply the mounted convention before remounting any legacy feature.
 
@@ -542,10 +542,12 @@ Focus: crashes, security bypasses, data corruption.
 
 - [x] C9, C10, C11 — the three panic paths are closed: typed destination claims with the parser result checked before use in `internal/token/jwt.go`, and a length-guarded preview slice at `mock_provider.go:99`. `TestMockProvider_Send_ShortTokens_NoPanic` is the C11 regression.
 - [x] C2 — existing staff.RoleID refresh lookup reverified with a real-DB regression in M02e
-- [ ] C3, C4 — add ownership checks to the device-token register and delete endpoints
-- [ ] C12 — add the missing `QUEUED` transition and its guard in `NotificationService.Send`
-- [ ] C13 — wire the delivery-update producer or remove the field and the README claim
-- [ ] C14, C15 — replace the defective membership checks with proper existence queries
+- [x] C3, C4 — identity is derived from the verified mobile JWT (`users/device_tokens_handler.go:218`) rather than a client-supplied user ID, and `ensureDeviceTokenOwnership` compares the token's owner before both update and delete (`users/service.go:943`)
+- [x] C12 — `UpdateStatusIfDraft(ctx, id, "QUEUED")` claims the transition and the `claimed == 0` guard aborts it (`notifications/service.go:1030` and `:1034`)
+- [x] C13 — the delivery-update producer is wired per delivery row (`notifications/processor.go:424`). A publish failure is logged rather than returned, so it stays non-fatal
+- [x] C14, C15 — membership now runs `memberRepo.Exists` before both add and remove (`segments/members_service.go:226` and `:292`), which makes `ErrMemberNotFound` reachable
+
+All ten Sprint 1 items are now closed in code. C3, C4, C12, C13, C14 and C15 all sit in packages imported only by test files, so they are remount prerequisites rather than live protections; the mounted equivalent of the segment membership semantics is `internal/features/applications/segment_writes.go`, which locks the segment before mutating it (`:123`), maps the 23505 `uq_segment_member` violation (`:131`) and uses `DELETE ... RETURNING`.
 - [x] C1 — the mounted middleware compares with `subtle.ConstantTimeCompare` behind an explicit empty-header check that fails closed (`internal/middleware/api_key.go:125`)
 - [x] C17 — both message keys now use `strconv.FormatInt` and no `string(rune(...))` construction remains. Partition affinity on the legacy path is still absent, for the separate reason recorded in H47
 
@@ -558,8 +560,8 @@ Focus: user-visible bugs and contract divergences.
 - [ ] H19–H26 — reconcile the two provider contracts and harden the OneSignal path
 - [ ] H27–H37 — audit and correct the idempotency and TOCTOU behaviours
 - [ ] H38–H42 — fix the partial-commit paths, either with transactions or with corrected response semantics
-- [ ] C19 — make notification history report per-notification, not per-delivery
-- [ ] C20 — wrap the device-token update in a transaction
+- [ ] C19 — make notification history report per-notification, not per-delivery. Still open in unmounted `users`; verified 2026-11-09
+- [x] C20 — the device-token update now runs inside a transaction with tx-bound reads (`users/service.go:762`)
 
 ### Sprint 3 — Medium
 
@@ -654,6 +656,7 @@ affected packages: `internal/audit`, `internal/config`, `internal/database`,
 | 1.0 | 2026-09-14 | Initial findings inventory compiled from the full-codebase Godoc pass |
 | 1.1 | 2026-11-02 | Add open Kafka findings H47/H48/M48 from source/dependency review and key-partition probe; see `docs/analysis/kafka-readiness.md`. No runtime fix applied. |
 | 1.2 | 2026-11-02 | Add open role-permission finding C21 from route/service/seed review and recalculate summary counts from distinct IDs; see `docs/analysis/api-data-security-readiness.md`. No runtime fix applied. |
+| 2.3 | 2026-11-09 | Close the remaining Sprint 1 rows. C3, C4, C12, C13, C14 and C15 are all fixed in code, which with C1, C9, C10, C11 and C17 closes all ten Sprint 1 criticals; all six sit in packages imported only by test files, so they are remount prerequisites rather than live protections. C20 is fixed the same way and C19 remains open in unmounted `users`. Also narrow pattern 1's affected list: `notifications` and `mobile` contain no `pgx.ErrNoRows` check anywhere, while `users` (29 checks) and `segments` (9) were wrongly included. No runtime change. |
 | 2.2 | 2026-11-09 | Correct the pattern 4 conclusion recorded in 2.1. Reading `operations.Update` in isolation missed that the mounted entry point `StaffService.Update` (`internal/features/staff/mutation.go:58`) shadows it and runs the write, re-read and audit inside one `staffmutation.Run` transaction with tx-bound repositories and audit service, so a failed re-read rolls the mutation back and no committed-without-audit state is reachable. `tests/integration/staff_mutation_test.go:132` already regresses that rollback. Pattern 4 is a robustness nit, not a live correctness defect. No runtime change. |
 | 2.1 | 2026-11-09 | Reconcile the Cross-Cutting Patterns section and four stale Sprint 1 rows against current code, recording for each pattern whether it still holds in mounted features or only in the unmounted `notifications`, `mobile`, `users` and `segments` packages. Pattern 2 is fully remediated; patterns 1 and 3 are remediated in mounted code only; patterns 5 and 6 still hold in mounted code; patterns 7 and 8 are unmounted-only. The claim made here that pattern 4 also held in mounted code was wrong and is corrected by 2.2. C9/C10/C11, C1 and C17 were already fixed in code but still carried open checkboxes. No runtime change. |
 | 2.0 | 2026-11-09 | Correct the package-level `# Partitioning` doc in `internal/kafka/events.go`, which claimed message keys route related events to the same partition and preserve order. That holds only for `ScopedProducer` (`kafka.Hash`); the legacy `Producer` uses `kafka.LeastBytes` and ignores key content, per H47. The doc now states both behaviors. Comment-only; found by auditing the remaining Kafka/provider comments after 1.9. |
