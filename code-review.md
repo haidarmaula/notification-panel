@@ -405,7 +405,7 @@ Design inconsistencies, duplication, contract drift, and maintainability hazards
 | M40 | `internal/token/jwt.go` — both staff parsers | **Fixed locally in M02e:** pin HS256, require exp and positive user_id in addition to purpose/signature checks |
 | M41 | `internal/token/jwt.go` | Fixed locally. Both staff token classes bind the subject to staff ID and require the configured issuer, a single purpose-specific audience and a permitted signing key ID. Protected key rotation and expiry are exercised through the login, refresh and access paths. [Staff policy](docs/specs/staff-sessions.md). |
 | M42 | `internal/token/jwt.go`, staff auth, migration 000033 | Fixed locally. Single-use refresh rotation detects replay, logout revokes a family, and credential/role/activity changes invalidate its staff generation. [Session contract and recovery](docs/specs/staff-sessions.md). |
-| M43 | `internal/features/auth` | **Fixed locally 2026-11-09:** login, refresh and logout require exactly one `application/json` Content-Type with optional UTF-8 charset and identity content encoding; unsupported media returns safe 415 before session work. The existing 64KiB body cap and safe 400/413 behavior remain. Caller compatibility and deployment are unverified. |
+| M43 | Mounted JSON handlers | **Media-type portion fixed locally 2026-11-09:** all mounted JSON writes require one `application/json` Content-Type with optional UTF-8 charset and identity content encoding; unsupported media returns safe 415 before service work. Scoped application handlers already used the strict decoder; auth, staff and profile now share the enforcement. The existing 64KiB/1MiB body caps and safe 400/413 behavior remain. Caller compatibility and deployment are unverified. |
 | M44 | All 17 JSON input handlers, including profile | **Fixed in local code, M02d:** 64KiB small JSON / 1MiB campaign limits, complete bounded reads and single-value decoding. [Evidence](docs/analysis/m02d-verification.md): boundary/direct-handler/real-DB route tests; no rejected mutation or Kafka event. Other abuse controls remain open. |
 | M45 | Protected HTTP API | **Fixed locally.** Login, refresh and logout share per-IP and aggregate authentication budgets before reaching the handler. [Gateway contract](docs/specs/m02-gateway.md). |
 | M46 | HTTP layer | No CORS configuration for the admin portal |
@@ -571,8 +571,8 @@ Focus: design consistency and maintainability.
 - [ ] M1–M8 — consolidate the duplicated helpers and DTOs
 - [ ] M9–M14 — remove dead code
 - [ ] M15–M27 — reconcile the divergent contracts and naming conventions
-- [x] M43 (body cap and auth media type), M44 — bounded full-body reads for all 17 JSON inputs; auth media type is locally tested, not deployed
-- [ ] M43 — remaining request/abuse controls beyond auth media type and body limits
+- [x] M43 (body cap and mounted JSON media type), M44 — bounded full-body reads for all 17 JSON inputs; media-type behavior is locally tested, not deployed
+- [ ] M43 — remaining request/abuse controls beyond mounted JSON media-type enforcement and body limits
 - [x] H43 — graceful HTTP shutdown, forced cancellation and bounded handler join
 - [x] M35–M37 — migrate to structured logging with a request ID
 
@@ -658,6 +658,7 @@ affected packages: `internal/audit`, `internal/config`, `internal/database`,
 
 | Version | Date | Description |
 |---------|------|-------------|
+| 2.6 | 2026-11-09 | Extend M43 media-type enforcement from auth to all mounted JSON write handlers; profile/staff now return safe 415 for missing, wrong, duplicate or compressed media before service work. OpenAPI/API docs and direct-handler tests updated. Full unit suite and isolated integration suite pass; caller compatibility and deployment remain open. |
 | 1.0 | 2026-09-14 | Initial findings inventory compiled from the full-codebase Godoc pass |
 | 1.1 | 2026-11-02 | Add open Kafka findings H47/H48/M48 from source/dependency review and key-partition probe; see `docs/analysis/kafka-readiness.md`. No runtime fix applied. |
 | 1.2 | 2026-11-02 | Add open role-permission finding C21 from route/service/seed review and recalculate summary counts from distinct IDs; see `docs/analysis/api-data-security-readiness.md`. No runtime fix applied. |

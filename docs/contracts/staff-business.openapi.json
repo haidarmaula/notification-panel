@@ -252,6 +252,7 @@
           "404": { "$ref": "#/components/responses/Error404" },
           "409": { "$ref": "#/components/responses/Error409" },
           "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
           "429": { "$ref": "#/components/responses/Error429" },
           "500": { "$ref": "#/components/responses/Error500" },
           "503": { "$ref": "#/components/responses/Error503" }
@@ -285,6 +286,7 @@
           "403": { "$ref": "#/components/responses/Error403" },
           "404": { "$ref": "#/components/responses/Error404" },
           "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
           "429": { "$ref": "#/components/responses/Error429" },
           "500": { "$ref": "#/components/responses/Error500" },
           "503": { "$ref": "#/components/responses/Error503" }
@@ -380,6 +382,7 @@
           "403": { "$ref": "#/components/responses/Error403" },
           "409": { "$ref": "#/components/responses/Error409" },
           "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
           "429": { "$ref": "#/components/responses/Error429" },
           "500": { "$ref": "#/components/responses/Error500" },
           "503": { "$ref": "#/components/responses/Error503" }
@@ -472,6 +475,7 @@
           "404": { "$ref": "#/components/responses/Error404" },
           "409": { "$ref": "#/components/responses/Error409" },
           "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
           "429": { "$ref": "#/components/responses/Error429" },
           "500": { "$ref": "#/components/responses/Error500" },
           "503": { "$ref": "#/components/responses/Error503" }
@@ -550,6 +554,7 @@
           "404": { "$ref": "#/components/responses/Error404" },
           "409": { "$ref": "#/components/responses/Error409" },
           "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
           "429": { "$ref": "#/components/responses/Error429" },
           "500": { "$ref": "#/components/responses/Error500" },
           "503": { "$ref": "#/components/responses/Error503" }
@@ -587,6 +592,7 @@
           "403": { "$ref": "#/components/responses/Error403" },
           "404": { "$ref": "#/components/responses/Error404" },
           "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
           "429": { "$ref": "#/components/responses/Error429" },
           "500": { "$ref": "#/components/responses/Error500" },
           "503": { "$ref": "#/components/responses/Error503" }

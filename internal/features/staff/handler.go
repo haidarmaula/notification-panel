@@ -168,7 +168,7 @@ func NewStaffHandler(service StaffServicer) *StaffHandler {
 // JSON input is limited to 64 KiB; oversized bodies return 413 before service work.
 func (h *StaffHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var req CreateStaffRequest
-	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
+	if !httprequest.DecodeJSONWithMediaType(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	if req.Role == "" || req.Name == "" || req.Email == "" || req.Password == "" {
@@ -307,7 +307,7 @@ func (h *StaffHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdateStaffRequest
-	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
+	if !httprequest.DecodeJSONWithMediaType(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	if req.Role == "" && req.Name == "" && req.Email == "" {
@@ -348,7 +348,7 @@ func (h *StaffHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdateStatusRequest
-	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
+	if !httprequest.DecodeJSONWithMediaType(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	if req.IsActive == nil {
@@ -382,7 +382,7 @@ func (h *StaffHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req UpdatePasswordRequest
-	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
+	if !httprequest.DecodeJSONWithMediaType(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	if req.CurrentPassword == "" {

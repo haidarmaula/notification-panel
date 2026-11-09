@@ -27,10 +27,12 @@ trailing garbage or multiple values return existing HTTP 400 `invalid request bo
 Unknown fields, duplicate-key semantics, JSON null and current field validations
 remain as before. This intentionally closes the previous acceptance of a first
 valid JSON value followed by extra data. The M02d body-budget slice did not
-change Content-Type handling. A separate M43 follow-up now requires JSON media
-type and identity content encoding on the three staff authentication endpoints
-only; see the [auth API contract](../api/auth-api.md). Other JSON handlers retain
-their existing media-type behavior, and request bodies are still not decompressed.
+change Content-Type handling. A separate M43 follow-up requires one
+`application/json` Content-Type (optional `charset=utf-8`) and identity content
+encoding for all mounted JSON request handlers; unsupported or compressed
+requests return 415. See the [auth API contract](../api/auth-api.md),
+[staff API](../api/staff-api.md) and [profile API](../api/profile-api.md).
+Retired, unmounted legacy handlers retain their historical media-type behavior.
 
 Existing route authentication/authorization executes first; body limits do not
 replace those guards. Direct handler calls also enforce limits (existing identity

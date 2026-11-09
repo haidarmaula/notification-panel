@@ -59,6 +59,7 @@ func TestStaffMutationSerializesRecoveryAuthority(t *testing.T) {
 		r := httptest.NewRequest(method, path, strings.NewReader(body)).WithContext(ctx)
 		r.Header.Set("Authorization", "Bearer "+a.access)
 		r.Header.Set("X-API-Key", "fixture-api-key")
+		r.Header.Set("Content-Type", "application/json")
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, r)
 		return w

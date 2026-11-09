@@ -17,6 +17,11 @@ All endpoints require authentication via:
 
 **Role Requirement:** All staff management endpoints are restricted to users with the **SUPER_ADMIN** role. Regular staff cannot access these endpoints.
 
+JSON write requests must use exactly one `Content-Type: application/json` header;
+an optional `charset=utf-8` parameter is accepted. Other media types, duplicate
+Content-Type headers, and compressed request bodies return 415 `unsupported
+media type` before service work.
+
 The JWT identifies the account. Both route and service independently load its
 current database authority; only active SUPER_ADMIN accounts have `staff.manage`.
 The JWT role claim and legacy `SUPER_ADMIN_ROLE` config do not grant permission.
@@ -49,6 +54,8 @@ account. A new login opens a session with its current authority.
 | `403` | Forbidden | Insufficient permissions (not SUPER_ADMIN) or self-deletion attempt |
 | `404` | Resource not found | Staff user does not exist |
 | `409` | Conflict | Email already registered or final active super administrator |
+| `413` | Request body too large | Request exceeds the JSON body limit |
+| `415` | Unsupported media type | JSON media type or identity content encoding is required |
 | `500` | Internal server error | Unexpected server error |
 
 ---

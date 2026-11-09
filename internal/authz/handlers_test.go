@@ -52,6 +52,9 @@ func TestEveryHandlerMapsAuthorizationErrors(t *testing.T) {
 			for _, h := range handlers {
 				t.Run(h.name, func(t *testing.T) {
 					r := httptest.NewRequest("POST", "/", strings.NewReader(h.body)).WithContext(serviceIdentity())
+					if h.body != "" {
+						r.Header.Set("Content-Type", "application/json")
+					}
 					r.SetPathValue("id", "42")
 					r.SetPathValue("userId", "7")
 					w := httptest.NewRecorder()

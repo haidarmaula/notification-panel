@@ -17,6 +17,11 @@ All endpoints require authentication via:
 
 The authenticated staff ID is extracted from the JWT and used to identify the profile owner. Users can only access and modify their own profile.
 
+JSON write requests must use exactly one `Content-Type: application/json` header;
+an optional `charset=utf-8` parameter is accepted. Other media types, duplicate
+Content-Type headers, and compressed request bodies return 415 `unsupported
+media type` before service work.
+
 ---
 
 ## Common Error Responses
@@ -27,6 +32,8 @@ The authenticated staff ID is extracted from the JWT and used to identify the pr
 | `401` | Unauthorized | Missing or invalid API Key / JWT |
 | `404` | Resource not found | Profile does not exist |
 | `409` | Conflict | Email already used by another account |
+| `413` | Request body too large | Request exceeds the JSON body limit |
+| `415` | Unsupported media type | JSON media type or identity content encoding is required |
 | `500` | Internal server error | Unexpected server error |
 
 ---

@@ -113,7 +113,7 @@ func (h *ProfileHandler) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req UpdateProfileRequest
-	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
+	if !httprequest.DecodeJSONWithMediaType(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 
@@ -154,7 +154,7 @@ func (h *ProfileHandler) UpdatePassword(w http.ResponseWriter, r *http.Request) 
 	}
 
 	var req UpdatePasswordRequest
-	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
+	if !httprequest.DecodeJSONWithMediaType(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 

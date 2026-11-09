@@ -28,9 +28,13 @@ A body within budget must contain one complete JSON value. Empty/malformed
 bodies, a second value or trailing garbage return 400 `invalid request body`.
 This closes prior silent acceptance of a valid first value followed by data.
 Unknown fields and duplicate-key decoding remain compatible; null still reaches
-existing field validation. Content-Type checks are unchanged (no new 415).
-Requests are not decompressed by this helper. Body-less operations keep their
-existing behavior.
+existing field validation. The separate M43 media-type policy now applies to all
+mounted JSON request handlers: exactly one `application/json` Content-Type is
+required, optional `charset=utf-8` is accepted, and content encoding must be
+identity. Missing/other/duplicate media types and compressed bodies return 415
+after the route's existing authentication and authorization gates. Retired,
+unmounted legacy handlers keep their historical behavior. Body-less operations
+keep their existing behavior.
 
 Clients should shrink over-budget requests before retrying; repeating identical
 oversized input will still fail. Use broadcast/segment targeting for an audience

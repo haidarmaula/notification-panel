@@ -94,13 +94,18 @@ Follow-up 2026-11-03: [M02 assessment](m02-baseline-assessment.md) and
 [M02e](m02e-verification.md) complete the scoped local development guard review.
 M03 isolated design/implementation may proceed; security release controls remain open.
 
-Follow-up 2026-11-09: M43 now requires one `application/json` Content-Type and
-identity content encoding on login, refresh and logout. Direct handler tests
-cover missing, wrong, duplicate and compressed media headers; the staff-session
-integration fixture exercises the valid JSON route contract and rejects missing
-or wrong media types before creating a session. This auth-only change returns 415
-and does not alter the other JSON handlers. Caller compatibility and deployment
-remain unverified.
+Follow-up 2026-11-09: M43 first added media-type checks to login, refresh and
+logout. It now applies the same policy to the mounted staff and profile JSON
+handlers; mounted scoped application handlers already used the strict JSON
+decoder. Direct tests cover missing and wrong media types across these handlers,
+while the shared helper/auth tests cover duplicate and compressed headers.
+Unsupported media returns 415 before service work. Caller compatibility and
+deployment remain unverified. The full `go test ./...` suite passed after
+updating the authorization test fixture to send its declared JSON media type.
+`bash scripts/integration.sh` also passed: `hello/tests/integration` in 148.416s,
+`hello/internal/fcm` in 1.651s, with 75 SDK requests observed by the simulator.
+The route inventory/API route checks, Go build/vet/format checks and OpenAPI
+JSON syntax check passed. These checks do not verify real caller compatibility.
 
 The auth route contract and JSON body-limit tests passed in the full isolated
 integration run on 2026-11-09. The direct-handler limit fixture now includes the
