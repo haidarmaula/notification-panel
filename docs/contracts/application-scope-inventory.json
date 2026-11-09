@@ -878,7 +878,7 @@
       "pattern": "POST /api/v1/apps/{app_id}/mobile/notifications/{campaign_id}/receipt",
       "source": "internal/features/applications/mobile_receipt.go",
       "scope": "application-scoped",
-      "disposition": "retain-scoped"
+      "disposition": "configured-mobile"
     },
     {
       "pattern": "POST /api/v1/auth/logout",

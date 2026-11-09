@@ -68,8 +68,9 @@ are not fixed-duration tasks. M03c/d and durable dispatch milestones still follo
 The machine inventory was refreshed after the November 3 baseline. The checker
 now matches 45 tables, 287 named queries across 42 files, 81 HTTP operations and
 six command entry points. The additions include staff sessions/administration,
-replay and retention controls, delivery execution/results/observations, two
-scoped mobile/campaign routes, auth logout and the replay/retention binaries.
+replay and retention controls, delivery execution/results/observations, the
+campaign statistics route, the conditionally configured mobile receipt route,
+auth logout and the replay/retention binaries.
 New scopes and route dispositions were classified from their migration,
 repository file, registered route and command contract. This is source coverage;
 it does not establish database isolation, command deployment state or runtime
