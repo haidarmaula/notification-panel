@@ -17,9 +17,11 @@ review completion does not mean acceptance or runtime implementation.
 
 Approximately 20,000 active devices and five campaigns/month means idle time
 is normal. Kafka is self-hosted on company servers; host count, monitoring
-stack, on-call owners and numeric SLO are unknown. Prefer integration with an
-existing company monitoring/logging system after inventory; do not silently
-require a second stack or assume an alert receiver already exists.
+stack and on-call owners are unknown. The project owner approved initial numeric
+service objectives in Step 05 on 2026-11-09; platform/operations approval and
+target-environment feasibility remain open. Prefer integration with an existing
+company monitoring/logging system after inventory; do not silently require a
+second stack or assume an alert receiver already exists.
 
 Current internal/middleware/logger.go prints method/raw path only. Server has
 no explicit panic wrapper/graceful shutdown; DB.New pings only at startup with
@@ -323,9 +325,18 @@ only successful campaign latency hides every failure and long-lived queue.
 
 ### Consequences
 
-Numeric availability/latency/retention SLO and error budget remain step 5's
-open decisions; do not claim 99.9% or <=60s as accepted. Low-volume alerts need
-absolute impact/age as well as rate rules and a monitoring freshness condition.
+Initial project-owner-approved Step 05 service targets are staff API
+availability of 99.9% per rolling 30 days, p95 latency at or below 300 ms and
+p99 at or below 1 second for valid requests. Malformed and unauthorized client
+requests are excluded from the availability denominator; server errors and
+timeouts count as bad outcomes. Use synthetic checks when traffic is sparse.
+For scheduled campaigns not under an explicit hold, 99% should reach durable
+queue acceptance within 60 seconds of `scheduled_for` over a rolling 12 months,
+with none exceeding 5 minutes; report each campaign because traffic is sparse.
+The 20,000-device durable provider-outcome objective is five minutes; 60 seconds
+is only a stretch benchmark for that fan-out. These are initial owner targets,
+not platform/operations sign-off or evidence of target feasibility. Low-volume
+alerts still need absolute impact/age and a monitoring-freshness condition.
 
 ## A-7. Alerts, dashboards and operator actions
 
@@ -422,10 +433,12 @@ Unbounded logging/tracing must not become a new delivery failure mode.
 
 ### Consequences
 
-Still open: company monitoring stack/access/storage, on-call and test receiver,
-numeric SLO/alert thresholds and required trace coverage, retention/security,
-host time synchronization and endpoint network policy. Continue ADR-09/10/11
-design without inventing these facts; require evidence before release.
+Still open: company monitoring stack/access/storage, platform/operations
+sign-off, on-call and test receiver, numeric alert thresholds and required trace
+coverage, retention/security, host time synchronization and endpoint network
+policy. The Step 05 service targets have project-owner approval, but require
+target-environment feasibility and staging evidence before release. Continue
+ADR-09/10/11 design without inventing these facts.
 
 ## Primary sources and verification limits
 
