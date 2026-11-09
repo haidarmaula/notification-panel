@@ -53,7 +53,16 @@ def source_inventory():
                 raise ValueError(f"duplicate route: {pattern}")
             routes[pattern] = str(path.relative_to(ROOT))
         if path.parent.name == "applications" and path.name == "module.go":
-            for pattern in re.findall(r'^\s*register\("([^"\n]+)",', text, re.M):
+            for expr in re.findall(r'^\s*register\(([^,\n]+),', text, re.M):
+                pattern = ""
+                for part in expr.split("+"):
+                    part = part.strip()
+                    if part == "prefix" and prefix is not None:
+                        pattern += prefix
+                    elif re.fullmatch(r'"[^"\n]*"', part):
+                        pattern += json.loads(part)
+                    else:
+                        raise ValueError(f"unresolved application route expression in {path}: {expr}")
                 if pattern in routes:
                     raise ValueError(f"duplicate route: {pattern}")
                 routes[pattern] = str(path.relative_to(ROOT))
