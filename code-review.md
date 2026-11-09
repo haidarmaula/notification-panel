@@ -425,15 +425,15 @@ Cosmetic issues, minor divergences, and code smells.
 
 | # | Location | Issue |
 |---|----------|-------|
-| L1 | `internal/audit/constants.go` | Constants use `SCREAMING_SNAKE_CASE` — non-idiomatic Go naming |
+| L1 | `internal/audit/constants.go` | Still open, and deliberately constrained. The Go identifiers use `SCREAMING_SNAKE_CASE` — for example `ACTION_STAFF_UPDATE` at `constants.go:17` — which is non-idiomatic. The string values (`"STAFF_UPDATE"`) are persisted audit labels and remain contracts, so only the identifiers may be renamed. Such a rename is safe but is mechanical churn across every call site for a cosmetic gain, and the project profile explicitly keeps persisted labels as contracts even where their naming differs from Go convention. |
 | L2 | `internal/token/jwt.go` | `StaffID` serialises as `json:"user_id"` — field name does not match tag |
 | L3 | `internal/bootstrap/bootstrap.go` | `"SUPER_ADMIN"` is hardcoded instead of using `cfg.SuperAdminRole` |
 | L4 | `internal/bootstrap/bootstrap.go` | No transaction wrapping the role lookup and staff insert |
 | L5 | `internal/database/db.go` | No connection pool sizing configuration |
 | L6 | `internal/config/scheduler.config.go` | `SchedulerInterval` is the only field with a non-empty default — asymmetric with the rest of the config surface |
 | L7 | `internal/config/base.config.go` — `GetDatabaseURL` | **Fixed.** DB credentials, database names and SSL mode are encoded as separate URL components. Tests round-trip reserved characters and IPv6 hosts. |
-| L8 | `README.md` | Claimed versions (`Go 1.26.4`, `Kafka 4.3.1`) do not match released versions |
-| L9 | `README.md` | Claims the worker emits `NotificationDeliveryUpdated` events — contradicted by C13 |
+| L8 | `README.md` | Fixed, verified 2026-11-09. Both claimed versions now match what the repository actually pins: `README.md:5` and `:215` say Go 1.26.10, matching the `go 1.26.10` directive in `go.mod`, and `README.md:76` says Kafka 4.3.1, matching the digest-locked `apache/kafka:4.3.1` image in `compose.integration.yml:30` and `compose.kafka-drill.yml:2`. The integration suite runs that image successfully, which is repository evidence the version exists and works. |
+| L9 | `README.md` | Resolved, verified 2026-11-09. The README no longer mentions `NotificationDeliveryUpdated` anywhere, so the claim this finding contradicted is gone. The underlying behavior was also fixed independently: see C13, where the producer is now invoked per delivery row. |
 | L10 | `internal/features/notifications/dto.go` — `Pagination` | The `Limit` field silently reflects the clamped value, not the client's request |
 | L11 | `internal/features/auth/model.go` — `User.Password` | Field name is misleading about the value it holds |
 | L12 | `internal/features/segments/handler.go` — `List`, `GetByID` | `&s.Description` takes the address of a plain string |
@@ -581,9 +581,9 @@ Focus: operational readiness.
 
 - [x] M45 — enforce protected authentication request budgets
 - [ ] M46 — configure CORS for the admin portal
-- [ ] M38 — add Prometheus metrics and OpenTelemetry tracing
-- [ ] L1 — rename the audit constants to `MixedCaps`
-- [ ] L8, L9 — correct the version claims in the README
+- [ ] M38 — Prometheus metrics, the private dashboard and the local alert rules are implemented; OpenTelemetry tracing is genuinely absent (no `otel` import anywhere in the tree) and target alert routing remains open
+- [ ] L1 — rename the audit constant identifiers to `MixedCaps`. The persisted string values are contracts and must not change, so this is safe but cosmetic
+- [x] L8, L9 — the README's Go and Kafka versions now match `go.mod` and the digest-locked compose images, and the `NotificationDeliveryUpdated` claim that L9 cited is gone from the README
 
 ---
 
