@@ -627,6 +627,37 @@
         },
         "overrides": []
       }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Admission Kafka lag (offsets)",
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 64
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "expr": "hello_kafka_group_lag_offsets{environment=~\"$environment\"} and on(job,instance,environment) hello:kafka_group_sample_fresh",
+          "legendFormat": "{{instance}} partition {{partition}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
     }
   ]
 }

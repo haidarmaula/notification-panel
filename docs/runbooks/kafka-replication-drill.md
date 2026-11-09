@@ -90,6 +90,11 @@ numeric group checkpoints and the original topic IDs. All six scrapes
 returned and the Kafka alerts cleared. Kafka traffic used synthetic
 credentials and an internal Docker network.
 
+In the November 9 isolated repeat, the checkpoint sampler distinguished missing
+commits, a one-offset lag and zero lag for both scoped fixture groups. The
+groups' credentials could not inspect an unrelated group. Both readers resumed
+with their committed offsets after the leader election and full broker restore.
+
 ## Evidence required for deployment
 
 The six processes share one Docker host and storage failure domain. Platform

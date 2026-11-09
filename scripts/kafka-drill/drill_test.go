@@ -320,9 +320,27 @@ func (d drill) keyedPublication(role, topic string, offset int64) {
 func (d drill) exercise(stage string) {
 	for _, scope := range []struct{ topic, writer, reader, group string }{{send, "scheduler", "admission", "fixture-admission"}, {updates, "delivery", "analytics", "fixture-analytics"}} {
 		w, r := d.client(scope.writer), d.client(scope.reader)
+		cfg := kafka.ScopedProducerConfig{Brokers: []string{"b3:9092", "b2:9092", "b1:9092"}, Topic: scope.topic, TLS: r.Transport.(*broker.Transport).TLS}
+		reader, err := kafka.NewGroupLagReader(cfg, d.p.ClusterID, scope.group, 3)
+		require.NoError(d.t, err)
+		d.t.Cleanup(reader.Close)
+		checkLag := func(want ...kafka.GroupLagPartition) {
+			d.t.Helper()
+			got, err := reader.Read(d.ctx)
+			require.NoError(d.t, err)
+			require.Equal(d.t, want, got)
+		}
+		caughtUp := []kafka.GroupLagPartition{{Partition: 0, Valid: true}, {Partition: 1, Valid: true}, {Partition: 2, Valid: true}}
 		switch stage {
 		case "baseline":
 			require.Equal(d.t, [3]int64{-1, -1, -1}, d.checkpoints(d.admin, scope.topic, scope.group))
+			checkLag(kafka.GroupLagPartition{Partition: 0}, kafka.GroupLagPartition{Partition: 1}, kafka.GroupLagPartition{Partition: 2})
+			denied, err := kafka.NewGroupLagReader(cfg, d.p.ClusterID, "fixture-unrelated", 3)
+			require.NoError(d.t, err)
+			d.t.Cleanup(denied.Close)
+			got, err := denied.Read(d.ctx)
+			require.Error(d.t, err)
+			require.Nil(d.t, got)
 			// A trusted operator initializes every partition of this new, inactive group.
 			for partition := range len(d.p.Replicas) {
 				require.NoError(d.t, d.commit(d.admin, scope.topic, scope.group, partition, 0))
@@ -330,10 +348,12 @@ func (d drill) exercise(stage string) {
 			offset, err := d.produce(w, scope.topic, "before")
 			require.NoError(d.t, err)
 			require.EqualValues(d.t, 0, offset)
+			checkLag(caughtUp[0], caughtUp[1], kafka.GroupLagPartition{Partition: 2, Valid: true, Lag: 1})
 			value, err := d.read(r, scope.topic, 2, offset)
 			require.NoError(d.t, err)
 			require.Equal(d.t, "before", value)
 			require.NoError(d.t, d.commit(r, scope.topic, scope.group, 2, offset+1))
+			checkLag(caughtUp...)
 			other := send
 			if scope.topic == send {
 				other = updates
@@ -350,6 +370,7 @@ func (d drill) exercise(stage string) {
 		case "failover":
 			positions := d.checkpoints(r, scope.topic, scope.group)
 			require.Equal(d.t, [3]int64{1, 0, 1}, positions)
+			checkLag(caughtUp...)
 			offset := positions[2]
 			value, err := d.read(r, scope.topic, 2, 0)
 			require.NoError(d.t, err)
@@ -366,6 +387,7 @@ func (d drill) exercise(stage string) {
 			require.ErrorIs(d.t, err, broker.NotEnoughReplicas)
 		case "recovered":
 			require.Equal(d.t, [3]int64{2, 0, 2}, d.checkpoints(r, scope.topic, scope.group))
+			checkLag(caughtUp...)
 			written, err := d.produce(w, scope.topic, "recovered")
 			require.NoError(d.t, err)
 			require.EqualValues(d.t, 2, written)

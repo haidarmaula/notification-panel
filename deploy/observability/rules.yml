@@ -9,6 +9,25 @@ groups:
         expr: max by (environment,family,kind) (hello_work_items and on(job,instance,environment) (time() - hello_work_last_success_timestamp_seconds < 150))
       - record: hello:work_oldest_seconds
         expr: max by (environment,kind) (hello_work_oldest_seconds and on(job,instance,environment) (time() - hello_work_last_success_timestamp_seconds < 150))
+      - record: hello:kafka_group_sample_fresh
+        expr: |
+          (hello_kafka_group_sample_healthy{job="hello",role="admission"} == 1)
+          and on(job,instance,environment) (time() - hello_kafka_group_sample_timestamp_seconds < 45)
+          and on(job,instance,environment) (up{job="hello",role="admission"} == 1)
+      - alert: HelloKafkaGroupSampleUnavailable
+        expr: (up{job="hello",role="admission"} == 1) unless on(job,instance,environment) hello:kafka_group_sample_fresh
+        for: 1m
+        labels: {severity: warning}
+        annotations:
+          summary: Admission cannot verify Kafka group checkpoints
+          runbook: docs/runbooks/monitoring.md#kafka-admission-checkpoints
+      - alert: HelloKafkaCheckpointUnsafe
+        expr: (hello_kafka_offset_range_valid{job="hello",role="admission"} == 0) and on(job,instance,environment) hello:kafka_group_sample_fresh
+        for: 1m
+        labels: {severity: urgent}
+        annotations:
+          summary: Admission has a missing or out-of-range Kafka checkpoint
+          runbook: docs/runbooks/monitoring.md#kafka-admission-checkpoints
       - alert: HelloScrapeMissing
         expr: up{job="hello"} == 0
         for: 2m

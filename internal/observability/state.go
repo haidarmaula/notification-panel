@@ -41,6 +41,7 @@ type State struct {
 	dropped         prometheus.Counter
 	transportErrors prometheus.Counter
 	logs            chan Request
+	kafkaGroup      *kafkaGroupCollector
 }
 
 func gauge(b bool) float64 {
@@ -212,6 +213,9 @@ func (s *State) Run(parent context.Context, admin *Admin, pool *pgxpool.Pool, lo
 			prometheus.NewCounterFunc(prometheus.CounterOpts{Name: "hello_db_pool_acquire_seconds_total", Help: "Accumulated wall time for successful acquisitions since pool creation."}, func() float64 { return pool.Stat().AcquireDuration().Seconds() }),
 		)
 		wg.Go(func() { s.collect(ctx, pool) })
+		if s.kafkaGroup != nil {
+			wg.Go(func() { s.kafkaGroup.run(ctx) })
+		}
 		if s.queues {
 			wg.Go(func() { s.collectQueues(ctx, pool) })
 			wg.Go(func() { s.collectWorkload(ctx, pool) })

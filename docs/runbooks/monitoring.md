@@ -84,9 +84,35 @@ inventory during maintenance.
 - Confirm recovery with a fresh scrape from every configured node, one observed
   active controller, full ISR and reconciled consumer offsets.
 
-The operator drill checks numeric consumer checkpoints separately. Target
-consumer lag and notification-path evidence remain release checks.
 [Kafka replication and offset drill](kafka-replication-drill.md).
+
+## Kafka admission checkpoints
+
+With private monitoring enabled, each admission worker samples its configured
+group and send topic every 15 seconds. It checks the database source registration,
+Kafka cluster identity and partition layout, then reads committed checkpoints
+and the broker's earliest and latest consumer-readable offsets. It uses the
+worker's existing Kafka identity and neither joins the group nor commits or
+resets offsets. Polls use a five-second budget. Topics above 64 partitions
+expose an unavailable sample without affecting admission.
+
+- The dashboard reports distance in offsets by partition for fresh, valid
+  checkpoints. Zero means a checkpoint equals the sampled readable end.
+  Duplicate worker scrapes measure the same group. Compare them individually.
+- A fresh invalid range means the checkpoint is missing, precedes the retained
+  log or exceeds the readable end. Inspect all partition bounds and the approved
+  source and checkpoint records. Follow the [offset drill](kafka-replication-drill.md)
+  and [sealed recovery runbook](sealed-restore.md) before any change.
+- An unavailable sample omits both lag and range and preserves the last
+  successful sample time. Check the hold and source status, broker availability,
+  and group/topic read ACLs. A sample older than 45 seconds is stale for alerts
+  and dashboards. Range checks use separate reads and can race with retention
+  and commits. Reconfirm a suspected breach before taking action.
+
+The downstream delivery-update consumer is owned separately. Verify its
+checkpoints and end-to-end notification-path monitoring in the target deployment.
+The November 9 race-enabled integration suite verified that the composed
+admission worker exported both partitions over its private mTLS listener.
 
 ## Provider and receipts
 

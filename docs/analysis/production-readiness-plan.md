@@ -1,6 +1,6 @@
 # Backend production readiness plan
 
-Updated 2026-11-08 (Asia/Jakarta). Step 23 is complete. The current phase is pre-production acceptance. Production dispatch remains on hold.
+Updated 2026-11-09 (Asia/Jakarta). Step 23 is complete. The current phase is pre-production acceptance. Production dispatch remains on hold.
 
 The first unchecked roadmap item is Step 05. Its measurement definitions are recorded below and its numeric targets await owner approval. Independent implementation and verification may proceed in parallel. Step 40 remains the staging device gate, and Step 41 capacity evidence informs the Step 05 decisions.
 
@@ -311,14 +311,14 @@ work on unchecked rows has started, as noted.
 
 - [ ] 34. All six process images use the pinned toolchain and run as a non-root user. The offline image check builds each command and verifies its entrypoint and protected policy behavior on a read-only filesystem. Protected role configuration is implemented. Target resource sizing, image attestation and deployment drills remain open. See the [image runbook](../runbooks/production-images.md).
 - [x] 35. Server, worker, scheduler and one-shot commands now bound startup and join or cancel outstanding work on shutdown. Local tests cover active HTTP drain, forced cancellation, inherited pipes and closing PostgreSQL connections. See the [lifecycle specification](../specs/process-lifecycle.md).
-- [ ] 36. Private mTLS health/readiness, redacted structured HTTP logs, provider/outbox metrics, a provisioned Grafana dashboard and Prometheus firing/recovery fixtures are implemented. The local Kafka exporter drill verifies alert firing and recovery for replication loss, insufficient ISR, offline partitions and missing scrapes. Target scrape inventory, consumer lag, notification-path and receiver checks remain open. See the [monitoring runbook](../runbooks/monitoring.md).
+- [ ] 36. Private mTLS health/readiness, redacted structured HTTP logs, provider/outbox metrics, a provisioned Grafana dashboard and Prometheus firing/recovery fixtures are implemented. The local Kafka drill verifies replication, insufficient ISR, offline partition and scrape alerts. The admission collector reports committed checkpoint lag and range validity using its scoped credentials. The isolated drill verifies missing checkpoints, measurable lag, zero lag, group denial and recovery. Target scrape inventory, admission and downstream checkpoints, notification-path and receiver checks remain open. See the [monitoring runbook](../runbooks/monitoring.md).
 - [ ] 37. A [protected retention job](../runbooks/retention.md) expires spent origin nonces, receipt request markers and reviewed terminal send keys in bounded authorized batches with holds and crash-safe progress. A [read-only subject impact preview](../runbooks/subject-erasure.md) inventories dependent records and incomplete coverage. Archive behavior, actual erasure across systems and owner-approved lifetimes remain open.
 - [ ] 38. [Sealed Kafka reconciliation](../runbooks/sealed-restore.md), [physical PITR and missing-WAL denial](../runbooks/physical-pitr.md), and [credential rollover](../runbooks/credential-rotation.md) pass isolated checks. Backup custody, actual recovery objectives and target credential retirement remain open.
 - [ ] 39. Operator grants and alert firing/recovery have isolated evidence. The company service owners, on-call receivers, escalation paths and operator access still require verification.
 
 ### Phase 7 — production evidence
 
-- [ ] 40. Staging end-to-end tests with real Android/iOS devices and relevant application states.
+- [ ] 40. Staging end-to-end tests with real Android/iOS devices and relevant application states. Provision the isolated backend, Firebase and Apple identities, Laravel and origin broker, and signed client builds using the [staging prerequisites](../runbooks/delivery-worker.md#step-40-staging-prerequisites).
 - [ ] 41. [Measured synthetic 20,000-device trials, quota holds and multi-campaign bursts](delivery-load.md). The latest isolated 20,000-device trials recorded all results in 49.424 s and 51.450 s. Target storage, network, provider quota and agreed headroom/soak profile remain open.
 - [ ] 42. Local failure drills cover controller/broker elections, lost ISR, monitored full broker loss, gaps, DB rollback, ambiguous publication, expired leases, duplicate/replay and provider timeout/429/503. Repeat in the approved failure domains with independent monitoring.
 - [ ] 43. Logical and physical recovery, post-backup revocations, missing WAL and guarded downgrade refusal pass locally. Target restore, compatible image rollback, off-site recovery keys and cutover rehearsal remain open.

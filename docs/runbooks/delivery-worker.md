@@ -77,8 +77,36 @@ cleanly with zero remaining worker database connections. Separate PostgreSQL
 cases verified deadline expiry, quota deferral across restart, and continued
 delivery while the database repeatedly rejected an unrelated device's update.
 
-For the [Step 40 staging check](../analysis/production-readiness-plan.md#phase-7--production-evidence),
-use a test application and owned test device.
+### Step 40 staging prerequisites
+
+1. Provision an isolated staging backend with PostgreSQL, Kafka, the gateway,
+   server, scheduler, admission worker and delivery worker. Apply the migrations,
+   install the scoped database grants, and provision the two Kafka topics,
+   source registrations and role-specific TLS identities. Use an empty test
+   application and keep dispatch held during setup.
+2. Register the staging Android package and iOS bundle in a Firebase test
+   project. Enable FCM, configure APNs in Firebase for the test iOS app, and
+   give the staging sender permission to send to the selected project. Mount
+   the service-account credential and backend keys from the approved secret
+   store. Record only public identifiers and secret references in the handoff.
+3. Configure a staging Laravel issuer and one-use origin issuer with the
+   application's agreed signing, claims and audience policy. Use test accounts
+   whose subjects map to users in the staging application.
+4. Build and sign the staging React Native app with FCM registration,
+   installation enrollment and receipt reporting. Provide at least one owned
+   physical Android device and one owned physical iPhone. Exclude the test
+   installations from overlapping OneSignal campaigns and grant only the
+   reviewed staging cohort access to FCM dispatch.
+
+See the [device and cutover evidence register](../analysis/cutover-readiness.md)
+and the [backend cutover controls](application-dispatch.md).
+
+### Step 40 staging acceptance
+
+Use the test application and owned devices. Verify foreground, background and
+terminated receipt behavior where supported, tap handling, token refresh and
+logout or account switching. Record app observations separately from FCM
+acceptance.
 Record the deployed commit, application identifier, source incarnation, declared
 replica/rate allocation and the test campaign ID. Verify that an already
 exhausted device produces one FAILED version with its prior charge intact,

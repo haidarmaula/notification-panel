@@ -1,6 +1,43 @@
 rule_files: [rules.yml, kafka-rules.yml]
 evaluation_interval: 15s
 tests:
+  - name: Kafka checkpoint alerts distinguish unsafe offsets from missing samples
+    interval: 15s
+    input_series:
+      - series: 'up{job="hello",instance="a",environment="test",role="admission"}'
+        values: '1+0x14'
+      - series: 'hello_kafka_group_sample_healthy{job="hello",instance="a",environment="test",role="admission"}'
+        values: '1+0x14'
+      - series: 'hello_kafka_group_sample_timestamp_seconds{job="hello",instance="a",environment="test",role="admission"}'
+        values: '0+15x4 60+0x6 180+15x3'
+      - series: 'hello_kafka_offset_range_valid{job="hello",instance="a",environment="test",role="admission",partition="0"}'
+        values: '0+0x11 1+0x2'
+      - series: 'up{job="hello",instance="b",environment="test",role="delivery"}'
+        values: '1+0x14'
+    alert_rule_test:
+      - eval_time: 1m
+        alertname: HelloKafkaCheckpointUnsafe
+        exp_alerts:
+          - exp_labels: {job: hello, instance: a, environment: test, role: admission, partition: "0", severity: urgent}
+            exp_annotations:
+              summary: Admission has a missing or out-of-range Kafka checkpoint
+              runbook: docs/runbooks/monitoring.md#kafka-admission-checkpoints
+      - eval_time: 2m45s
+        alertname: HelloKafkaCheckpointUnsafe
+        exp_alerts: []
+      - eval_time: 2m45s
+        alertname: HelloKafkaGroupSampleUnavailable
+        exp_alerts:
+          - exp_labels: {job: hello, instance: a, environment: test, role: admission, severity: warning}
+            exp_annotations:
+              summary: Admission cannot verify Kafka group checkpoints
+              runbook: docs/runbooks/monitoring.md#kafka-admission-checkpoints
+      - eval_time: 3m
+        alertname: HelloKafkaGroupSampleUnavailable
+        exp_alerts: []
+      - eval_time: 3m
+        alertname: HelloKafkaCheckpointUnsafe
+        exp_alerts: []
   - name: controller metrics lost and recovered
     interval: 15s
     input_series:

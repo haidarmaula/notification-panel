@@ -104,6 +104,19 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 		}
 		logger.WarnContext(ctx, "worker started in admission_only mode", "provider_execution", false)
 		state := observability.New("admission")
+		if c.monitoring != nil {
+			reader, err := kafka.NewGroupLagReader(c.broker, c.source.ClusterID, c.admission.GroupID, c.source.PartitionCount)
+			if err != nil {
+				return ErrConfiguration
+			}
+			defer reader.Close()
+			state.SetKafkaGroupReader(func(ctx context.Context) ([]kafka.GroupLagPartition, error) {
+				if err := c.source.VerifyRegistration(ctx, pool); err != nil {
+					return nil, err
+				}
+				return reader.Read(ctx)
+			})
+		}
 		return state.Run(ctx, c.monitoring, pool, logger, func(ctx context.Context) error {
 			return runloop.SuperviseObserved(ctx, "admission", worker.Run, c.retry, logger, state)
 		})

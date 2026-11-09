@@ -8,7 +8,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -175,7 +178,16 @@ func TestSchedulerAndAuthenticatedWorkerComposeDurablePipeline(t *testing.T) {
 		require.Error(t, load(deployment.Worker, change).Run(ctx, logger))
 	}
 	scheduledRuntime := load(deployment.Scheduler, nil)
-	worker := load(deployment.Worker, nil)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	diagnostics := listener.Addr().String()
+	require.NoError(t, listener.Close())
+	worker := load(deployment.Worker, func(p map[string]any) {
+		p["monitoring"] = map[string]string{
+			"listen": diagnostics, "client_ca_pem": read("ca.crt"),
+			"server_certificate_pem": read("server.crt"), "server_key_pem": read("server.key"),
+		}
+	})
 	runCtx, stop := context.WithCancel(ctx)
 	done := make(chan error, 1)
 	go func() {
@@ -226,4 +238,24 @@ func TestSchedulerAndAuthenticatedWorkerComposeDurablePipeline(t *testing.T) {
 	require.NoError(t, f.pool.QueryRow(ctx, "SELECT status,deadline_at FROM notifications WHERE id=$1", f.campaign).Scan(&status, &deadline))
 	require.Equal(t, "PROCESSING", status)
 	require.True(t, scheduled.DeadlineAt.Time.Equal(deadline), "polling cannot extend accepted TTL")
+
+	scraperTransport := &http.Transport{TLSClientConfig: admissionFixtureTLS(t)}
+	defer scraperTransport.CloseIdleConnections()
+	scraper := &http.Client{Transport: scraperTransport, Timeout: time.Second}
+	require.Eventually(t, func() bool {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://"+diagnostics+"/metrics", nil)
+		if err != nil {
+			return false
+		}
+		res, err := scraper.Do(req)
+		if err != nil {
+			return false
+		}
+		defer res.Body.Close()
+		body, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
+		return err == nil && res.StatusCode == http.StatusOK &&
+			strings.Contains(string(body), "hello_kafka_group_sample_healthy 1") &&
+			strings.Contains(string(body), `hello_kafka_group_lag_offsets{partition="0"} 0`) &&
+			strings.Contains(string(body), `hello_kafka_group_lag_offsets{partition="1"} 0`)
+	}, 16*time.Second, 100*time.Millisecond, "the monitored admission worker must expose its committed Kafka offsets")
 }
