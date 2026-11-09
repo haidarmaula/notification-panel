@@ -405,8 +405,8 @@ Design inconsistencies, duplication, contract drift, and maintainability hazards
 | M40 | `internal/token/jwt.go` — both staff parsers | **Fixed locally in M02e:** pin HS256, require exp and positive user_id in addition to purpose/signature checks |
 | M41 | `internal/token/jwt.go` | Fixed locally. Both staff token classes bind the subject to staff ID and require the configured issuer, a single purpose-specific audience and a permitted signing key ID. Protected key rotation and expiry are exercised through the login, refresh and access paths. [Staff policy](docs/specs/staff-sessions.md). |
 | M42 | `internal/token/jwt.go`, staff auth, migration 000033 | Fixed locally. Single-use refresh rotation detects replay, logout revokes a family, and credential/role/activity changes invalidate its staff generation. [Session contract and recovery](docs/specs/staff-sessions.md). |
-| M43 | `internal/features/auth` | **Partially fixed in M02d:** login/refresh use the 64KiB full-body limit with safe 413/400; real-module rejection tests pass locally. Content-Type enforcement remains open for compatibility. |
-| M44 | All 16 JSON input handlers, including profile | **Fixed in local code, M02d:** 64KiB small JSON / 1MiB campaign limits, complete bounded reads and single-value decoding. [Evidence](docs/analysis/m02d-verification.md): boundary/direct-handler/real-DB route tests; no rejected mutation or Kafka event. Other abuse controls remain open. |
+| M43 | `internal/features/auth` | **Fixed locally 2026-11-09:** login, refresh and logout require exactly one `application/json` Content-Type with optional UTF-8 charset and identity content encoding; unsupported media returns safe 415 before session work. The existing 64KiB body cap and safe 400/413 behavior remain. Caller compatibility and deployment are unverified. |
+| M44 | All 17 JSON input handlers, including profile | **Fixed in local code, M02d:** 64KiB small JSON / 1MiB campaign limits, complete bounded reads and single-value decoding. [Evidence](docs/analysis/m02d-verification.md): boundary/direct-handler/real-DB route tests; no rejected mutation or Kafka event. Other abuse controls remain open. |
 | M45 | Protected HTTP API | **Fixed locally.** Login, refresh and logout share per-IP and aggregate authentication budgets before reaching the handler. [Gateway contract](docs/specs/m02-gateway.md). |
 | M46 | HTTP layer | No CORS configuration for the admin portal |
 | M47 | `internal/features/mobile/service.go` — `verifyJWT` | Correctly enforces HMAC signing — but `internal/token` does not apply the same hardening |
@@ -571,8 +571,8 @@ Focus: design consistency and maintainability.
 - [ ] M1–M8 — consolidate the duplicated helpers and DTOs
 - [ ] M9–M14 — remove dead code
 - [ ] M15–M27 — reconcile the divergent contracts and naming conventions
-- [x] M43 (body cap), M44 — bounded full-body reads for all 16 JSON inputs, locally verified M02d
-- [ ] M43 — Content-Type enforcement and remaining request/abuse controls
+- [x] M43 (body cap and auth media type), M44 — bounded full-body reads for all 17 JSON inputs; auth media type is locally tested, not deployed
+- [ ] M43 — remaining request/abuse controls beyond auth media type and body limits
 - [x] H43 — graceful HTTP shutdown, forced cancellation and bounded handler join
 - [x] M35–M37 — migrate to structured logging with a request ID
 

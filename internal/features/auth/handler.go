@@ -15,7 +15,7 @@ func NewAuthHandler(service *AuthService) *AuthHandler { return &AuthHandler{ser
 
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
-	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
+	if !httprequest.DecodeJSONWithMediaType(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	pair, err := h.service.Login(r.Context(), req.Email, req.Password)
@@ -24,7 +24,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 	var req RefreshTokenRequest
-	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
+	if !httprequest.DecodeJSONWithMediaType(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	pair, err := h.service.RefreshToken(r.Context(), req.RefreshToken)
@@ -33,7 +33,7 @@ func (h *AuthHandler) RefreshToken(w http.ResponseWriter, r *http.Request) {
 
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 	var req RefreshTokenRequest
-	if !httprequest.DecodeJSON(w, r, &req, httprequest.DefaultJSONLimit) {
+	if !httprequest.DecodeJSONWithMediaType(w, r, &req, httprequest.DefaultJSONLimit) {
 		return
 	}
 	credentialResponse(w, nil, h.service.Logout(r.Context(), req.RefreshToken))

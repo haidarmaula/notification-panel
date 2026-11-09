@@ -19,6 +19,17 @@ const (
 	CampaignJSONLimit int64 = 1 << 20
 )
 
+// DecodeJSONWithMediaType requires application/json with an optional UTF-8
+// charset and identity content encoding before applying DecodeJSON's body
+// budget and decoding behavior. It writes 415 and returns false otherwise.
+func DecodeJSONWithMediaType(w http.ResponseWriter, r *http.Request, dst any, limit int64) bool {
+	if !jsonMediaType(r) {
+		response.JSON(w, http.StatusUnsupportedMediaType, nil, "unsupported media type")
+		return false
+	}
+	return DecodeJSON(w, r, dst, limit)
+}
+
 // DecodeJSON reads the entire bounded body before decoding exactly one JSON
 // value. It writes a safe 413/400 and returns false on failure; callers must
 // return before business work. Unknown fields retain encoding/json semantics.

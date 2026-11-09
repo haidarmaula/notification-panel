@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -47,6 +48,9 @@ func TestStaffSessionFamilies(t *testing.T) {
 		req := httptest.NewRequest(method, path, bytes.NewReader(body)).WithContext(ctx)
 		req.Header.Set("X-API-Key", "fixture-api-key")
 		req.Header.Set("Authorization", "Bearer "+bearer)
+		if len(body) != 0 {
+			req.Header.Set("Content-Type", "application/json")
+		}
 		w := httptest.NewRecorder()
 		mux.ServeHTTP(w, req)
 		return w
@@ -83,6 +87,21 @@ func TestStaffSessionFamilies(t *testing.T) {
 		SELECT id,'Inactive','inactive@fixture.test',$1,false FROM roles WHERE name='ADMIN'`, string(hash))
 	exec(`INSERT INTO staff_users(role_id,name,email,password_hash)
 		SELECT id,'Invalid hash','invalid-hash@fixture.test','invalid' FROM roles WHERE name='ADMIN'`)
+	for _, mediaType := range []string{"", "text/plain"} {
+		req := httptest.NewRequest("POST", "/api/v1/auth/login", strings.NewReader(`{"email":"sessions@fixture.test","password":"fixture-login"}`)).WithContext(ctx)
+		req.Header.Set("X-API-Key", "fixture-api-key")
+		if mediaType != "" {
+			req.Header.Set("Content-Type", mediaType)
+		}
+		w := httptest.NewRecorder()
+		mux.ServeHTTP(w, req)
+		require.Equal(t, http.StatusUnsupportedMediaType, w.Code)
+		require.JSONEq(t, `{"success":false,"message":"unsupported media type"}`, w.Body.String())
+		require.NotContains(t, w.Body.String(), "fixture-login")
+	}
+	var sessions int
+	require.NoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM staff_sessions").Scan(&sessions))
+	require.Zero(t, sessions, "unsupported media must be rejected before login creates a session")
 	var rejected []byte
 	for _, input := range []auth.LoginRequest{
 		{Email: "sessions@fixture.test", Password: "wrong"},
@@ -100,7 +119,6 @@ func TestStaffSessionFamilies(t *testing.T) {
 		}
 		require.Equal(t, rejected, w.Body.Bytes())
 	}
-	var sessions int
 	require.NoError(t, pool.QueryRow(ctx, "SELECT count(*) FROM staff_sessions").Scan(&sessions))
 	require.Zero(t, sessions)
 	first, second, oldSignerFamily := login(), login(), login()

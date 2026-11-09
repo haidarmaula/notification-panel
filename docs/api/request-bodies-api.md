@@ -5,7 +5,7 @@ M02d: implemented and locally verified 2026-11-03, not deployed.
 
 | Limit (inclusive, raw bytes) | Routes |
 | --- | --- |
-| 65,536 (64 KiB) | POST `/api/v1/auth/login`, POST `/api/v1/auth/refresh` |
+| 65,536 (64 KiB) | POST `/api/v1/auth/login`, POST `/api/v1/auth/refresh`, POST `/api/v1/auth/logout` |
 | 65,536 | POST `/api/v1/mobile/sync` |
 | 65,536 | PATCH `/api/v1/profile`, PATCH `/api/v1/profile/password` |
 | 65,536 | POST `/api/v1/staff`, PATCH `/api/v1/staff/{id}`, PATCH `/api/v1/staff/{id}/status`, PATCH `/api/v1/staff/{id}/password` |

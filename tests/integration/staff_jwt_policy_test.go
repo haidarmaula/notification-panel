@@ -52,6 +52,9 @@ func TestStaffJWTPolicyAPI(t *testing.T) {
 		}
 		r := httptest.NewRequest(method, path, strings.NewReader(body)).WithContext(ctx)
 		r.Header.Set("X-API-Key", "fixture-api-key")
+		if purpose == "refresh" {
+			r.Header.Set("Content-Type", "application/json")
+		}
 		if purpose == "access" {
 			r.Header.Set("Authorization", "Bearer "+signed)
 		}

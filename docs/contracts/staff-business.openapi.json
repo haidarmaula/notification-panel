@@ -63,6 +63,7 @@
           "401": { "$ref": "#/components/responses/Error401" },
           "403": { "$ref": "#/components/responses/Error403" },
           "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
           "429": { "$ref": "#/components/responses/Error429" },
           "500": { "$ref": "#/components/responses/Error500" },
           "503": { "$ref": "#/components/responses/Error503" }
@@ -119,6 +120,7 @@
           "401": { "$ref": "#/components/responses/Error401" },
           "403": { "$ref": "#/components/responses/Error403" },
           "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
           "429": { "$ref": "#/components/responses/Error429" },
           "500": { "$ref": "#/components/responses/Error500" },
           "503": { "$ref": "#/components/responses/Error503" }
@@ -167,6 +169,7 @@
           "401": { "$ref": "#/components/responses/Error401" },
           "403": { "$ref": "#/components/responses/Error403" },
           "413": { "$ref": "#/components/responses/Error413" },
+          "415": { "$ref": "#/components/responses/Error415" },
           "429": { "$ref": "#/components/responses/Error429" },
           "500": { "$ref": "#/components/responses/Error500" },
           "503": { "$ref": "#/components/responses/Error503" }
@@ -3582,7 +3585,7 @@
         }
       },
       "Error415": {
-        "description": "Scoped JSON writes require application/json (optional charset=utf-8) and identity content encoding.",
+        "description": "JSON request bodies require application/json (optional charset=utf-8) and identity content encoding.",
         "content": {
           "application/json": {
             "schema": { "$ref": "#/components/schemas/Error" },

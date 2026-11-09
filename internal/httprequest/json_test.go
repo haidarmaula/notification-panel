@@ -27,6 +27,20 @@ type failedReader struct{}
 
 func (failedReader) Read([]byte) (int, error) { return 0, errors.New("private body credential detail") }
 
+func TestDecodeJSONWithMediaTypeAcceptsUTF8JSON(t *testing.T) {
+	for _, mediaType := range []string{"application/json", "application/json; charset=utf-8"} {
+		t.Run(mediaType, func(t *testing.T) {
+			r := httptest.NewRequest("POST", "/", strings.NewReader(`{"value":"accepted"}`))
+			r.Header.Set("Content-Type", mediaType)
+			w := httptest.NewRecorder()
+			var dst struct{ Value string }
+			require.True(t, DecodeJSONWithMediaType(w, r, &dst, 64))
+			require.Equal(t, 200, w.Code)
+			require.Equal(t, "accepted", dst.Value)
+		})
+	}
+}
+
 func TestJSONSizeBoundaries(t *testing.T) {
 	const limit int64 = 64
 	prefix := `{"value":"é","unknown":true}`

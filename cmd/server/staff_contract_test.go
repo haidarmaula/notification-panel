@@ -37,6 +37,7 @@ func TestStaffOpenAPIRegistration(t *testing.T) {
 				require.Contains(t, operation.Responses, "401")
 				send := func(key bool) (int, map[string]any) {
 					r := httptest.NewRequest(strings.ToUpper(method), param.ReplaceAllString(path, "123"), strings.NewReader("{"))
+					r.Header.Set("Content-Type", "application/json")
 					if key {
 						r.Header.Set("X-API-Key", "fixture-contract-key")
 					}

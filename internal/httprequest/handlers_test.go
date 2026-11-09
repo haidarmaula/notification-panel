@@ -36,6 +36,7 @@ func TestAllJSONHandlersRejectBeforeService(t *testing.T) {
 		limit int64
 	}{
 		{"auth.login", a.Login, httprequest.DefaultJSONLimit}, {"auth.refresh", a.RefreshToken, httprequest.DefaultJSONLimit},
+		{"auth.logout", a.Logout, httprequest.DefaultJSONLimit},
 		{"mobile.sync", m.Sync, httprequest.DefaultJSONLimit},
 		{"profile.update", p.UpdateProfile, httprequest.DefaultJSONLimit}, {"profile.password", p.UpdatePassword, httprequest.DefaultJSONLimit},
 		{"notification.create", n.Create, httprequest.CampaignJSONLimit}, {"notification.update", n.Update, httprequest.CampaignJSONLimit},
@@ -58,6 +59,7 @@ func TestAllJSONHandlersRejectBeforeService(t *testing.T) {
 				t.Run(variant.name, func(t *testing.T) {
 					ctx := context.WithValue(context.Background(), middleware.UserContextKey, &token.AccessClaims{StaffID: 1, RoleName: "SUPER_ADMIN"})
 					r := httptest.NewRequest("POST", "/", strings.NewReader(variant.body)).WithContext(ctx)
+					r.Header.Set("Content-Type", "application/json")
 					r.ContentLength = -1
 					r.SetPathValue("id", "1")
 					w := httptest.NewRecorder()

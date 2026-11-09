@@ -6,7 +6,8 @@ Status: implemented and locally verified, 2026-11-03; not deployed.
 
 ## Result
 
-All 16 incoming JSON decoding handlers use `internal/httprequest.DecodeJSON`.
+All 17 incoming JSON decoding handlers use `internal/httprequest.DecodeJSON` or
+the auth media-type wrapper `DecodeJSONWithMediaType`.
 The fixed budgets are 64KiB for small account/device/segment requests and 1MiB
 for notification create/update, including bounded explicit target lists. These
 are initial safeguards, not benchmark-approved final values. ADR-11's earlier
@@ -74,12 +75,13 @@ and `/tmp/hello-m02d-integration.txt` (temporary local evidence).
 
 ## Limits and next step
 
-M44's body-limit finding is locally remediated, including profile; M43 is partial
-because Content-Type enforcement is deliberately unchanged. No new 415,
-decompression, duplicate-key rejection, protected-field policy, item/string/depth
-limits, rate limiter, timeouts/header limits or aggregate resource limits ship
-in this slice. The helper does not bound hashing/provider payloads or decoded
-work independently of the byte budget. No load/abuse or reverse-proxy test ran.
+M44's body-limit finding is locally remediated, including profile. At the time of
+the original M02d implementation, M43 remained partial because Content-Type
+enforcement was unchanged. No decompression, duplicate-key rejection,
+protected-field policy, item/string/depth limits, timeouts/header limits or
+aggregate resource limits ship in that slice. The helper does not bound
+hashing/provider payloads or decoded work independently of the byte budget. No
+load/abuse or reverse-proxy test ran.
 
 M02 and plan step 20 remain in progress. Reassess the baseline and specify the
 remaining security controls before moving to M03; do not infer complete
@@ -91,3 +93,16 @@ M02c remains a separate operator gate.
 Follow-up 2026-11-03: [M02 assessment](m02-baseline-assessment.md) and
 [M02e](m02e-verification.md) complete the scoped local development guard review.
 M03 isolated design/implementation may proceed; security release controls remain open.
+
+Follow-up 2026-11-09: M43 now requires one `application/json` Content-Type and
+identity content encoding on login, refresh and logout. Direct handler tests
+cover missing, wrong, duplicate and compressed media headers; the staff-session
+integration fixture exercises the valid JSON route contract and rejects missing
+or wrong media types before creating a session. This auth-only change returns 415
+and does not alter the other JSON handlers. Caller compatibility and deployment
+remain unverified.
+
+The auth route contract and JSON body-limit tests passed in the full isolated
+integration run on 2026-11-09. The direct-handler limit fixture now includes the
+previously omitted logout endpoint, bringing its route count to 17. The earlier
+16-handler figures above describe the original M02d run.

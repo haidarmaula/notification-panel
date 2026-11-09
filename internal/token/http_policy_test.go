@@ -86,6 +86,7 @@ func TestStaffHTTPRejectsBeforeLookup(t *testing.T) {
 					require.NoError(t, err)
 					r := httptest.NewRequest("POST", "/api/v1/auth/refresh", strings.NewReader(string(body)))
 					r.Header.Set("X-API-Key", "fixture-api-key")
+					r.Header.Set("Content-Type", "application/json")
 					mux.ServeHTTP(w, r)
 				}
 				require.Equal(t, 401, w.Code)

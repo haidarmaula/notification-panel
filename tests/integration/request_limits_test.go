@@ -79,7 +79,7 @@ func TestJSONRequestLimitsAPI(t *testing.T) {
 		r := httptest.NewRequest(method, path, strings.NewReader(body)).WithContext(ctx)
 		r.Header.Set("X-API-Key", "fixture-api-key")
 		r.Header.Set("Authorization", "Bearer "+access)
-		// Missing Content-Type remains supported for compatibility.
+		r.Header.Set("Content-Type", "application/json")
 		if omit != "" {
 			r.Header.Del(omit)
 		}
@@ -157,6 +157,7 @@ func TestJSONRequestLimitsAPI(t *testing.T) {
 		r, err := http.NewRequestWithContext(ctx, "POST", server.URL+"/api/v1/auth/login", body)
 		require.NoError(t, err)
 		r.Header.Set("X-API-Key", "fixture-api-key")
+		r.Header.Set("Content-Type", "application/json")
 		before := snapshot()
 		result, err := client.Do(r)
 		require.NoError(t, err)

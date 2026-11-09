@@ -3,9 +3,9 @@
 Contract established 2026-11-03. Local implementation/evidence is tracked in
 [verification](../analysis/m02d-verification.md).
 
-All 16 current handlers that decode JSON share a bounded reader/decoder:
+All 17 current handlers that decode JSON share a bounded reader/decoder:
 
-- 65,536 bytes (64 KiB): auth login/refresh, mobile sync, profile update/password,
+- 65,536 bytes (64 KiB): auth login/refresh/logout, mobile sync, profile update/password,
   staff create/update/status/password, segment create/update/add member, device
   token register/update.
 - 1,048,576 bytes (1 MiB): notification create/update, allowing bounded target lists.
@@ -26,8 +26,11 @@ Bodies within budget must contain exactly one JSON value. Invalid/empty bodies,
 trailing garbage or multiple values return existing HTTP 400 `invalid request body`.
 Unknown fields, duplicate-key semantics, JSON null and current field validations
 remain as before. This intentionally closes the previous acceptance of a first
-valid JSON value followed by extra data. Content-Type enforcement and compression
-support are unchanged; this slice does not introduce 415 or decompression.
+valid JSON value followed by extra data. The M02d body-budget slice did not
+change Content-Type handling. A separate M43 follow-up now requires JSON media
+type and identity content encoding on the three staff authentication endpoints
+only; see the [auth API contract](../api/auth-api.md). Other JSON handlers retain
+their existing media-type behavior, and request bodies are still not decompressed.
 
 Existing route authentication/authorization executes first; body limits do not
 replace those guards. Direct handler calls also enforce limits (existing identity
@@ -37,6 +40,6 @@ existing behavior; no global body prebuffer is introduced.
 
 Verification: exact/over boundaries, UTF-8 byte counts, known/unknown/inaccurate
 length, bounded read counts, oversized valid-prefix/trailing-data inputs,
-16 direct handlers, authenticated real-module routes and unchanged DB/Kafka
+17 direct handlers, authenticated real-module routes and unchanged DB/Kafka
 snapshots on rejection. Request rate/time/header/depth/field-specific limits,
 total concurrent memory limits and ingress configuration remain separate work.
