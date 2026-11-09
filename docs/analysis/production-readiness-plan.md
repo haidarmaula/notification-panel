@@ -292,7 +292,7 @@ work on unchecked rows has started, as noted.
 - [x] 03. Lock core v1 scope; additional features mentioned by the user are deferred. Localisation is not a v1 promise; input boundaries must be explicit in SPECs.
 - [x] 04. Record user scale requirements: approximately 20,000 devices, 5 campaigns/month, full broadcast. Final sizing awaits benchmarks.
 - [ ] 05. Set SLOs, RPO/RTO, and acceptance thresholds. Measurement boundaries and required approvals are in the [Step 05 decision record](#step-05-decision-record).
-- [ ] 06. Verify mobile/Laravel/token integrations. [First mobile source inspected](mobile-source-checkpoint.md); the current client still uses OneSignal. Laravel issuer, provider project and real device enrollment remain unverified.
+- [ ] 06. Verify mobile/Laravel/token integrations. [First mobile source inspected](mobile-source-checkpoint.md); the current production client still uses OneSignal. A separate test-only React Native FCM app and loopback local mobile issuer now exist and pass local static/unit checks. Android Firebase client configuration, protected sender-credential access, an active local application and mapped identity, and real-device enrollment/push evidence remain outstanding. Laravel issuer and production consumer integration remain unverified.
 
 ### Phase 2 — design
 
