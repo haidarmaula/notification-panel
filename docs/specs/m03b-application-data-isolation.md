@@ -37,14 +37,17 @@ can remain PROVISIONING throughout. No ACTIVE status migration is included.
 
 ## 2. Reviewed inventory
 
-The machine-readable inventory enumerates all 16 current tables, 135 named SQL
-queries across 15 files, 46 feature HTTP operations and four binaries. Of these,
-11 tables, 100 named queries and 24 HTTP operations concern legacy app-owned
-business data. Names include currently unexposed repository functions: absence
+As of 2026-11-09, the machine-readable inventory matches source declarations for
+45 tables, 287 named SQL queries across 42 files, 81 feature HTTP operations and
+six binaries. The original 2026-11-03 checkpoint counted 16 tables, 135 queries
+across 15 files, 46 routes and four binaries; its identified subset of 11 legacy
+tables, 100 named queries and 24 routes remains a historical baseline, not a
+current total. Names include currently unexposed repository functions: absence
 of a route is not evidence a global query is safe to keep in a new caller.
-Audit's four queries are mixed-scope and need separate scoped projections.
-The 20 role/staff queries and 11 registry queries remain deliberate control-plane
-operations, not blanket exemptions for business joins.
+Audit's four original queries are mixed-scope and need separate scoped projections.
+The role/staff and registry classifications remain deliberate control-plane
+operations, not blanket exemptions for business joins. The inventory checker
+detects declaration drift only; these counts do not establish runtime isolation.
 
 | Aggregate / source query file | Required application scope and references |
 | --- | --- |

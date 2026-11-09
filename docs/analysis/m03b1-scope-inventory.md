@@ -63,6 +63,19 @@ scoped users/devices/segments, remaining business aggregates/projections, and th
 complete legacy retirement/isolation gate. M03b.2–5 remain unimplemented. These
 are not fixed-duration tasks. M03c/d and durable dispatch milestones still follow.
 
+## Source inventory refresh — 2026-11-09
+
+The machine inventory was refreshed after the November 3 baseline. The checker
+now matches 45 tables, 287 named queries across 42 files, 81 HTTP operations and
+six command entry points. The additions include staff sessions/administration,
+replay and retention controls, delivery execution/results/observations, two
+scoped mobile/campaign routes, auth logout and the replay/retention binaries.
+New scopes and route dispositions were classified from their migration,
+repository file, registered route and command contract. This is source coverage;
+it does not establish database isolation, command deployment state or runtime
+traffic. The original route-retirement counts above remain the November 3
+baseline and still require cutover review.
+
 ## Checks and limits
 
 `python3 scripts/check-application-scope-inventory.py` matches the checked-in

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "as_of": "2026-11-03",
+  "as_of": "2026-11-09",
   "status": "source-inventory-not-runtime-isolation",
   "spec": "../specs/m03b-application-data-isolation.md",
   "tables": [
@@ -79,6 +79,74 @@
     {
       "name": "users",
       "scope": "application-legacy"
+    },
+    {
+      "name": "application_dispatch_grants",
+      "scope": "registry-control"
+    },
+    {
+      "name": "application_lifecycle_grants",
+      "scope": "registry-control"
+    },
+    {
+      "name": "binding_route_grants",
+      "scope": "application-scoped"
+    },
+    {
+      "name": "notification_observations",
+      "scope": "application-scoped"
+    },
+    {
+      "name": "notification_receipt_metadata",
+      "scope": "application-scoped"
+    },
+    {
+      "name": "notification_receipt_requests",
+      "scope": "application-scoped"
+    },
+    {
+      "name": "notification_replay_attempts",
+      "scope": "application-scoped"
+    },
+    {
+      "name": "notification_replay_controls",
+      "scope": "application-scoped"
+    },
+    {
+      "name": "notification_replay_grants",
+      "scope": "application-scoped"
+    },
+    {
+      "name": "notification_replay_requests",
+      "scope": "application-scoped"
+    },
+    {
+      "name": "notification_update_outbox",
+      "scope": "application-scoped"
+    },
+    {
+      "name": "retention_batches",
+      "scope": "application-scoped"
+    },
+    {
+      "name": "retention_grants",
+      "scope": "application-scoped"
+    },
+    {
+      "name": "retention_policies",
+      "scope": "application-scoped"
+    },
+    {
+      "name": "staff_administration_guard",
+      "scope": "global-control"
+    },
+    {
+      "name": "staff_session_control",
+      "scope": "global-control"
+    },
+    {
+      "name": "staff_sessions",
+      "scope": "global-control"
     }
   ],
   "query_files": [
@@ -345,6 +413,149 @@
         "SearchUsers",
         "UpdateUser",
         "UpdateUserStatus"
+      ]
+    },
+    {
+      "path": "db/queries/delivery_recovery.sql",
+      "scope": "application-scoped",
+      "names": [
+        "FailRecoveredDelivery",
+        "LockRecoverableDelivery",
+        "LockRecoveryBindingRetirement",
+        "LockRecoveryDeliveryUser",
+        "LockRecoveryInstallationOwner"
+      ]
+    },
+    {
+      "path": "db/queries/delivery_results.sql",
+      "scope": "application-scoped",
+      "names": [
+        "AdvanceInvalidatedInstallation",
+        "HoldResultDispatch",
+        "InsertDeliveryUpdate",
+        "LockResultBinding",
+        "LockResultDelivery",
+        "LockResultInstallation",
+        "LockResultPolicy",
+        "WriteDeliveryResult"
+      ]
+    },
+    {
+      "path": "db/queries/execution.sql",
+      "scope": "application-scoped",
+      "names": [
+        "AcquireExecutionLease",
+        "CountExecutionOutcomes",
+        "FinalizeExecutionCampaign",
+        "GetExecutionIntentIdentity",
+        "GetExecutionProviderRoute",
+        "LockDeviceExecutionCampaign",
+        "LockExecutionApplication",
+        "LockExecutionBinding",
+        "LockExecutionInstallation",
+        "LockExecutionSubmission",
+        "ReleaseExecutionLease",
+        "RenewExecutionLease",
+        "ReserveExecutionAttempt"
+      ]
+    },
+    {
+      "path": "db/queries/execution_discovery.sql",
+      "scope": "application-scoped",
+      "names": [
+        "DeferUnchargedDelivery",
+        "ListExecutionRecoveryCampaigns",
+        "ListExecutionRecoveryDevices"
+      ]
+    },
+    {
+      "path": "db/queries/observations.sql",
+      "scope": "application-scoped",
+      "names": [
+        "ApplyDeliveryObservation",
+        "CheckScopedObservedRead",
+        "GetCampaignStatistics",
+        "GetReceiptFingerprint",
+        "LockObservationDelivery",
+        "LockReceiptIdentity",
+        "RecordObservationFact",
+        "RecordObservedRead",
+        "RegisterReceiptRequest"
+      ]
+    },
+    {
+      "path": "db/queries/receipt_metadata.sql",
+      "scope": "application-scoped",
+      "names": [
+        "FreezeReceiptMetadata",
+        "GetFrozenReceiptMetadata",
+        "LockReceiptDelivery"
+      ]
+    },
+    {
+      "path": "db/queries/retention.sql",
+      "scope": "application-scoped",
+      "names": [
+        "RunRetentionBatch"
+      ]
+    },
+    {
+      "path": "db/queries/send_replay.sql",
+      "scope": "application-scoped",
+      "names": [
+        "AbandonExpiredReplayAttempt",
+        "ClaimReplayControl",
+        "ClearFinishedReplayClaim",
+        "FinishReplayAttempt",
+        "GetReplayAttempt",
+        "InsertReplayAttempt",
+        "InsertReplayControl",
+        "InsertReplayRequest",
+        "ListExpiredReplayClaims",
+        "LockReplayCleanupEvidence",
+        "LockReplayCleanupGrant",
+        "LockReplayControl",
+        "LockReplayEvidence",
+        "LockReplayOperationalGrant",
+        "LockReplayRequest",
+        "ReplayClaimPublishable",
+        "ReplayCleanupContext",
+        "ReplayPreparationRetryDue",
+        "ReplayTargetsSupported",
+        "ResolveReplayControl"
+      ]
+    },
+    {
+      "path": "db/queries/staff_mutations.sql",
+      "scope": "global-control",
+      "names": [
+        "CountMatchingStaff",
+        "HasActiveSuperAdmin",
+        "LockStaffAdministration",
+        "LockStaffMutationLineage",
+        "LockStaffMutationSession",
+        "LockStaffMutationUsers",
+        "UpdateOwnStaffProfile"
+      ]
+    },
+    {
+      "path": "db/queries/staff_sessions.sql",
+      "scope": "global-control",
+      "names": [
+        "OpenStaffSession",
+        "RevokeStaffSession",
+        "RotateStaffSession",
+        "StaffSessionActive"
+      ]
+    },
+    {
+      "path": "db/queries/update_outbox.sql",
+      "scope": "application-scoped",
+      "names": [
+        "DeferDeliveryUpdate",
+        "DeletePublishedDeliveryUpdate",
+        "HasLineageBlockedDeliveryUpdate",
+        "LockNextDeliveryUpdate"
       ]
     }
   ],
@@ -656,6 +867,24 @@
       "source": "internal/features/applications/module.go",
       "scope": "registry-control",
       "disposition": "retain-provisioning-registry"
+    },
+    {
+      "pattern": "GET /api/v1/apps/{app_id}/campaigns/{campaign_id}/statistics",
+      "source": "internal/features/applications/module.go",
+      "scope": "application-scoped",
+      "disposition": "retain-scoped"
+    },
+    {
+      "pattern": "POST /api/v1/apps/{app_id}/mobile/notifications/{campaign_id}/receipt",
+      "source": "internal/features/applications/mobile_receipt.go",
+      "scope": "application-scoped",
+      "disposition": "retain-scoped"
+    },
+    {
+      "pattern": "POST /api/v1/auth/logout",
+      "source": "internal/features/auth/routes.go",
+      "scope": "global-control",
+      "disposition": "retain-global"
     }
   ],
   "commands": [
@@ -674,6 +903,14 @@
     {
       "path": "cmd/worker/main.go",
       "disposition": "Retired entry point exits before starting database or provider work."
+    },
+    {
+      "path": "cmd/requeue/main.go",
+      "disposition": "Requires authorized application-scoped replay grant; bounded replay, no direct publish bypass."
+    },
+    {
+      "path": "cmd/retention/main.go",
+      "disposition": "Requires application-scoped operational grant; bounded retention batches with holds and preview controls."
     }
   ]
 }
