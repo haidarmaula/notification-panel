@@ -506,11 +506,9 @@ What remains is a robustness nit rather than a correctness defect: a transient r
 
 ### 6. Silent Pagination Clamping
 
-**Still holds, unchanged.** `internal/features/staff/handler.go:563` accepts a `limit` only when it parses and satisfies `v > 0 && v <= 100`; any other value silently falls back to the default of 10, and an unparseable or non-positive `page` keeps its default. The response echoes the applied `Page` and `Limit` (`staff/handler.go:295`), which the original finding already noted, so a client still cannot distinguish "you asked for 10" from "you asked for 5000 and got 10". No 400 is returned.
+**Fixed locally in mounted staff.** Omitted parameters still use page 1 / limit 10. Malformed, repeated, non-positive, over-limit and offset-overflowing values now return 400 `invalid pagination`. The service independently validates direct calls and computes the offset in 64-bit arithmetic before converting to the repository's int32 offset. API docs and OpenAPI now describe the rejection contract; tests cover defaults, bounds, duplicates, overflow and the handler response.
 
-**Affected:** mounted `staff` is confirmed. The other originally listed features (`notifications`, `segments`, `users`) are unmounted and were not individually re-verified.
-
-**Recommended fix:** either reject out-of-range values with a 400 or report both the requested and applied limits in the response metadata. Rejecting is the smaller code change but is a client-visible contract change, so `docs/api/` must be updated in the same commit.
+**Affected:** mounted `staff` is fixed. The other originally listed features (`notifications`, `segments`, `users`) remain unmounted and were not individually re-verified; revisit their pagination behavior before remounting them.
 
 ---
 
@@ -556,7 +554,7 @@ All ten Sprint 1 items are now closed in code. C3, C4, C12, C13, C14 and C15 all
 Focus: user-visible bugs and contract divergences.
 
 - [x] H1–H8 — the error-mapping gaps are closed and the 500 policy is consistent. No 500 path serves `err.Error()`; H1/H2/H5/H6/H7/H8 map only `pgx.ErrNoRows` (or a real 23505) to their sentinels and propagate everything else wrapped. H3's broad claim was already superseded, and H4 — the last row still written as open — now logs its `statusErr` on both status paths
-- [x] H10–H18 — totals, pagination and result caps are all corrected. Only H11 (staff `List`) is mounted and it was already reconciled; H10 and H12–H18 sit in unmounted `segments`, `users` and `notifications`. Clamping an out-of-range `limit` to 100 in mounted staff still exists, but that is cross-cutting pattern 6 rather than one of these findings
+- [x] H10–H18 — totals, pagination and result caps are all corrected. Only H11 (staff `List`) is mounted and it was already reconciled; H10 and H12–H18 sit in unmounted `segments`, `users` and `notifications`. Mounted staff now rejects invalid pagination and service calls validate the offset; pattern 6 is fixed locally.
 - [x] H19–H26 — provider result cardinality, error signaling, partial acceptance and FCM configuration are corrected and focused package tests pass. H22 remains a documented OneSignal batch-ID limitation; pinned SDK SendAll deprecation is a future-upgrade consideration.
 - [ ] H27, H29–H32, H34–H35, H37 — remaining findings are confined to unmounted legacy paths and must be fixed or retired before remount. H28, H33 and H36 are fixed in existing code; H35's exact `ON DELETE CASCADE` outcome is recorded above.
 - [x] H38–H41 — mounted campaign mutations, campaign creation and staff changes use transactions for their critical writes and audit evidence
@@ -658,6 +656,7 @@ affected packages: `internal/audit`, `internal/config`, `internal/database`,
 
 | Version | Date | Description |
 |---------|------|-------------|
+| 2.9 | 2026-11-09 | Fix mounted staff pagination clamping and offset overflow: reject invalid/duplicate values with 400, validate direct service calls, and update API/OpenAPI contracts with boundary tests. |
 | 2.8 | 2026-11-09 | Share campaign/template title and body byte validation and add exact/over UTF-8 boundary tests; the API contract already specified 255/4096 UTF-8 bytes. The mounted application package passes. |
 | 2.7 | 2026-11-09 | Enforce the staff name/email `VARCHAR(255)` character boundary in staff and profile services; document the OpenAPI/API limit and test multibyte Unicode boundaries plus rejection before staff persistence. Target deployment remains unverified. |
 | 2.6 | 2026-11-09 | Extend M43 media-type enforcement from auth to all mounted JSON write handlers; profile/staff now return safe 415 for missing, wrong, duplicate or compressed media before service work. OpenAPI/API docs and direct-handler tests updated. Full unit suite and isolated integration suite pass; caller compatibility and deployment remain open. |

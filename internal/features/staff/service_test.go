@@ -277,6 +277,20 @@ func TestStaffService_List(t *testing.T) {
 				assert.Equal(t, int64(1), total)
 			},
 		},
+		{
+			name:          "rejects offset overflow before repository access",
+			page:          21474838,
+			limit:         100,
+			expectedError: ErrInvalidPagination,
+			mockSetup:     func(*mocks.MockStaffUserRepository) {},
+		},
+		{
+			name:          "rejects invalid limit before repository access",
+			page:          1,
+			limit:         101,
+			expectedError: ErrInvalidPagination,
+			mockSetup:     func(*mocks.MockStaffUserRepository) {},
+		},
 	}
 
 	for _, tc := range tests {

@@ -85,8 +85,8 @@ Retrieves a paginated list of staff users with optional search by name or email.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `page` | integer | 1 | Page number |
-| `limit` | integer | 10 | Items per page (max 100) |
+| `page` | integer | 1 | Positive page number; the calculated offset must fit a signed 32-bit integer |
+| `limit` | integer | 10 | Items per page (1–100) |
 | `search` | string | - | Keyword to search by name or email (case‑insensitive) |
 
 ### Success Response (200 OK)
@@ -127,6 +127,7 @@ Retrieves a paginated list of staff users with optional search by name or email.
 
 | Status | Message | Condition |
 |--------|---------|-----------|
+| `400` | invalid pagination | `page` or `limit` is malformed, duplicated, outside its range, or produces an offset outside the supported range |
 | `500` | Internal server error | Database query failed |
 
 ---

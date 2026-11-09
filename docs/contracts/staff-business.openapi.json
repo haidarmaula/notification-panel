@@ -304,6 +304,7 @@
           { "$ref": "#/components/parameters/Search" }
         ],
         "responses": {
+          "400": { "$ref": "#/components/responses/Error400" },
           "200": {
             "description": "Successful response.",
             "content": {
@@ -2049,9 +2050,10 @@
       "StaffPage": {
         "name": "page",
         "in": "query",
-        "description": "Invalid values fall back to page one.",
+        "description": "Positive page number. The calculated offset with limit must fit a signed 32-bit integer; invalid pagination returns 400.",
         "schema": {
           "type": "integer",
+          "format": "int32",
           "minimum": 1,
           "default": 1
         }
@@ -2059,7 +2061,7 @@
       "StaffLimit": {
         "name": "limit",
         "in": "query",
-        "description": "Invalid values fall back to ten.",
+        "description": "Items per page, from 1 to 100. Invalid pagination returns 400.",
         "schema": {
           "type": "integer",
           "minimum": 1,

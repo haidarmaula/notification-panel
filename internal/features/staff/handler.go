@@ -247,10 +247,10 @@ func (h *StaffHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 //
 // # Query parameters
 //
-// page and limit are parsed by getPaginationParams with the defaults and
-// clamping policy documented on that helper. search is an optional
-// keyword passed through to the service; an empty search selects the
-// unfiltered list path.
+// Omitted page and limit values use the documented defaults. Malformed,
+// duplicate, non-positive, out-of-range, or offset-overflowing pagination
+// values return 400. search is an optional keyword passed through to the
+// service; an empty search selects the unfiltered list path.
 //
 // # TotalPages computation
 //
@@ -272,12 +272,20 @@ func (h *StaffHandler) GetByID(w http.ResponseWriter, r *http.Request) {
 //
 // Safe for concurrent use.
 func (h *StaffHandler) List(w http.ResponseWriter, r *http.Request) {
-	page, limit := getPaginationParams(r)
+	page, limit, err := getPaginationParams(r)
+	if err != nil {
+		response.JSON(w, http.StatusBadRequest, nil, ErrInvalidPagination.Error())
+		return
+	}
 	search := r.URL.Query().Get("search")
 
 	items, total, err := h.service.List(r.Context(), page, limit, search)
 	if err != nil {
 		if authz.WriteError(w, err) {
+			return
+		}
+		if errors.Is(err, ErrInvalidPagination) {
+			response.JSON(w, http.StatusBadRequest, nil, ErrInvalidPagination.Error())
 			return
 		}
 		response.JSON(w, http.StatusInternalServerError, nil, "internal server error")
@@ -529,41 +537,35 @@ func parseInt64FromPath(r *http.Request, key string) (int64, error) {
 	return strconv.ParseInt(raw, 10, 64)
 }
 
-// getPaginationParams extracts page and limit from query parameters with defaults.
-//
-// # Defaults and clamping
-//
-// The function applies a default of page=1 and limit=10 when a parameter
-// is absent, and silently clamps out-of-range values rather than rejecting
-// them:
-//
-//   - A page value that fails to parse, or that parses to zero or a
-//     negative number, is replaced by 1.
-//   - A limit value that fails to parse, or that parses to zero, a
-//     negative number, or a value greater than 100, is replaced by 10.
-//
-// Clients should treat the values echoed in the response's Page and Limit
-// fields as authoritative, not the values they sent.
-//
-// # Duplication
-//
-// This function is byte-for-byte identical to the versions in
-// notifications, segments, and (if present) mobile and users. As with
-// parseInt64FromPath, the duplication is due to the helpers being
-// unexported in each package; a shared request-parsing helper package
-// would collapse them.
-func getPaginationParams(r *http.Request) (page, limit int32) {
+// getPaginationParams extracts optional pagination parameters. Omitted values
+// use the documented defaults; malformed, duplicate or out-of-range values
+// return ErrInvalidPagination.
+func getPaginationParams(r *http.Request) (page, limit int32, err error) {
 	page = 1
 	limit = 10
-	if p := r.URL.Query().Get("page"); p != "" {
-		if v, err := strconv.ParseInt(p, 10, 32); err == nil && v > 0 {
-			page = int32(v)
+	query := r.URL.Query()
+	if values, ok := query["page"]; ok {
+		if len(values) != 1 {
+			return 0, 0, ErrInvalidPagination
 		}
-	}
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if v, err := strconv.ParseInt(l, 10, 32); err == nil && v > 0 && v <= 100 {
-			limit = int32(v)
+		value, parseErr := strconv.ParseInt(values[0], 10, 32)
+		if parseErr != nil || value < 1 {
+			return 0, 0, ErrInvalidPagination
 		}
+		page = int32(value)
 	}
-	return
+	if values, ok := query["limit"]; ok {
+		if len(values) != 1 {
+			return 0, 0, ErrInvalidPagination
+		}
+		value, parseErr := strconv.ParseInt(values[0], 10, 32)
+		if parseErr != nil || value < 1 || value > 100 {
+			return 0, 0, ErrInvalidPagination
+		}
+		limit = int32(value)
+	}
+	if _, err := paginationOffset(page, limit); err != nil {
+		return 0, 0, err
+	}
+	return page, limit, nil
 }

@@ -83,6 +83,10 @@ var (
 	// The handler maps this to 404 Not Found.
 	ErrStaffNotFound = errors.New("staff user not found")
 
+	// ErrInvalidPagination indicates that a requested page or limit is invalid,
+	// or that their calculated row offset cannot be represented.
+	ErrInvalidPagination = errors.New("invalid pagination")
+
 	// ErrEmailAlreadyUsed is returned by Update when the proposed new
 	// email collides with another staff user's email. It represents the
 	// same class of conflict as ErrEmailAlreadyRegistered, but it is
@@ -411,16 +415,29 @@ func (s *operations) getByID(ctx context.Context, id int64) (*Staff, error) {
 	}, nil
 }
 
+func paginationOffset(page, limit int32) (int32, error) {
+	if page < 1 || limit < 1 || limit > 100 {
+		return 0, ErrInvalidPagination
+	}
+	offset := (int64(page) - 1) * int64(limit)
+	if offset > int64(1<<31-1) {
+		return 0, ErrInvalidPagination
+	}
+	return int32(offset), nil
+}
+
 // List returns staff and a total using the same name and email filter.
 func (s *operations) List(ctx context.Context, page, limit int32, search string) ([]Staff, int64, error) {
 	if _, err := s.permissions.Require(ctx, authz.StaffManage); err != nil {
 		return nil, 0, err
 	}
-	offset := (page - 1) * limit
+	offset, err := paginationOffset(page, limit)
+	if err != nil {
+		return nil, 0, err
+	}
 
 	var staffs []Staff
 	var total int64
-	var err error
 
 	if search != "" {
 		rows, err := s.staffRepo.Search(ctx, search, offset, limit)
