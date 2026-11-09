@@ -29,4 +29,16 @@ trap 'exit 143' TERM
 export HELLO_INTEGRATION_RESTORE_PROBE="$probe_dir/probe.test"
 GOOS=linux GOARCH="$probe_arch" CGO_ENABLED=0 GOWORK=off GOFLAGS= \
   go test -c -mod=readonly -tags=integration -o "$HELLO_INTEGRATION_RESTORE_PROBE" ./tests/integration
+# This reviewed worker predates migration 40 and includes the dispatch gates.
+prior_revision=ea31066275baafdbb40b723a46c5081462d19126
+git merge-base --is-ancestor "$prior_revision" HEAD
+mkdir "$probe_dir/prior-source"
+git archive "$prior_revision" | tar -x -C "$probe_dir/prior-source"
+export HELLO_INTEGRATION_ROLLBACK_WORKER="$probe_dir/worker-prior"
+(
+  cd "$probe_dir/prior-source"
+  GOOS=linux GOARCH="$probe_arch" CGO_ENABLED=0 GOWORK=off GOFLAGS= \
+    go build -mod=readonly -trimpath -o "$HELLO_INTEGRATION_ROLLBACK_WORKER" ./cmd/worker
+)
+echo "Rollback fixture built from $prior_revision"
 bash scripts/integration.sh

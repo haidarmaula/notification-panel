@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -94,13 +95,13 @@ func providerRequests(t *testing.T, ctx context.Context) (int, int) {
 
 // The production binary reads its protected files and uses the fixture network's
 // private Google endpoints. stdin and argv never carry the service-account key.
-func runDeliveryWorkerBinary(t *testing.T, ctx context.Context) context.Context {
+func runDeliveryWorkerBinary(t *testing.T, ctx context.Context, binary string) (context.Context, func()) {
 	t.Helper()
 	// The container image has unrelated PG* image metadata. The deployment
 	// policy correctly rejects such environment overrides, so start with none.
 	processCtx, stopProcess := context.WithTimeout(context.WithoutCancel(ctx), time.Minute)
 	t.Cleanup(stopProcess)
-	cmd := deliveryWorkerExec(processCtx, "sh", "-ec", `echo $$ > /tmp/hello-worker.pid; exec env -i PATH=/usr/bin:/bin /fixture-bin/worker`)
+	cmd := deliveryWorkerExec(processCtx, "sh", "-ec", `echo $$ > /tmp/hello-worker.pid; exec env -i PATH=/usr/bin:/bin "$1"`, "worker", binary)
 	var logs bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &logs, &logs
 	require.NoError(t, cmd.Start())
@@ -110,30 +111,30 @@ func runDeliveryWorkerBinary(t *testing.T, ctx context.Context) context.Context 
 		done <- cmd.Wait()
 		cancel()
 	}()
-	t.Cleanup(func() {
+	var once sync.Once
+	shutdownWorker := func() {
 		// The test context is cancelled before cleanup runs. Use an independent
 		// deadline to deliver SIGTERM and wait for the actual process exit.
 		shutdown, stop := context.WithTimeout(context.Background(), 8*time.Second)
 		defer stop()
 		select {
 		case err := <-done:
-			t.Errorf("delivery worker exited before SIGTERM: %v; %s", err, logs.String())
-			return
+			t.Fatalf("delivery worker exited before SIGTERM: %v; %s", err, logs.String())
 		default:
 		}
-		signal := deliveryWorkerExec(shutdown, "sh", "-ec", `read -r pid < /tmp/hello-worker.pid; test "$(readlink /proc/$pid/exe)" = /fixture-bin/worker; kill -TERM "$pid"`)
+		signal := deliveryWorkerExec(shutdown, "sh", "-ec", `read -r pid < /tmp/hello-worker.pid; test "$(readlink /proc/$pid/exe)" = "$1"; kill -TERM "$pid"`, "worker", binary)
 		output, err := signal.CombinedOutput()
-		if err != nil {
-			t.Errorf("signaling fixture worker: %v; %s", err, output)
-		}
+		require.NoError(t, err, "signaling fixture worker: %s", output)
 		select {
 		case err := <-done:
 			require.NoError(t, err, "worker SIGTERM exit: %s", logs.String())
 		case <-shutdown.Done():
-			t.Error("delivery worker failed to exit on SIGTERM")
+			t.Fatal("delivery worker failed to exit on SIGTERM")
 		}
-	})
-	return running
+	}
+	stopWorker := func() { once.Do(shutdownWorker) }
+	t.Cleanup(stopWorker)
+	return running, stopWorker
 }
 
 func TestDeliveryWorkerRecoversInterruptedClaimAndPublishesAfterHold(t *testing.T) {
@@ -168,13 +169,15 @@ func TestDeliveryWorkerRecoversInterruptedClaimAndPublishesAfterHold(t *testing.
 	reader := broker.NewReader(broker.ReaderConfig{Brokers: []string{"127.0.0.1:19092"}, Topic: source.Topic,
 		Partition: 0, MaxWait: 100 * time.Millisecond, MinBytes: 1, MaxBytes: 65536})
 	defer func() { require.NoError(t, reader.Close()) }()
-	require.NoError(t, reader.SetOffset(lastTopicOffset(t, ctx, source.Topic)))
+	firstOffset := lastTopicOffset(t, ctx, source.Topic)
+	require.NoError(t, reader.SetOffset(firstOffset))
 	beforeOAuth, beforeFCM := providerRequests(t, ctx)
-	runCtx := runDeliveryWorkerBinary(t, ctx)
-	read := func(id pgtype.UUID, status string) kafka.ScopedDeliveryUpdated {
+	runCtx, stopWorker := runDeliveryWorkerBinary(t, ctx, "/fixture-bin/worker")
+	read := func(id pgtype.UUID, status string, offset int64) kafka.ScopedDeliveryUpdated {
 		t.Helper()
 		msg, err := reader.ReadMessage(runCtx)
 		require.NoError(t, err)
+		require.Equal(t, offset, msg.Offset)
 		event, err := kafka.DecodeScopedDelivery(msg.Value)
 		require.NoError(t, err)
 		require.Equal(t, kafka.DeliveryUpdateKey(f.campaign), msg.Key)
@@ -184,7 +187,7 @@ func TestDeliveryWorkerRecoversInterruptedClaimAndPublishesAfterHold(t *testing.
 		require.EqualValues(t, 1, event.DeliveryVersion)
 		return event
 	}
-	failed := read(abandoned, "FAILED")
+	failed := read(abandoned, "FAILED", firstOffset)
 	require.NotNil(t, failed.Reason)
 	require.Equal(t, "retry_budget_exhausted", *failed.Reason)
 	require.Nil(t, failed.ProviderMessageID)
@@ -192,8 +195,15 @@ func TestDeliveryWorkerRecoversInterruptedClaimAndPublishesAfterHold(t *testing.
 	require.NoError(t, f.pool.QueryRow(ctx, "SELECT attempt_count FROM notification_delivery_intents WHERE id=$1", eligible).Scan(&attempts))
 	require.Zero(t, attempts)
 
+	rollback := os.Getenv("HELLO_INTEGRATION_ROLLBACK_WORKER") != ""
+	if rollback {
+		// The prior worker must resume on the same database, held application,
+		// source registration and Kafka partition after the current worker exits.
+		stopWorker()
+		runCtx, stopWorker = runDeliveryWorkerBinary(t, ctx, "/fixture-bin/worker-prior")
+	}
 	executionSQL(t, ctx, f, "UPDATE application_dispatch_policy SET hold_new=false WHERE application_id=$1", f.app)
-	accepted := read(eligible, "SENT")
+	accepted := read(eligible, "SENT", firstOffset+1)
 	require.NotNil(t, accepted.ProviderMessageID)
 	require.Contains(t, *accepted.ProviderMessageID, "projects/integration-fixture/messages/accepted-")
 	require.NotNil(t, accepted.ProviderAcceptedAt)
@@ -209,9 +219,17 @@ func TestDeliveryWorkerRecoversInterruptedClaimAndPublishesAfterHold(t *testing.
 		(SELECT count(*) FROM notification_update_outbox WHERE event_id=$2)`, f.campaign, otherEvent).Scan(&count, &other))
 	require.Equal(t, 2, count)
 	require.Equal(t, 1, other)
+	stopWorker()
 	oauth, fcm := providerRequests(t, ctx)
 	require.Equal(t, beforeOAuth+1, oauth)
 	require.Equal(t, beforeFCM+1, fcm)
+	require.Equal(t, firstOffset+2, lastTopicOffset(t, ctx, source.Topic))
+	if rollback {
+		require.Equal(t, failed.OriginEpoch, accepted.OriginEpoch)
+		require.Equal(t, failed.SourceEpoch, accepted.SourceEpoch)
+		require.NotEqual(t, failed.EventID, accepted.EventID)
+		t.Log("Worker rollback passed on the current schema with two consecutive Kafka outcomes and one FCM request")
+	}
 }
 
 // A second application has a real, publishable outbox event before the worker starts.

@@ -66,6 +66,31 @@ elapsed time from backup start was 2.438 s. Partition 0 advanced from log end
 0 to 1 only on the source. The restored outbox still held two original events.
 The 14 table comparisons and rollback/lineage probes passed.
 
+## Worker rollback on the current schema
+
+The same wrapper builds the prior delivery worker from Git revision
+`ea31066275baafdbb40b723a46c5081462d19126`. That revision includes the scoped
+dispatch gates and predates migration 40. Use a checkout containing that
+revision. The build reads the archived source in a temporary directory.
+
+In the rollback trial the current worker finalizes an expired attempt while
+the application is held. The harness waits for its SIGTERM exit before
+starting the prior executable in the same isolated container. The database
+stays on the current migration chain. The protected policy, source and Kafka
+partition stay the same. After the fixture lifts the hold, the prior worker
+must submit the remaining eligible device. The drill checks both consecutive
+Kafka offsets, their stable lineage, the exhausted and newly charged attempts,
+one synthetic FCM request, and a drained outbox for the campaign. Unrelated
+application work remains queued.
+
+The November 9 race-enabled run passed both the sealed restore and worker
+handoff. The worker trial recorded one simulated FCM request and exactly two
+consecutive Kafka records across the two executables.
+
+The drill exercises the delivery executable and its database and Kafka
+compatibility. Target image digests, deployment configuration and the
+complete rollback procedure require staging evidence.
+
 ## Recovery decision record for a deployment
 
 The incident owner timestamps the last confirmed recoverable transaction and

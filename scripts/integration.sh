@@ -72,6 +72,9 @@ build_fixture() {
 }
 build_fixture worker ./cmd/worker
 build_fixture provider ./scripts/integration-provider.go
+if [[ -n "${HELLO_INTEGRATION_ROLLBACK_WORKER:-}" ]]; then
+  install -m 0755 "$HELLO_INTEGRATION_ROLLBACK_WORKER" "$HELLO_INTEGRATION_BIN_DIR/worker-prior"
+fi
 "${compose[@]}" config --quiet
 if [[ -n "$("${compose[@]}" ps -a -q)" ]]; then
   printf 'Refusing to reuse existing hello-integration containers. Inspect them first.\n' >&2
