@@ -25,12 +25,15 @@ import (
 // lockstep without any other change.
 const maxFCMMessagesPerBatch = 500
 
+type fcmBatchSender interface {
+	SendAll(context.Context, []*messaging.Message) (*messaging.BatchResponse, error)
+}
+
 // FCMProvider implements NotificationProvider using Firebase Cloud Messaging.
 //
-// It is an alternative to the default OneSignalProvider, shipping for
-// deployments that prefer to dispatch through Firebase directly. Both
-// providers implement the same NotificationProvider interface, so the
-// selection is a startup-time configuration concern, not a code change.
+// This adapter belongs to the legacy notifications feature and is not
+// constructed by the current worker binary. The protected worker uses the
+// route-bound FCM transport in internal/dispatch.
 //
 // # Initialisation
 //
@@ -63,7 +66,7 @@ const maxFCMMessagesPerBatch = 500
 // for concurrent use. FCMProvider therefore has no synchronisation of its
 // own and is safe for concurrent Send calls.
 type FCMProvider struct {
-	client *messaging.Client
+	client fcmBatchSender
 }
 
 // NewFCMProvider creates a new FCMProvider with the given service account credentials (JSON).

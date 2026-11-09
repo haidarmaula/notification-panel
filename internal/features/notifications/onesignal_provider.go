@@ -37,11 +37,10 @@ const onesignalEndpoint = "https://onesignal.com/api/v1/notifications"
 
 // OneSignalProvider sends notifications via OneSignal REST API.
 //
-// It is the production default provider. Unlike FCMProvider — which issues
-// one FCM request per device token — OneSignalProvider batches every valid
-// token in the request into a single HTTPS call using OneSignal's
-// include_player_ids array. This makes it substantially more efficient for
-// high-cardinality fan-out, at the cost of coarser error reporting: the
+// This adapter is used by the legacy notifications module, which is not
+// mounted by the current worker binary. It batches valid tokens into a
+// single HTTPS call using OneSignal's include_player_ids array, at the cost
+// of coarser error reporting: the
 // OneSignal endpoint returns a single aggregate response for the batch, not
 // per-token receipts, so the provider cannot distinguish which tokens in a
 // partially-successful batch were accepted.
@@ -113,9 +112,10 @@ const onesignalEndpoint = "https://onesignal.com/api/v1/notifications"
 // for concurrent use, and the provider holds no other mutable state.
 // Concurrent Send calls are safe.
 type OneSignalProvider struct {
-	appID  string
-	apiKey string
-	client *http.Client
+	appID    string
+	apiKey   string
+	client   *http.Client
+	endpoint string
 }
 
 // NewOneSignalProvider creates a new OneSignalProvider with a 10s timeout.
@@ -144,9 +144,10 @@ type OneSignalProvider struct {
 // tokens are in the batch.
 func NewOneSignalProvider(appID, apiKey string) *OneSignalProvider {
 	return &OneSignalProvider{
-		appID:  appID,
-		apiKey: apiKey,
-		client: &http.Client{Timeout: 10 * time.Second},
+		appID:    appID,
+		apiKey:   apiKey,
+		client:   &http.Client{Timeout: 10 * time.Second},
+		endpoint: onesignalEndpoint,
 	}
 }
 
@@ -510,7 +511,7 @@ func (p *OneSignalProvider) Send(ctx context.Context, req SendRequest) ([]SendRe
 		return results, fmt.Errorf("marshal request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", onesignalEndpoint, bytes.NewReader(jsonBody))
+	httpReq, err := http.NewRequestWithContext(ctx, "POST", p.endpoint, bytes.NewReader(jsonBody))
 	if err != nil {
 		// Unreachable: the endpoint is a package-level constant. Handled
 		// the same way as the marshal failure above.

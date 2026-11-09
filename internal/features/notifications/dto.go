@@ -45,11 +45,10 @@
 //
 // # Provider abstraction
 //
-// Delivery is dispatched through a NotificationProvider interface. Three
-// implementations ship in this package: OneSignalProvider (the production
-// default), FCMProvider (an alternative provider), and MockProvider (a
-// local-development stub). The provider is selected at process startup and
-// is not swapped per request.
+// This package retains a NotificationProvider interface, OneSignal and FCM
+// adapters, and a MockProvider used for local/tests. The legacy notifications
+// module is not mounted by the current binaries; cmd/worker uses the protected
+// daemon and scoped dispatch pipeline instead.
 //
 // # Concurrency
 //

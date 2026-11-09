@@ -12,43 +12,27 @@ import "context"
 // tokens, and returns a slice of SendResult — one per token — plus a
 // function-level error.
 //
-// The contract callers (currently Processor.ProcessSendRequested) rely on
-// is the following, though the shipped implementations do not all honour
-// it:
+// Callers rely on the following contract:
 //
 //   - One SendResult is returned per input token, in the same order as
-//     req.Tokens. The caller correlates results to tokens by position and
-//     by UserID.
-//   - A per-token failure is reported as a SendResult with Status "FAILED"
-//     and a non-nil Error field. It is not reported through the
-//     function-level error.
-//   - The function-level error is reserved for failures that prevent any
-//     result from being produced at all — a transport failure, an
-//     authentication failure, or a malformed request that the provider
-//     rejects before attempting delivery.
+//     req.Tokens. The caller correlates results to tokens by position.
+//   - Every token has a result with Status "SENT" or "FAILED". The Error
+//     field may carry a per-token cause when the provider can identify it.
+//   - A non-nil function-level error means no token succeeded. Partial
+//     failures are represented in the result slice and return a nil error.
 //
-// # Current implementations and their divergences
+// # Implementations
 //
-// Three implementations ship in this package: MockProvider, FCMProvider,
-// and OneSignalProvider. Only the first two honour the contract above:
+// MockProvider, FCMProvider and OneSignalProvider implement this contract,
+// with provider-specific limits on failure attribution:
 //
-//   - MockProvider returns exactly one result per input token, all
-//     "SENT", all with a non-nil Error field of nil. Its function-level
-//     error is always nil.
-//   - FCMProvider honours the per-token contract, but its function-level
-//     error is also always nil — even when the provider's internal SDK
-//     reports a failure for every token.
-//   - OneSignalProvider does not honour the per-token contract. It filters
-//     out tokens whose PushToken is empty or shorter than 10 bytes before
-//     dispatching, so the returned slice may be shorter than the input,
-//     and it returns a nil result slice plus a non-nil error on any batch
-//     failure — including one caused by a single bad player ID.
-//
-// Callers written against one provider's semantics will mishandle the
-// others. The safe pattern is to treat the interface as documentation of
-// intent, not as a guarantee of behaviour, and to consult each
-// implementation's Godoc before relying on any specific return-shape
-// property.
+//   - MockProvider succeeds every token and is intended for local/test use.
+//   - FCMProvider returns an outcome per token using Firebase batch
+//     responses, including per-token errors.
+//   - OneSignalProvider returns an outcome per token, but a partial batch
+//     rejection cannot be attributed to specific tokens. It conservatively
+//     fails the forwarded batch; all successful recipients share OneSignal's
+//     batch message ID.
 //
 // # Concurrency
 //
@@ -57,7 +41,7 @@ import "context"
 type NotificationProvider interface {
 	// Send dispatches the notification described by req to the devices in
 	// req.Tokens. See the interface documentation for the result-shape
-	// contract and the divergences among the shipped implementations.
+	// contract and provider-specific limits on failure attribution.
 	Send(ctx context.Context, req SendRequest) ([]SendResult, error)
 }
 
@@ -148,17 +132,15 @@ type SendRequest struct {
 
 // SendResult represents the outcome for a single device.
 //
-// One SendResult is expected per input DeviceTokenInfo, though the
-// OneSignalProvider's token-filtering behaviour can produce fewer — see
-// NotificationProvider for the full contract divergence.
+// One SendResult is returned per input DeviceTokenInfo, in the same order.
 //
 // # Status values
 //
 // The two providers that populate Status use the same two literals:
 //
 //   - "SENT" — the provider accepted the notification for this device.
-//   - "FAILED" — the provider rejected it, and the Error field describes
-//     why.
+//   - "FAILED" — the provider rejected it or could not attribute success.
+//     Error contains a cause when the provider can identify one.
 //
 // No other values are produced by the shipped providers. A caller that
 // wants to persist the outcome should treat the Status field as the

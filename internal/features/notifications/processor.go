@@ -127,12 +127,10 @@ type Processor struct {
 //
 // # Parameters
 //
-// Every parameter must be non-nil; none is validated, so a nil repository
-// or provider will panic on the first ProcessSendRequested call rather than
-// at construction. In practice the dependencies are wired by cmd/worker,
-// which builds the repositories from the shared sqlc.Queries, constructs
-// the provider (currently always OneSignalProvider), and creates the Kafka
-// producer targeting the update topic.
+// Every parameter must be non-nil; none is validated, so a nil dependency
+// will panic on the first ProcessSendRequested call rather than at
+// construction. This legacy processor is not wired by cmd/worker; the
+// protected worker uses internal/dispatch.
 //
 // # Concurrency
 //
