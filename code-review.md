@@ -628,12 +628,22 @@ Adding an `event_id` and a schema version to the event structs would enable cons
 
 Counts are recalculated from distinct finding IDs currently present in the
 tables, including C21/H47/H48/M48; they are not counts of currently open findings.
-The old summary undercounted High by one. Original closed/fixed rows still
-need reconciliation.
+The old summary undercounted High by one. Reconciliation of the original
+closed/fixed rows is in progress: C1, C9, C10, C11, C17, H47, H48, M48 and all
+eight cross-cutting patterns were re-verified against current code on 2026-11-09
+(changelog rows 1.8 to 2.2). The remaining original rows are unreconciled.
 
 **Cross-cutting patterns:** 8
 
-**Packages affected:** all 7 feature modules, all 3 `cmd/` binaries, `internal/audit`, `internal/config`, `internal/database`, `internal/kafka`, `internal/middleware`, `internal/token`, `pkg/response`
+**Packages affected:** the audit spanned the feature modules and `cmd/` binaries
+present when it was written. The tree has since grown to 8 feature modules
+(`applications`, `auth`, `mobile`, `notifications`, `profile`, `segments`,
+`staff`, `users`) and 6 `cmd/` binaries (`bootstrap`, `requeue`, `retention`,
+`scheduler`, `server`, `worker`), so the recorded "7 feature modules, 3 `cmd/`
+binaries" scope no longer describes the repository. Of the 8 feature modules only
+`applications`, `auth`, `profile` and `staff` are mounted by `cmd/server`. Other
+affected packages: `internal/audit`, `internal/config`, `internal/database`,
+`internal/kafka`, `internal/middleware`, `internal/token`, `pkg/response`.
 
 ---
 
