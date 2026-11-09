@@ -138,6 +138,12 @@ gates are visible on the dashboard. Check the affected worker's recent provider
 outcomes, actual quota allocation and pending campaign deadlines. Confirm recovery
 with a closed gate and successful provider outcomes when work resumes.
 
+The HTTP p95 and p99 dashboard panels are diagnostic and include all observed
+requests. The current latency histogram has no request-validity dimension, so
+these panels do not establish the approved valid-request latency SLO or its
+availability denominator. Add reviewed request classification and sparse-traffic
+synthetic checks before treating a dashboard value as SLO evidence.
+
 ## Diagnostic output
 
 A slow log pipe can fill the server's 256-record access buffer or exceed its

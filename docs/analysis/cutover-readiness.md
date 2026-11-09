@@ -12,7 +12,7 @@ means evidence is missing, not that the user's system necessarily has a problem.
 
 | Gate | Evidence to record | Role owner | Status |
 | --- | --- | --- | --- |
-| C01 Firebase inventory | Project/app/package/bundle/environment IDs, IAM owner, quota and APNs setup; evidence location without secrets | Mobile + ops | User confirms an isolated staging Firebase project and signed Android/iOS test builds are available. Exact project/app IDs, IAM access, quota and APNs setup remain unverified. |
+| C01 Firebase inventory | Project/app/package/bundle/environment IDs, IAM owner, quota and APNs setup; evidence location without secrets | Mobile + ops | Firebase staging project ID `push-notifications-stagi-a6a41` provided in the local handoff on 2026-11-09. User reports signed Android/iOS test builds are available. Android package/iOS bundle IDs, IAM access, quota, APNs setup and build locations remain unverified. |
 | C02 React Native compatibility | RN/package/native versions, supported address types and enrollment callbacks | Mobile | [Source revision inspected](mobile-source-checkpoint.md); release builds and callbacks pending |
 | C03 Legacy behavior | Whether production sends/scheduled automation exist, operators and cohort exclusion/pause | Product + ops | Not verified |
 | C04 Registry/consent census | User/device/installation counts, owner/epoch, unknown legacy, permissions/opt-out and activity | Backend + mobile | Scoped, read-only census available. Target counts, permission state, legacy-only devices and exact physical population require independent evidence. |

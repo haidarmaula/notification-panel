@@ -32,5 +32,19 @@ for _ in {1..60}; do
     if docker exec "$container" wget -qO /dev/null http://127.0.0.1:3000/api/health 2>/dev/null; then break; fi
     sleep 0.5
 done
-docker exec "$container" wget -qO- http://127.0.0.1:3000/api/dashboards/uid/hello-notification-runtime | \
+dashboard_url=http://127.0.0.1:3000/api/dashboards/uid/hello-notification-runtime
+dashboard_ready=false
+for _ in {1..60}; do
+    if docker exec "$container" wget -qO /dev/null "$dashboard_url" 2>/dev/null; then
+        dashboard_ready=true
+        break
+    fi
+    sleep 0.5
+done
+if [[ $dashboard_ready != true ]]; then
+    docker logs "$container" >&2
+    echo "Grafana did not provision the dashboard before the deadline." >&2
+    exit 1
+fi
+docker exec "$container" wget -qO- "$dashboard_url" | \
   python3 -c 'import json,sys; saved=json.load(open("dashboard.json")); live=json.load(sys.stdin)["dashboard"]; assert live["uid"]==saved["uid"] and [p["targets"] for p in live["panels"]]==[p["targets"] for p in saved["panels"]], "provisioned dashboard differs"; print("Grafana provisioned and returned all", len(live["panels"]), "panels")'

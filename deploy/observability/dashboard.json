@@ -725,6 +725,37 @@
         },
         "overrides": []
       }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "HTTP p99 duration by route (all requests)",
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 80
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "${DS_PROMETHEUS}"
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le,route) (rate(hello_http_request_duration_seconds_bucket{environment=~\"$environment\"}[5m])))",
+          "legendFormat": "{{route}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": {
+            "spanNulls": false
+          }
+        },
+        "overrides": []
+      }
     }
   ]
 }
