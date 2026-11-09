@@ -178,8 +178,8 @@ The outbox peaked at 3,441 sampled updates and drained at 75.570 s. The provider
 saw 20,000 calls, a peak of 400 arrivals in one second and 16 simultaneous
 requests. The worker peaked at 49,696 kB resident. All 20,000 charges, SENT
 rows, event IDs and Kafka keys matched. This run took 11.554 s longer than the
-proposed healthy 60 s result target and averaged about 280 recorded devices/s
-from queue acceptance.
+60 s stretch benchmark and averaged about 280 recorded devices/s from queue
+acceptance.
 
 ## Backpressure and repeated campaigns
 
@@ -201,12 +201,14 @@ the outbox drained in 77.009 s.
 
 ## Target-environment gate
 
-The proposed healthy measurement is 20,000 durable device results within 60 s
-from queue acceptance, approximately 334 results/s. Kafka drain is recorded
-separately. Production SLO, approved headroom, sustained soak duration, provider quotas
-and deployment sizing still require owner agreement. Repeat in staging on the
-chosen storage and network with realistic application/epoch skew, payload
-sizes, campaign mixes, process replicas and shared-project quota allocations.
+The project owner approved a healthy objective of 20,000 durable provider
+outcomes within five minutes from queue acceptance. The 60 s measurement,
+approximately 334 results/s, is a stretch benchmark. Kafka drain is recorded
+separately. Actual provider quota and reserved headroom, sustained soak
+duration, campaign burst profile and deployment sizing still require target
+evidence and operations agreement. Repeat in staging on the chosen storage and
+network with realistic application/epoch skew, payload sizes, campaign mixes,
+process replicas and shared-project quota allocations.
 Monitor DB waits, I/O, memory, broker lag and recovery during worker restarts,
 dependency outages and provider throttling. Verify controlled real-device
 delivery on Android/iOS as a separate cutover gate.
@@ -233,11 +235,40 @@ acceptances, SENT rows, version-one results and distinct broker delivery IDs.
 Each ended with zero outstanding outbox rows or active requests. Preparation
 took 6.038 s and 3.969 s respectively. Worker peak resident memory was 50,256 kB
 and 47,428 kB. The faster submission increased the peak backlog waiting for
-Kafka. The 1,000/s run finished submissions within the proposed 60-second
-window locally. The 400/s run exceeded it by 14.833 s. These single trials use a
-private simulated provider, local PostgreSQL and a single broker. Production
-acceptance still requires repeated runs with representative storage, approved
-project-wide capacity, concurrent campaigns, latency, failure and broker policy.
+Kafka. The 1,000/s run finished submissions within the 60-second stretch
+benchmark locally. The 400/s run exceeded that benchmark by 14.833 s. These
+single trials used a private simulated provider, local PostgreSQL and a single
+broker. Production acceptance still requires repeated runs with representative
+storage, approved project-wide capacity, concurrent campaigns, latency, failure
+and broker policy.
+
+## Five-campaign aggregate burst
+
+One healthy burst queued five campaigns of 20,000 devices each before worker
+startup, using one synthetic provider allocation of 400 starts/s and an
+eight-connection worker DB pool:
+
+| Measure | Result |
+|---|---:|
+| Total devices / campaigns | 100,000 / 5 |
+| First queue record to last committed result | 360.177 s |
+| Per-device result p95 / p99 | 340.574 / 354.918 s |
+| First queue record to drained Kafka outbox | 360.707 s |
+| Average durable results per second | 277.23 |
+| Sampled peak outbox / worker peak RSS | 103 / 47,176 KiB |
+| Durable outcomes / verified distinct Kafka IDs | 100,000 / 100,000 |
+
+The run completed all five campaigns with no failed or deferred devices and
+verified every distinct delivery ID in Kafka. The combined 100,000-device
+workload took just over six minutes. This is one local synthetic observation;
+the project-approved five-minute objective applies to 20,000 eligible devices,
+and this fixture does not report per-campaign completion times. Do not classify
+it as a pass or failure for that objective. The target multi-campaign burst
+denominator and shared-project provider allocation still need agreement.
+
+```sh
+bash scripts/delivery-load.sh 20000 5 healthy burst 400 8
+```
 
 ```sh
 bash scripts/delivery-load.sh 20000 1 healthy burst 400 8 10
@@ -264,7 +295,7 @@ revision using the unique applied-grant index and both identity columns.
 The indexed run observed 20,000 accepted physical requests, 20,000 unique
 broker delivery IDs and zero outstanding outbox rows. Peak worker resident
 memory was 47,524 kB. The 48.845 s result above predates per-binding authorization.
-With the route checks enabled this trial exceeded the proposed 60 s threshold
+With the route checks enabled this trial exceeded the 60 s stretch benchmark
 by 4.363 s. These are single-host synthetic measurements. Actual authorized
 provider capacity and target end-to-end timings are still required.
 
@@ -327,8 +358,8 @@ submissions, 10 ms active polling and a synthetic allocation of 1,000 starts/s.
 
 The repeat spent 12 ms on Kafka request handoff and 632 ms on preparation.
 Both runs recorded 20,000 accepted physical requests, 20,000 charges and
-20,000 distinct Kafka delivery IDs with an empty outbox. Both met the
-proposed local 60-second target. The Step 41 release gate still requires
+20,000 distinct Kafka delivery IDs with an empty outbox. Both were within the
+local 60-second stretch benchmark. The Step 41 release gate still requires
 representative staging storage and networking, approved provider quota and
 measured headroom and soak behavior.
 
