@@ -64,11 +64,14 @@ continues to target port 8080; the campaign API used port 8082.
    protected locations. Do not print or commit them.
 4. Update the Step 40 evidence register only with the limits above. Step 05
    remains the roadmap's first unchecked item.
-5. Step 05's owner-approved targets are documented, but the sender service
-   account cannot read the effective Firebase quota (`serviceusage.quotas.get`
-   returned 403). Obtain quota/headroom evidence from a project owner; no quota
-   settings were changed. Campaign TTL, soak/burst profile, operational owners,
-   and target acceptance also remain open.
+5. The project owner shared a Cloud Console screenshot filtered to FCM showing
+   a “Send requests per minute” quota of 600,000 and current usage of 0. I
+   recommend an initial staging cap of 60,000 sends/minute for this backend,
+   reserving 90% for other project use and unexpected peaks; this is not yet
+   owner/operations-approved or provider-validated. The sender service account
+   itself still cannot read quotas (`serviceusage.quotas.get` returned 403); no
+   quota settings were changed. Recent peak usage, campaign TTL, soak/burst
+   profile, operational owners and target acceptance remain open.
 
 ## Local files and working tree
 
@@ -81,13 +84,17 @@ The user-provided sender credential remains under
 or the repository.
 
 The smoke setup and initial handoff were committed in `8367ac0`
-(`chore(local-fcm): add isolated smoke setup and handoff`). The follow-up
-roadmap/ADR status corrections are tracked in the repository working tree; check
-`git status` before continuing. The current Codex session could not inspect the
+(`chore(local-fcm): add isolated smoke setup and handoff`); roadmap/ADR status
+corrections were committed in `711773c`; exact-origin CORS support for M46 is
+committed in `8d2bc94`. Production portal origin and browser acceptance remain
+open. Review `git status` and the latest commits before continuing. The current
+Codex session could not inspect the
 Docker or ADB sockets because the execution environment denied access. The last
 confirmed state was the three smoke containers healthy and the Android device
 connected as described above; do not assume that state is unchanged.
 
 `go vet` and focused race tests passed earlier in this task; `govulncheck`
-remained blocked by network/DNS access. No additional tests were run during the
-roadmap/ADR documentation refresh.
+remained blocked by network/DNS access. The M46 CORS increment passed focused
+tests for middleware, configuration, ingress and server plus `go vet` for those
+packages. No additional tests were run during the roadmap/ADR documentation
+refresh.
