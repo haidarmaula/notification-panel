@@ -1,0 +1,32 @@
+# Optional TLS profile for a local delivery worker. Keep the default developer
+# listeners for the API and other local tools; the worker uses only DELIVERY.
+# HELLO_FCM_SMOKE_TLS_DIR must contain disposable server.key/server.crt,
+# server.pem and ca.crt files. Never place production credentials here.
+services:
+  postgres:
+    command:
+      - bash
+      - -ec
+      - |
+        cp /hello-worker-tls/server.key /tmp/hello-worker-server.key
+        chown postgres:postgres /tmp/hello-worker-server.key
+        chmod 600 /tmp/hello-worker-server.key
+        exec docker-entrypoint.sh postgres -c ssl=on \
+          -c ssl_cert_file=/hello-worker-tls/server.crt \
+          -c ssl_key_file=/tmp/hello-worker-server.key
+    volumes:
+      - '${HELLO_FCM_SMOKE_TLS_DIR:?disposable TLS directory required}:/hello-worker-tls:ro'
+
+  kafka:
+    environment:
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,INTERNAL://0.0.0.0:9094,DELIVERY://0.0.0.0:9095,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092,INTERNAL://kafka:9094,DELIVERY://kafka:9095
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,INTERNAL:PLAINTEXT,DELIVERY:SSL
+      KAFKA_SSL_KEYSTORE_TYPE: PEM
+      KAFKA_SSL_KEYSTORE_LOCATION: /hello-worker-tls/server.pem
+      KAFKA_SSL_TRUSTSTORE_TYPE: PEM
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /hello-worker-tls/ca.crt
+      KAFKA_SSL_CLIENT_AUTH: required
+      KAFKA_SSL_ENABLED_PROTOCOLS: TLSv1.2,TLSv1.3
+    volumes:
+      - '${HELLO_FCM_SMOKE_TLS_DIR:?disposable TLS directory required}:/hello-worker-tls:ro'

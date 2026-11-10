@@ -29,6 +29,48 @@ source and destination when publishing. Immutable topic incarnation is pinned by
 the reviewed source manifest. A deployment using a different project, source
 or key rotation must provide its corresponding policy.
 
+## Register the delivery update source
+
+Source registration is an owner operation because the application cannot prove
+that a topic name still identifies the approved Kafka log. First provision the
+topic and ACLs on the approved cluster. Through its authenticated Kafka admin
+connection, independently record the cluster identity, exact topic incarnation
+ID and partition count. Store those values with the source UUID, owner, purpose
+and review reference in the deployment's restricted evidence system. Do not
+derive a new incarnation from the topic name or reuse the old registration after
+topic recreation.
+
+As the trusted database schema owner, insert the reviewed identity inactive:
+
+```sql
+INSERT INTO public.notification_log_sources
+       (id, topic, cluster_identity, topic_incarnation, active)
+VALUES (:'source_id'::uuid, :'topic', :'cluster_identity', :'topic_incarnation', false);
+```
+
+Re-read the row and compare every value with the approved evidence and live
+broker metadata. A separate authorized reviewer then approves activation; the
+schema owner applies the exact-row transition:
+
+```sql
+UPDATE public.notification_log_sources
+   SET active = true
+ WHERE id = :'source_id'::uuid
+   AND topic = :'topic'
+   AND cluster_identity = :'cluster_identity'
+   AND topic_incarnation = :'topic_incarnation'
+   AND active = false
+RETURNING id, topic, cluster_identity, topic_incarnation, active;
+```
+
+Require exactly one returned row. If it returns none, stop and reconcile the
+database and evidence; do not widen the predicate. Put the same reviewed source
+UUID, cluster identity, topic, incarnation, and partition count in the
+protected worker policy. Startup checks compare the active database row and
+live broker metadata. Deactivation is a separate owner action after stopping
+dependent workers and coordinating readers, checkpoints, and any source
+handoff. Preserve old registrations and attributed evidence for recovery.
+
 ## Recovery and shutdown
 
 The worker polls immediately and waits after each completed tick. The optional
@@ -97,6 +139,27 @@ delivery while the database repeatedly rejected an unrelated device's update.
    physical Android device and one owned physical iPhone. Exclude the test
    installations from overlapping OneSignal campaigns and grant only the
    reviewed staging cohort access to FCM dispatch.
+
+Before the first `admission_only` worker starts, initialize its Kafka consumer
+group to an owner-reviewed numeric offset. A new group has no committed
+checkpoint; the worker rejects Kafka's negative `FirstOffset` sentinel and
+restarts rather than guessing a starting point. With the group inactive, use
+the authenticated Kafka admin identity to inspect the topic's retained bounds
+and review the intended offset. Dry-run and then apply the exact checkpoint:
+
+```sh
+kafka-consumer-groups.sh --bootstrap-server "$BROKER" \
+  --command-config "$ADMIN_TLS_CONFIG" --reset-offsets --group "$GROUP" \
+  --topic "$TOPIC:$PARTITION" --to-offset "$APPROVED_OFFSET" --dry-run
+kafka-consumer-groups.sh --bootstrap-server "$BROKER" \
+  --command-config "$ADMIN_TLS_CONFIG" --reset-offsets --group "$GROUP" \
+  --topic "$TOPIC:$PARTITION" --to-offset "$APPROVED_OFFSET" --execute
+```
+
+Confirm the committed offset and lag before starting the worker. For a new,
+verified-empty smoke topic, offset zero is the expected starting point. Never
+reset a populated deployment group to zero without reconciling its prior
+processing and retention state.
 
 See the [device and cutover evidence register](../analysis/cutover-readiness.md)
 and the [backend cutover controls](application-dispatch.md).

@@ -110,6 +110,20 @@ remain the operator setup checklist. Repository fixtures cannot demonstrate
 staging identity provisioning, signed client builds, Firebase/APNs access or
 real-device behavior. Do not mark Steps 05, 06 or 40 complete on this preflight.
 
+### Local Android FCM smoke evidence (2026-11-10)
+
+In the isolated `hello_fcm_smoke` database, the local API accepted one
+synthetic, one-device campaign. The delivery worker recorded one FCM `SENT`
+attempt, and the foreground Android smoke app displayed the expected title and
+body. The send and delivery outboxes drained. The admission-only worker first
+restarted because its new Kafka group had no committed numeric checkpoint; an
+owner-reviewed offset-zero checkpoint on the dedicated test topic resolved the
+restart, and the group reached offset 1 with zero lag. The
+[local smoke handoff](local-fcm-smoke-handoff.md) records the bounded evidence
+and active local processes. This is not isolated staging acceptance: iOS,
+background/terminated app states, signed staging builds, Laravel staging and
+target operations evidence remain open. Do not mark Step 40 complete.
+
 | Open decision | What must be determined | Blocks |
 | --- | --- | --- |
 | API, scheduling, fan-out, availability SLOs | Initial project-owner targets are recorded in Step 05; platform validation, actual quota/headroom and deployment evidence remain | Final sizing and production go/no-go |
