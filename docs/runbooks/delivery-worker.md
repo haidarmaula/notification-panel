@@ -29,6 +29,16 @@ source and destination when publishing. Immutable topic incarnation is pinned by
 the reviewed source manifest. A deployment using a different project, source
 or key rotation must provide its corresponding policy.
 
+For the staging project whose Cloud Console screenshot shows an FCM quota of
+600,000 sends/minute, the initial Step 05 recommendation is to set
+`project_requests_per_second` to 1,000 (60,000/minute), with each replica's
+`requests_per_second` no greater than the integer-divided allocation
+`1,000 / replica_count`. The deployment must keep the actual replica count at
+the declared value and account for every other client using that Firebase
+project; these static settings do not coordinate independently configured
+senders. This is a proposed initial cap, not owner/operations approval or a
+real-provider capacity result.
+
 ## Register the delivery update source
 
 Source registration is an owner operation because the application cannot prove

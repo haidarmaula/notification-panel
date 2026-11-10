@@ -68,7 +68,10 @@ continues to target port 8080; the campaign API used port 8082.
    a “Send requests per minute” quota of 600,000 and current usage of 0. I
    recommend an initial staging cap of 60,000 sends/minute for this backend,
    reserving 90% for other project use and unexpected peaks; this is not yet
-   owner/operations-approved or provider-validated. The sender service account
+   owner/operations-approved or provider-validated. The existing worker policy
+   supports a static project allocation with `project_requests_per_second` and
+   `replica_count`; deployment must enforce that count and include other senders
+   because there is no cross-process coordinator. The sender service account
    itself still cannot read quotas (`serviceusage.quotas.get` returned 403); no
    quota settings were changed. Recent peak usage, campaign TTL, soak/burst
    profile, operational owners and target acceptance remain open.
