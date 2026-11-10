@@ -85,13 +85,13 @@ or the repository.
 
 The smoke setup and initial handoff were committed in `8367ac0`
 (`chore(local-fcm): add isolated smoke setup and handoff`); roadmap/ADR status
-corrections were committed in `711773c`; exact-origin CORS support for M46 is
-committed in `8d2bc94`. Production portal origin and browser acceptance remain
-open. Review `git status` and the latest commits before continuing. The current
-Codex session could not inspect the
-Docker or ADB sockets because the execution environment denied access. The last
-confirmed state was the three smoke containers healthy and the Android device
-connected as described above; do not assume that state is unchanged.
+corrections were committed in `711773c`; exact-origin CORS support for M46 was
+committed in `8d2bc94` and its optional-policy compatibility fix in `bbd0cef`.
+Production portal origin and browser acceptance remain open. On 2026-11-10, a
+read-only Docker check confirmed the scheduler, admission and delivery smoke
+workers were up for 25 minutes, with local PostgreSQL and Kafka healthy. A
+read-only ADB check returned no connected devices, so no new push was sent; do
+not resend campaign 1. Recheck the device and daemon state before continuing.
 
 `go vet` and focused race tests passed earlier in this task; `govulncheck`
 remained blocked by network/DNS access. The M46 CORS increment passed focused
