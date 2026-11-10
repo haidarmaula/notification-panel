@@ -1,6 +1,6 @@
 # ADR-01–11 consistency review
 
-Date: 2026-11-02. Status: design review; ADRs remain **proposed**.
+Date: 2026-11-02. Status checkpoint refreshed 2026-11-10; ADRs remain **proposed**.
 No runtime changes, migrations, provisioning, or production evidence.
 Requirements index: [production plan](production-readiness-plan.md).
 
@@ -37,7 +37,7 @@ requires the decisions actually used by that milestone.
 | CR7 | Topic name/partition/offset can be reused after topic recreation | Quarantine uniqueness by physical log source incarnation + partition + offset | 02,07,10 |
 | CR8 | source_epoch conflates acceptance, recovery, and Kafka source identities | Separate origin_epoch, source_epoch, and log_source_id; section 4 | 02,03,05,07,10 |
 | CR9 | Capability expiry based on schedule acceptance can precede sending | Receipt capability expiry = persisted deadline_at + proposed 7d | 01,05,10,11 |
-| CR10 | Multiple applications confirmed after initial review; current data/permissions/events are global | [ADR-12](../adr/adr-12-multi-application-isolation.md) requires end-to-end app scope, no default-app fallback, and a legacy query gate before a second app. [M03a–d](../specs/m03a-application-scope-plan.md) plan; no A/B implementation/tests yet | 01–12 |
+| CR10 | Multiple applications confirmed after initial review; current data/permissions/events are global | [ADR-12](../adr/adr-12-multi-application-isolation.md) requires end-to-end app scope, no default-app fallback, and a legacy query gate before a second app. M03a–d scoped registry, APIs, lifecycle and delivery foundations are implemented and locally verified; two synthetic applications exercise scoped isolation. Target legacy-route migration, production identity/owner controls, and release acceptance remain open | 01–12 |
 
 These resolutions have been incorporated into the related ADRs or the shared protocol here.
 “Resolved in design” status does not close runtime findings in `code-review.md`.
@@ -130,12 +130,12 @@ provider delivery is not promised.
 | Gate | Condition / owner still to be determined | Blocks |
 | --- | --- | --- |
 | G1 Scope | Core confirmed; unsupported inputs must be explicit | SPEC contract boundaries, not baseline tests |
-| G2 Freshness/performance | TTL, numeric SLO, acceptance target, and aggregate quota not yet agreed | Final scheduling/retry configuration, benchmark acceptance, and release |
+| G2 Freshness/performance | Initial staff API/scheduling SLOs and 20,000-device durable-outcome threshold were approved on 2026-11-09 and are recorded in the [Step 05 decision record](production-readiness-plan.md#step-05-decision-record). Campaign TTL, effective Firebase quota/headroom, aggregate app/device peak and an approved soak/burst profile remain open | Final scheduling/retry configuration, target quota/headroom acceptance, and release |
 | G3 Mobile/auth | kaiapps2 path/branch found as first consumer; SDK/native behavior not yet read. Trusted issuer/audience/proof/revocation required per application, not global Laravel | Enrollment/receipt auth SPEC acceptance and cutover |
 | G4 Infrastructure | Kafka hosts/failure domains, DB/staging/TLS, and operators unknown | Production deployment/HA claims |
 | G5 Security policy | Multi-app requirement confirmed; ADR-12 app grant/control-plane details remain proposed. Business role matrix confirmed by user; M02a scoped SPEC and operation guards locally verified. Enrollment proof/recovery, gateway/BFF/operational policy remain open | Enabling modern enrollment/identity/perimeter and remaining security SPECs; does not block M02a role enforcement. C21 remediated within M02a scope; remaining security gates stay open |
-| G6 Data/recovery | Retention, erasure, RPO/RTO, backup ownership, and consumer inventory undetermined | Maintenance/recovery SPEC acceptance and release |
-| G7 Firebase/cutover | Project/app/APNs configuration, credential access, legacy automation/exclusive cohort unverified | Real provider/device pilot and OneSignal retirement |
+| G6 Data/recovery | Initial RPO ≤5 minutes, RTO ≤4 hours and PITR ≥30 days were approved on 2026-11-09. Retention and erasure lifetimes, backup ownership, target recovery evidence, and consumer inventory remain open | Maintenance/erasure SPEC decisions, target recovery acceptance, and release |
+| G7 Firebase/cutover | Local Firebase project/app configuration and protected sender credential were verified; one authorized synthetic Android foreground FCM send was received on 2026-11-10. APNs/iOS, background/terminated states, production client and Laravel integration, target quota/headroom, legacy automation, and exclusive-cohort controls remain unverified | Staging provider/device pilot and OneSignal retirement |
 
 Baseline test repair and staged processor review can start without
 Firebase/Laravel server access or final SLO numbers. Sensitive implementation follows

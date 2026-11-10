@@ -64,6 +64,11 @@ continues to target port 8080; the campaign API used port 8082.
    protected locations. Do not print or commit them.
 4. Update the Step 40 evidence register only with the limits above. Step 05
    remains the roadmap's first unchecked item.
+5. Step 05's owner-approved targets are documented, but the sender service
+   account cannot read the effective Firebase quota (`serviceusage.quotas.get`
+   returned 403). Obtain quota/headroom evidence from a project owner; no quota
+   settings were changed. Campaign TTL, soak/burst profile, operational owners,
+   and target acceptance also remain open.
 
 ## Local files and working tree
 
@@ -75,16 +80,14 @@ The user-provided sender credential remains under
 `/Users/koperasiastra/.config/hello/staging/`; never copy its contents into chat
 or the repository.
 
-Current uncommitted repository changes are:
+The smoke setup and initial handoff were committed in `8367ac0`
+(`chore(local-fcm): add isolated smoke setup and handoff`). The follow-up
+roadmap/ADR status corrections are tracked in the repository working tree; check
+`git status` before continuing. The current Codex session could not inspect the
+Docker or ADB sockets because the execution environment denied access. The last
+confirmed state was the three smoke containers healthy and the Android device
+connected as described above; do not assume that state is unchanged.
 
-- `compose.local-worker-security.yml` — optional local-only PostgreSQL TLS and
-  Kafka mTLS overlay.
-- `scripts/local-fcm-smoke/open-runtime.sql` — guarded owner operation scoped
-  to the synthetic smoke database.
-- `docs/runbooks/delivery-worker.md` — local delivery-source registration
-  and new admission-group checkpoint guidance.
-- This handoff file.
-
-The smoke worker/scheduler images are local Docker images only. No code was
-committed. `go vet` and focused race tests passed earlier in this task;
-`govulncheck` remained blocked by network/DNS access.
+`go vet` and focused race tests passed earlier in this task; `govulncheck`
+remained blocked by network/DNS access. No additional tests were run during the
+roadmap/ADR documentation refresh.
