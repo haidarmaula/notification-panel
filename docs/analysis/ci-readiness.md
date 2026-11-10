@@ -86,7 +86,39 @@ three OpenAPI documents, two event schemas and their synthetic examples. The
 delivery job exercises two 32-device broadcasts in an isolated Docker network.
 Local execution of the CI command produced 66 charged calls, 64 accepted
 delivery results, 64 unique Kafka updates and an empty outbox after transient
-503 responses. Manual workflow dispatch also builds and [checks the six
-production images](../runbooks/production-images.md). The complete opt-in
-Postman/DB/Kafka/race and physical recovery suites run separately. Hosted
-execution and repository branch rules still require target evidence.
+503 responses. At that checkpoint, manual workflow dispatch built and
+[checked the six production images](../runbooks/production-images.md), while
+full integration and physical recovery ran separately.
+
+## Routine release gates added on November 10
+
+Every configured workflow event now includes the six offline production-image
+checks, race-enabled full PostgreSQL/Kafka/FCM integration with migration round
+trips and sealed restore/compatible-worker rollback, monitoring rules/dashboard
+provisioning, and physical PITR with wrong-key/missing-WAL rejection. The existing
+quality, synthetic delivery and reachable-vulnerability jobs remain required.
+`Release readiness gates` fails unless all six dependency jobs succeed; it
+records the source commit in the workflow summary. Repository rules must require
+that check separately; this change does not modify hosted branch protection.
+
+The integration runner installs golang-migrate v4.19.1 and Postman CLI 1.75.0.
+The test package has a six-minute aggregate timeout to include the new expiry
+and probe-polling regressions; individual operation/test deadlines remain bounded.
+The Linux CLI archive is pinned by SHA-256 before extraction; no remote installer
+script executes. The selected archive hash was measured from the official
+versioned download, not obtained from an independent publisher signature.
+
+Local workflow validation parses YAML, checks every shell step with `bash -n`
+and asserts the aggregate gate dependencies. Executing actionlint v1.7.12 was
+blocked by this session's external-code permission policy. Hosted Linux tool
+installation and workflow execution remain unverified until an authorized run.
+These repository gates do not establish target-environment acceptance.
+
+The final local run of the changed working tree passed the full race-enabled
+integration/sealed restore suite (PostgreSQL/Kafka 218.293 s; FCM 3.035 s), all
+six offline image checks, monitoring/dashboard provisioning, physical PITR and
+the exact small synthetic delivery CI scenario. The synthetic run recorded 64
+accepted deliveries, 64 Kafka updates, 66 charged attempts and no retained outbox
+rows. Unit race tests, build, vet, formatting, module/skill integrity, all 57
+mounted routes and published schema examples also passed. The fresh scan reported
+zero reachable vulnerabilities, not zero package/module advisories.

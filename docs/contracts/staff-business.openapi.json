@@ -1373,7 +1373,7 @@
         "parameters": [
           { "$ref": "#/components/parameters/AppId" },
           { "$ref": "#/components/parameters/campaignId" },
-          { "$ref": "#/components/parameters/After" },
+          { "$ref": "#/components/parameters/DeliveryAfter" },
           { "$ref": "#/components/parameters/Limit" }
         ],
         "responses": {
@@ -1396,9 +1396,9 @@
                   "data": {
                     "items": [
                       {
-                        "id": "24",
+                        "id": "12345678-abcd-4000-8000-000000000001",
                         "user_id": "9007199254740993",
-                        "device_id": "7",
+                        "installation_id": "12345678-abcd-4000-8000-000000000003",
                         "status": "SENT",
                         "sent_at": "2026-11-07T08:00:00Z",
                         "delivered_at": null,
@@ -2024,6 +2024,16 @@
         "schema": {
           "type": "integer",
           "format": "int64"
+        }
+      },
+      "DeliveryAfter": {
+        "name": "after_id",
+        "in": "query",
+        "description": "Resume after this delivery UUID in ascending UUID order, not timestamp order. Omit to start at the zero lower bound. Supplied cursors must be canonical lowercase, nonzero UUIDs. No cross-request snapshot.",
+        "schema": {
+          "type": "string",
+          "format": "uuid",
+          "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
         }
       },
       "After": {
@@ -2731,12 +2741,14 @@
       },
       "Delivery": {
         "type": "object",
+        "description": "Modern delivery intent with frozen original user attribution, including after installation ownership changes. Provider acceptance is not device delivery. No legacy device-token records or provider secrets are exposed.",
         "properties": {
-          "id": { "$ref": "#/components/schemas/BusinessId" },
+          "id": { "type": "string", "format": "uuid" },
           "user_id": { "$ref": "#/components/schemas/BusinessId" },
-          "device_id": { "$ref": "#/components/schemas/BusinessId" },
+          "installation_id": { "type": "string", "format": "uuid", "description": "Public installation UUID, not an internal installation or legacy device-token ID." },
           "status": {
-            "type": "string"
+            "type": "string",
+            "enum": ["PENDING", "SENT", "DELIVERED", "OPENED", "FAILED"]
           },
           "sent_at": {
             "type": [
@@ -2763,7 +2775,7 @@
         "required": [
           "id",
           "user_id",
-          "device_id",
+          "installation_id",
           "status",
           "sent_at",
           "delivered_at",
@@ -3005,7 +3017,8 @@
               "string",
               "null"
             ],
-            "pattern": "^[1-9][0-9]{0,18}$"
+            "format": "uuid",
+            "pattern": "^(?!00000000-0000-0000-0000-000000000000$)[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
           }
         },
         "required": [

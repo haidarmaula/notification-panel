@@ -4,14 +4,64 @@ GET /api/v1/apps/{app_id}/campaigns/{campaign_id}/deliveries and
 GET /api/v1/apps/{app_id}/campaigns/{campaign_id}/reads require the staff API
 key, JWT, notifications.read, an explicit project grant and ACTIVE status.
 
-Both use the project user cursor contract. Missing and foreign campaigns return
-404. A visible campaign with no matching records returns an empty page.
-Only records with matching project ownership throughout are included.
+Missing and foreign campaigns return 404. A visible campaign with no matching
+records returns `{"items":[],"next_after_id":null}` in the response data.
+Responses carry `Cache-Control: no-store`.
 
-Delivery fields are id, user_id, device_id, status, sent_at, delivered_at
-and opened_at. Read fields are id, user_id and read_at. IDs are decimal
-strings and absent timestamps are null. Delivery status is the stored state.
-Responses carry Cache-Control: no-store.
+## Delivery ledger and pagination
+
+Deliveries read only modern `notification_delivery_intents`, strictly scoped to
+the application and campaign. Legacy `notification_deliveries` / `device_tokens`
+records do not appear, even when they have application attribution.
+
+Delivery fields are `id`, `user_id`, `installation_id`, `status`, `sent_at`,
+`delivered_at` and `opened_at`:
+
+- `id` is the delivery intent UUID; `installation_id` is the public installation
+  UUID, not an internal BIGINT or legacy device-token ID. `device_id` is removed.
+- `user_id` is a decimal string from the intent's frozen `owner_user_id`.
+  Installation owner switches or retired bindings do not hide or reattribute
+  history to the current owner.
+- All stored statuses appear: `PENDING`, `SENT`, `DELIVERED`, `OPENED`, `FAILED`.
+- `sent_at` maps to `provider_accepted_at` (provider acknowledgement, not proof of
+  device delivery). `delivered_at` and `opened_at` map to
+  `observed_delivered_at` and `observed_opened_at`. Absent timestamps are null.
+- Provider addresses, provider message IDs, installation proofs, credentials,
+  binding internals and raw provider errors are never included.
+
+`limit` defaults to 20 and accepts 1–100. Delivery `after_id`, when supplied,
+must be a canonical lowercase, hyphenated, nonzero UUID. Empty, decimal, zero,
+uppercase, malformed and repeated cursors return 400; unknown query parameters
+are rejected. Omit `after_id` for the zero UUID lower bound. Results use ascending
+UUID order (`id > after_id`), **not chronological order**. The query fetches
+`limit + 1`; `next_after_id` is the last returned UUID only when another row is
+available, otherwise null. Pagination is not a cross-request snapshot; new
+random UUIDs below a previously returned cursor can be missed.
+
+Example: `GET /api/v1/apps/{app_id}/campaigns/{campaign_id}/deliveries?limit=1`
+returns data shaped as:
+
+```json
+{
+  "items": [{
+    "id": "12345678-abcd-4000-8000-000000000001",
+    "user_id": "9007199254740993",
+    "installation_id": "12345678-abcd-4000-8000-000000000003",
+    "status": "SENT",
+    "sent_at": "2026-11-07T08:00:00Z",
+    "delivered_at": null,
+    "opened_at": null
+  }],
+  "next_after_id": null
+}
+```
+
+## Read history (unchanged)
+
+Reads retain the project user **decimal** cursor contract (`after_id` omitted or
+`0` starts the page). Read fields are `id`, `user_id` and `read_at`; both IDs are
+decimal strings. The delivery UUID cursor does not change this endpoint or any
+other list endpoint.
 
 ## Modern campaign statistics
 

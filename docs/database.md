@@ -884,3 +884,22 @@ index. Campaign acceptance can find the active bindings for each eligible
 owner without scanning the project's installations repeatedly. The index
 build and removal can block writes to installation bindings. Rehearse their
 duration with representative data and use the deployment migration window.
+
+### Bounded campaign delivery history
+
+Migration 000030's update-identity unique constraint on
+`notification_delivery_intents(application_id, notification_id, id)` supports
+bounded `limit + 1` history scans (at most 101 rows). Equality on
+application/campaign followed by the UUID lower bound and ascending ID order
+covers all statuses, not only pending work. The history query reuses this index;
+no additional index or schema migration is required.
+
+Mounted delivery history reads modern intents, never legacy deliveries or device
+tokens. It joins installations by application and internal installation ID solely
+to return `mobile_installations.public_id` as `installation_id`. User attribution
+comes from immutable `owner_user_id` on the intent; it is not filtered or rewritten
+by the installation's current owner or active binding. Public `id`/cursor values
+are delivery UUIDs. `sent_at`, `delivered_at` and `opened_at` expose only provider
+acceptance and observed delivery/open timestamps, respectively. The separate read
+history endpoint retains its decimal cursor. See the
+[campaign history contract](api/scoped-campaign-history-api.md).

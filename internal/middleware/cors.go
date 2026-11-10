@@ -11,13 +11,17 @@ var corsMethods = map[string]struct{}{
 	"HEAD":    {},
 	"PATCH":   {},
 	"POST":    {},
+	"PUT":     {},
 	"OPTIONS": {},
 }
 
 var corsHeaders = map[string]struct{}{
-	"authorization": {},
-	"content-type":  {},
-	"x-api-key":     {},
+	"authorization":   {},
+	"content-type":    {},
+	"if-match":        {},
+	"if-none-match":   {},
+	"idempotency-key": {},
+	"x-api-key":       {},
 }
 
 // NewCORSMiddleware allows browser requests from the configured exact origins.
@@ -55,13 +59,14 @@ func NewCORSMiddleware(origins []string) Middleware {
 					http.Error(w, "preflight request is not allowed", http.StatusForbidden)
 					return
 				}
-				w.Header().Set("Access-Control-Allow-Methods", "DELETE, GET, HEAD, OPTIONS, PATCH, POST")
-				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, X-API-Key")
+				w.Header().Set("Access-Control-Allow-Methods", "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT")
+				w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type, If-Match, If-None-Match, Idempotency-Key, X-API-Key")
 				w.Header().Set("Access-Control-Max-Age", "600")
 				w.WriteHeader(http.StatusNoContent)
 				return
 			}
 
+			w.Header().Set("Access-Control-Expose-Headers", "ETag")
 			next(w, r)
 		}
 	}

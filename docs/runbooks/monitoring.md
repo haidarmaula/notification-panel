@@ -40,6 +40,14 @@ totals. For a database failure, check TLS, pool occupancy, the current migration
 and permissions. Confirm recovery with a fresh successful sample and a ready
 role. The probe makes no broker or provider request.
 
+The schema capability check requires staff sessions and administration guards,
+modern delivery/receipt columns, binding routes and application lifecycle/dispatch
+objects used by the current binaries. Missing tables, columns or required routines
+fail readiness even when the connection and older outbox tables are healthy.
+Catalog inspection does not grant workers access to staff/session data. This is a
+runtime compatibility check, not proof that every migration, effective grant or
+index has been installed; retain the explicit migration and deployment checks.
+
 ## Durable work
 
 The scheduler samples send and update outbox retry eligibility every 15 seconds.

@@ -2,7 +2,7 @@
 
 **Version:** 1.7
 
-**Last Updated:** 2026-11-09
+**Last Updated:** 2026-11-10
 
 **Scope:** Full codebase audit conducted during the Godoc documentation pass  
 **Coverage:** `cmd/`, `internal/`, `pkg/` — every non-test, non-generated `.go` file
@@ -29,6 +29,34 @@ advisories initially. Go/module security updates and a final scan reduced the
 reachable result to zero; uncalled dependency advisories remain informational.
 See [CI evidence](docs/analysis/ci-readiness.md) for versions and limitations.
 The dependency scan does not close runtime findings; C21 is separately remediated by M02a code/tests. H47/H48/M48 are reconciled to the unmounted legacy producer; other older rows remain unreconciled.
+
+## Staging-preparation review — 2026-11-10
+
+| ID | Severity | Finding and remediation |
+| --- | --- | --- |
+| STG1 | P2 — implemented | OAuth refresh collapsed temporary transport/server failures into permanent credential failures, failing recipients and holding application dispatch. The credential boundary now preserves a sanitized temporary classification; the client returns retryable not-submitted network evidence without FCM I/O. Permanent credential rejection retains its terminal result/hold. Regressions cover refresh timeout, temporary status/body failures and bounded charged retry behavior. |
+| STG2 | P2 — implemented | A truncated or oversized HTTP 429 body was classified as uncertain network failure before the known status was considered. An observed 429 now preserves quota rejection, the one-minute retry floor and shared cooldown with or without Retry-After. Non-429 body uncertainty remains conservative. |
+| STG3 | P2 — implemented | Mounted campaign delivery history read legacy deliveries while the active worker wrote modern intents. History now reads application/campaign-scoped intents, preserves frozen user attribution across owner switches, returns public installation UUIDs and uses UUID delivery cursors. Decimal read-history cursors remain unchanged. The existing update-identity unique index supports bounded scans; no duplicate index or schema migration is added. API documents and examples match the new contract. |
+| STG4 | P2 — implemented | Staff/profile mutation transactions retained the session family but lost access-JWT expiry. They now require and recheck access expiry after locks and before commit, and recheck family expiry without invalidating intentional self-password/role changes. Unit and mounted HTTP regressions cover lock-wait and mutation-time expiry with rollback. |
+| STG5 | P2 — implemented | Exact-origin CORS omitted mounted PUT operations, conditional/idempotency request headers and ETag exposure. The explicit allowlists now support those contracts while preserving empty/disallowed-origin denial and rejecting unrelated headers. |
+| STG6 | P2 — implemented | Readiness accepted an older schema containing the original three outbox/observation tables but lacking current authentication and dispatch objects. Catalog-based capability checks now require current tables, columns and routines without expanding daemon data grants. Private-probe regressions remove staff/session and dispatch capabilities and check denial/recovery. Explicit migration/grant checks remain deployment requirements. |
+| STG7 | P2 — implemented | Routine CI did not require full integration, hardened images or operational fixtures. Every configured event now runs full race-enabled integration/sealed restore, image checks, monitoring and physical PITR alongside the existing gates. An aggregate readiness job requires every dependency to succeed. Hosted execution and requiring that job in repository rules remain external verification, not an automatic production sign-off. |
+
+Local verification of this working tree passed focused and full unit race tests,
+build, vet, formatting, module and pinned-skill checks, 57 mounted routes and all
+published schema examples. The final full race-enabled integration/sealed restore
+run passed migrations 1–40 up/down/up, the PostgreSQL/Kafka package in 218.293 s
+and FCM in 3.035 s. The new history, staff/profile expiry and incompatible-schema
+regressions passed. All six images passed offline startup; monitoring/dashboard
+and encrypted physical PITR drills passed. The transient synthetic burst recorded
+64 accepted deliveries, 64 Kafka updates, 66 charged attempts and an empty outbox.
+The current vulnerability scan found zero reachable advisories; one imported-package
+and three module advisories remain outside analyzed call paths. Workflow YAML,
+shell steps and aggregate dependencies passed local checks; actionlint execution
+was permission-blocked and the hosted workflow remains unverified.
+
+These fixes do not close target identity, real-device, capacity, operational-owner,
+retention/erasure or cutover acceptance gates.
 
 ## Mounted staff credential review — 2026-11-09
 

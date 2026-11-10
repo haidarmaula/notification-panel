@@ -26,6 +26,9 @@ const messagingScope = "https://www.googleapis.com/auth/firebase.messaging"
 // ErrCredentials contains no provider error, token, assertion or key material.
 var ErrCredentials = errors.New("FCM credentials unavailable")
 
+// errTokenTemporary preserves retryability without retaining upstream secrets.
+var errTokenTemporary = errors.New("FCM token temporarily unavailable")
+
 // FileCredentialPolicy pins a managed secret's expected identity. Cross-project
 // grants require explicit approval; neither JSON nor this flag proves remote IAM.
 type FileCredentialPolicy struct {
@@ -211,17 +214,20 @@ func (s *fileTokenSource) Token(parent context.Context) (*auth.Token, error) {
 	select {
 	case s.gate <- struct{}{}:
 	case <-ctx.Done():
-		return nil, ErrCredentials
+		return nil, errTokenTemporary
 	}
 	defer func() { <-s.gate }()
 	if ctx.Err() != nil {
-		return nil, ErrCredentials
+		return nil, errTokenTemporary
 	}
 	if s.cached != nil && time.Until(s.cached.Expiry) > time.Minute {
 		return copyAccessToken(s.cached), nil
 	}
 	token, err := s.provider.Token(ctx)
-	if err != nil || ctx.Err() != nil || token == nil || token.Type != "Bearer" ||
+	if ctx.Err() != nil || errors.Is(err, errTokenTemporary) {
+		return nil, errTokenTemporary
+	}
+	if err != nil || token == nil || token.Type != "Bearer" ||
 		!opaqueToken(token.Value) || !token.Expiry.After(time.Now().Add(s.timeout)) {
 		return nil, ErrCredentials
 	}
@@ -248,11 +254,19 @@ func (t oauthTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 		if response != nil && response.Body != nil {
 			_ = response.Body.Close()
 		}
-		return nil, ErrCredentials
+		return nil, errTokenTemporary
 	}
 	data, readErr := io.ReadAll(io.LimitReader(response.Body, 16*1024+1))
 	closeErr := response.Body.Close()
-	if readErr != nil || closeErr != nil || len(data) > 16*1024 {
+	// Preserve temporary status without retaining provider text or allowing SDK retries.
+	if response.StatusCode == http.StatusRequestTimeout || response.StatusCode == http.StatusTooManyRequests ||
+		response.StatusCode >= 500 && response.StatusCode <= 599 {
+		return nil, errTokenTemporary
+	}
+	if readErr != nil || closeErr != nil {
+		return nil, errTokenTemporary
+	}
+	if len(data) > 16*1024 {
 		return nil, ErrCredentials
 	}
 	if response.StatusCode >= 200 && response.StatusCode < 300 {
@@ -266,6 +280,14 @@ func (t oauthTransport) RoundTrip(r *http.Request) (*http.Response, error) {
 			body.Expires < 1 || body.Expires > 3600 || body.IDToken != "" {
 			return nil, ErrCredentials
 		}
+	} else {
+		var body struct {
+			Error string `json:"error"`
+		}
+		if json.Unmarshal(data, &body) == nil && (body.Error == "server_error" || body.Error == "temporarily_unavailable") {
+			return nil, errTokenTemporary
+		}
+		return nil, ErrCredentials
 	}
 	response.Body = io.NopCloser(bytes.NewReader(data))
 	return response, nil

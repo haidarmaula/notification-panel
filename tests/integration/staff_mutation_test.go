@@ -14,6 +14,7 @@ import (
 	"testing"
 	"time"
 
+	jwtlib "github.com/golang-jwt/jwt/v5"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/crypto/bcrypt"
@@ -177,6 +178,105 @@ func TestStaffMutationSerializesRecoveryAuthority(t *testing.T) {
 			require.Equal(t, before.PasswordHash, after.PasswordHash)
 			require.Equal(t, before.AuthEpoch, after.AuthEpoch)
 			require.Equal(t, http.StatusOK, request(boundary, "PATCH", tc.path, body(boundaryPassword)).Code)
+		})
+	}
+}
+
+func TestStaffMutationExpiryRollsBack(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		duringWork    bool
+		sessionExpiry bool
+	}{
+		{name: "profile access expires waiting for user lock"},
+		{name: "profile session expires waiting for user lock", sessionExpiry: true},
+		{name: "staff access expires during audited work", duringWork: true},
+		{name: "staff session expires during audited work", duringWork: true, sessionExpiry: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+			defer cancel()
+			pool := acceptanceFixture(t, ctx)
+			q := sqlc.New(pool)
+			var actor int64
+			require.NoError(t, pool.QueryRow(ctx, `INSERT INTO staff_users(role_id,name,email,password_hash)
+				SELECT id,'expiry-actor','expiry-actor@fixture.invalid','fixture-only'
+				FROM roles WHERE name='SUPER_ADMIN' RETURNING id`).Scan(&actor))
+			tokens := token.NewTokenManager("fixture-access-not-production", "fixture-refresh-not-production")
+			access, err := fixtureAccess(ctx, q, tokens, actor, "SUPER_ADMIN", "")
+			require.NoError(t, err)
+			claims, err := tokens.ParseAccessToken(access)
+			require.NoError(t, err)
+			api := middleware.NewAPIKeyMiddleware("fixture-api-key")
+			jwt := middleware.NewJWTMiddleware(tokens, repository.NewStaffUserRepository(q))
+			mux := http.NewServeMux()
+			profile.NewProfileModule(q, pool, api.Use, jwt.Use).RegisterRoutes(mux)
+			staff.NewStaffModule(q, pool, api.Use, jwt.Use, middleware.NewAuditMiddleware().Use).RegisterRoutes(mux)
+
+			blocker, err := pool.Begin(ctx)
+			require.NoError(t, err)
+			defer blocker.Rollback(context.Background())
+			path, waitQuery := "/api/v1/profile", "%LockStaffMutationUsers%"
+			if tc.duringWork {
+				// The staff update runs before its required audit INSERT blocks.
+				_, err = blocker.Exec(ctx, `LOCK TABLE audit_logs IN ACCESS EXCLUSIVE MODE`)
+				path, waitQuery = fmt.Sprintf("/api/v1/staff/%d", actor), "%CreateAuditLog%"
+			} else {
+				_, err = blocker.Exec(ctx, `SELECT id FROM staff_users WHERE id=$1 FOR UPDATE`, actor)
+			}
+			require.NoError(t, err)
+
+			expires := time.Now().Add(5 * time.Second).Truncate(time.Second)
+			if tc.sessionExpiry {
+				_, err = pool.Exec(ctx, `UPDATE staff_sessions SET expires_at=$2 WHERE id=$1::uuid`, claims.SessionID, expires)
+				require.NoError(t, err)
+			} else {
+				claims.ExpiresAt = jwtlib.NewNumericDate(expires)
+				candidate := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, claims)
+				candidate.Header["kid"] = "dev-access"
+				access, err = candidate.SignedString([]byte("fixture-access-not-production"))
+				require.NoError(t, err)
+			}
+			r := httptest.NewRequest(http.MethodPatch, path, strings.NewReader(`{"name":"must-roll-back"}`)).WithContext(ctx)
+			r.Header.Set("Authorization", "Bearer "+access)
+			r.Header.Set("X-API-Key", "fixture-api-key")
+			r.Header.Set("Content-Type", "application/json")
+			answered := make(chan *httptest.ResponseRecorder, 1)
+			go func() {
+				w := httptest.NewRecorder()
+				mux.ServeHTTP(w, r)
+				answered <- w
+			}()
+			require.Eventually(t, func() bool {
+				var blocked bool
+				err := pool.QueryRow(ctx, `SELECT EXISTS (
+					SELECT FROM pg_stat_activity WHERE wait_event_type='Lock' AND query LIKE $1
+					AND pid <> pg_backend_pid()
+				)`, waitQuery).Scan(&blocked)
+				return err == nil && blocked
+			}, 3*time.Second, 10*time.Millisecond)
+			// Prove authentication and lock contention precede credential expiry.
+			require.True(t, time.Now().Before(expires), "request did not block before expiry")
+			timer := time.NewTimer(time.Until(expires))
+			defer timer.Stop()
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				t.Fatal("timed out waiting for credential expiry")
+			}
+			require.NoError(t, blocker.Commit(ctx))
+			select {
+			case w := <-answered:
+				require.Equal(t, http.StatusUnauthorized, w.Code, w.Body.String())
+			case <-ctx.Done():
+				t.Fatal("mounted mutation did not finish")
+			}
+			row, err := q.GetStaffUserByID(ctx, actor)
+			require.NoError(t, err)
+			require.Equal(t, "expiry-actor", row.Name)
+			var audits int
+			require.NoError(t, pool.QueryRow(ctx, `SELECT count(*) FROM audit_logs WHERE entity_type='staff_user'`).Scan(&audits))
+			require.Zero(t, audits, "expired staff mutation committed its audit")
 		})
 	}
 }

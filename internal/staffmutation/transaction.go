@@ -5,6 +5,7 @@ package staffmutation
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -26,7 +27,12 @@ func Run[T any](ctx context.Context, db Transactor, target int64, administrative
 	var zero, result T
 	claims, ok := ctx.Value(middleware.UserContextKey).(*token.AccessClaims)
 	var session pgtype.UUID
-	if !ok || claims == nil || claims.StaffID <= 0 || session.Scan(claims.SessionID) != nil || !session.Valid {
+	if !ok || claims == nil || claims.StaffID <= 0 || claims.ExpiresAt == nil ||
+		session.Scan(claims.SessionID) != nil || !session.Valid {
+		return zero, authz.ErrUnauthenticated
+	}
+	expires := claims.ExpiresAt.Time
+	if !time.Now().Before(expires) {
 		return zero, authz.ErrUnauthenticated
 	}
 	if !administrative && claims.StaffID != target {
@@ -53,8 +59,25 @@ func Run[T any](ctx context.Context, db Transactor, target int64, administrative
 		if err != nil {
 			return err
 		}
+		if !time.Now().Before(expires) {
+			return authz.ErrUnauthenticated
+		}
 		result, err = work(q)
-		return err
+		if err != nil {
+			return err
+		}
+		// Self-password and role changes intentionally advance the actor's generation.
+		var unexpired bool
+		if err := tx.QueryRow(ctx, `SELECT EXISTS (
+			SELECT 1 FROM staff_sessions
+			WHERE id = $1 AND staff_user_id = $2 AND expires_at > clock_timestamp()
+		)`, session, claims.StaffID).Scan(&unexpired); err != nil {
+			return err
+		}
+		if !unexpired || !time.Now().Before(expires) {
+			return authz.ErrUnauthenticated
+		}
+		return nil
 	})
 	if err != nil {
 		return zero, err

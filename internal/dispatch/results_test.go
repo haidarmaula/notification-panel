@@ -47,6 +47,46 @@ func TestResultStateAndRetryPolicy(t *testing.T) {
 	}
 }
 
+func TestTokenFailureResultPolicy(t *testing.T) {
+	now := time.Unix(2000000000, 0).UTC()
+	for _, tc := range []struct {
+		name       string
+		reason     fcm.Reason
+		count      int32
+		deadline   time.Duration
+		wantStatus string
+		wantReason string
+		hold       bool
+	}{
+		{"temporary refresh", fcm.Network, 1, time.Hour, "PENDING", "", false},
+		{"temporary refresh budget exhausted", fcm.Network, 3, time.Hour, "FAILED", "retry_budget_exhausted", false},
+		{"temporary refresh expired", fcm.Network, 1, -time.Second, "FAILED", "ttl_expired", false},
+		{"invalid credentials", fcm.CredentialFailure, 1, time.Hour, "FAILED", "credentials", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// The attempt remains charged even though token failure prevented submission.
+			out := fcm.Outcome{Disposition: fcm.NotSubmitted, Reason: tc.reason}
+			if !validResult(out) || configurationFailure(out) != tc.hold {
+				t.Fatal("token result rejected or incorrect application hold")
+			}
+			row := sqlc.LockResultDeliveryRow{
+				Status: "PENDING", AttemptCount: tc.count, RecordedAt: resultTime(now),
+				DeadlineAt: resultTime(now.Add(tc.deadline)), NextAttemptAt: resultTime(now),
+			}
+			desired, changed := resultMutation(row, out, 3)
+			if desired.Status != tc.wantStatus || desired.TerminalReason.String != tc.wantReason || changed != (tc.wantStatus == "FAILED") {
+				t.Fatalf("unexpected token result mutation: status=%s reason=%s changed=%t", desired.Status, desired.TerminalReason.String, changed)
+			}
+			if desired.AttemptCount != tc.count {
+				t.Fatal("token failure refunded a charged attempt")
+			}
+			if tc.wantStatus == "PENDING" && desired.NextAttemptAt.Time.Before(now.Add(10*time.Second)) {
+				t.Fatal("token failure bypassed retry backoff")
+			}
+		})
+	}
+}
+
 func TestDeliveryRetryDelayUsesAttemptWindowAndStableJitter(t *testing.T) {
 	var low, high pgtype.UUID
 	high.Bytes[15] = 99

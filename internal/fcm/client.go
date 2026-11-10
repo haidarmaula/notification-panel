@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"log/slog"
 	"net"
 	"net/http"
@@ -350,6 +351,9 @@ func (p *Permit) send(parent context.Context, request pushpayload.Request, check
 	token, err := s.tokens.Token(ctx)
 	if ctx.Err() != nil {
 		return Outcome{Disposition: NotSubmitted, Reason: Cancelled}
+	}
+	if errors.Is(err, errTokenTemporary) {
+		return Outcome{Disposition: NotSubmitted, Reason: Network}
 	}
 	if err != nil || token == nil || !token.Expiry.After(time.Now().Add(s.config.RequestTimeout)) ||
 		(token.Type != "" && token.Type != "Bearer") || !opaqueToken(token.Value) {

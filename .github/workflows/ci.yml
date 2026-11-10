@@ -71,9 +71,43 @@ jobs:
       - name: Verify transient retry and complete update drain
         run: bash scripts/delivery-load.sh 32 2 transient burst 8 8 10
 
+  integration:
+    name: Full integration, migrations and sealed recovery
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install pinned integration tools
+        run: |
+          mkdir -p "$RUNNER_TEMP/hello-tools" "$RUNNER_TEMP/hello-postman"
+          GOBIN="$RUNNER_TEMP/hello-tools" go install -tags postgres github.com/golang-migrate/migrate/v4/cmd/migrate@v4.19.1
+          curl --fail --silent --show-error --location --max-time 180 \
+            https://dl-cli.pstmn.io/download/version/1.75.0/linux64 \
+            --output "$RUNNER_TEMP/postman.tar.gz"
+          printf '%s  %s\n' 7c1b204163473c3d8107256939709e27a1bf4640cafd6a67350854aa27c38b9c "$RUNNER_TEMP/postman.tar.gz" | sha256sum --check --strict
+          tar -xzf "$RUNNER_TEMP/postman.tar.gz" -C "$RUNNER_TEMP/hello-postman"
+          ln -s postman-cli "$RUNNER_TEMP/hello-postman/postman"
+          printf '%s\n' "$RUNNER_TEMP/hello-tools" "$RUNNER_TEMP/hello-postman" >> "$GITHUB_PATH"
+      - name: Verify installed tool versions
+        run: |
+          migrate -version
+          test "$(postman --version)" = 1.75.0
+      - name: Run race-enabled integration and sealed restore
+        env:
+          GOFLAGS: -race
+        run: bash scripts/restore-drill.sh
+
   release-images:
     name: Build and check six offline production images
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -83,6 +117,22 @@ jobs:
           persist-credentials: false
       - name: Check the production commands
         run: python3 scripts/check-images.py
+
+  operations:
+    name: Monitoring rules and physical PITR
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Check monitoring rules and provisioned dashboards
+        run: bash scripts/check-monitoring.sh
+      - name: Pull the pinned recovery fixture image
+        run: docker pull postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+      - name: Verify physical recovery and missing-WAL rejection
+        run: python3 scripts/pitr-drill.py
 
   vulnerability:
     name: Reachable Go vulnerabilities
@@ -100,3 +150,19 @@ jobs:
           cache: true
       - name: Scan application and test code
         run: bash scripts/ci.sh vuln
+
+  release-ready:
+    name: Release readiness gates
+    if: ${{ always() }}
+    needs: [quality, delivery, integration, release-images, operations, vulnerability]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every verification job to succeed
+        env:
+          JOB_RESULTS: ${{ join(needs.*.result, ' ') }}
+        run: |
+          for result in $JOB_RESULTS; do
+            test "$result" = success
+          done
+          printf 'Repository gates passed for commit `%s`. Target deployment acceptance remains separate.\n' "$GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

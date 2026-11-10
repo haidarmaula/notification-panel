@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -205,11 +206,11 @@ func TestFileSourceWaitersCancelAndRefreshJoins(t *testing.T) {
 	<-started
 	waiter, cancelWaiter := context.WithCancel(context.Background())
 	cancelWaiter()
-	if token, err := source.Token(waiter); token != nil || err != ErrCredentials {
+	if token, err := source.Token(waiter); token != nil || !errors.Is(err, errTokenTemporary) {
 		t.Fatal("cancelled waiter blocked or received token")
 	}
 	cancelFirst()
-	if err := <-done; err != ErrCredentials {
+	if err := <-done; !errors.Is(err, errTokenTemporary) || err.Error() != errTokenTemporary.Error() {
 		t.Fatal("raw refresh error escaped")
 	}
 	select {
@@ -240,6 +241,102 @@ func TestOAuthResponsesAreBoundedAndSafe(t *testing.T) {
 			defer cleanup()
 			if token, err := source.Token(context.Background()); token != nil || !errors.Is(err, ErrCredentials) || err.Error() != ErrCredentials.Error() {
 				t.Fatal("unsafe token/error returned")
+			}
+		})
+	}
+}
+
+func TestFileSourceRefreshTimeoutIsRetryable(t *testing.T) {
+	data, policy, _ := fileFixture(t)
+	config, request := transportFixture(t)
+	calls := 0
+	source, cleanup, err := fileSource(config, policy, data, roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		calls++
+		<-r.Context().Done()
+		return nil, r.Context().Err()
+	}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	// Expire the refresh budget while the send's parent context remains live.
+	source.timeout = 20 * time.Millisecond
+	client, err := newClient(config, source, roundTripFunc(func(*http.Request) (*http.Response, error) {
+		t.Error("refresh timeout reached FCM")
+		return nil, errTransport
+	}), func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	out := send(t, client, request)
+	if out.Disposition != NotSubmitted || out.Reason != Network || out.PhysicalRequests != 0 || calls != 1 {
+		t.Fatalf("refresh timeout misclassified or retried: %+v calls=%d", out, calls)
+	}
+}
+
+func TestOAuthFailureClassificationThroughClient(t *testing.T) {
+	data, policy, _ := fileFixture(t)
+	for _, tc := range []struct {
+		name, body string
+		status     int
+		transport  bool
+		truncated  bool
+		temporary  bool
+	}{
+		{name: "transport", transport: true, temporary: true},
+		{name: "timeout status", status: 408, body: `sensitive`, temporary: true},
+		{name: "quota", status: 429, body: `sensitive`, temporary: true},
+		{name: "internal", status: 500, body: `sensitive`, temporary: true},
+		{name: "unavailable truncated", status: 503, truncated: true, temporary: true},
+		{name: "unavailable oversized", status: 503, body: strings.Repeat("sensitive", 3000), temporary: true},
+		{name: "gateway", status: 504, body: `sensitive`, temporary: true},
+		{name: "temporary oauth", status: 400, body: `{"error":"temporarily_unavailable","error_description":"sensitive"}`, temporary: true},
+		{name: "server oauth", status: 400, body: `{"error":"server_error","error_description":"sensitive"}`, temporary: true},
+		{name: "invalid grant", status: 400, body: `{"error":"invalid_grant","error_description":"sensitive"}`},
+		{name: "invalid client", status: 401, body: `{"error":"invalid_client","error_description":"sensitive"}`},
+		{name: "forbidden", status: 403, body: `sensitive`},
+		{name: "invalid token response", status: 200, body: `{"access_token":"sensitive","token_type":"Basic","expires_in":3600}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			config, request := transportFixture(t)
+			calls := 0
+			source, cleanup, err := fileSource(config, policy, data, roundTripFunc(func(*http.Request) (*http.Response, error) {
+				calls++
+				if tc.transport {
+					return nil, errors.New("sensitive transport failure")
+				}
+				r := response(tc.status, tc.body)
+				if tc.truncated {
+					r.Body = io.NopCloser(io.MultiReader(strings.NewReader(`{"error":`), failingResponseReader{}))
+				}
+				return r, nil
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+			wantErr, wantReason := ErrCredentials, CredentialFailure
+			if tc.temporary {
+				wantErr, wantReason = errTokenTemporary, Network
+			}
+			if token, err := source.Token(context.Background()); token != nil || !errors.Is(err, wantErr) || err.Error() != wantErr.Error() {
+				t.Fatal("token failure did not retain safe classification")
+			}
+			client, err := newClient(config, source, roundTripFunc(func(*http.Request) (*http.Response, error) {
+				t.Error("token failure reached FCM")
+				return nil, errTransport
+			}), func() {})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer client.Close()
+			out := send(t, client, request)
+			if out.Disposition != NotSubmitted || out.Reason != wantReason || out.PhysicalRequests != 0 || out.ProviderMessageID != "" {
+				t.Fatalf("unexpected token failure outcome: %+v", out)
+			}
+			if calls != 2 {
+				t.Fatalf("refresh retried internally or cached failure: %d calls", calls)
 			}
 		})
 	}

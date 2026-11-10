@@ -75,6 +75,10 @@ func classify(name string, sdkErr error, record callSnapshot, project string, de
 		out.RetryAt = retryAt(record.retryAfter, now, floor, deadline)
 		return out
 	}
+	// The status alone proves quota rejection even when the body is unusable.
+	if record.status == http.StatusTooManyRequests {
+		return retry(Quota, Rejected, time.Minute)
+	}
 	if record.bad || !record.complete {
 		return retry(Network, Unconfirmed, 10*time.Second)
 	}

@@ -24,6 +24,8 @@ func TestPrivateDiagnostics(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
 	pool := acceptanceFixture(t, ctx)
+	_, err := pool.Exec(ctx, "ALTER TABLE staff_sessions RENAME TO incompatible_staff_sessions")
+	require.NoError(t, err)
 	l, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
 	address := l.Addr().String()
@@ -74,7 +76,22 @@ func TestPrivateDiagnostics(t *testing.T) {
 		}
 		return res.StatusCode, string(data)
 	}
-	require.Eventually(t, func() bool { c, _ := probe("/readyz"); return c == 200 }, 5*time.Second, 30*time.Millisecond)
+	require.Eventually(t, func() bool {
+		c, b := probe("/readyz")
+		return c == 503 && b == "database_unavailable\n"
+	}, 5*time.Second, 30*time.Millisecond)
+	_, err = pool.Exec(ctx, "ALTER TABLE incompatible_staff_sessions RENAME TO staff_sessions")
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { c, _ := probe("/readyz"); return c == 200 }, 8*time.Second, 30*time.Millisecond)
+	_, err = pool.Exec(ctx, "ALTER TABLE application_dispatch_policy RENAME COLUMN dispatch_mode TO incompatible_dispatch_mode")
+	require.NoError(t, err)
+	require.Eventually(t, func() bool {
+		c, b := probe("/readyz")
+		return c == 503 && b == "database_unavailable\n"
+	}, 8*time.Second, 30*time.Millisecond)
+	_, err = pool.Exec(ctx, "ALTER TABLE application_dispatch_policy RENAME COLUMN incompatible_dispatch_mode TO dispatch_mode")
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { c, _ := probe("/readyz"); return c == 200 }, 8*time.Second, 30*time.Millisecond)
 	unauth := cert.Clone()
 	unauth.Certificates = nil
 	resp, err := makeClient(unauth).Get("https://" + address + "/metrics")

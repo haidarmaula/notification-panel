@@ -160,6 +160,36 @@ func (s *State) handlers() http.Handler {
 	return mux
 }
 
+const readinessQuery = `SELECT sealed OR migration_hold FROM notification_runtime
+WHERE singleton AND NOT EXISTS (
+    SELECT 1 FROM (VALUES
+        ('staff_users', ARRAY['auth_epoch']),
+        ('staff_sessions', ARRAY['id','staff_user_id','auth_epoch','session_epoch','refresh_digest','expires_at','revoked_at']),
+        ('staff_session_control', ARRAY['session_epoch']),
+        ('staff_administration_guard', ARRAY['singleton']),
+        ('notification_send_outbox', ARRAY['source_epoch','next_publish_at']),
+        ('notification_update_outbox', ARRAY['delivery_version','payload','next_attempt_at']),
+        ('notification_delivery_intents', ARRAY['provider_accepted_at','observed_delivered_at','observed_opened_at','audience_route_revision']),
+        ('notification_receipt_metadata', ARRAY['delivery_id','key_id','expires_unix']),
+        ('notification_receipt_requests', ARRAY['client_event_id','expires_unix']),
+        ('notification_observations', ARRAY['delivery_id','event','received_at']),
+        ('notification_preparations', ARRAY['prepared_pilot_cohort']),
+        ('current_binding_routes', ARRAY['revision','destination','resume_from']),
+        ('application_lifecycle_grants', ARRAY['id','applied_at']),
+        ('application_dispatch_policy', ARRAY['dispatch_revision','dispatch_mode','dispatch_cohort']),
+        ('application_dispatch_grants', ARRAY['id','applied_at'])
+    ) AS required(relation_name,column_names)
+    CROSS JOIN LATERAL pg_catalog.unnest(required.column_names) AS required_column(name)
+    WHERE NOT EXISTS (
+        SELECT 1 FROM pg_catalog.pg_attribute a
+        WHERE a.attrelid=pg_catalog.to_regclass(required.relation_name)
+            AND a.attname=required_column.name AND a.attnum>0 AND NOT a.attisdropped
+    )
+)
+AND pg_catalog.to_regprocedure('hold_delivery_dispatch(bigint)') IS NOT NULL
+AND pg_catalog.to_regprocedure('apply_application_lifecycle(uuid,uuid)') IS NOT NULL
+AND pg_catalog.to_regprocedure('apply_application_dispatch(uuid,uuid)') IS NOT NULL`
+
 func (s *State) collect(ctx context.Context, pool *pgxpool.Pool) {
 	timer := time.NewTimer(0)
 	defer timer.Stop()
@@ -170,10 +200,8 @@ func (s *State) collect(ctx context.Context, pool *pgxpool.Pool) {
 		case <-timer.C:
 			check, cancel := context.WithTimeout(ctx, time.Second)
 			var held bool
-			// Verify the role can access the modern schema in addition to opening a connection.
-			err := pool.QueryRow(check, `SELECT sealed OR migration_hold FROM notification_runtime
-            WHERE singleton AND to_regclass('notification_observations') IS NOT NULL
-            AND to_regclass('notification_send_outbox') IS NOT NULL AND to_regclass('notification_update_outbox') IS NOT NULL`).Scan(&held)
+			// Catalog checks preserve each daemon's restricted table grants.
+			err := pool.QueryRow(check, readinessQuery).Scan(&held)
 			cancel()
 			s.mu.Lock()
 			if err == nil {

@@ -183,8 +183,15 @@ func TestScopedSegmentWrites(t *testing.T) {
 		request(http.MethodGet, foreignPath+"/reads", "", 404)
 		require.Contains(t, request(http.MethodGet, historyPath+"/reads", "", 200).Body.String(), `"items":[]`)
 		device := number("INSERT INTO device_tokens(application_id,user_id,platform,provider,push_token) VALUES($1,$2,'ANDROID','FCM','private-fixture-token') RETURNING id", appID, user)
-		delivery := number("INSERT INTO notification_deliveries(application_id,notification_id,user_id,device_token_id,provider,provider_message_id,failed_reason) VALUES($1,$2,$3,$4,'FCM','private-provider-id','private-failure-detail') RETURNING id", appID, historyCampaign, user, device)
+		exec("INSERT INTO notification_deliveries(application_id,notification_id,user_id,device_token_id,provider,provider_message_id,failed_reason) VALUES($1,$2,$3,$4,'FCM','private-provider-id','private-failure-detail')", appID, historyCampaign, user, device)
 		exec("INSERT INTO notification_deliveries(notification_id,user_id,device_token_id,provider) VALUES($1,$2,$3,'LEGACY')", historyCampaign, user, device)
+		require.Contains(t, request(http.MethodGet, historyPath+"/deliveries", "", 200).Body.String(), `"items":[]`, "legacy-only deliveries must not masquerade as modern history")
+		installation := number("INSERT INTO mobile_installations(application_id,owner_user_id,proof_verifier) VALUES($1,$2,decode(repeat('01',32),'hex')) RETURNING id", appID, user)
+		binding := number(`INSERT INTO installation_bindings(application_id,installation_id,owner_user_id,owner_epoch,platform,provider_namespace,provider_route_key,address_type,address_fingerprint,address_ciphertext,encryption_key_version)
+			VALUES($1,$2,$3,1,'ANDROID','history-fixture','route','FCM_REGISTRATION_TOKEN',decode(repeat('02',32),'hex'),'private-address',1) RETURNING id`, appID, installation, user)
+		var delivery, installationPublic string
+		require.NoError(t, tx.QueryRow(ctx, "INSERT INTO notification_delivery_intents(application_id,notification_id,installation_id,binding_id,owner_user_id,owner_epoch) VALUES($1,$2,$3,$4,$5,1) RETURNING id::text", appID, historyCampaign, installation, binding, user).Scan(&delivery))
+		require.NoError(t, tx.QueryRow(ctx, "SELECT public_id::text FROM mobile_installations WHERE id=$1", installation).Scan(&installationPublic))
 		exec("INSERT INTO notification_reads(application_id,notification_id,user_id) VALUES($1,$2,$3)", appID, historyCampaign, user)
 		exec("INSERT INTO notification_reads(notification_id,user_id) VALUES($1,$2)", historyCampaign, foreign)
 		var deliveries, reads struct {
@@ -197,7 +204,12 @@ func TestScopedSegmentWrites(t *testing.T) {
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &deliveries))
 		require.Len(t, deliveries.Data.Items, 1)
 		require.Len(t, deliveries.Data.Items[0], 7)
-		require.Equal(t, fmt.Sprint(delivery), deliveries.Data.Items[0]["id"])
+		require.Equal(t, delivery, deliveries.Data.Items[0]["id"])
+		require.Equal(t, installationPublic, deliveries.Data.Items[0]["installation_id"])
+		require.Equal(t, "PENDING", deliveries.Data.Items[0]["status"])
+		for _, hidden := range []string{"device_id", "private-fixture-token", "private-provider-id", "private-failure-detail", "private-address", "proof_verifier"} {
+			require.NotContains(t, w.Body.String(), hidden)
+		}
 		require.Nil(t, deliveries.Data.NextAfterID)
 		w = request(http.MethodGet, historyPath+"/reads", "", 200)
 		require.NoError(t, json.Unmarshal(w.Body.Bytes(), &reads))

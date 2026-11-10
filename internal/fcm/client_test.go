@@ -359,6 +359,69 @@ func TestRetryAdviceAndBreakerGenerations(t *testing.T) {
 	}
 }
 
+type failingResponseReader struct{}
+
+func (failingResponseReader) Read([]byte) (int, error) {
+	return 0, io.ErrUnexpectedEOF
+}
+
+func TestDamagedResponseQuotaBackpressure(t *testing.T) {
+	for _, status := range []int{200, 401, 429, 503} {
+		for _, body := range []string{"truncated", "oversized"} {
+			for _, header := range []string{"", "120"} {
+				for _, shortDeadline := range []bool{false, true} {
+					t.Run(fmt.Sprintf("%d/%s/retry=%s/short=%t", status, body, header, shortDeadline), func(t *testing.T) {
+						config, request := transportFixture(t)
+						if shortDeadline {
+							request.Deadline = time.Now().Add(5 * time.Second)
+						}
+						calls := 0
+						client := makeClient(t, config, roundTripFunc(func(*http.Request) (*http.Response, error) {
+							calls++
+							r := response(status, strings.Repeat("x", 70*1024))
+							if body == "truncated" {
+								r.Body = io.NopCloser(io.MultiReader(strings.NewReader(`{"error":`), failingResponseReader{}))
+							}
+							r.Header.Set("Retry-After", header)
+							return r, nil
+						}))
+						started := time.Now()
+						out := send(t, client, request)
+						if calls != 1 || out.PhysicalRequests != 1 {
+							t.Fatalf("damaged response caused hidden retries: %+v calls=%d", out, calls)
+						}
+						if status != 429 {
+							if out.Disposition != Unconfirmed || out.Reason != Network || !client.s.cooldown.IsZero() {
+								t.Fatalf("non-quota uncertainty was not conservative: %+v", out)
+							}
+							return
+						}
+						floor := time.Minute
+						if header != "" {
+							floor = 120 * time.Second
+						}
+						if out.Disposition != Rejected || out.Reason != Quota {
+							t.Fatalf("observed quota was lost: %+v", out)
+						}
+						if shortDeadline {
+							if !out.RetryAt.Equal(request.Deadline) {
+								t.Fatal("delivery retry must stop at its deadline")
+							}
+						} else if out.RetryAt.Before(started.Add(floor)) {
+							t.Fatal("damaged quota response shortened retry floor")
+						}
+						permit, err := client.Acquire(context.Background())
+						var deferred *Deferred
+						if permit != nil || !errors.As(err, &deferred) || deferred.RetryAt.Before(started.Add(floor)) {
+							t.Fatal("damaged quota response lost shared cooldown")
+						}
+					})
+				}
+			}
+		}
+	}
+}
+
 func TestQuotaHoldSurvivesDeliveryDeadline(t *testing.T) {
 	config, request := transportFixture(t)
 	request.Deadline = time.Now().Add(time.Second)
