@@ -41,7 +41,7 @@ func TestProtectedServerDatabaseAndMobilePolicy(t *testing.T) {
 		return map[string]any{"audience": "aud-" + kid, "active_kid": kid, "keys": []map[string]string{{"kid": kid, "key": base64.RawURLEncoding.EncodeToString([]byte(material))}}}
 	}
 	trust := map[string]any{"issuer": "protected-staff", "access": purpose("access", strings.Repeat("b", 32)), "refresh": purpose("refresh", strings.Repeat("c", 32))}
-	p := map[string]any{"ingress": fixtureIngress(t), "database_url": dbURL, "api_key": strings.Repeat("a", 32), "staff_tokens": trust, "mobile_policy_file": ""}
+	p := map[string]any{"ingress": fixtureIngress(t), "database_url": dbURL, "api_key": strings.Repeat("a", 32), "staff_tokens": trust, "mobile_policy_file": "", "browser_origins": []string{"https://admin.example.test"}}
 	parse := func() (*ServerConfig, error) {
 		b, err := json.Marshal(p)
 		if err != nil {
@@ -53,6 +53,14 @@ func TestProtectedServerDatabaseAndMobilePolicy(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(cfg.CORSAllowedOrigins) != 1 || cfg.CORSAllowedOrigins[0] != "https://admin.example.test" {
+		t.Fatalf("protected CORS origins = %#v", cfg.CORSAllowedOrigins)
+	}
+	p["browser_origins"] = []string{"*"}
+	if cfg, err := parse(); cfg != nil || err != deployment.ErrConfiguration {
+		t.Fatal("protected server accepted a wildcard browser origin")
+	}
+	p["browser_origins"] = []string{"https://admin.example.test"}
 	pair, err := cfg.StaffTokens().Issue(1, "ADMIN", "", token.NewFamily())
 	if err != nil {
 		t.Fatal(err)
@@ -116,6 +124,7 @@ func TestLocalServerListenerDefaultsToLoopback(t *testing.T) {
 		"REFRESH_SECRET": "fixture-refresh-secret", "MOBILE_JWT_SECRET": "fixture-mobile-secret",
 		"SUPER_ADMIN_ROLE": "SUPER_ADMIN", "KAFKA_BROKER": "localhost:9092",
 		"KAFKA_SEND_TOPIC": "notification.send.requested", "HTTP_LISTEN_ADDRESS": "",
+		"CORS_ALLOWED_ORIGINS": "https://admin.example.test, http://localhost:3000",
 	} {
 		t.Setenv(name, value)
 	}
@@ -123,9 +132,38 @@ func TestLocalServerListenerDefaultsToLoopback(t *testing.T) {
 	if cfg.ListenAddress != "127.0.0.1:8080" {
 		t.Fatalf("local listener = %q, want loopback default", cfg.ListenAddress)
 	}
+	if len(cfg.CORSAllowedOrigins) != 2 || cfg.CORSAllowedOrigins[1] != "http://localhost:3000" {
+		t.Fatalf("local CORS origins = %#v", cfg.CORSAllowedOrigins)
+	}
+	t.Setenv("CORS_ALLOWED_ORIGINS", "")
+	if cfg := LoadServerConfig(); len(cfg.CORSAllowedOrigins) != 0 {
+		t.Fatalf("unset CORS origins = %#v, want default deny", cfg.CORSAllowedOrigins)
+	}
 	t.Setenv("HTTP_LISTEN_ADDRESS", "0.0.0.0:8080")
 	if cfg := LoadServerConfig(); cfg.ListenAddress != "0.0.0.0:8080" {
 		t.Fatalf("explicit local listener = %q, want configured address", cfg.ListenAddress)
+	}
+}
+
+func TestCORSOriginListCanonicalizesAndRejectsUnsafeOrigins(t *testing.T) {
+	origins, err := parseCORSOriginList("HTTPS://Admin.Example.Test:443, http://localhost:3000, https://admin.example.test")
+	if err != nil {
+		t.Fatal("valid origins rejected")
+	}
+	want := []string{"https://admin.example.test", "http://localhost:3000"}
+	if len(origins) != len(want) {
+		t.Fatalf("origins = %#v, want %#v", origins, want)
+	}
+	for i := range want {
+		if origins[i] != want[i] {
+			t.Fatalf("origin[%d] = %q, want %q", i, origins[i], want[i])
+		}
+	}
+
+	for _, value := range []string{"*", "https://*", "null", "https://admin.example.test/", "ftp://admin.example.test", "https://user@admin.example.test", "https://admin.example.test?x=1", "https://admin.example.test,"} {
+		if _, err := parseCORSOriginList(value); err == nil {
+			t.Errorf("unsafe origin %q accepted", value)
+		}
 	}
 }
 

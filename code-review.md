@@ -408,7 +408,7 @@ Design inconsistencies, duplication, contract drift, and maintainability hazards
 | M43 | Mounted JSON handlers | **Media-type portion fixed locally 2026-11-09:** all mounted JSON writes require one `application/json` Content-Type with optional UTF-8 charset and identity content encoding; unsupported media returns safe 415 before service work. Scoped application handlers already used the strict decoder; auth, staff and profile now share the enforcement. The existing 64KiB/1MiB body caps and safe 400/413 behavior remain. Staff/profile name/email enforce the schema-backed `VARCHAR(255)` character limit. Campaign and template content share byte-limit validation with exact/over and multibyte boundary tests. Other field/item/depth controls, caller compatibility and deployment are unverified. |
 | M44 | All 17 JSON input handlers, including profile | **Fixed in local code, M02d:** 64KiB small JSON / 1MiB campaign limits, complete bounded reads and single-value decoding. [Evidence](docs/analysis/m02d-verification.md): boundary/direct-handler/real-DB route tests; no rejected mutation or Kafka event. Other abuse controls remain open. |
 | M45 | Protected HTTP API | **Fixed locally.** Login, refresh and logout share per-IP and aggregate authentication budgets before reaching the handler. [Gateway contract](docs/specs/m02-gateway.md). |
-| M46 | HTTP layer | No CORS configuration for the admin portal |
+| M46 | HTTP layer | **Fixed locally:** optional exact browser-origin allowlist applies to API responses and preflight requests behind gateway authentication/rate limits. The protected server policy uses `browser_origins`; local development uses `CORS_ALLOWED_ORIGINS`. Empty configuration denies cross-origin browser access. This does not authenticate requests, enable cookies, or establish the production portal origin. |
 | M47 | `internal/features/mobile/service.go` — `verifyJWT` | **Scoped to the unmounted legacy mobile service.** It accepts the HMAC family instead of pinning HS256 and does not enforce issuer, audience or subject. The comparison in the legacy Godoc was stale: `internal/token` staff parsers now pin HS256 and validate their configured issuer/audience, but do not verify mobile tokens. The mounted mobile lifecycle uses a separate protected identity policy. Keep the legacy gap open if that module is ever reactivated. |
 
 ### Kafka Client Configuration
@@ -579,7 +579,7 @@ Focus: design consistency and maintainability.
 Focus: operational readiness.
 
 - [x] M45 — enforce protected authentication request budgets
-- [ ] M46 — configure CORS for the admin portal
+- [x] M46 — exact-origin CORS policy is configurable; production portal origin and browser acceptance remain deployment gates
 - [ ] M38 — Prometheus metrics, the private dashboard and the local alert rules are implemented; OpenTelemetry tracing is genuinely absent (no `otel` import anywhere in the tree) and target alert routing remains open
 - [ ] L1 — rename the audit constant identifiers to `MixedCaps`. The persisted string values are contracts and must not change, so this is safe but cosmetic
 - [x] L8, L9 — the README's Go and Kafka versions now match `go.mod` and the digest-locked compose images, and the `NotificationDeliveryUpdated` claim that L9 cited is gone from the README

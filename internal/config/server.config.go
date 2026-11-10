@@ -12,17 +12,17 @@ import (
 // ServerConfig holds the configuration required by the HTTP API server
 // (cmd/server) in addition to the shared database settings.
 //
-// It covers three concerns: authentication secrets used to sign and verify
+// It covers authentication secrets used to sign and verify
 // JWTs, the shared API key used by the admin portal for coarse-grained
-// authorisation, and the Kafka producer parameters used when a staff member
-// triggers an immediate notification send. Delivery-provider credentials
-// (OneSignal) are deliberately absent — only the worker talks to OneSignal.
+// authorisation, browser CORS origins, and Kafka producer parameters used
+// when a staff member triggers an immediate notification send.
 type ServerConfig struct {
-	Gateway          *ingress.Gateway
-	Monitoring       *observability.Admin
-	ListenAddress    string
-	mobilePolicyFile string
-	staffTokens      *token.TokenManager
+	Gateway            *ingress.Gateway
+	Monitoring         *observability.Admin
+	ListenAddress      string
+	CORSAllowedOrigins []string
+	mobilePolicyFile   string
+	staffTokens        *token.TokenManager
 
 	BaseConfig
 
@@ -77,12 +77,11 @@ func (c *ServerConfig) StaffTokens() *token.TokenManager {
 //
 // # Failure modes
 //
-// The function calls log.Fatal and terminates the process if any of API_KEY,
-// ACCESS_SECRET, REFRESH_SECRET, MOBILE_JWT_SECRET, SUPER_ADMIN_ROLE,
-// KAFKA_BROKER, or KAFKA_SEND_TOPIC is empty, or if the underlying
-// LoadBaseConfig fails. There are no defaults: the API server refuses to
-// start with an incomplete security configuration rather than risk running
-// with a weak or missing secret. It never returns nil.
+// The function calls log.Fatal and terminates the process if API_KEY,
+// ACCESS_SECRET, or REFRESH_SECRET is empty, if CORS_ALLOWED_ORIGINS is
+// malformed, or if the underlying LoadBaseConfig fails. The listener defaults
+// to loopback, and an empty CORS origin list denies cross-origin browser
+// access. It never returns nil.
 //
 // # Concurrency
 //
@@ -107,6 +106,11 @@ func LoadServerConfig() *ServerConfig {
 	}
 	if cfg.ListenAddress == "" {
 		cfg.ListenAddress = "127.0.0.1:8080"
+	}
+	var err error
+	cfg.CORSAllowedOrigins, err = parseCORSOriginList(os.Getenv("CORS_ALLOWED_ORIGINS"))
+	if err != nil {
+		log.Fatal("CORS_ALLOWED_ORIGINS is invalid")
 	}
 
 	if cfg.APIKey == "" {

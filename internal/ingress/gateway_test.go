@@ -52,6 +52,33 @@ func TestGatewayClientIdentity(t *testing.T) {
 		})
 	}
 }
+
+func TestGatewayProtectHandlerChecksPeerBeforeCustomHandler(t *testing.T) {
+	g := testGateway(t)
+	mux := http.NewServeMux()
+	mux.HandleFunc("OPTIONS /api/test", func(http.ResponseWriter, *http.Request) {})
+	called := false
+	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+	serve := g.ProtectHandler(mux, handler)
+
+	request := httptest.NewRequest(http.MethodOptions, "/api/test", nil)
+	request.Header.Set("Origin", "https://admin.example.test")
+	response := httptest.NewRecorder()
+	serve.ServeHTTP(response, request)
+	require.Equal(t, http.StatusForbidden, response.Code)
+	require.False(t, called, "custom handler ran before gateway verification")
+
+	request = gatewayRequest("/api/test", "192.0.2.1")
+	request.Method = http.MethodOptions
+	response = httptest.NewRecorder()
+	serve.ServeHTTP(response, request)
+	require.Equal(t, http.StatusNoContent, response.Code)
+	require.True(t, called)
+}
+
 func TestGatewayBudgets(t *testing.T) {
 	g := testGateway(t)
 	mux := http.NewServeMux()

@@ -82,6 +82,12 @@ func (g *Gateway) ClientIP(r *http.Request) string {
 // Protect rejects unauthorized traffic before it can reach a credential parser
 // or acquire a database connection. Authentication paths have a separate budget.
 func (g *Gateway) Protect(mux *http.ServeMux) http.Handler {
+	return g.ProtectHandler(mux, mux)
+}
+
+// ProtectHandler applies gateway checks and request limits before serving the
+// supplied handler. The mux remains the route source for auth-specific limits.
+func (g *Gateway) ProtectHandler(mux *http.ServeMux, handler http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		ip := g.ClientIP(r)
@@ -108,7 +114,7 @@ func (g *Gateway) Protect(mux *http.ServeMux) http.Handler {
 		select {
 		case g.active <- struct{}{}:
 			defer func() { <-g.active }()
-			mux.ServeHTTP(w, r)
+			handler.ServeHTTP(w, r)
 		default:
 			w.Header().Set("Retry-After", "1")
 			response.JSON(w, http.StatusServiceUnavailable, nil, "service busy")

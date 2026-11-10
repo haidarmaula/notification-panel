@@ -36,10 +36,16 @@ func parseServerDeployment(data []byte) (*ServerConfig, error) {
 	var c ServerConfig
 	var admin, gateway, staffTokens json.RawMessage
 	var dsn string
+	var browserOrigins []string
 	err := jsonobject.DecodeOptional(data, map[string]any{
-		"ingress": &gateway, "database_url": &dsn, "api_key": &c.APIKey, "staff_tokens": &staffTokens, "mobile_policy_file": &c.mobilePolicyFile,
+		"ingress": &gateway, "database_url": &dsn, "api_key": &c.APIKey, "staff_tokens": &staffTokens,
+		"mobile_policy_file": &c.mobilePolicyFile, "browser_origins": &browserOrigins,
 	}, map[string]any{"monitoring": &admin})
 	if err != nil || len(c.APIKey) < 32 {
+		return nil, deployment.ErrConfiguration
+	}
+	c.CORSAllowedOrigins, err = canonicalCORSOrigins(browserOrigins)
+	if err != nil {
 		return nil, deployment.ErrConfiguration
 	}
 	c.staffTokens, err = token.ParsePolicy(staffTokens, c.APIKey)

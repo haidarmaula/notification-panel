@@ -92,10 +92,10 @@ func runServer(ctx context.Context, cfg *config.ServerConfig) (err error) {
 	logger := slog.New(slog.NewJSONHandler(observability.BoundedOutput(os.Stderr, state.Dropped), nil)).With("component", "server")
 	return state.Run(ctx, cfg.Monitoring, db, logger, func(ctx context.Context) error {
 		var listener net.Listener
-		var handler http.Handler = mux
+		var handler http.Handler = http.HandlerFunc(middleware.NewCORSMiddleware(cfg.CORSAllowedOrigins)(mux.ServeHTTP))
 		if cfg.Gateway != nil {
 			listener, err = cfg.Gateway.Listener.Listen(ctx)
-			handler = cfg.Gateway.Protect(mux)
+			handler = cfg.Gateway.ProtectHandler(mux, handler)
 		} else {
 			var lc net.ListenConfig
 			listener, err = lc.Listen(ctx, "tcp", cfg.ListenAddress)

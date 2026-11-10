@@ -663,7 +663,7 @@ docker-compose -f docker-compose.yml -f docker-compose.prod.yml up -d
 
 - ⚠️ **Rate Limiting** — Add rate limiter middleware
 - ⚠️ **HTTPS** — Use TLS in production
-- ⚠️ **CORS** — Configure for web frontend
+- ✅ **CORS** — Exact browser origins can be configured in the protected server policy; the default denies cross-origin access
 - ⚠️ **Input Sanitization** — Add validation middleware for all inputs
 
 ---
