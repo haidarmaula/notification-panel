@@ -56,10 +56,15 @@ func TestProtectedServerDatabaseAndMobilePolicy(t *testing.T) {
 	if len(cfg.CORSAllowedOrigins) != 1 || cfg.CORSAllowedOrigins[0] != "https://admin.example.test" {
 		t.Fatalf("protected CORS origins = %#v", cfg.CORSAllowedOrigins)
 	}
+	delete(p, "browser_origins")
+	if cfg, err := parse(); err != nil || len(cfg.CORSAllowedOrigins) != 0 {
+		t.Fatal("protected server did not default to denying browser origins")
+	}
 	p["browser_origins"] = []string{"*"}
 	if cfg, err := parse(); cfg != nil || err != deployment.ErrConfiguration {
 		t.Fatal("protected server accepted a wildcard browser origin")
 	}
+	p["browser_origins"] = []string{"https://admin.example.test"}
 	p["browser_origins"] = []string{"https://admin.example.test"}
 	pair, err := cfg.StaffTokens().Issue(1, "ADMIN", "", token.NewFamily())
 	if err != nil {

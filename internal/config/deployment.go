@@ -39,8 +39,8 @@ func parseServerDeployment(data []byte) (*ServerConfig, error) {
 	var browserOrigins []string
 	err := jsonobject.DecodeOptional(data, map[string]any{
 		"ingress": &gateway, "database_url": &dsn, "api_key": &c.APIKey, "staff_tokens": &staffTokens,
-		"mobile_policy_file": &c.mobilePolicyFile, "browser_origins": &browserOrigins,
-	}, map[string]any{"monitoring": &admin})
+		"mobile_policy_file": &c.mobilePolicyFile,
+	}, map[string]any{"monitoring": &admin, "browser_origins": &browserOrigins})
 	if err != nil || len(c.APIKey) < 32 {
 		return nil, deployment.ErrConfiguration
 	}
