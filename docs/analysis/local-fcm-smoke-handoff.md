@@ -49,8 +49,9 @@ is now documented in `docs/runbooks/delivery-worker.md`.
 The scheduler and delivery-only worker were healthy at the last check. The
 three container names are `hello-fcm-smoke-scheduler`,
 `hello-fcm-smoke-admission`, and `hello-fcm-smoke-delivery`. The connected
-Android device is still running the smoke app. The app's reverse API tunnel
-continues to target port 8080; the campaign API used port 8082.
+Android device now shows the Metro bundle error. The current ADB reverse list
+contains only port 8081; the earlier API reverse for port 8080 is absent. The
+campaign API process uses port 8082.
 
 ## Continue safely
 
@@ -75,6 +76,29 @@ continues to target port 8080; the campaign API used port 8082.
    itself still cannot read quotas (`serviceusage.quotas.get` returned 403); no
    quota settings were changed. Recent peak usage, campaign TTL, soak/burst
    profile, operational owners and target acceptance remain open.
+6. The app's current “Unable to load script” screen is caused by the local
+   Metro port conflict, before API or FCM traffic: the mobile issuer listens
+   on `127.0.0.1:8081`; the campaign API listens on `127.0.0.1:8082`; and an
+   existing `expo run:android` process also binds `*:8081`. Expo tried 8082,
+   which collides with the campaign API. The temporary Metro process started
+   during diagnosis was stopped. Do not kill the issuer, campaign API or the
+   existing Expo process without confirming ownership. The Android device is
+   now connected wirelessly, and its only reverse is `tcp:8081`.
+7. The app project pins Node 26 in `.nvmrc`; Node 26.12.1 is installed. Use
+   that runtime and a free Metro port, for example:
+
+   ```sh
+   cd ~/projects/hello-fcm-smoke
+   source "$HOME/.nvm/nvm.sh"
+   nvm use
+   npx expo run:android --port 8083
+   ```
+
+   Port 8083 was free at the last check. Verify `adb reverse --list` after the
+   Expo launch and add `adb reverse tcp:8083 tcp:8083` if Expo did not. Keep
+   the issuer on 8081 and campaign API on 8082; do not send another FCM message
+   until the app loads its JS bundle. `npx expo run:android --help` confirms
+   the installed CLI supports `--port`.
 
 ## Local files and working tree
 
@@ -90,14 +114,15 @@ The smoke setup and initial handoff were committed in `8367ac0`
 (`chore(local-fcm): add isolated smoke setup and handoff`); roadmap/ADR status
 corrections were committed in `711773c`; exact-origin CORS support for M46 was
 committed in `8d2bc94` and its optional-policy compatibility fix in `bbd0cef`.
-Production portal origin and browser acceptance remain open. On 2026-11-10, a
+Production portal origin and browser acceptance remain open. The latest
 read-only Docker check confirmed the scheduler, admission and delivery smoke
-workers were up for 25 minutes, with local PostgreSQL and Kafka healthy. A
-read-only ADB check returned no connected devices, so no new push was sent; do
-not resend campaign 1. Recheck the device and daemon state before continuing.
+workers up for 25 minutes, with local PostgreSQL and Kafka healthy. The Android
+device later reconnected over wireless debugging. No new FCM push was sent;
+campaign 1 remains complete and must not be replayed. Recheck the device and
+daemon state before continuing.
 
-`go vet` and focused race tests passed earlier in this task; `govulncheck`
+`go test ./...`, `go build ./...`, and focused `go vet` for the CORS packages
+passed on 2026-11-10. Earlier focused race tests also passed; `govulncheck`
 remained blocked by network/DNS access. The M46 CORS increment passed focused
-tests for middleware, configuration, ingress and server plus `go vet` for those
-packages. No additional tests were run during the roadmap/ADR documentation
-refresh.
+tests for middleware, configuration, ingress and server. The Expo issue is a
+local dev-server port/runtime problem; no app source files were changed.
