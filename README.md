@@ -48,7 +48,7 @@ Admission and delivery are two protected modes of `cmd/worker`, not one consumer
 
 ## First safe command
 
-With the Go version declared in [go.mod](go.mod), from the repository root:
+With the Go version declared in [go.mod](go.mod) available on PATH, from the repository root (see [toolchain preflight](docs/development-guide.md#toolchain-preflight) if `go` is not found):
 
 ```bash
 go test -mod=readonly ./internal/jsonobject/...

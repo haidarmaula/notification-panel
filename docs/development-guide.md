@@ -2,6 +2,12 @@
 
 Read the [domain model](domain-model.md) and [notification journey](notification-journey.md) before changing delivery behavior. Run commands below from the repository root. These paths deliberately separate safe code exploration from environments that create database resources or contact providers.
 
+## Toolchain preflight
+
+Run `command -v go` and `go version` in the same shell you will use below. A Go installation outside PATH is not a missing installation: for the standard `/usr/local/go` layout, use `export PATH="/usr/local/go/bin:$PATH"` in that shell, then verify again. Other installation methods can use a different directory; do not replace an existing toolchain or change global shell settings just to run this guide.
+
+The version must support [go.mod](../go.mod). These checks distinguish a shell setup problem from a failing build before you start infrastructure.
+
 ## 1. Start without infrastructure
 
 Use the Go version in [go.mod](../go.mod), currently 1.26.10. Docker, `.env`, Firebase credentials, tmux, and a particular editor are not needed for ordinary unit tests.
@@ -25,11 +31,25 @@ bash scripts/ci.sh vet
 
 The CI `test` gate includes race detection. `modules` downloads/verifies modules and checks for module-file drift; `vuln` installs a pinned scanner and consults vulnerability data. Those checks need network access. None requires `.env` or a Make target. Green unit/race checks are not real-provider or production evidence.
 
+### Check these guides automatically
+
+With Python 3 and Bash available:
+
+```bash
+python3 scripts/check-onboarding.py
+python3 scripts/check-onboarding.py --run
+python3 -B -m unittest discover -s scripts -p 'test_check_onboarding.py'
+```
+
+The first command checks the five onboarding pages' local links/headings, Bash syntax, and allowed safe examples. `--run` additionally executes the actual first safe Go block from this guide and the README, deduplicating repeated commands and failing on a nonzero exit or a test filter that runs no tests. It requires Go on PATH and may download dependencies. It never executes later database, API, integration, or provider examples. The last command tests the checker itself, including deliberately broken examples; these checks do not establish that the login walkthrough or live delivery works.
+
 ## 2. Run the local API, not live delivery
 
 Prerequisites: Docker with Compose, Make, host `migrate`, curl, and jq for the smoke example. Reserve the configured PostgreSQL host port and API port 8080. Use a development-only database: migration commands change its schema.
 
-Before starting, inspect the [Compose file](../docker-compose.yml) and any existing `.env`. Do not overwrite existing credentials or run this against a shared database. Every Make target includes `.env`, including `make help` and `make sqlc`.
+Before starting, run `docker context show` and `docker info` to confirm the intended daemon is reachable. Having the Docker CLI installed is not enough. If `docker info` hangs, interrupt it and resolve Docker Desktop/daemon availability with the environment owner before proceeding; do not reset Docker or stop existing workloads to make this guide run.
+
+Inspect the [Compose file](../docker-compose.yml) and any existing `.env`. The default file has fixed container names, so a different Compose project name alone does not isolate it from an existing development stack. Do not overwrite credentials, reuse an occupied service, or migrate a shared database. Every Make target includes `.env`, including `make help` and `make sqlc`.
 
 ```bash
 test -f .env || cp .env.example .env
@@ -61,9 +81,11 @@ This minimal path intentionally does not start Kafka. The broader Compose file a
 
 ### Verify login and a protected read
 
-Use Bash for this example. Read local values interactively rather than putting passwords into shell history; the script does not print tokens. Install jq before running it, and do not enable shell tracing.
+Use Bash for this example. Read local values interactively rather than putting passwords into shell history; the script does not print tokens. The subshell stops on login/token/profile errors and keeps its credential variables out of the calling shell. Install jq before running it, and do not enable shell tracing.
 
 ```bash
+(
+set -euo pipefail
 read -r -s -p 'Local API key: ' K; printf '\n'
 read -r -p 'Bootstrap email: ' E
 read -r -s -p 'Bootstrap password: ' P; printf '\n'
@@ -72,9 +94,9 @@ LOGIN=$(jq -n --arg email "$E" --arg password "$P" \
   curl -fsS http://127.0.0.1:8080/api/v1/auth/login \
     -H "X-API-Key: $K" -H 'Content-Type: application/json' --data-binary @-)
 T=$(printf '%s' "$LOGIN" | jq -er '.data.access_token')
-curl -i http://127.0.0.1:8080/api/v1/profile \
+curl -fiSs http://127.0.0.1:8080/api/v1/profile \
   -H "X-API-Key: $K" -H "Authorization: Bearer $T"
-unset LOGIN T P E K
+)
 ```
 
 Expected: login succeeds with access/refresh tokens; profile returns HTTP 200 and the bootstrap user's identity with `role_name: SUPER_ADMIN`, not a password/hash. A request with no API key returns 401. If login fails, stop before the profile request and check the key, bootstrap identity, migrations, and API terminal logs. Do not share raw login output.
