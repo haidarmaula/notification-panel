@@ -157,10 +157,52 @@ jobs:
       - name: Scan application and test code
         run: bash scripts/ci.sh vuln
 
+  dashboard:
+    name: Dashboard build, security boundary and browser workflows
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: web/dashboard
+    steps:
+      - name: Checkout
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Set up Node
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22.23.4'
+      - name: Install pinned package manager and dependencies
+        run: |
+          npm install --global pnpm@11.25.0 --ignore-scripts
+          pnpm install --frozen-lockfile
+      - name: Verify contracts, formatting and lint
+        run: |
+          pnpm api:generate
+          test -z "$(git status --porcelain -- src/lib/api/generated)"
+          pnpm format:check
+          pnpm lint
+      - name: Test and build dashboard
+        run: |
+          pnpm test
+          pnpm build
+          pnpm budget
+          pnpm audit --prod --audit-level high
+      - name: Verify browser workflows through the Go BFF
+        run: |
+          pnpm exec playwright install --with-deps chromium
+          pnpm test:e2e
+
   release-ready:
     name: Release readiness gates
     if: ${{ always() }}
-    needs: [quality, delivery, integration, release-images, operations, vulnerability]
+    needs: [quality, delivery, integration, release-images, operations, vulnerability, dashboard]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

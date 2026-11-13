@@ -12,7 +12,8 @@ REQUIRED_JOBS={
  'Isolated worker, PostgreSQL, Kafka and simulated provider',
  'Full integration, migrations and sealed recovery',
  'Build and check six offline production images',
- 'Monitoring rules and physical PITR','Reachable Go vulnerabilities','Release readiness gates'}
+ 'Monitoring rules and physical PITR','Reachable Go vulnerabilities','Release readiness gates',
+ 'Dashboard build, security boundary and browser workflows'}
 
 
 def checked_run(run,jobs,sha):
