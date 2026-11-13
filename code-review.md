@@ -30,6 +30,33 @@ reachable result to zero; uncalled dependency advisories remain informational.
 See [CI evidence](docs/analysis/ci-readiness.md) for versions and limitations.
 The dependency scan does not close runtime findings; C21 is separately remediated by M02a code/tests. H47/H48/M48 are reconciled to the unmounted legacy producer; other older rows remain unreconciled.
 
+## Android staging enrollment verification — 2026-11-12
+
+**STG8 — P2, fixed and verified on staging.** The restricted server grant
+profile allowed insertion into `mobile_origin_uses` but omitted SELECT on the
+three explicit `ON CONFLICT` target columns. Android enrollment returned a
+sanitized HTTP 500 and rolled back. The profile now grants SELECT only on
+`application_public_id`, `issuer` and `nonce_digest`; `expires_at` and whole-table
+SELECT remain denied. The disposable PostgreSQL grant fixture reproduced the
+failure and passed with the fix, including duplicate-origin insertion. Its
+notification UPDATE assertion now checks the intended column grant and rejects
+whole-table UPDATE. The corrected profile was applied to staging, and the real
+Android device enrolled with one installation and one active binding. Runtime
+seal, migration hold and application send hold remained enabled.
+
+## Android staging receipt verification — 2026-11-12
+
+**STG9 — P2, fixed.** The restricted API profile omitted columns used by
+receipt identity checks: `current_binding_routes.resume_from`,
+`application_dispatch_policy.dispatch_revision` and
+`notification_preparations.prepared_pilot_cohort`. It also lacked SELECT on the
+explicit observation conflict-target columns `delivery_id,event`. Real Android
+receipts returned sanitized HTTP 500. The profile now includes only these
+required columns, with isolated PostgreSQL planning/route-read regressions
+that failed before the changes and passed afterward. The corrected profile
+was applied to staging; actual Android callbacks produced DELIVERED facts for
+campaigns 4 and 6, and an OPENED fact plus scoped user-read row for campaign 5. The existing mobile, origin and receipt keys were preserved.
+
 ## Staging-preparation review — 2026-11-10
 
 | ID | Severity | Finding and remediation |
@@ -345,7 +372,7 @@ User-visible bugs, security weaknesses without immediate exploitability, and beh
 | # | Location | Issue |
 |---|----------|-------|
 | H43 | `cmd/server/main.go` | **Fixed, locally tested 2026-11-08.** SIGINT/SIGTERM stop acceptance, allow active HTTP work to drain and then cancel overdue requests. The pool closes after handler exit. A hard-stop deadline reports failure when a handler remains unresponsive. See [process lifecycle](docs/specs/process-lifecycle.md). |
-| H44 | `internal/features/notifications/module.go` | The Kafka producer created in the module constructor is never closed |
+| H44 | `internal/features/notifications/module.go` | **Confirmed in unmounted legacy code.** The module creates a producer at `module.go:121` and does not close it. No production `cmd/` imports this feature module; fix before any remount. |
 | H45 | Kafka topic provisioning | Fixed. The legacy writer disables automatic topic creation and the protected writer requires pre-provisioned topics. The local replicated cluster denies unauthorized writes. |
 | H46 | Kafka durability | Fixed. Both producer paths configure `RequireAll`. The isolated replicated-cluster drill rejects a write when only one replica remains in sync. Target replication and failure domains require verification. |
 | H47 | `internal/kafka/producer.go:96` — `NewProducer` | **Reconciled 2026-11-09; open only on the unmounted legacy producer.** `kafka.LeastBytes` does not hash message keys: `LeastBytes.Balance` in pinned kafka-go v0.4.51 `balancer.go:87` picks the lowest-byte partition and uses `len(msg.Key)` only as a byte counter, so the claimed per-notification partition affinity never held. A local six-message probe over three partitions routed the same key to 0/1/2. The mounted scoped transport restores key affinity with `Balancer: &broker.Hash{}` (`internal/kafka/scoped_send.go:113`); `Hash.Balance` (`balancer.go:153`) hashes a present key and round-robins only when it is nil. `NewProducer` is reachable solely from `internal/features/notifications/module.go:121`, and that module is imported by test files alone — no `cmd/` binary mounts it, and `cmd/worker/main.go:28` delegates to `daemon.Process`. The legacy Godoc previously asserted that keys determine partition assignment, that the balancer was therefore inert, and that both publish methods preserve per-notification ordering; those comments were corrected on 2026-11-09, but the `LeastBytes` balancer itself is unchanged. Remounting the legacy module requires the hash balancer and a reviewed mapping transition first; ADR-07 remains proposed. |

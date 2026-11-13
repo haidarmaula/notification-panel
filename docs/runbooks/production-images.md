@@ -32,6 +32,13 @@ Darwin uses `/private/etc/hello` for protected policies.
 | Requeue | The operator job uses its own reviewed [replay policy, grant and execution procedure](operator-replay.md). |
 | Retention | A one-shot job reads `/etc/hello/retention.json` and uses its own database login to run one [authorized retention batch](retention.md). |
 
+The restricted API database role uses the reviewed
+[`server-grants.sql`](../../deploy/postgres/server-grants.sql) profile after
+migration 000041, with a separate non-superuser login. Mobile origin consumption
+requires INSERT plus SELECT on its three explicit conflict-key columns; the
+profile does not grant whole-table reads or reads of the expiry column. The
+disposable `bash scripts/server-grants.sh` fixture verifies those boundaries.
+
 Role policies accept exact field names and reject missing, unknown or duplicate
 members. Use explicit PostgreSQL host, port, database, service account and
 percent-escaped credentials with `sslmode=verify-full`. Optional TLS auxiliary
@@ -63,6 +70,16 @@ Use the protected integration fixtures for DB, Kafka and provider behavior.
 Related decisions: [transport topology](../adr/adr-07-kafka-topology.md),
 [deployment security](../adr/adr-11-security-baseline.md) and
 [process lifecycle](../specs/process-lifecycle.md).
+
+## Single-VM staging controller
+
+The current private staging deployment has a dedicated
+[operations controller and acceptance record](../../deploy/staging/OPERATIONS.md).
+It builds/checks committed-source images, replaces four roles under a guarded
+maintenance fence, retains rollback containers and refuses automatic schema
+changes. The same controller handles encrypted DB/config backups, isolated sealed
+restore validation and private management checks. This staging evidence does not
+replace the repository's release-readiness gates or production recovery review.
 
 Automated staging deployment uses the [signed main-only CD authorization](../../deploy/staging/CD.md)
 and the existing guarded maintenance, readiness and rollback controller.
