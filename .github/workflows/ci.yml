@@ -41,6 +41,8 @@ jobs:
         run: python3 scripts/check-go-skills.py
       - name: Check staging operations and signed CD protocol
         run: python3 -m unittest discover -s deploy/staging -p '*_test.py'
+      - name: Check API documentation client
+        run: node --test web/api-docs/app.test.cjs
       - name: Check consumer routes and examples
         run: |
           python3 scripts/check-api-routes.py

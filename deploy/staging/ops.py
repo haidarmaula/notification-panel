@@ -43,6 +43,15 @@ def prepare(name,revision,schema,archive=None):
         images[role]=obj['Id']
     manifest={'release':name,'revision':revision,'schema':current['schema'],'images':images,'source_sha256':hashlib.sha256(archive).hexdigest(),
         'created':time.time(),'checks':['six offline hardened image gates'],'hosted_ci':'not asserted; verify repository CI separately','scope':'staging only'}
+    docs_source=source/'scripts/api_docs.py'
+    if docs_source.exists():
+        run([sys.executable,str(docs_source),'--output',str(directory/'api-docs'),'--release',name])
+        out=io.BytesIO()
+        with tarfile.open(fileobj=out,mode='w') as tar:
+            for path in sorted((directory/'api-docs').rglob('*')):
+                if path.is_file():tar.add(path,arcname=str(path.relative_to(directory/'api-docs')),recursive=False)
+        atomic(directory/'api-docs.tar',out.getvalue())
+        manifest['docs_sha256']=hashlib.sha256(out.getvalue()).hexdigest()
     save(directory/'release.json',manifest)
     return manifest
 
@@ -50,13 +59,16 @@ def prepare(name,revision,schema,archive=None):
 def main():
     os.umask(0o077)
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','cd'])
+    parser.add_argument('command',choices=['diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','cd','docs-gateway'])
     parser.add_argument('--release');parser.add_argument('--revision');parser.add_argument('--schema',type=int);parser.add_argument('--cron',action='store_true')
     args=parser.parse_args()
     if args.command in ['capture','prepare','deploy'] and (not args.release or not re.fullmatch('[a-z0-9][a-z0-9-]{0,63}',args.release)):raise SystemExit('Valid --release is required.')
     try:
         with lock(nonblocking=args.cron and args.command!='backup',name='cd.lock' if args.command=='cd' else 'build.lock' if args.command=='prepare' else 'operations.lock',timeout=300 if args.cron and args.command=='backup' else None):
-            if args.command=='cd':
+            if args.command=='docs-gateway':
+                from ops_gateway_docs import configure
+                result=configure()
+            elif args.command=='cd':
                 from ops_cd import poll
                 result=poll()
                 if result['phase']!='retry-paused':(ROOT/'cd/last-error.json').unlink(missing_ok=True)

@@ -8,6 +8,8 @@
   "paths": {
     "/api/v1/apps/{app_id}/mobile/installations": {
       "post": {
+        "tags": ["Installations"],
+        "summary": "Enroll a device installation",
         "operationId": "enrollInstallation",
         "description": "Obtain one installation proof. Replace all synthetic credentials in the example with real credentials issued for the test environment.",
         "parameters": [
@@ -98,6 +100,8 @@
     },
     "/api/v1/apps/{app_id}/mobile/installations/{installation_id}/refresh": {
       "post": {
+        "tags": ["Installations"],
+        "summary": "Refresh an installation",
         "operationId": "refreshInstallation",
         "description": "Replace the current binding under the same owner.",
         "parameters": [
@@ -197,6 +201,8 @@
     },
     "/api/v1/apps/{app_id}/mobile/installations/{installation_id}/logout": {
       "post": {
+        "tags": ["Installations"],
+        "summary": "Log out an installation",
         "operationId": "logOutInstallation",
         "description": "Release ownership using the current version.",
         "parameters": [
@@ -293,6 +299,8 @@
     },
     "/api/v1/apps/{app_id}/mobile/installations/{installation_id}/switch": {
       "post": {
+        "tags": ["Installations"],
+        "summary": "Switch the installation owner",
         "operationId": "switchInstallationOwner",
         "description": "Present the destination account JWT and current installation proof/version.",
         "parameters": [
@@ -392,6 +400,8 @@
     },
     "/api/v1/apps/{app_id}/mobile/installations/{installation_id}/state": {
       "post": {
+        "tags": ["Installations"],
+        "summary": "Read authenticated installation state",
         "operationId": "readInstallationState",
         "description": "Reconcile an uncertain lifecycle response using proof and the current account.",
         "parameters": [
@@ -488,6 +498,8 @@
     },
     "/api/v1/apps/{app_id}/mobile/notifications/{campaign_id}/receipt": {
       "post": {
+        "tags": ["Receipts"],
+        "summary": "Report a delivery or open observation",
         "operationId": "reportDeviceReceipt",
         "description": "Retry an uncertain report with the same client event ID and original capability. Requires receipt policy, current installation ownership and project identity. Maximum 4096 body bytes.",
         "parameters": [
@@ -586,6 +598,8 @@
     },
     "/api/v1/apps/{app_id}/campaigns/{campaign_id}/send": {
       "post": {
+        "tags": ["Campaign delivery"],
+        "summary": "Accept a campaign for sending",
         "operationId": "acceptCampaign",
         "description": "Empty request body. Acceptance commits the outbox before replying. Requires current send permission and an explicit application grant.",
         "parameters": [
@@ -689,6 +703,8 @@
     },
     "/api/v1/apps/{app_id}/campaigns/{campaign_id}/schedule": {
       "post": {
+        "tags": ["Campaign delivery"],
+        "summary": "Schedule a campaign",
         "operationId": "scheduleCampaign",
         "description": "The timestamp must be in the future at commit. Requires current schedule permission and an explicit application grant.",
         "parameters": [
@@ -787,6 +803,8 @@
     },
     "/api/v1/apps/{app_id}/campaigns/{campaign_id}/statistics": {
       "get": {
+        "tags": ["Campaign delivery"],
+        "summary": "Read campaign delivery statistics",
         "operationId": "getCampaignStatistics",
         "description": "One consistent snapshot. Pending preparation has null counts. Device reports, provider acknowledgements and opened users have different denominators.",
         "parameters": [
@@ -1608,5 +1626,16 @@
         "description": "Project-specific mobile identity token."
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "Installations"
+    },
+    {
+      "name": "Receipts"
+    },
+    {
+      "name": "Campaign delivery"
+    }
+  ]
 }

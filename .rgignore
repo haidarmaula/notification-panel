@@ -13,6 +13,7 @@ internal/**/mocks/
 
 # Machine-readable contracts and diagram sources; use docs/api/*.md instead
 docs/contracts/
+web/api-docs/vendor/
 docs/diagrams/
 
 # Dependency checksums; go.mod carries the useful version data

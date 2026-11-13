@@ -14,6 +14,7 @@
   "paths": {
     "/api/v1/auth/login": {
       "post": {
+        "tags": ["Authentication"],
         "operationId": "loginStaff",
         "summary": "Open a staff session",
         "security": [
@@ -72,6 +73,7 @@
     },
     "/api/v1/auth/refresh": {
       "post": {
+        "tags": ["Authentication"],
         "operationId": "rotateStaffSession",
         "summary": "Rotate a single-use refresh credential",
         "security": [
@@ -129,6 +131,7 @@
     },
     "/api/v1/auth/logout": {
       "post": {
+        "tags": ["Authentication"],
         "operationId": "logoutStaff",
         "summary": "Revoke the represented staff session",
         "security": [
@@ -178,6 +181,7 @@
     },
     "/api/v1/profile": {
       "get": {
+        "tags": ["Profile"],
         "operationId": "getProfile",
         "summary": "Read the current staff profile",
         "responses": {
@@ -212,6 +216,7 @@
         }
       },
       "patch": {
+        "tags": ["Profile"],
         "operationId": "updateProfile",
         "summary": "Update the current staff profile",
         "requestBody": {
@@ -261,6 +266,7 @@
     },
     "/api/v1/profile/password": {
       "patch": {
+        "tags": ["Profile"],
         "operationId": "changeProfilePassword",
         "summary": "Change the current staff password",
         "requestBody": {
@@ -295,6 +301,7 @@
     },
     "/api/v1/staff": {
       "get": {
+        "tags": ["Staff"],
         "operationId": "listStaff",
         "summary": "List staff accounts",
         "x-required-permission": "staff.manage",
@@ -343,6 +350,7 @@
         }
       },
       "post": {
+        "tags": ["Staff"],
         "operationId": "createStaff",
         "summary": "Create a staff account",
         "x-required-permission": "staff.manage",
@@ -392,6 +400,7 @@
     },
     "/api/v1/staff/{id}": {
       "get": {
+        "tags": ["Staff"],
         "operationId": "getStaff",
         "summary": "Read a staff account",
         "x-required-permission": "staff.manage",
@@ -431,6 +440,7 @@
         }
       },
       "patch": {
+        "tags": ["Staff"],
         "operationId": "updateStaff",
         "summary": "Update staff identity or role",
         "description": "Removing the final active SUPER_ADMIN returns 409. A successful role or activation change invalidates the affected account’s sessions.",
@@ -483,6 +493,7 @@
         }
       },
       "delete": {
+        "tags": ["Staff"],
         "operationId": "deleteStaff",
         "summary": "Delete a staff account",
         "x-required-permission": "staff.manage",
@@ -510,6 +521,7 @@
     },
     "/api/v1/staff/{id}/status": {
       "patch": {
+        "tags": ["Staff"],
         "operationId": "setStaffStatus",
         "summary": "Set a staff account's active flag",
         "description": "Removing the final active SUPER_ADMIN returns 409. A successful role or activation change invalidates the affected account’s sessions.",
@@ -564,6 +576,7 @@
     },
     "/api/v1/staff/{id}/password": {
       "patch": {
+        "tags": ["Staff"],
         "operationId": "resetStaffPassword",
         "summary": "Reset a staff password using the acting administrator's current password",
         "x-required-permission": "staff.manage",
@@ -602,6 +615,7 @@
     },
     "/api/v1/apps/{app_id}/users": {
       "get": {
+        "tags": ["Project users"],
         "operationId": "listProjectUsers",
         "summary": "List Project Users",
         "x-required-permission": "users.read",
@@ -660,6 +674,7 @@
     },
     "/api/v1/apps/{app_id}/users/{user_id}": {
       "get": {
+        "tags": ["Project users"],
         "operationId": "getProjectUser",
         "summary": "Get Project User",
         "x-required-permission": "users.read",
@@ -712,6 +727,7 @@
     },
     "/api/v1/apps/{app_id}/users/{user_id}/devices": {
       "get": {
+        "tags": ["Project users"],
         "operationId": "listProjectUserDevices",
         "summary": "List Project User Devices",
         "x-required-permission": "users.read",
@@ -761,6 +777,7 @@
     },
     "/api/v1/apps/{app_id}/segments": {
       "get": {
+        "tags": ["Segments"],
         "operationId": "listProjectSegments",
         "summary": "List Project Segments",
         "x-required-permission": "segments.read",
@@ -815,6 +832,7 @@
         }
       },
       "post": {
+        "tags": ["Segments"],
         "operationId": "createSegment",
         "summary": "Create a project segment",
         "x-required-permission": "segments.write",
@@ -880,6 +898,7 @@
     },
     "/api/v1/apps/{app_id}/segments/{segment_id}": {
       "get": {
+        "tags": ["Segments"],
         "operationId": "getProjectSegment",
         "summary": "Get Project Segment",
         "x-required-permission": "segments.read",
@@ -928,6 +947,7 @@
         }
       },
       "put": {
+        "tags": ["Segments"],
         "operationId": "replaceSegment",
         "summary": "Replace a segment and clear any omitted description",
         "x-required-permission": "segments.write",
@@ -992,6 +1012,7 @@
         }
       },
       "delete": {
+        "tags": ["Segments"],
         "operationId": "deleteSegment",
         "summary": "Delete an unreferenced segment",
         "x-required-permission": "segments.write",
@@ -1029,6 +1050,7 @@
     },
     "/api/v1/apps/{app_id}/segments/{segment_id}/members": {
       "get": {
+        "tags": ["Segments"],
         "operationId": "listSegmentMembers",
         "summary": "List Segment Members",
         "x-required-permission": "segments.members.read",
@@ -1086,6 +1108,7 @@
     },
     "/api/v1/apps/{app_id}/campaigns": {
       "get": {
+        "tags": ["Campaigns"],
         "operationId": "listCampaigns",
         "summary": "List Campaigns",
         "x-required-permission": "notifications.read",
@@ -1138,6 +1161,7 @@
         }
       },
       "post": {
+        "tags": ["Campaigns"],
         "operationId": "createCampaignDraft",
         "summary": "Create a campaign draft",
         "x-required-permission": "notifications.draft.write",
@@ -1206,6 +1230,7 @@
     },
     "/api/v1/apps/{app_id}/campaigns/{campaign_id}": {
       "get": {
+        "tags": ["Campaigns"],
         "operationId": "getCampaign",
         "summary": "Get Campaign",
         "x-required-permission": "notifications.read",
@@ -1261,6 +1286,7 @@
         }
       },
       "put": {
+        "tags": ["Campaigns"],
         "operationId": "replaceCampaignDraft",
         "summary": "Replace the draft and its entire target set",
         "x-required-permission": "notifications.draft.write",
@@ -1328,6 +1354,7 @@
         }
       },
       "delete": {
+        "tags": ["Campaigns"],
         "operationId": "deleteCampaignDraft",
         "summary": "Delete an unprotected draft",
         "x-required-permission": "notifications.draft.write",
@@ -1365,6 +1392,7 @@
     },
     "/api/v1/apps/{app_id}/campaigns/{campaign_id}/deliveries": {
       "get": {
+        "tags": ["Campaigns"],
         "operationId": "listCampaignDeliveryHistory",
         "summary": "List Campaign Delivery History",
         "x-required-permission": "notifications.read",
@@ -1424,6 +1452,7 @@
     },
     "/api/v1/apps/{app_id}/campaigns/{campaign_id}/reads": {
       "get": {
+        "tags": ["Campaigns"],
         "operationId": "listCampaignReadHistory",
         "summary": "List Campaign Read History",
         "x-required-permission": "notifications.read",
@@ -1479,6 +1508,7 @@
     },
     "/api/v1/apps/{app_id}/templates": {
       "get": {
+        "tags": ["Templates"],
         "operationId": "listTemplates",
         "summary": "List Templates",
         "x-required-permission": "notifications.read",
@@ -1533,6 +1563,7 @@
         }
       },
       "post": {
+        "tags": ["Templates"],
         "operationId": "createTemplate",
         "summary": "Create a project template",
         "x-required-permission": "notifications.draft.write",
@@ -1600,6 +1631,7 @@
     },
     "/api/v1/apps/{app_id}/templates/{template_id}": {
       "get": {
+        "tags": ["Templates"],
         "operationId": "getTemplate",
         "summary": "Get Template",
         "x-required-permission": "notifications.read",
@@ -1648,6 +1680,7 @@
         }
       },
       "put": {
+        "tags": ["Templates"],
         "operationId": "replaceTemplate",
         "summary": "Replace a template's editable fields",
         "x-required-permission": "notifications.draft.write",
@@ -1716,6 +1749,7 @@
     },
     "/api/v1/apps/{app_id}/uploads": {
       "get": {
+        "tags": ["Uploads"],
         "operationId": "listUploadBatches",
         "summary": "List Upload Batches",
         "x-required-permission": "notifications.read",
@@ -1772,6 +1806,7 @@
     },
     "/api/v1/apps/{app_id}/uploads/{batch_id}/rows": {
       "get": {
+        "tags": ["Uploads"],
         "operationId": "listUploadRows",
         "summary": "List Upload Rows",
         "x-required-permission": "notifications.read",
@@ -1827,6 +1862,7 @@
     },
     "/api/v1/apps/{app_id}/audit-logs": {
       "get": {
+        "tags": ["Audit log"],
         "operationId": "listProjectAudit",
         "summary": "List Project Audit",
         "x-required-permission": "audit.read",
@@ -1884,6 +1920,7 @@
     },
     "/api/v1/apps/{app_id}/segments/{segment_id}/members/{user_id}": {
       "put": {
+        "tags": ["Segments"],
         "operationId": "addSegmentMember",
         "summary": "Add a member to a segment",
         "x-required-permission": "segments.members.write",
@@ -1920,6 +1957,7 @@
         }
       },
       "delete": {
+        "tags": ["Segments"],
         "operationId": "removeSegmentMember",
         "summary": "Remove a segment membership",
         "x-required-permission": "segments.members.write",
@@ -3644,5 +3682,34 @@
         }
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "Authentication"
+    },
+    {
+      "name": "Profile"
+    },
+    {
+      "name": "Staff"
+    },
+    {
+      "name": "Project users"
+    },
+    {
+      "name": "Segments"
+    },
+    {
+      "name": "Campaigns"
+    },
+    {
+      "name": "Templates"
+    },
+    {
+      "name": "Uploads"
+    },
+    {
+      "name": "Audit log"
+    }
+  ]
 }

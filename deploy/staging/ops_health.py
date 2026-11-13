@@ -80,6 +80,16 @@ def health(persist=True):
     cd_status=ROOT/'cd/status.json'
     if cd_status.exists() and json.loads(cd_status.read_text()).get('phase') in ['failed','rollback-blocked']:report['alerts'].append('staging CD deployment failed; inspect cd/status.json')
     if (ROOT/'cd/last-error.json').exists():report['alerts'].append('staging CD polling or authorization error')
+    if (ROOT/'docs-enabled.json').exists():
+        try:
+            import ops_docs
+            docs_release=ops_docs.current()
+            journal=json.loads((ROOT/'deployment.json').read_text()) if (ROOT/'deployment.json').exists() else {}
+            expected=journal.get('new_docs') if journal.get('phase')=='committed' else journal.get('old_docs') if journal.get('phase')=='rolled-back' else docs_release
+            if docs_release!=expected:raise RuntimeError('Documentation pointer drifted from deployed backend.')
+            ops_docs.verify(docs_release)
+            report['docs_release']=docs_release
+        except Exception:report['alerts'].append('API documentation unavailable or integrity check failed')
     if persist:
         save(ROOT/'status.json',report)
         alerts=report['alerts'];old=previous.get('alerts',[])

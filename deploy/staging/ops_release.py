@@ -6,6 +6,7 @@ import subprocess
 import time
 from ops_common import ROOT, ROLES, ORDER, clone_args, db, enter_maintenance, inspect, leave_maintenance, run, save, state, maintenance_matches
 from ops_health import probe
+import ops_docs as docs
 
 
 def exists(name):return subprocess.run(['docker','inspect',name],capture_output=True).returncode==0
@@ -33,6 +34,8 @@ def capture(release):
     current=state()
     if current['schema']['dirty']:raise RuntimeError('Database migration is dirty.')
     manifest={'release':release,'schema':current['schema'],'images':{},'created':time.time(),'kind':'captured-current'}
+    manifest['docs_release']=docs.current()
+    docs.verify(manifest['docs_release'])
     for role in ROLES:manifest['images'][role]=inspect('hello-staging-'+role)['Image']
     save(target/'release.json',manifest)
     return manifest
@@ -66,6 +69,7 @@ def rollback_journal(journal):
         if inspect(name)['Image']!=journal['old_images'][role]:raise RuntimeError('Rollback image identity mismatch.')
         run(['docker','start',name])
     ready()
+    docs.switch(journal.get('old_docs'));docs.verify(journal.get('old_docs'))
     journal['phase']='rollback-reopening';save(ROOT/'deployment.json',journal)
     leave_maintenance(journal['before'])
     journal['phase']='rolled-back';journal['completed']=time.time();save(ROOT/'deployment.json',journal)
@@ -81,10 +85,11 @@ def deploy(release):
     prior=ROOT/'deployment.json'
     if prior.exists() and json.loads(prior.read_text())['phase'] not in ['committed','rolled-back']:
         raise RuntimeError('Incomplete deployment requires recover first.')
+    next_docs=docs.publish(release,manifest['docs_sha256']) if manifest.get('docs_sha256') else manifest.get('docs_release')
     suffix=str(int(time.time()))
     journal={'release':release,'phase':'prepared','before':state(),'started':time.time(),
         'old_names':{r:'hello-staging-'+r+'-rollback-'+suffix for r in ROLES},
-        'old_images':{r:current[r]['Image'] for r in ROLES}}
+        'old_images':{r:current[r]['Image'] for r in ROLES},'old_docs':docs.current(),'new_docs':next_docs}
     # Journal before changing the maintenance fence, then stop/join each process.
     save(prior,journal)
     try:
@@ -98,6 +103,7 @@ def deploy(release):
             run(clone_args(role,manifest['images'][role],current[role]))
             run(['docker','start',name])
         ready()
+        docs.switch(next_docs);docs.verify(next_docs)
         journal['phase']='reopening';save(prior,journal)
         leave_maintenance(before)
         journal['phase']='committed';journal['completed']=time.time();save(prior,journal)
@@ -128,6 +134,7 @@ def recover():
                   if journal['phase']=='reopening' else journal['old_images'])
         if any(inspect('hello-staging-'+r)['Image']!=image for r,image in expected.items()):raise RuntimeError('Recovered image inventory mismatch.')
         ready()
+        docs.verify(journal.get('new_docs') if journal['phase']=='reopening' else journal.get('old_docs'))
         journal['phase']='committed' if journal['phase']=='reopening' else 'rolled-back'
         journal['completed']=time.time();save(ROOT/'deployment.json',journal)
         return {'phase':journal['phase']}

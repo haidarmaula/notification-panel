@@ -15,8 +15,9 @@
   "paths": {
     "/api/v1/apps": {
       "get": {
+        "tags": ["Accessible applications"],
         "operationId": "listGrantedApplications",
-        "summary": "listGrantedApplications",
+        "summary": "List applications you can access",
         "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "app-grant",
         "x-required-permission": "applications.read",
@@ -53,8 +54,9 @@
     },
     "/api/v1/apps/{app_id}": {
       "get": {
+        "tags": ["Accessible applications"],
         "operationId": "getGrantedApplication",
-        "summary": "getGrantedApplication",
+        "summary": "Read an accessible application",
         "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "app-grant",
         "x-required-permission": "applications.read",
@@ -88,8 +90,9 @@
     },
     "/api/v1/admin/apps": {
       "get": {
+        "tags": ["Application administration"],
         "operationId": "listManagedApplications",
-        "summary": "listManagedApplications",
+        "summary": "List managed applications",
         "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
@@ -127,8 +130,9 @@
         ]
       },
       "post": {
+        "tags": ["Application administration"],
         "operationId": "createApplication",
-        "summary": "createApplication",
+        "summary": "Create an application",
         "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
@@ -178,8 +182,9 @@
     },
     "/api/v1/admin/apps/{app_id}": {
       "get": {
+        "tags": ["Application administration"],
         "operationId": "getManagedApplication",
-        "summary": "getManagedApplication",
+        "summary": "Read a managed application",
         "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
@@ -211,8 +216,9 @@
         ]
       },
       "patch": {
+        "tags": ["Application administration"],
         "operationId": "renameApplication",
-        "summary": "renameApplication",
+        "summary": "Rename an application",
         "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
@@ -276,8 +282,9 @@
     },
     "/api/v1/admin/apps/{app_id}/staff-grants": {
       "get": {
+        "tags": ["Staff access grants"],
         "operationId": "listApplicationStaffGrants",
-        "summary": "listApplicationStaffGrants",
+        "summary": "List application staff grants",
         "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
@@ -317,8 +324,9 @@
     },
     "/api/v1/admin/apps/{app_id}/staff-grants/{staff_id}": {
       "get": {
+        "tags": ["Staff access grants"],
         "operationId": "getApplicationStaffGrant",
-        "summary": "getApplicationStaffGrant",
+        "summary": "Read a staff access grant",
         "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
@@ -353,8 +361,9 @@
         ]
       },
       "put": {
+        "tags": ["Staff access grants"],
         "operationId": "enableApplicationStaffGrant",
-        "summary": "enableApplicationStaffGrant",
+        "summary": "Enable a staff access grant",
         "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
@@ -425,8 +434,9 @@
         "x-reject-duplicate-json-fields": true
       },
       "delete": {
+        "tags": ["Staff access grants"],
         "operationId": "revokeApplicationStaffGrant",
-        "summary": "revokeApplicationStaffGrant",
+        "summary": "Revoke a staff access grant",
         "x-implementation-status": "implemented-m03a3-local-verified",
         "x-access-mode": "control-plane",
         "x-required-permission": "applications.manage",
@@ -1254,5 +1264,16 @@
         }
       }
     }
-  }
+  },
+  "tags": [
+    {
+      "name": "Accessible applications"
+    },
+    {
+      "name": "Application administration"
+    },
+    {
+      "name": "Staff access grants"
+    }
+  ]
 }

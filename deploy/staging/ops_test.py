@@ -70,6 +70,12 @@ class DeploymentFailureTests(unittest.TestCase):
             return b''
         def ready():
             if failure=='ready' and failure not in once:once.add(failure);raise RuntimeError('injected readiness failure')
+        documentation={'current':None}
+        def docs_verify(value):
+            if failure=='docs' and value=='candidate' and failure not in once:once.add(failure);raise RuntimeError('injected docs integrity failure')
+        from types import SimpleNamespace
+        docs=SimpleNamespace(current=lambda:documentation['current'],publish=lambda *_:'candidate',switch=lambda value:documentation.update(current=value),verify=docs_verify)
+        if failure=='docs':documentation['current']='previous'
         def stop():
             self.assertTrue(current['migration_hold'],'services must never stop unfenced');events.append('stop')
         def save(path,journal):
@@ -79,10 +85,10 @@ class DeploymentFailureTests(unittest.TestCase):
         image='sha256:'+'a'*64
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);(root/'releases/r').mkdir(parents=True)
-            (root/'releases/r/release.json').write_text(json.dumps({'release':'r','schema':before['schema'],'images':{r:image for r in release.ROLES}}))
+            (root/'releases/r/release.json').write_text(json.dumps({'release':'r','schema':before['schema'],'images':{r:image for r in release.ROLES},**({'docs_sha256':'digest'} if failure=='docs' else {})}))
             with patch.multiple(release,ROOT=root,state=lambda:dict(current),inspect=lambda _: {'Image':image},image_check=lambda *_:None,
                 clone_args=lambda *_:['docker','create'],enter_maintenance=enter,leave_maintenance=leave,run=run,ready=ready,
-                stop_roles=stop,exists=lambda _:True,save=save):
+                stop_roles=stop,exists=lambda _:True,save=save,docs=docs):
                 with self.assertRaises((RuntimeError,OSError)):release.deploy('r')
                 journal=json.loads((root/'deployment.json').read_text())
                 if failure=='commit-write':
@@ -90,8 +96,10 @@ class DeploymentFailureTests(unittest.TestCase):
                     self.assertEqual(events.count('stop'),1,'no rollback while dispatch is open')
                     self.assertEqual(release.recover()['phase'],'committed')
                 else:self.assertEqual(journal['phase'],'rolled-back')
+                if failure=='docs':self.assertEqual(documentation['current'],'previous')
         self.assertFalse(current['migration_hold'])
 
+    def test_docs_failure_restores_both_backend_and_previous_docs(self):self.exercise('docs')
     def test_failure_during_rename_restores_fenced_originals(self):self.exercise('rename')
     def test_readiness_failure_rolls_back_before_reopening(self):self.exercise('ready')
     def test_reopen_failure_rechecks_fence_before_rollback(self):self.exercise('reopen')

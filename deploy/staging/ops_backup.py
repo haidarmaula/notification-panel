@@ -56,6 +56,9 @@ def backup():
         'images':{role:inspect('hello-staging-'+role)['Image'] for role in ROLES}}
     if (ROOT/'tls').exists():
         files['ops-tls.tar']=bundle({f.name:f.read_bytes() for f in (ROOT/'tls').iterdir() if f.is_file() and not f.is_symlink()})
+    import ops_docs
+    if (ROOT/'docs-enabled.json').exists():
+        files['api-docs-volume.tar']=ops_docs.helper('tar','-cpf','-','-C','/docs','.')
     manifest['format']=1
     manifest['files_sha256']={name:hashlib.sha256(data).hexdigest() for name,data in files.items()}
     files['manifest.json']=json.dumps(manifest).encode()
