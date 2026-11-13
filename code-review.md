@@ -742,11 +742,12 @@ The maintained toolchain and builder pins now use 1.26.11, including a freshly
 verified official OCI index digest. Reachable-vulnerability scanning remains
 required and passes locally with the patch; no advisory is suppressed.
 
-**CD2 — fixed.** Two hosted replay integration tests compared otherwise identical
-events whose timestamp locations were `time.Local` versus `time.UTC` on a UTC
-runner. The accepted-event fixture now canonicalizes both database timestamps
-to UTC before full structural equality. All epoch/deadline/idempotency/offset
-assertions remain intact; production timestamp handling is unchanged.
+**CD2 — fixed.** Hosted replay/outbox integration tests compared otherwise
+identical events whose timestamp locations were `time.Local` versus `time.UTC`
+on a UTC runner. The accepted-event fixture and native outbox publisher callback
+now canonicalize database timestamps to UTC before full structural equality.
+All epoch/deadline/idempotency/offset assertions remain intact; production
+timestamp handling is unchanged.
 
 **CD3 — fixed.** The hourly backup and minutely health cron jobs raced for the
 same nonblocking lock at minute 07. A health win skipped the entire backup hour.

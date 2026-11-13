@@ -43,6 +43,8 @@ func TestSourceOutboxHoldsInactiveRegistration(t *testing.T) {
 	source := dispatch.SourceManifest{ID: f.source, ClusterID: "fixture", Topic: "send", Incarnation: "incarnation", PartitionCount: 1}
 	outbox, err := dispatch.NewSourceOutbox(f.pool, scopedPublishFunc(func(_ context.Context, got kafka.ScopedSendRequested) error {
 		calls++
+		// Native database timestamps use the same canonical form as decoded wire events.
+		got.RequestedAt, got.DeadlineAt = got.RequestedAt.UTC(), got.DeadlineAt.UTC()
 		require.Equal(t, event, got)
 		return nil
 	}), source)

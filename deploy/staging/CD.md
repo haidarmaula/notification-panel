@@ -106,7 +106,7 @@ an already active invocation. A real-file-lock regression covers this race.
 
 Existing hosted CI also exposed GO-2026-6859 in Go 1.26.10 and UTC/local timestamp
 representation mismatches in replay fixtures. Pins move to Go 1.26.11 and its
-verified official builder digest. The expected replay fixture timestamps are
+verified official builder digest. The expected replay fixture and native outbox callback timestamps are
 normalized to UTC while all complete-event, epoch, deadline, idempotency and
 offset assertions remain unchanged. Vulnerability scanning is not suppressed.
 
