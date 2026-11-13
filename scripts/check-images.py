@@ -108,7 +108,7 @@ def main():
                 print(f"{role} {image} passed offline startup", flush=True)
             mount_policies(volume, bundle, 0o660)
             for role in ("server", "bootstrap", "dashboard"):
-                expect_denial(flags, images[role], "invalid " + role + " configuration")
+                expect_denial(flags, images[role], "invalid protected dashboard configuration" if role == "dashboard" else "invalid " + role + " configuration")
     finally:
         docker("volume", "rm", volume)
     print("All seven images passed. Group-writable deployed policies were rejected.")
