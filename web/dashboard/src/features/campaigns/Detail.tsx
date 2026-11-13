@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowUpRight, CalendarClock, Pencil, Send, Trash2, X } from 
 import { useAuth } from '../../app/auth';
 import { data, request, errorMessage, ApiError } from '../../lib/api/client';
 import type { Campaign } from '../../lib/api/types';
-import { Failure, Loading, Status } from '../../components/ui/Feedback';
+import { Failure, Loading, RecipientLabel, Status } from '../../components/ui/Feedback';
 export default function Detail() {
   const params = useParams();
   const auth = useAuth();
@@ -165,9 +165,7 @@ export default function Detail() {
                       <For each={campaign().targets}>
                         {(target) => (
                           <li>
-                            {target.type === 'BROADCAST'
-                              ? 'Semua penerima dalam aplikasi'
-                              : `${target.type === 'SEGMENT' ? 'Segmen' : target.type === 'INDIVIDUAL' ? 'Pengguna' : 'Target tersimpan'} #${target.id ?? '—'}`}
+                            <RecipientLabel appId={params.appId!} target={target} />
                           </li>
                         )}
                       </For>
@@ -248,9 +246,7 @@ export default function Detail() {
                   <For each={query.data?.targets}>
                     {(target) => (
                       <li>
-                        {target.type === 'BROADCAST'
-                          ? 'Semua penerima aplikasi'
-                          : `${target.type} #${target.id}`}
+                        <RecipientLabel appId={params.appId!} target={target} />
                       </li>
                     )}
                   </For>

@@ -5,8 +5,8 @@
 :root {
   color-scheme: light;
   font-family: var(--font-sans);
-  color: #263a33;
-  background: #f8f9f6;
+  color: var(--ink);
+  background: var(--canvas);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -14,9 +14,16 @@
   line-height: 1.5;
   --green: #245b44;
   --ink: #213a30;
-  --muted: #6b776f;
+  --muted: #5e6d63;
   --line: #dce2da;
   --paper: #fff;
+  --canvas: #f8f9f6;
+  --surface-soft: #edf1e5;
+  --surface-hover: #e8eedf;
+  --text-secondary: #52654e;
+  --link: #3e6542;
+  --error: #9e332b;
+  --error-border: #b7473e;
   --radius: 7px;
 }
 fieldset {
@@ -32,7 +39,7 @@ fieldset {
   margin: 15px 0 2px;
 }
 .environment-badge {
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 750;
   letter-spacing: 0.3px;
   border: 1px solid var(--line);
@@ -100,17 +107,30 @@ fieldset {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+.campaign-shortcut {
+  margin-left: auto;
+  min-width: 0;
+  max-width: 100%;
+  font-size: 14px;
+}
+.campaign-shortcut > summary {
+  cursor: pointer;
+  color: var(--link);
+  padding: 8px 0;
+  font-weight: 600;
+}
 .campaign-lookup {
-  max-width: 400px;
-  margin-bottom: 25px;
+  width: min(400px, 100%);
+  margin-top: 12px;
   display: grid;
   gap: 8px;
 }
 .campaign-lookup .actions {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
 }
 .campaign-lookup input {
   min-width: 0;
+  flex: 1 1 160px;
 }
 .receipt-help {
   margin: 16px 0 24px;
@@ -135,9 +155,6 @@ fieldset {
   }
 }
 @media (max-width: 760px) {
-  .desktop-only {
-    display: none;
-  }
   .settings-grid,
   .workflow-links {
     grid-template-columns: minmax(0, 1fr);
@@ -153,12 +170,17 @@ fieldset {
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
-  color: #e1e9e3;
-  background: #141c18;
   --ink: #e1e9e3;
   --muted: #a9b8ae;
   --line: #3b4c41;
   --paper: #1d2922;
+  --canvas: #141c18;
+  --surface-soft: #233128;
+  --surface-hover: #2a3c30;
+  --text-secondary: #bfcec1;
+  --link: #b2d6ad;
+  --error: #ffb5a6;
+  --error-border: #e68e7e;
   --green: #387b57;
 }
 [data-theme='dark']
@@ -168,7 +190,6 @@ fieldset {
     .empty-state,
     .application-row,
     .dialog-content,
-    .login-form-wrap,
     .secondary,
     .notification-preview
   ) {
@@ -243,7 +264,7 @@ fieldset {
   color: #efda9a;
 }
 [data-theme='dark'] .primary:hover:not(:disabled) {
-  background: #438b64;
+  background: #397b58;
 }
 * {
   box-sizing: border-box;
@@ -285,7 +306,7 @@ input:focus-visible,
 textarea:focus-visible,
 select:focus-visible,
 summary:focus-visible {
-  outline: 3px solid #84b99b;
+  outline: 3px solid var(--link);
   outline-offset: 3px;
 }
 h1,
@@ -313,7 +334,7 @@ h3 {
   color: var(--muted);
 }
 .eyebrow {
-  font-size: 10px;
+  font-size: 11px;
   letter-spacing: 1.6px;
   font-weight: 750;
   color: var(--muted);
@@ -337,7 +358,7 @@ h3 {
   justify-content: center;
   gap: 8px;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 14px;
   white-space: nowrap;
 }
 .primary {
@@ -356,9 +377,9 @@ h3 {
   background: #f0f4ed;
 }
 .small {
-  min-height: 34px;
+  min-height: 40px;
   padding: 6px 10px;
-  font-size: 12px;
+  font-size: 14px;
 }
 .danger {
   background: #a2352d;
@@ -376,8 +397,8 @@ h3 {
   background: transparent;
   color: inherit;
   border-radius: 5px;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 40px;
+  min-height: 40px;
 }
 .stack {
   display: flex;
@@ -388,7 +409,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 input:not([type='checkbox']),
@@ -399,6 +420,7 @@ textarea {
   border-radius: 6px;
   background: #fff;
   color: var(--ink);
+  font-weight: 400;
   padding: 11px 12px;
   outline-offset: 2px;
 }
@@ -421,7 +443,7 @@ input[type='checkbox'] {
   height: 17px;
 }
 .field-hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   font-weight: 400;
   text-align: right;
@@ -432,8 +454,31 @@ input[type='checkbox'] {
   line-height: 1.65;
 }
 .field-error {
-  color: #9e332b;
+  color: var(--error);
   font-size: 13px;
+}
+.field-feedback {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  min-block-size: 1.5em;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--error);
+  overflow-wrap: anywhere;
+}
+.field-feedback .field-hint {
+  flex-shrink: 0;
+  margin-left: auto;
+}
+:root :is(input, select, textarea, fieldset)[aria-invalid='true'] {
+  border-color: var(--error-border);
+}
+:is(input, select, textarea)[aria-invalid='true']:focus-visible,
+fieldset[aria-invalid='true']:focus-within {
+  outline: 3px solid var(--error-border);
+  outline-offset: 3px;
 }
 .preserve-lines {
   white-space: pre-wrap;
@@ -446,6 +491,48 @@ input[type='checkbox'] {
   justify-content: center;
   gap: 10px;
   color: var(--muted);
+}
+.campaign-data-region {
+  --campaign-region-size: 360px;
+  min-block-size: var(--campaign-region-size);
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.campaign-data-region > :is(.loading-state, .empty-state) {
+  min-block-size: var(--campaign-region-size);
+  flex: 1;
+}
+.campaign-data-region > .empty-state {
+  min-block-size: 0;
+  padding: 32px 20px;
+  justify-content: center;
+}
+.campaign-data-region .table-loading {
+  display: block;
+  padding-top: 42px;
+}
+.skeleton-table {
+  width: 100%;
+  background: var(--paper);
+}
+.skeleton-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px 40px;
+  gap: 20px;
+  align-items: center;
+  min-height: 60px;
+  padding: 18px 19px;
+  border-bottom: 1px solid var(--line);
+}
+.skeleton-row span {
+  display: block;
+  height: 14px;
+  background: var(--surface-soft);
+  border-radius: 4px;
+}
+.skeleton-row span:first-child {
+  width: 70%;
 }
 .spinner {
   width: 17px;
@@ -531,7 +618,7 @@ input[type='checkbox'] {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 1.8px;
   color: #b6cfa9;
   font-weight: 650;
@@ -564,7 +651,7 @@ input[type='checkbox'] {
 }
 .message-sample span {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   color: #c0cfbe;
   margin-top: 4px;
 }
@@ -588,7 +675,7 @@ input[type='checkbox'] {
   flex-shrink: 0;
 }
 .login-footnote {
-  font-size: 11px;
+  font-size: 12px;
   color: #b1c3af;
 }
 .login-form-area {
@@ -596,11 +683,12 @@ input[type='checkbox'] {
   align-items: center;
   justify-content: center;
   padding: 56px 40px;
-  background: #fbfcf9;
+  background: var(--canvas);
 }
 .login-form-wrap {
   width: 100%;
   max-width: 365px;
+  background: transparent;
 }
 .login-form-wrap h2 {
   font-size: 28px;
@@ -621,9 +709,10 @@ input[type='checkbox'] {
 }
 .password-field button {
   position: absolute;
-  right: 7px;
-  top: 7px;
-  color: #788578;
+  right: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--muted);
 }
 .login-submit {
   margin-top: 5px;
@@ -662,7 +751,7 @@ input[type='checkbox'] {
   color: #f2f6e9;
 }
 .sidebar-caption {
-  font-size: 9px;
+  font-size: 12px;
   letter-spacing: 1.8px;
   color: #a0b59d;
   font-weight: 650;
@@ -689,7 +778,7 @@ input[type='checkbox'] {
 .workspace-switch small {
   display: block;
   color: #a8bca5;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 400;
   margin-top: 3px;
 }
@@ -720,7 +809,7 @@ input[type='checkbox'] {
   gap: 11px;
   padding: 11px 12px;
   border-radius: 6px;
-  font-size: 12px;
+  font-size: 14px;
   color: #c4d3bf;
 }
 .sidebar nav a:hover {
@@ -750,7 +839,7 @@ input[type='checkbox'] {
 }
 .profile strong {
   display: block;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -758,7 +847,7 @@ input[type='checkbox'] {
 }
 .profile small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: #a5b9a1;
   margin-top: 2px;
   overflow: hidden;
@@ -783,12 +872,12 @@ input[type='checkbox'] {
   background: transparent;
   border: 0;
   color: #b8cbb3;
-  font-size: 11px;
+  font-size: 14px;
   margin-top: 17px;
   padding: 6px 0;
 }
 .sidebar-error {
-  font-size: 11px;
+  font-size: 12px;
   color: #ffcfb8;
   margin-top: 9px;
 }
@@ -805,7 +894,7 @@ input[type='checkbox'] {
   gap: 15px;
   padding: 0 39px;
   background: #fcfdfb;
-  font-size: 11px;
+  font-size: 12px;
   color: #67766b;
 }
 .breadcrumb-separator {
@@ -814,7 +903,7 @@ input[type='checkbox'] {
 }
 .context-label {
   margin-left: auto;
-  font-size: 10px;
+  font-size: 12px;
   color: #7a887d;
 }
 .main-content {
@@ -841,8 +930,9 @@ input[type='checkbox'] {
 }
 .section-bar {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   border-bottom: 1px solid var(--line);
   padding-bottom: 15px;
@@ -851,11 +941,13 @@ input[type='checkbox'] {
   font-size: 13px;
 }
 .section-bar > span {
-  font-size: 11px;
+  font-size: 12px;
 }
 .table-wrap {
   overflow: auto;
-  background: #fff;
+  max-width: 100%;
+  min-width: 0;
+  background: var(--paper);
   border-bottom: 1px solid var(--line);
 }
 table {
@@ -864,16 +956,16 @@ table {
   text-align: left;
 }
 th {
-  font-size: 10px;
+  font-size: 12px;
   letter-spacing: 0.4px;
-  color: #7c887a;
-  background: #f0f3eb;
+  color: var(--muted);
+  background: var(--surface-soft);
   font-weight: 600;
   padding: 12px 19px;
   border-bottom: 1px solid var(--line);
 }
 td {
-  font-size: 12px;
+  font-size: 14px;
   padding: 18px 19px;
   border-bottom: 1px solid #ebeee7;
 }
@@ -887,7 +979,7 @@ tbody tr:hover {
   background: #fbfcf8;
 }
 .campaign-title {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   display: inline-block;
   line-height: 1.5;
@@ -899,16 +991,16 @@ tbody tr:hover {
 }
 .row-meta {
   display: block;
-  font-size: 10px;
-  color: #8a9589;
+  font-size: 12px;
+  color: var(--muted);
   margin-top: 5px;
   font-variant-numeric: tabular-nums;
 }
 .row-action {
-  color: #627b60;
+  color: var(--link);
   display: inline-flex;
-  min-width: 32px;
-  min-height: 32px;
+  min-width: 40px;
+  min-height: 40px;
   align-items: center;
   justify-content: center;
 }
@@ -916,7 +1008,7 @@ tbody tr:hover {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   padding: 4px 8px;
   border-radius: 4px;
@@ -941,24 +1033,24 @@ tbody tr:hover {
 .status-failed,
 .status-retired {
   background: #fbe9e2;
-  color: #a6563c;
+  color: #914932;
 }
 .status-processing,
 .status-queued,
 .status-scheduled {
   background: #f7f0da;
-  color: #8c702b;
+  color: #7b601f;
 }
 .status-held {
   background: #fff0df;
-  color: #9b682a;
+  color: #80531e;
 }
 .pagination {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-top: 21px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   gap: 12px;
 }
@@ -970,7 +1062,7 @@ tbody tr:hover {
   border-top: 1px solid var(--line);
   margin-top: 46px;
   padding-top: 18px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 .empty-state {
@@ -1039,7 +1131,7 @@ tbody tr:hover {
   overflow-wrap: anywhere;
 }
 .application-row p {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 3px;
 }
@@ -1058,8 +1150,8 @@ tbody tr:hover {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: #688064;
-  font-size: 11px;
+  color: var(--link);
+  font-size: 12px;
   margin-bottom: 24px;
 }
 .actions {
@@ -1097,7 +1189,7 @@ tbody tr:hover {
   margin: 24px 0 0;
 }
 .message-detail dt {
-  font-size: 10px;
+  font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.9px;
   color: var(--muted);
@@ -1117,14 +1209,14 @@ tbody tr:hover {
 .target-list {
   margin: 17px 0;
   padding-left: 18px;
-  color: #576a55;
+  color: var(--text-secondary);
   font-size: 12px;
   line-height: 1.9;
 }
 .notification-preview {
   padding: 23px;
-  background: #edf1e5;
-  border: 1px solid #d9e0cc;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
   border-radius: 12px;
   overflow-wrap: anywhere;
 }
@@ -1132,7 +1224,7 @@ tbody tr:hover {
   display: flex;
   align-items: center;
   gap: 9px;
-  font-size: 10px;
+  font-size: 12px;
   color: #61705b;
   margin-bottom: 21px;
 }
@@ -1143,7 +1235,7 @@ tbody tr:hover {
 .notification-preview > p {
   font-size: 12px;
   line-height: 1.8;
-  color: #5c6d56;
+  color: var(--text-secondary);
 }
 .preview-note {
   margin: 13px 8px 0;
@@ -1158,8 +1250,8 @@ tbody tr:hover {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 11px;
-  color: #61775b;
+  font-size: 12px;
+  color: var(--link);
   margin-top: 20px;
 }
 .section-heading {
@@ -1168,7 +1260,7 @@ tbody tr:hover {
   gap: 12px;
 }
 .section-heading p {
-  font-size: 11px;
+  font-size: 12px;
   margin-top: 4px;
 }
 .step-number {
@@ -1177,19 +1269,19 @@ tbody tr:hover {
   justify-content: center;
   min-width: 27px;
   height: 27px;
-  border: 1px solid #d3dec8;
-  background: #f2f5ed;
+  border: 1px solid var(--line);
+  background: var(--surface-soft);
   border-radius: 5px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 650;
-  color: #6b805b;
+  color: var(--text-secondary);
 }
 .checkbox-label {
   flex-direction: row;
   align-items: center;
   gap: 10px;
   font-weight: 400;
-  font-size: 12px;
+  font-size: 14px;
 }
 .audience-options {
   border: 1px solid var(--line);
@@ -1208,21 +1300,25 @@ tbody tr:hover {
   width: 100%;
   padding: 10px 12px;
   border: 0;
-  border-bottom: 1px solid #e9eee4;
-  background: #fff;
+  border-bottom: 1px solid var(--line);
+  background: var(--paper);
   color: var(--ink);
-  font-size: 12px;
+  font-size: 14px;
   gap: 12px;
 }
 .audience-option:last-child {
   border-bottom: 0;
 }
 .audience-option:hover:not(:disabled) {
-  background: #f0f5e8;
+  background: var(--surface-hover);
+}
+.audience-option > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .audience-option small {
   display: block;
-  font-size: 10px;
+  font-size: 12px;
   color: var(--muted);
   margin-top: 3px;
 }
@@ -1237,21 +1333,52 @@ tbody tr:hover {
 .target-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  background: #eef3e7;
-  color: #4e6942;
-  border: 1px solid #d5e1ca;
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
+  background: var(--surface-soft);
+  color: var(--text-secondary);
+  border: 1px solid var(--line);
   border-radius: 4px;
-  font-size: 10px;
+  font-size: 14px;
   padding: 2px 3px 2px 8px;
 }
+.recipient-label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.recipient-label small {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
 .target-chip .icon-button {
-  min-height: 25px;
-  min-width: 25px;
+  min-height: 40px;
+  min-width: 40px;
+  flex-shrink: 0;
+}
+.editor-grid > .stack {
+  min-width: 0;
 }
 .editor-preview {
+  grid-column: 2;
+  grid-row: 1;
+  min-width: 0;
   position: sticky;
   top: 26px;
+}
+.editor-preview > summary {
+  cursor: pointer;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+.editor-preview[open] > summary {
+  margin-bottom: 16px;
 }
 .editor-preview > .eyebrow {
   display: block;
@@ -1264,13 +1391,16 @@ tbody tr:hover {
   margin-top: 27px;
   padding-top: 21px;
   border-top: 1px solid var(--line);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.9;
-  color: #788372;
+  color: var(--muted);
 }
 .editor-actions {
+  grid-column: 1 / -1;
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 15px;
   padding-bottom: 20px;
 }
@@ -1318,7 +1448,8 @@ tbody tr:hover {
   right: 14px;
 }
 .confirmation-summary {
-  background: #f4f6ef;
+  background: var(--surface-soft);
+  color: var(--ink);
   border: 1px solid var(--line);
   border-radius: 7px;
   padding: 18px;
@@ -1337,10 +1468,10 @@ tbody tr:hover {
   margin: 7px 0;
 }
 .confirmation-summary ul {
-  font-size: 11px;
+  font-size: 12px;
   margin: 14px 0 0;
   padding-left: 15px;
-  color: #67785d;
+  color: var(--text-secondary);
 }
 .dialog-actions {
   display: flex;
@@ -1365,8 +1496,8 @@ tbody tr:hover {
   border-right: 0;
 }
 .metrics-strip dt {
-  font-size: 11px;
-  color: #6b7d65;
+  font-size: 12px;
+  color: var(--muted);
 }
 .metrics-strip dd {
   font-size: 35px;
@@ -1376,8 +1507,8 @@ tbody tr:hover {
   font-variant-numeric: tabular-nums;
 }
 .metrics-strip span {
-  font-size: 10px;
-  color: #87917f;
+  font-size: 12px;
+  color: var(--muted);
   display: block;
 }
 .history-heading {
@@ -1397,12 +1528,12 @@ tbody tr:hover {
   border-bottom: 2px solid transparent;
   background: transparent;
   padding: 12px 0;
-  font-size: 12px;
-  color: #7c8b73;
+  font-size: 14px;
+  color: var(--muted);
 }
 .tabs .selected {
-  border-bottom-color: #537542;
-  color: #355f33;
+  border-bottom-color: var(--link);
+  color: var(--link);
   font-weight: 650;
 }
 .fatal-error {
@@ -1471,13 +1602,35 @@ tbody tr:hover {
   .mobile-only {
     display: inline-flex !important;
   }
+  .desktop-only {
+    display: none;
+  }
   .sidebar {
     transform: translateX(-100%);
+    visibility: hidden;
     width: 250px;
     transition: transform 0.15s ease;
   }
   .sidebar.is-open {
     transform: translateX(0);
+    visibility: visible;
+  }
+  .icon-button,
+  .row-action,
+  .target-chip .icon-button {
+    min-width: 44px;
+    min-height: 44px;
+    flex-shrink: 0;
+  }
+  .button,
+  .audience-option,
+  .campaign-shortcut > summary {
+    min-height: 44px;
+  }
+  input:not([type='checkbox']),
+  select,
+  textarea {
+    font-size: 16px;
   }
   .nav-scrim {
     display: block;
@@ -1519,27 +1672,45 @@ tbody tr:hover {
   .section-bar > span {
     max-width: 150px;
     text-align: right;
-    font-size: 10px;
+    font-size: 12px;
+  }
+  .campaign-shortcut[open] {
+    flex-basis: 100%;
+  }
+  .campaign-data-region {
+    --campaign-region-size: 340px;
+  }
+  .campaign-data-region .table-loading {
+    padding-top: 40px;
+  }
+  .skeleton-row {
+    grid-template-columns: minmax(0, 1fr) 70px 44px;
+    gap: 12px;
+    padding: 13px 11px;
+  }
+  .campaign-data-region .row-meta {
+    overflow-wrap: anywhere;
   }
   th,
   td {
     padding: 13px 11px;
   }
   .campaign-title {
-    font-size: 12px;
-  }
-  .row-meta {
-    font-size: 9px;
+    font-size: 14px;
   }
   .status {
-    font-size: 9px;
     padding: 4px 6px;
+    flex-shrink: 0;
   }
   .pagination {
-    gap: 8px;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .pagination > div {
+    flex-wrap: wrap;
   }
   .pagination .button {
-    font-size: 10px;
+    font-size: 14px;
     padding: 6px 8px;
     gap: 5px;
   }
@@ -1548,11 +1719,29 @@ tbody tr:hover {
   }
   .detail-grid,
   .editor-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .editor-grid :is(input, select, textarea, fieldset) {
+    scroll-margin-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
   }
   .editor-preview {
+    grid-column: auto;
+    grid-row: auto;
     position: static;
-    order: -1;
+  }
+  .editor-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    background: var(--canvas);
+    border-top: 1px solid var(--line);
+    padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
+    gap: 10px;
+  }
+  .editor-actions .button {
+    white-space: nowrap;
+    text-align: center;
+    flex: 0 1 auto;
   }
   .editor-preview .notification-preview {
     padding: 18px;
@@ -1568,7 +1757,7 @@ tbody tr:hover {
     display: none;
   }
   .editor-preview .preview-note {
-    font-size: 10px;
+    font-size: 12px;
   }
   .detail-grid aside {
     max-width: none;
@@ -1627,27 +1816,34 @@ tbody tr:hover {
     font-size: 12px;
   }
   .login-assistance {
-    font-size: 11px;
+    font-size: 12px;
   }
   .application-row {
     padding: 19px 10px;
     gap: 12px;
+    flex-wrap: wrap;
+  }
+  .application-row > div:not(.application-icon) {
+    flex: 1 1 110px;
+  }
+  .heading-meta {
+    flex-wrap: wrap;
   }
   .application-icon {
     width: 35px;
     height: 35px;
   }
   .application-row h2 {
-    font-size: 13px;
+    font-size: 14px;
   }
   .application-row > .status {
-    font-size: 9px;
+    font-size: 12px;
   }
   .metrics-strip {
     gap: 22px 14px;
   }
   .metrics-strip dt {
-    font-size: 10px;
+    font-size: 12px;
   }
   .metrics-strip dd {
     font-size: 29px;
@@ -1658,7 +1854,7 @@ tbody tr:hover {
     gap: 0;
   }
   .history-heading > .help-text {
-    font-size: 10px;
+    font-size: 12px;
     padding-bottom: 8px;
   }
   .dialog-content {
@@ -1671,7 +1867,7 @@ tbody tr:hover {
     gap: 8px;
   }
   .dialog-actions .button {
-    font-size: 12px;
+    font-size: 14px;
     padding: 9px 11px;
   }
   .empty-state {

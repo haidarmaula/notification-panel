@@ -52,7 +52,8 @@ test('shows held acceptance and preserves draft; statistics stay explicitly inco
   await login(page);
   await page.goto(`/apps/${app}/campaigns/9007199254740993`);
   await page.getByRole('button', { name: 'Tinjau pengiriman' }).click();
-  await expect(page.getByRole('dialog')).toContainText('INDIVIDUAL #42');
+  await expect(page.getByRole('dialog')).toContainText('Penerima Uji');
+  await expect(page.getByRole('dialog')).toContainText('Pengguna #42');
   await page.getByRole('button', { name: 'Konfirmasi kirim' }).click();
   await expect(page.getByRole('alert')).toContainText('Pengiriman sedang ditahan');
   await page.getByRole('button', { name: 'Kembali', exact: true }).click();
@@ -296,4 +297,202 @@ test('management screens fit a narrow viewport', async ({ page }) => {
     ).toBe(true);
   }
   await page.screenshot({ path: 'test-results/dashboard-mobile-logs.png', fullPage: true });
+});
+
+test('closed mobile navigation is skipped by keyboard and resets on desktop resize', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  await page.goto(`/apps/${app}/campaigns`);
+  const opener = page.getByRole('button', { name: 'Buka navigasi', exact: true });
+  await expect(page.getByRole('button', { name: /sidebar/ })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Lewati ke konten' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(opener).toBeFocused();
+  await opener.click();
+  await page.getByRole('link', { name: 'Template', exact: true }).click();
+  await expect(opener).toBeFocused();
+  await expect(page.getByRole('navigation', { name: 'Navigasi utama' })).toHaveCount(0);
+  await opener.click();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect(page.locator('.workspace-body')).not.toHaveAttribute('inert');
+  await expect(page.getByRole('heading', { name: 'Template', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Sembunyikan sidebar' })).toBeVisible();
+});
+
+test('dark login themes the full panel without a card and supports password visibility', async ({
+  page,
+}) => {
+  await page.addInitScript(() => localStorage.setItem('hello.theme', 'dark'));
+  await page.goto('/login');
+  await expect(page.getByRole('heading', { name: 'Selamat datang kembali.' })).toBeVisible();
+  await expect(page.locator('.login-form-area')).toHaveCSS('background-color', 'rgb(20, 28, 24)');
+  await expect(page.locator('.login-form-wrap')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await page.getByLabel('Kata sandi', { exact: true }).fill('fixture-only');
+  await page.getByRole('button', { name: 'Tampilkan kata sandi' }).click();
+  await expect(page.locator('input[name="password"]')).toHaveAttribute('type', 'text');
+  await page.getByRole('button', { name: 'Sembunyikan kata sandi' }).click();
+  await expect(page.locator('input[name="password"]')).toHaveAttribute('type', 'password');
+  await page.screenshot({ path: 'test-results/dashboard-login-dark.png', fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/dashboard-login-mobile-dark.png', fullPage: true });
+  await page.getByLabel('Email', { exact: true }).fill('staff@example.invalid');
+  await page.getByLabel('Kata sandi', { exact: true }).fill('wrong');
+  await page.getByRole('button', { name: 'Masuk ke dashboard' }).click();
+  await expect(page.getByRole('alert')).toContainText('Email atau kata sandi tidak sesuai.');
+});
+
+test('dark editor keeps readable enabled recipients and notification content', async ({ page }) => {
+  await login(page);
+  await page.goto(`/apps/${app}/settings`);
+  await page.getByLabel('Tema', { exact: true }).selectOption('dark');
+  await page.goto(`/apps/${app}/campaigns/new`);
+  await expect(page.getByRole('button', { name: 'Penerima Uji #42' })).toBeEnabled();
+  const contrast = await page.evaluate(() => {
+    const rgb = (value: string) =>
+      value
+        .match(/[\d.]+/g)!
+        .slice(0, 3)
+        .map(Number);
+    const luminance = (value: number[]) =>
+      value
+        .map((channel) => {
+          channel /= 255;
+          return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+        })
+        .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+    return ['.audience-option', '.notification-preview > p', '.back-link'].map((selector) => {
+      const element = document.querySelector<HTMLElement>(selector)!;
+      let parent: HTMLElement | null = element;
+      while (parent && getComputedStyle(parent).backgroundColor === 'rgba(0, 0, 0, 0)')
+        parent = parent.parentElement;
+      const foreground = luminance(rgb(getComputedStyle(element).color));
+      const background = luminance(rgb(getComputedStyle(parent!).backgroundColor));
+      return {
+        selector,
+        ratio:
+          (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05),
+      };
+    });
+  });
+  for (const item of contrast) expect(item.ratio, item.selector).toBeGreaterThanOrEqual(4.5);
+  await page.screenshot({ path: 'test-results/dashboard-editor-dark.png', fullPage: true });
+});
+
+test('draft validation identifies fields, restores focus, and preserves field geometry', async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto(`/apps/${app}/campaigns/new`);
+  const title = page.getByLabel('Judul notifikasi', { exact: true });
+  const body = page.getByLabel('Pesan', { exact: true });
+  const before = await body.boundingBox();
+  await page.getByRole('button', { name: 'Simpan draft', exact: true }).click();
+  await expect(title).toBeFocused();
+  await expect(title).toHaveAttribute('aria-invalid', 'true');
+  await expect(title).toHaveAccessibleDescription(/Judul wajib diisi/);
+  await expect(body).toHaveAttribute('aria-invalid', 'true');
+  const after = await body.boundingBox();
+  expect(Math.abs(after!.y + (await page.evaluate(() => scrollY)) - before!.y)).toBeLessThanOrEqual(
+    2,
+  );
+  await title.fill('Judul valid');
+  await body.fill('Pesan valid');
+  await page.getByRole('button', { name: 'Simpan draft', exact: true }).click();
+  const broadcast = page.getByLabel('Semua penerima dalam aplikasi', { exact: true });
+  await expect(broadcast).toBeFocused();
+  await expect(broadcast).toHaveAccessibleDescription('Pilih sedikitnya satu penerima.');
+  await page.getByRole('button', { name: 'Penerima Uji #42' }).click();
+  await expect(broadcast).toHaveAttribute('aria-invalid', 'false');
+  await title.fill('é'.repeat(128));
+  await page.getByRole('button', { name: 'Simpan draft', exact: true }).click();
+  await expect(title).toBeFocused();
+  await expect(title).toHaveAccessibleDescription(/Judul maksimal 255 byte/);
+});
+
+test('recipient names survive broadcast toggles, draft editing, and send review', async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto(`/apps/${app}/campaigns/new`);
+  await page.getByLabel('Judul notifikasi', { exact: true }).fill('Named recipients');
+  await page.getByLabel('Pesan', { exact: true }).fill('Isolated draft with named recipients.');
+  await page.getByRole('button', { name: 'Penerima Uji #42' }).click();
+  await page.getByRole('combobox', { name: 'Jenis penerima', exact: true }).selectOption('SEGMENT');
+  await page.getByRole('button', { name: 'Segmen Uji #7' }).click();
+  const selected = page.locator('.selected-targets');
+  await expect(selected).toContainText('Penerima Uji');
+  await expect(selected).toContainText('Segmen Uji');
+  const broadcast = page.getByLabel('Semua penerima dalam aplikasi', { exact: true });
+  await broadcast.check();
+  await broadcast.uncheck();
+  await expect(selected).toContainText('Penerima Uji');
+  await expect(selected).toContainText('Segmen Uji');
+  await page.getByRole('button', { name: 'Simpan draft', exact: true }).click();
+  await expect(page.locator('.target-list')).toContainText('Penerima Uji');
+  await expect(page.locator('.target-list')).toContainText('Segmen Uji');
+  await page.getByRole('link', { name: 'Edit draft', exact: true }).click();
+  await expect(selected).toContainText('Penerima Uji');
+  await expect(selected).toContainText('Segmen Uji');
+  await page.getByRole('button', { name: 'Simpan draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Tinjau pengiriman', exact: true }).click();
+  await expect(page.getByRole('dialog')).toContainText('Penerima Uji');
+  await expect(page.getByRole('dialog')).toContainText('Segmen Uji');
+  await expect(page.getByRole('dialog')).not.toContainText('INDIVIDUAL');
+});
+
+test('mobile editor starts with fields and keeps save reachable with a collapsible preview', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  await page.goto(`/apps/${app}/campaigns/new`);
+  const title = page.getByLabel('Judul notifikasi', { exact: true });
+  await expect(title).toBeInViewport();
+  await expect(page.locator('.editor-preview')).not.toHaveAttribute('open');
+  const save = page.getByRole('button', { name: 'Simpan draft', exact: true });
+  await expect(save).toBeInViewport();
+  await title.fill('Pesan mobile');
+  await page.getByLabel('Pesan', { exact: true }).fill('Isi pratinjau mobile.');
+  await page.locator('.editor-preview > summary').click();
+  await expect(page.locator('.notification-preview')).toContainText('Isi pratinjau mobile.');
+  await expect(save).toBeInViewport();
+  await page.setViewportSize({ width: 320, height: 740 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: 'test-results/dashboard-editor-mobile.png', fullPage: true });
+});
+
+test('campaign loading and empty states keep the footer stable and ID lookup secondary', async ({
+  page,
+}) => {
+  await login(page);
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/bff/api/apps/${app}/campaigns?*`, async (route) => {
+    await gate;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ success: true, data: { items: [], next_after_id: null } }),
+    });
+  });
+  await page.goto(`/apps/${app}/campaigns`);
+  await expect(page.getByRole('status')).toContainText('Memuat data');
+  const before = await page.locator('.page-footnote').boundingBox();
+  release();
+  await expect(page.getByRole('heading', { name: 'Mulai dari pesan pertama.' })).toBeVisible();
+  const after = await page.locator('.page-footnote').boundingBox();
+  expect(Math.abs(after!.y - before!.y)).toBeLessThanOrEqual(1);
+  await expect(page.getByLabel('Buka berdasarkan ID campaign')).not.toBeVisible();
+  await page.locator('.campaign-shortcut > summary').click();
+  await expect(page.getByLabel('Buka berdasarkan ID campaign')).toBeVisible();
+  await page.getByLabel('Buka berdasarkan ID campaign').fill('9007199254740993');
+  await page.getByRole('button', { name: 'Buka', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Pengingat jadwal layanan', level: 1, exact: true }),
+  ).toBeVisible();
 });

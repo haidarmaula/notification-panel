@@ -1,11 +1,11 @@
-import { Show, For, createSignal, createEffect, onCleanup } from 'solid-js';
+import { Show, For, createSignal, createEffect, onCleanup, onMount } from 'solid-js';
 import { A, useNavigate, useParams, useBeforeLeave, useSearchParams } from '@solidjs/router';
 import { createQuery, useQueryClient } from '@tanstack/solid-query';
 import { ArrowLeft, Check, Plus, X } from 'lucide-solid';
 import { useAuth } from '../../app/auth';
 import { data, request, errorMessage, ApiError } from '../../lib/api/client';
 import type { Campaign, Page } from '../../lib/api/types';
-import { Failure, Loading } from '../../components/ui/Feedback';
+import { Failure, Loading, RecipientLabel } from '../../components/ui/Feedback';
 import { draftSchema } from './validation';
 
 type Target = { type: 'BROADCAST' } | { type: 'SEGMENT' | 'INDIVIDUAL'; id: string };
@@ -42,9 +42,26 @@ export default function Editor() {
   const [title, setTitle] = createSignal('');
   const [body, setBody] = createSignal('');
   const [targets, setTargets] = createSignal<Target[]>([]);
+  const [individualTargets, setIndividualTargets] = createSignal<Target[]>([]);
+  const [targetNames, setTargetNames] = createSignal<Record<string, string>>({});
   const [kind, setKind] = createSignal<'INDIVIDUAL' | 'SEGMENT'>('INDIVIDUAL');
   const [cursor, setCursor] = createSignal('');
   const [loaded, setLoaded] = createSignal('');
+  const [fieldErrors, setFieldErrors] = createSignal<
+    Partial<Record<'title' | 'body' | 'targets', string>>
+  >({});
+  const [previewOpen, setPreviewOpen] = createSignal(
+    window.matchMedia('(min-width: 761px)').matches,
+  );
+  let titleInput: HTMLInputElement | undefined;
+  let bodyInput: HTMLTextAreaElement | undefined;
+  let targetsInput: HTMLInputElement | undefined;
+  onMount(() => {
+    const wide = window.matchMedia('(min-width: 761px)');
+    const resize = () => setPreviewOpen(wide.matches);
+    wide.addEventListener('change', resize);
+    onCleanup(() => wide.removeEventListener('change', resize));
+  });
   const [error, setError] = createSignal('');
   const [pending, setPending] = createSignal(false);
   const [dirty, setDirty] = createSignal(false);
@@ -111,14 +128,19 @@ export default function Editor() {
     if (dirty() && !window.confirm('Perubahan belum disimpan. Tinggalkan halaman?'))
       event.preventDefault();
   });
-  function add(id: string) {
-    const selected: Target = { type: kind(), id };
+  function add(item: { id: string; name?: string | null; external_id?: string }) {
+    const selected: Target = { type: kind(), id: item.id };
     if (
       !targets().some(
-        (target) => target.type === selected.type && 'id' in target && target.id === id,
+        (target) => target.type === selected.type && 'id' in target && target.id === item.id,
       )
     ) {
       setTargets([...targets().filter((target) => target.type !== 'BROADCAST'), selected]);
+      setTargetNames({
+        ...targetNames(),
+        [`${kind()}:${item.id}`]: item.name || item.external_id || '',
+      });
+      setFieldErrors({ ...fieldErrors(), targets: undefined });
       setDirty(true);
     }
   }
@@ -126,9 +148,18 @@ export default function Editor() {
     event.preventDefault();
     if (pending() || uncertain()) return;
     setError('');
+    setFieldErrors({});
     const parsed = draftSchema.safeParse({ title: title(), body: body(), targets: targets() });
     if (!parsed.success) {
-      setError(parsed.error.issues[0].message);
+      const errors = parsed.error.flatten().fieldErrors;
+      setFieldErrors({
+        title: errors.title?.[0],
+        body: errors.body?.[0],
+        targets: errors.targets?.[0],
+      });
+      const invalid = errors.title ? titleInput : errors.body ? bodyInput : targetsInput;
+      invalid?.focus();
+      invalid?.scrollIntoView({ block: 'center' });
       return;
     }
     const appId = params.appId;
@@ -210,7 +241,7 @@ export default function Editor() {
               </div>
             }
           >
-            <form class="editor-grid" onSubmit={(event) => void save(event)}>
+            <form class="editor-grid" noValidate onSubmit={(event) => void save(event)}>
               <div class="stack">
                 <section class="surface stack">
                   <div class="section-heading">
@@ -223,11 +254,14 @@ export default function Editor() {
                   <label>
                     Judul notifikasi
                     <input
+                      ref={titleInput}
                       aria-label="Judul notifikasi"
-                      aria-describedby="title-bytes"
+                      aria-describedby="title-bytes title-error"
+                      aria-invalid={!!fieldErrors().title}
                       value={title()}
                       onInput={(event) => {
                         setTitle(event.currentTarget.value);
+                        setFieldErrors({ ...fieldErrors(), title: undefined });
                         setDirty(true);
                       }}
                       placeholder="Apa yang ingin Anda sampaikan?"
@@ -238,19 +272,27 @@ export default function Editor() {
                         (!!selectedTemplate() && (!templateLoaded() || !templateData()?.is_active))
                       }
                     />
-                    <span id="title-bytes" class="field-hint">
-                      {new TextEncoder().encode(title()).length}/255 byte
+                    <span class="field-feedback">
+                      <span id="title-error" class="field-error" aria-live="polite">
+                        {fieldErrors().title}
+                      </span>
+                      <span id="title-bytes" class="field-hint">
+                        {new TextEncoder().encode(title()).length}/255 byte
+                      </span>
                     </span>
                   </label>
                   <label>
                     Pesan
                     <textarea
+                      ref={bodyInput}
                       aria-label="Pesan"
-                      aria-describedby="body-bytes"
+                      aria-describedby="body-bytes body-error"
+                      aria-invalid={!!fieldErrors().body}
                       rows={5}
                       value={body()}
                       onInput={(event) => {
                         setBody(event.currentTarget.value);
+                        setFieldErrors({ ...fieldErrors(), body: undefined });
                         setDirty(true);
                       }}
                       placeholder="Tulis pesan untuk penerima Anda…"
@@ -261,22 +303,35 @@ export default function Editor() {
                         (!!selectedTemplate() && (!templateLoaded() || !templateData()?.is_active))
                       }
                     />
-                    <span id="body-bytes" class="field-hint">
-                      {new TextEncoder().encode(body()).length}/4096 byte
+                    <span class="field-feedback">
+                      <span id="body-error" class="field-error" aria-live="polite">
+                        {fieldErrors().body}
+                      </span>
+                      <span id="body-bytes" class="field-hint">
+                        {new TextEncoder().encode(body()).length}/4096 byte
+                      </span>
                     </span>
                   </label>
                 </section>
-                <section class="surface stack">
+                <fieldset
+                  class="surface stack"
+                  aria-labelledby="recipients-heading"
+                  aria-describedby="targets-error"
+                  aria-invalid={!!fieldErrors().targets}
+                >
                   <div class="section-heading">
                     <span class="step-number">02</span>
                     <div>
-                      <h2>Tentukan penerima</h2>
+                      <h2 id="recipients-heading">Tentukan penerima</h2>
                       <p class="muted">Pilih pengguna atau segmen dalam aplikasi ini.</p>
                     </div>
                   </div>
                   <label class="checkbox-label">
                     <input
+                      ref={targetsInput}
                       type="checkbox"
+                      aria-describedby="targets-error"
+                      aria-invalid={!!fieldErrors().targets}
                       checked={targets().some((target) => target.type === 'BROADCAST')}
                       disabled={
                         pending() ||
@@ -284,7 +339,13 @@ export default function Editor() {
                         (!!selectedTemplate() && (!templateLoaded() || !templateData()?.is_active))
                       }
                       onChange={(event) => {
-                        setTargets(event.currentTarget.checked ? [{ type: 'BROADCAST' }] : []);
+                        if (event.currentTarget.checked) {
+                          setIndividualTargets(targets());
+                          setTargets([{ type: 'BROADCAST' }]);
+                        } else {
+                          setTargets(individualTargets());
+                        }
+                        setFieldErrors({ ...fieldErrors(), targets: undefined });
                         setDirty(true);
                       }}
                     />
@@ -334,7 +395,7 @@ export default function Editor() {
                                       target.id === item.id,
                                   )
                                 }
-                                onClick={() => add(item.id)}
+                                onClick={() => add(item)}
                               >
                                 <span>
                                   {item.name || item.external_id || `#${item.id}`}
@@ -372,8 +433,15 @@ export default function Editor() {
                       <For each={targets()}>
                         {(target, index) => (
                           <span class="target-chip">
-                            {target.type === 'SEGMENT' ? 'Segmen' : 'Pengguna'} #
-                            {'id' in target ? target.id : ''}
+                            <RecipientLabel
+                              appId={params.appId!}
+                              target={target}
+                              name={
+                                'id' in target
+                                  ? targetNames()[`${target.type}:${target.id}`]
+                                  : undefined
+                              }
+                            />
                             <button
                               type="button"
                               class="icon-button"
@@ -396,7 +464,10 @@ export default function Editor() {
                       </For>
                     </div>
                   </Show>
-                </section>
+                  <p id="targets-error" class="field-feedback field-error" aria-live="polite">
+                    {fieldErrors().targets}
+                  </p>
+                </fieldset>
                 <Show when={error()}>
                   <p class="notice notice-error" role="alert">
                     {error()}
@@ -413,26 +484,13 @@ export default function Editor() {
                     </A>
                   </div>
                 </Show>
-                <div class="editor-actions">
-                  <A class="button secondary" href={`/apps/${params.appId}/campaigns`}>
-                    Kembali
-                  </A>
-                  <button
-                    type="submit"
-                    class="button primary"
-                    disabled={
-                      pending() ||
-                      uncertain() ||
-                      (!!selectedTemplate() && (!templateLoaded() || !templateData()?.is_active))
-                    }
-                  >
-                    <Check size={17} />
-                    {pending() ? 'Menyimpan…' : 'Simpan draft'}
-                  </button>
-                </div>
               </div>
-              <aside class="editor-preview">
-                <span class="eyebrow">PRATINJAU</span>
+              <details
+                class="editor-preview"
+                open={previewOpen()}
+                onToggle={(event) => setPreviewOpen(event.currentTarget.open)}
+              >
+                <summary>Pratinjau notifikasi</summary>
                 <div class="notification-preview">
                   <div class="preview-heading">
                     <span class="sample-mark">h.</span>
@@ -454,7 +512,24 @@ export default function Editor() {
                     sebelum mengirim.
                   </p>
                 </div>
-              </aside>
+              </details>
+              <div class="editor-actions">
+                <A class="button secondary" href={`/apps/${params.appId}/campaigns`}>
+                  Kembali
+                </A>
+                <button
+                  type="submit"
+                  class="button primary"
+                  disabled={
+                    pending() ||
+                    uncertain() ||
+                    (!!selectedTemplate() && (!templateLoaded() || !templateData()?.is_active))
+                  }
+                >
+                  <Check size={17} />
+                  {pending() ? 'Menyimpan…' : 'Simpan draft'}
+                </button>
+              </div>
             </form>
           </Show>
         </Show>

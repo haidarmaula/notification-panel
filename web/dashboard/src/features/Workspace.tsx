@@ -35,14 +35,23 @@ export function Workspace(props: ParentProps) {
     if (menu()) navigation?.querySelector<HTMLButtonElement>('button')?.focus();
   });
   const closeMenu = () => {
+    if (!menu()) return;
     setMenu(false);
     menuButton?.focus();
   };
   const escape = (event: KeyboardEvent) => {
     if (event.key === 'Escape' && menu()) closeMenu();
   };
+  const narrow = window.matchMedia('(max-width: 760px)');
+  const resize = () => {
+    if (!narrow.matches) setMenu(false);
+  };
+  narrow.addEventListener('change', resize);
   window.addEventListener('keydown', escape);
-  onCleanup(() => window.removeEventListener('keydown', escape));
+  onCleanup(() => {
+    window.removeEventListener('keydown', escape);
+    narrow.removeEventListener('change', resize);
+  });
   const [logoutError, setLogoutError] = createSignal('');
   const [leaving, setLeaving] = createSignal(false);
   const profile = createQuery(() => ({
@@ -114,7 +123,13 @@ export function Workspace(props: ParentProps) {
               </button>
             </div>
             <span class="sidebar-caption">RUANG KERJA</span>
-            <A href="/apps" class="workspace-switch" onClick={() => setMenu(false)}>
+            <A
+              href="/apps"
+              class="workspace-switch"
+              onClick={() => {
+                if (menu()) closeMenu();
+              }}
+            >
               <span class="app-monogram">{(application.data?.name ?? 'H').slice(0, 1)}</span>
               <span>
                 {application.data?.name ?? 'Pilih aplikasi'}
@@ -127,13 +142,22 @@ export function Workspace(props: ParentProps) {
                 <A
                   href={`/apps/${params.appId}/overview`}
                   activeClass="nav-active"
-                  onClick={() => setMenu(false)}
+                  onClick={() => {
+                    if (menu()) closeMenu();
+                  }}
                 >
                   <LayoutDashboard size={18} />
                   Ringkasan
                 </A>
               </Show>
-              <A href="/apps" end activeClass="nav-active" onClick={() => setMenu(false)}>
+              <A
+                href="/apps"
+                end
+                activeClass="nav-active"
+                onClick={() => {
+                  if (menu()) closeMenu();
+                }}
+              >
                 <Boxes size={18} />
                 Aplikasi
               </A>
@@ -141,7 +165,9 @@ export function Workspace(props: ParentProps) {
                 <A
                   href={`/apps/${params.appId}/campaigns`}
                   activeClass="nav-active"
-                  onClick={() => setMenu(false)}
+                  onClick={() => {
+                    if (menu()) closeMenu();
+                  }}
                 >
                   <Megaphone size={18} />
                   Campaign
@@ -151,7 +177,9 @@ export function Workspace(props: ParentProps) {
                 <A
                   href={`/apps/${params.appId}/templates`}
                   activeClass="nav-active"
-                  onClick={() => setMenu(false)}
+                  onClick={() => {
+                    if (menu()) closeMenu();
+                  }}
                 >
                   <FileText size={18} />
                   Template
@@ -159,7 +187,9 @@ export function Workspace(props: ParentProps) {
                 <A
                   href={`/apps/${params.appId}/logs`}
                   activeClass="nav-active"
-                  onClick={() => setMenu(false)}
+                  onClick={() => {
+                    if (menu()) closeMenu();
+                  }}
                 >
                   <ListChecks size={18} />
                   Log pengiriman
@@ -168,7 +198,9 @@ export function Workspace(props: ParentProps) {
                 <A
                   href={`/apps/${params.appId}/audience`}
                   activeClass="nav-active"
-                  onClick={() => setMenu(false)}
+                  onClick={() => {
+                    if (menu()) closeMenu();
+                  }}
                 >
                   <Users size={18} />
                   Pengguna &amp; perangkat
@@ -176,7 +208,9 @@ export function Workspace(props: ParentProps) {
                 <A
                   href={`/apps/${params.appId}/segments`}
                   activeClass="nav-active"
-                  onClick={() => setMenu(false)}
+                  onClick={() => {
+                    if (menu()) closeMenu();
+                  }}
                 >
                   <Layers size={18} />
                   Segment
@@ -184,7 +218,9 @@ export function Workspace(props: ParentProps) {
                 <A
                   href={`/apps/${params.appId}/settings`}
                   activeClass="nav-active"
-                  onClick={() => setMenu(false)}
+                  onClick={() => {
+                    if (menu()) closeMenu();
+                  }}
                 >
                   <Settings size={18} />
                   Pengaturan
