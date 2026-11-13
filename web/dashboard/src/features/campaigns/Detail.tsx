@@ -17,13 +17,20 @@ export default function Detail() {
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal('');
   const [success, setSuccess] = createSignal('');
+  const [accepted, setAccepted] = createSignal(false);
+  const [uncertain, setUncertain] = createSignal(false);
   const path = () => `/apps/${params.appId}/campaigns/${params.campaignId}`;
   const query = createQuery(() => ({
     queryKey: ['campaign', params.appId, params.campaignId],
     queryFn: ({ signal }) => data<Campaign>(path(), signal),
+    refetchInterval: (entry) =>
+      (accepted() && entry.state.data?.status === 'DRAFT') ||
+      ['QUEUED', 'PROCESSING'].includes(entry.state.data?.status ?? '')
+        ? 5000
+        : false,
   }));
   async function confirm() {
-    if (pending()) return;
+    if (pending() || uncertain() || accepted()) return;
     const operation = action();
     if (!operation) return;
     const appId = params.appId;
@@ -48,7 +55,9 @@ export default function Detail() {
         idempotencyKey:
           operation === 'send' ? `hello-dashboard:${appId}:${campaignId}:send` : undefined,
       });
+      if (operation !== 'delete') setAccepted(true);
       await client.invalidateQueries({ queryKey: ['campaigns', appId] });
+      await client.invalidateQueries({ queryKey: ['recent-campaigns', appId] });
       await client.invalidateQueries({ queryKey: ['campaign', appId, campaignId] });
       if (params.appId !== appId || params.campaignId !== campaignId) return;
       setAction(null);
@@ -62,12 +71,20 @@ export default function Detail() {
     } catch (error) {
       if (error instanceof ApiError && error.status === 401)
         window.dispatchEvent(new Event('hello:session-expired'));
+      if (
+        error instanceof ApiError &&
+        (error.status === 0 || (error.status >= 500 && error.status !== 503))
+      ) {
+        setUncertain(true);
+        void query.refetch();
+      }
       setError(errorMessage(error));
     } finally {
       setPending(false);
     }
   }
   function open(value: 'send' | 'schedule' | 'delete') {
+    if (accepted() || uncertain()) return;
     setError('');
     setScheduled('');
     setAction(value);
@@ -86,6 +103,17 @@ export default function Detail() {
           <Show when={query.data}>
             {(campaign) => (
               <>
+                <Show when={uncertain()}>
+                  <p class="notice" role="alert">
+                    Hasil tindakan belum dapat dipastikan. Periksa status terbaru sebelum mencoba
+                    lagi.
+                  </p>
+                </Show>
+                <Show when={accepted() && campaign().status === 'DRAFT'}>
+                  <p class="notice" role="status">
+                    Permintaan diterima. Menunggu pembaruan status campaign…
+                  </p>
+                </Show>
                 <header class="page-heading detail-heading">
                   <div>
                     <div class="heading-meta">
@@ -95,7 +123,7 @@ export default function Detail() {
                     <h1>{campaign().title}</h1>
                   </div>
                   <div class="actions">
-                    <Show when={campaign().status === 'DRAFT'}>
+                    <Show when={campaign().status === 'DRAFT' && !accepted() && !uncertain()}>
                       <A class="button secondary" href={`${path()}/edit`}>
                         <Pencil size={16} />
                         Edit draft
@@ -105,7 +133,7 @@ export default function Detail() {
                         Tinjau pengiriman
                       </button>
                     </Show>
-                    <Show when={campaign().status !== 'DRAFT'}>
+                    <Show when={campaign().status !== 'DRAFT' || accepted()}>
                       <A class="button primary" href={`${path()}/results`}>
                         Lihat hasil
                         <ArrowUpRight size={16} />
@@ -161,7 +189,7 @@ export default function Detail() {
                     <p class="help-text preview-note">
                       Tampilan sebenarnya mengikuti pengaturan perangkat penerima.
                     </p>
-                    <Show when={campaign().status === 'DRAFT'}>
+                    <Show when={campaign().status === 'DRAFT' && !accepted() && !uncertain()}>
                       <div class="secondary-actions">
                         <button class="button secondary" onClick={() => open('schedule')}>
                           <CalendarClock size={17} />
@@ -263,7 +291,7 @@ export default function Detail() {
                 </Dialog.CloseButton>
                 <button
                   class={`button ${action() === 'delete' ? 'danger' : 'primary'}`}
-                  disabled={pending()}
+                  disabled={pending() || uncertain() || accepted()}
                   onClick={() => void confirm()}
                 >
                   {pending()

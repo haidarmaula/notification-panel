@@ -26,6 +26,27 @@ const campaigns = [
     targets: [{ type: 'INDIVIDUAL', id: '42' }],
   },
 ];
+const templates = [
+  {
+    id: '3',
+    name: 'Pengingat',
+    title_template: 'Pengingat layanan',
+    body_template: 'Buka aplikasi untuk melihat informasi.',
+    is_active: true,
+  },
+];
+const segments = [{ id: '7', name: 'Segmen Uji', description: null }];
+const members = new Map([['7', []]]);
+const users = [
+  {
+    id: '42',
+    external_id: 'fixture-recipient',
+    name: 'Penerima Uji',
+    email: null,
+    status: 'ACTIVE',
+  },
+];
+const profile = { name: 'Staf Pengujian', email: 'staff@example.invalid' };
 const sessions = new Set();
 let sequence = 0;
 function send(response, status, data) {
@@ -104,7 +125,8 @@ const api = createServer(
       return;
     }
     if (url.pathname === '/api/v1/profile') {
-      send(response, 200, { name: 'Staf Pengujian', email: 'staff@example.invalid' });
+      if (request.method === 'PATCH') Object.assign(profile, body);
+      send(response, 200, profile);
       return;
     }
     if (url.pathname === '/api/v1/apps') {
@@ -117,19 +139,68 @@ const api = createServer(
     }
     const base = `/api/v1/apps/${appId}`;
     if (url.pathname === `${base}/users`) {
+      send(response, 200, { items: users, next_after_id: null });
+      return;
+    }
+    if (url.pathname === `${base}/users/42`) {
+      send(response, 200, users[0]);
+      return;
+    }
+    if (url.pathname === `${base}/users/42/devices`) {
       send(response, 200, {
         items: [
-          { id: '42', external_id: 'fixture-recipient', name: 'Penerima Uji', status: 'ACTIVE' },
+          { id: '8', platform: 'ANDROID', is_active: true, last_seen_at: '2026-11-13T00:00:00Z' },
         ],
         next_after_id: null,
       });
       return;
     }
-    if (url.pathname === `${base}/segments`) {
-      send(response, 200, {
-        items: [{ id: '7', name: 'Segmen Uji', description: null }],
-        next_after_id: null,
-      });
+    const directory = url.pathname
+      .slice(base.length)
+      .match(/^\/(templates|segments)(?:\/(\d+))?(?:\/members(?:\/(\d+))?)?$/);
+    if (directory) {
+      const collection = directory[1] === 'templates' ? templates : segments;
+      const id = directory[2];
+      const userID = directory[3];
+      const item = collection.find((item) => item.id === id);
+      if (id && !item) {
+        send(response, 404, {});
+        return;
+      }
+      if (url.pathname.includes('/members')) {
+        const group = members.get(id) ?? [];
+        if (userID) {
+          const index = group.findIndex((member) => member.user_id === userID);
+          if (request.method === 'PUT' && index < 0) {
+            const user = users.find((user) => user.id === userID);
+            group.push({ ...user, id: String(group.length + 1), user_id: userID });
+          }
+          if (request.method === 'DELETE' && index >= 0) group.splice(index, 1);
+          members.set(id, group);
+          send(response, 204);
+          return;
+        }
+        send(response, 200, { items: group, next_after_id: null });
+        return;
+      }
+      if (request.method === 'POST') {
+        const created = { ...body, id: String(100 + collection.length) };
+        collection.push(created);
+        send(response, 201, created);
+        return;
+      }
+      if (request.method === 'PUT') {
+        Object.assign(item, body);
+        send(response, 200, item);
+        return;
+      }
+      if (request.method === 'DELETE') {
+        collection.splice(collection.indexOf(item), 1);
+        members.delete(id);
+        send(response, 204);
+        return;
+      }
+      send(response, 200, id ? item : { items: collection, next_after_id: null });
       return;
     }
     if (url.pathname === `${base}/campaigns`) {
@@ -159,6 +230,11 @@ const api = createServer(
       }
       const campaign = campaigns[index];
       if (match[2] === 'send' || match[2] === 'schedule') {
+        if (campaign.title === 'Fixture acceptance') {
+          campaign.status = 'QUEUED';
+          send(response, 202, { id: campaign.id });
+          return;
+        }
         send(response, 503, {});
         return;
       }

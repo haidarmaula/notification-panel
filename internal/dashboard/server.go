@@ -422,8 +422,12 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, id string, valu
 
 var appPath = regexp.MustCompile(`^/apps/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(/.*)?$`)
 var itemPath = regexp.MustCompile(`^/(campaigns|users|segments|templates)/[1-9][0-9]*(/(statistics|deliveries|reads|send|schedule))?$`)
+var audiencePath = regexp.MustCompile(`^/(users/[1-9][0-9]*/devices|segments/[1-9][0-9]*/members)(/[1-9][0-9]*)?$`)
 
 func allowed(method, path string) bool {
+	if method == "PATCH" && path == "/profile" {
+		return true
+	}
 	if method == "GET" && (path == "/apps" || path == "/profile") {
 		return true
 	}
@@ -432,10 +436,16 @@ func allowed(method, path string) bool {
 		return false
 	}
 	suffix := match[1]
+	if audience := audiencePath.FindStringSubmatch(suffix); audience != nil {
+		if strings.HasPrefix(audience[1], "users/") {
+			return method == "GET" && audience[2] == ""
+		}
+		return method == "GET" && audience[2] == "" || (method == "PUT" || method == "DELETE") && audience[2] != ""
+	}
 	if method == "GET" && (suffix == "" || suffix == "/campaigns" || suffix == "/users" || suffix == "/segments" || suffix == "/templates") {
 		return true
 	}
-	if method == "POST" && suffix == "/campaigns" {
+	if method == "POST" && (suffix == "/campaigns" || suffix == "/templates" || suffix == "/segments") {
 		return true
 	}
 	item := itemPath.FindStringSubmatch(suffix)
@@ -446,7 +456,7 @@ func allowed(method, path string) bool {
 		return item[3] == "" || item[1] == "campaigns" && (item[3] == "statistics" || item[3] == "deliveries" || item[3] == "reads")
 	}
 	if item[1] != "campaigns" {
-		return false
+		return item[3] == "" && (method == "PUT" && (item[1] == "templates" || item[1] == "segments") || method == "DELETE" && item[1] == "segments")
 	}
 	return (method == "PUT" || method == "DELETE") && item[3] == "" || method == "POST" && (item[3] == "send" || item[3] == "schedule")
 }

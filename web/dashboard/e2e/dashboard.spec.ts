@@ -100,3 +100,200 @@ test('message preview updates locally without a draft write', async ({ page }) =
   expect(draftWrites).toBe(0);
   await page.screenshot({ path: 'test-results/dashboard-editor.png', fullPage: true });
 });
+
+test('persists appearance and desktop sidebar preference without storing account data', async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto(`/apps/${app}/settings`);
+  await page.getByLabel('Tema', { exact: true }).selectOption('dark');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: 'Sembunyikan sidebar' }).click();
+  await expect(page.getByRole('navigation', { name: 'Navigasi utama' })).not.toBeVisible();
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.getByRole('button', { name: 'Tampilkan sidebar' })).toBeVisible();
+  await page.getByRole('button', { name: 'Tampilkan sidebar' }).click();
+  await expect(page.getByRole('navigation', { name: 'Navigasi utama' })).toBeVisible();
+  expect(await page.evaluate(() => Object.keys(localStorage).sort())).toEqual([
+    'hello.sidebar',
+    'hello.theme',
+  ]);
+  await page.screenshot({ path: 'test-results/dashboard-settings-dark.png', fullPage: true });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await page.getByLabel('Tema', { exact: true }).selectOption('system');
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+});
+
+test('creates, replaces and uses a template without sending', async ({ page }) => {
+  await login(page);
+  await page.goto(`/apps/${app}/templates`);
+  await page.getByRole('link', { name: 'Buat template', exact: true }).click();
+  await page.getByLabel('Nama template', { exact: true }).fill('Template layanan');
+  await page.getByLabel('Judul notifikasi', { exact: true }).fill('Informasi layanan');
+  await page.getByLabel('Pesan', { exact: true }).fill('Jadwal layanan diperbarui.');
+  await page.getByRole('button', { name: 'Simpan template', exact: true }).click();
+  await page.getByRole('link', { name: 'Template layanan', exact: true }).click();
+  await page.getByLabel('Pesan', { exact: true }).fill('Jadwal layanan terbaru.');
+  await page.getByRole('button', { name: 'Simpan template', exact: true }).click();
+  const row = page.getByRole('row').filter({ hasText: 'Template layanan' });
+  await row.getByRole('link', { name: 'Gunakan', exact: true }).click();
+  await expect(page.getByLabel('Pesan', { exact: true })).toHaveValue('Jadwal layanan terbaru.');
+  await page.getByRole('button', { name: 'Penerima Uji #42' }).click();
+  await page.getByRole('button', { name: 'Simpan draft', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Informasi layanan', exact: true })).toBeVisible();
+  await expect(page.getByText('Draft', { exact: true })).toBeVisible();
+});
+
+test('manages a manual segment and its membership through the real BFF', async ({ page }) => {
+  await login(page);
+  await page.goto(`/apps/${app}/segments`);
+  await page.getByRole('link', { name: 'Buat segment', exact: true }).click();
+  await page.getByLabel('Nama segment', { exact: true }).fill('Pilot internal');
+  await page.getByLabel('Deskripsi', { exact: true }).fill('Pengguna uji internal');
+  await page.getByRole('button', { name: 'Simpan segment', exact: true }).click();
+  await page.getByRole('button', { name: 'Tambah anggota', exact: true }).click();
+  await page.getByRole('button', { name: 'Tambahkan Penerima Uji', exact: true }).click();
+  await expect(
+    page.getByRole('button', { name: 'Keluarkan Penerima Uji', exact: true }),
+  ).toBeVisible();
+  await page.screenshot({ path: 'test-results/dashboard-segment.png', fullPage: true });
+  await page.getByLabel('Deskripsi', { exact: true }).fill('Anggota diperbarui');
+  await page.getByRole('button', { name: 'Simpan segment', exact: true }).click();
+  await expect(page.getByLabel('Deskripsi', { exact: true })).toHaveValue('Anggota diperbarui');
+  page.on('dialog', (dialog) => dialog.accept());
+  await page.getByRole('button', { name: 'Keluarkan Penerima Uji', exact: true }).click();
+  await expect(page.getByText('Belum ada anggota di segment ini.')).toBeVisible();
+  await page.getByRole('button', { name: 'Hapus segment', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Segment', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Pilot internal', exact: true })).toHaveCount(0);
+});
+
+test('opens scoped device registrations and saves the staff profile', async ({ page }) => {
+  await login(page);
+  await page.goto(`/apps/${app}/audience`);
+  await page.getByRole('link', { name: 'Penerima Uji', exact: true }).click();
+  await expect(page.getByRole('cell', { name: 'ANDROID', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Pengaturan', exact: true }).click();
+  await page.getByLabel('Nama', { exact: true }).fill('Staf Operasional');
+  await page.getByRole('button', { name: 'Simpan profil', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('Profil berhasil diperbarui.');
+  await expect(page.getByText('Staf Operasional', { exact: true })).toBeVisible();
+});
+
+test('mobile navigation contains focus, closes with Escape, and restores focus', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  await page.goto(`/apps/${app}/segments`);
+  const opener = page.getByRole('button', { name: 'Buka navigasi', exact: true });
+  await opener.click();
+  await expect(
+    page.getByRole('button', { name: 'Tutup navigasi', exact: true }).last(),
+  ).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(opener).toBeFocused();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test('accepted fixture campaign immediately removes draft actions and refreshes list state', async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto(`/apps/${app}/campaigns/new`);
+  await page.getByLabel('Judul notifikasi', { exact: true }).fill('Fixture acceptance');
+  await page
+    .getByLabel('Pesan', { exact: true })
+    .fill('Isolated fixture, never sent to a provider.');
+  await page.getByRole('button', { name: 'Penerima Uji #42' }).click();
+  await page.getByRole('button', { name: 'Simpan draft', exact: true }).click();
+  await page.getByRole('button', { name: 'Tinjau pengiriman', exact: true }).click();
+  await page.getByRole('button', { name: 'Konfirmasi kirim', exact: true }).click();
+  await expect(page.getByText('Dalam antrean', { exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Edit draft', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Tinjau pengiriman', exact: true })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Semua campaign', exact: true }).click();
+  await expect(page.getByRole('row').filter({ hasText: 'Fixture acceptance' })).toContainText(
+    'Dalam antrean',
+  );
+});
+
+test('uncertain campaign acceptance blocks a second submission in the open dialog', async ({
+  page,
+}) => {
+  await login(page);
+  await page.goto(`/apps/${app}/campaigns/9007199254740993`);
+  let submissions = 0;
+  await page.route(`**/bff/api/apps/${app}/campaigns/9007199254740993/send`, async (route) => {
+    submissions++;
+    await route.abort('failed');
+  });
+  await page.getByRole('button', { name: 'Tinjau pengiriman', exact: true }).click();
+  const confirm = page.getByRole('button', { name: 'Konfirmasi kirim', exact: true });
+  await confirm.click();
+  await expect(confirm).toBeDisabled();
+  await page.keyboard.press('Enter');
+  expect(submissions).toBe(1);
+  await expect(page.getByRole('dialog')).toContainText('Hasil permintaan belum diketahui');
+});
+
+test('campaign polling stops after a terminal status', async ({ page }) => {
+  await login(page);
+  let reads = 0;
+  await page.route(`**/bff/api/apps/${app}/campaigns/9007199254740993`, async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    reads++;
+    payload.data.status = reads === 1 ? 'PROCESSING' : 'SENT';
+    await route.fulfill({ response, json: payload });
+  });
+  await page.goto(`/apps/${app}/campaigns/9007199254740993`);
+  await expect.poll(() => reads, { timeout: 10000 }).toBe(2);
+  await page.waitForTimeout(6000);
+  expect(reads).toBe(2);
+});
+
+test('a delayed template cannot overwrite an editable message', async ({ page }) => {
+  await login(page);
+  let release: () => void = () => {};
+  const gate = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  await page.route(`**/bff/api/apps/${app}/templates/3`, async (route) => {
+    await gate;
+    await route.continue();
+  });
+  await page.goto(`/apps/${app}/campaigns/new?template=3`);
+  await expect(page.getByLabel('Judul notifikasi', { exact: true })).toBeDisabled();
+  await expect(page.getByLabel('Pesan', { exact: true })).toBeDisabled();
+  release();
+  await expect(page.getByLabel('Pesan', { exact: true })).toHaveValue(
+    'Buka aplikasi untuk melihat informasi.',
+  );
+  await expect(page.getByLabel('Pesan', { exact: true })).toBeEnabled();
+});
+
+test('management screens fit a narrow viewport', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await login(page);
+  for (const route of [
+    'overview',
+    'settings',
+    'templates',
+    'segments/7',
+    'audience',
+    'audience/42',
+    'logs',
+  ]) {
+    await page.goto(`/apps/${app}/${route}`);
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+      route,
+    ).toBe(true);
+  }
+  await page.screenshot({ path: 'test-results/dashboard-mobile-logs.png', fullPage: true });
+});

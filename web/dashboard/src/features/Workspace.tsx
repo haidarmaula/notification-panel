@@ -1,4 +1,4 @@
-import { For, Show, createSignal, type ParentProps } from 'solid-js';
+import { For, Show, createSignal, createEffect, onCleanup, type ParentProps } from 'solid-js';
 import { A, Navigate, useParams } from '@solidjs/router';
 import { createQuery } from '@tanstack/solid-query';
 import {
@@ -11,7 +11,15 @@ import {
   Megaphone,
   Menu,
   X,
+  LayoutDashboard,
+  Users,
+  Layers,
+  ListChecks,
+  Settings,
+  PanelLeftClose,
+  PanelLeftOpen,
 } from 'lucide-solid';
+import { preferences, setSidebarHidden } from '../app/preferences';
 import { useAuth } from '../app/auth';
 import { data, errorMessage } from '../lib/api/client';
 import type { Application } from '../lib/api/types';
@@ -21,6 +29,20 @@ export function Workspace(props: ParentProps) {
   const auth = useAuth();
   const params = useParams();
   const [menu, setMenu] = createSignal(false);
+  let navigation: HTMLElement | undefined;
+  let menuButton: HTMLButtonElement | undefined;
+  createEffect(() => {
+    if (menu()) navigation?.querySelector<HTMLButtonElement>('button')?.focus();
+  });
+  const closeMenu = () => {
+    setMenu(false);
+    menuButton?.focus();
+  };
+  const escape = (event: KeyboardEvent) => {
+    if (event.key === 'Escape' && menu()) closeMenu();
+  };
+  window.addEventListener('keydown', escape);
+  onCleanup(() => window.removeEventListener('keydown', escape));
   const [logoutError, setLogoutError] = createSignal('');
   const [leaving, setLeaving] = createSignal(false);
   const profile = createQuery(() => ({
@@ -56,11 +78,29 @@ export function Workspace(props: ParentProps) {
         <a href="#workspace-main" class="skip-link">
           Lewati ke konten
         </a>
-        <div class="workspace">
+        <div class={`workspace ${preferences.sidebarHidden ? 'sidebar-hidden' : ''}`}>
           <Show when={menu()}>
-            <button class="nav-scrim" aria-label="Tutup navigasi" onClick={() => setMenu(false)} />
+            <button class="nav-scrim" aria-label="Tutup navigasi" onClick={closeMenu} />
           </Show>
-          <aside class={`sidebar ${menu() ? 'is-open' : ''}`}>
+          <aside
+            ref={navigation}
+            onKeyDown={(event) => {
+              if (!menu() || event.key !== 'Tab') return;
+              const items = Array.from(
+                navigation?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? [],
+              ).filter((node) => node.getClientRects().length);
+              const first = items[0],
+                last = items.at(-1);
+              if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
+                last?.focus();
+              } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
+                first?.focus();
+              }
+            }}
+            class={`sidebar ${menu() ? 'is-open' : ''}`}
+          >
             <div class="sidebar-brand">
               <A href="/apps" class="wordmark">
                 hello<span>.</span>
@@ -68,7 +108,7 @@ export function Workspace(props: ParentProps) {
               <button
                 class="icon-button mobile-only"
                 aria-label="Tutup navigasi"
-                onClick={() => setMenu(false)}
+                onClick={closeMenu}
               >
                 <X size={20} />
               </button>
@@ -83,6 +123,16 @@ export function Workspace(props: ParentProps) {
               <ChevronDown size={15} />
             </A>
             <nav aria-label="Navigasi utama">
+              <Show when={params.appId}>
+                <A
+                  href={`/apps/${params.appId}/overview`}
+                  activeClass="nav-active"
+                  onClick={() => setMenu(false)}
+                >
+                  <LayoutDashboard size={18} />
+                  Ringkasan
+                </A>
+              </Show>
               <A href="/apps" end activeClass="nav-active" onClick={() => setMenu(false)}>
                 <Boxes size={18} />
                 Aplikasi
@@ -95,6 +145,49 @@ export function Workspace(props: ParentProps) {
                 >
                   <Megaphone size={18} />
                   Campaign
+                </A>
+              </Show>
+              <Show when={params.appId}>
+                <A
+                  href={`/apps/${params.appId}/templates`}
+                  activeClass="nav-active"
+                  onClick={() => setMenu(false)}
+                >
+                  <FileText size={18} />
+                  Template
+                </A>
+                <A
+                  href={`/apps/${params.appId}/logs`}
+                  activeClass="nav-active"
+                  onClick={() => setMenu(false)}
+                >
+                  <ListChecks size={18} />
+                  Log pengiriman
+                </A>
+                <span class="sidebar-caption nav-group">AUDIENCE</span>
+                <A
+                  href={`/apps/${params.appId}/audience`}
+                  activeClass="nav-active"
+                  onClick={() => setMenu(false)}
+                >
+                  <Users size={18} />
+                  Pengguna &amp; perangkat
+                </A>
+                <A
+                  href={`/apps/${params.appId}/segments`}
+                  activeClass="nav-active"
+                  onClick={() => setMenu(false)}
+                >
+                  <Layers size={18} />
+                  Segment
+                </A>
+                <A
+                  href={`/apps/${params.appId}/settings`}
+                  activeClass="nav-active"
+                  onClick={() => setMenu(false)}
+                >
+                  <Settings size={18} />
+                  Pengaturan
                 </A>
               </Show>
               <a href="/docs/" target="_blank" rel="noreferrer">
@@ -122,9 +215,10 @@ export function Workspace(props: ParentProps) {
               </Show>
             </div>
           </aside>
-          <div class="workspace-body">
+          <div class="workspace-body" inert={menu()}>
             <header class="topbar">
               <button
+                ref={menuButton}
                 class="icon-button mobile-only"
                 aria-label="Buka navigasi"
                 aria-expanded={menu()}
@@ -132,6 +226,21 @@ export function Workspace(props: ParentProps) {
               >
                 <Menu size={21} />
               </button>
+              <button
+                class="icon-button desktop-only"
+                aria-label={preferences.sidebarHidden ? 'Tampilkan sidebar' : 'Sembunyikan sidebar'}
+                aria-expanded={!preferences.sidebarHidden}
+                onClick={() => setSidebarHidden(!preferences.sidebarHidden)}
+              >
+                <Show when={preferences.sidebarHidden} fallback={<PanelLeftClose size={20} />}>
+                  <PanelLeftOpen size={20} />
+                </Show>
+              </button>
+              <span class="environment-badge">
+                {['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+                  ? 'LOKAL'
+                  : window.location.host}
+              </span>
               <span>
                 Ruang kerja <span class="breadcrumb-separator">/</span>{' '}
                 {application.data?.name ?? 'Aplikasi'}

@@ -8,8 +8,23 @@ import Applications, { Workspace } from './features/Workspace';
 import Campaigns from './features/campaigns/List';
 import { Loading } from './components/ui/Feedback';
 import './styles.css';
+import { initAppearance } from './app/preferences';
 const Detail = lazy(() => import('./features/campaigns/Detail'));
 const Editor = lazy(() => import('./features/campaigns/Editor'));
+const Overview = lazy(() => import('./features/management/Overview'));
+const Settings = lazy(() => import('./features/management/Settings'));
+const Templates = lazy(() => import('./features/management/Templates'));
+const TemplateEditor = lazy(() =>
+  import('./features/management/Templates').then((module) => ({ default: module.TemplateEditor })),
+);
+const Segments = lazy(() => import('./features/management/Segments'));
+const SegmentEditor = lazy(() =>
+  import('./features/management/Segments').then((module) => ({ default: module.SegmentEditor })),
+);
+const Audience = lazy(() => import('./features/management/Audience'));
+const UserDetail = lazy(() =>
+  import('./features/management/Audience').then((module) => ({ default: module.UserDetail })),
+);
 const Results = lazy(() => import('./features/results/Results'));
 function keyed(Page: Component): Component {
   return () => {
@@ -23,13 +38,24 @@ function keyed(Page: Component): Component {
 }
 const ApplicationRoute = keyed(Applications);
 const CampaignRoute = keyed(Campaigns);
+const LogsRoute = keyed(() => <Campaigns results />);
 const DetailRoute = keyed(Detail);
 const EditorRoute = keyed(Editor);
 const ResultsRoute = keyed(Results);
+const OverviewRoute = keyed(Overview);
+const SettingsRoute = keyed(Settings);
+const TemplatesRoute = keyed(Templates);
+const TemplateEditorRoute = keyed(TemplateEditor);
+const SegmentsRoute = keyed(Segments);
+const SegmentEditorRoute = keyed(SegmentEditor);
+const AudienceRoute = keyed(Audience);
+const UserDetailRoute = keyed(UserDetail);
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing root');
-render(
-  () => (
+render(() => {
+  initAppearance();
+  const client = makeQueryClient();
+  return (
     <ErrorBoundary
       fallback={
         <main class="fatal-error">
@@ -41,13 +67,24 @@ render(
         </main>
       }
     >
-      <QueryClientProvider client={makeQueryClient()}>
+      <QueryClientProvider client={client}>
         <AuthProvider>
           <Router root={(props) => <Suspense fallback={<Loading />}>{props.children}</Suspense>}>
             <Route path="/" component={() => <Navigate href="/apps" />} />
             <Route path="/login" component={Login} />
             <Route path="/apps" component={Workspace}>
               <Route path="/" component={ApplicationRoute} />
+              <Route path="/:appId/logs" component={LogsRoute} />
+              <Route path="/:appId/overview" component={OverviewRoute} />
+              <Route path="/:appId/settings" component={SettingsRoute} />
+              <Route path="/:appId/templates" component={TemplatesRoute} />
+              <Route path="/:appId/templates/new" component={TemplateEditorRoute} />
+              <Route path="/:appId/templates/:templateId" component={TemplateEditorRoute} />
+              <Route path="/:appId/segments" component={SegmentsRoute} />
+              <Route path="/:appId/segments/new" component={SegmentEditorRoute} />
+              <Route path="/:appId/segments/:segmentId" component={SegmentEditorRoute} />
+              <Route path="/:appId/audience" component={AudienceRoute} />
+              <Route path="/:appId/audience/:userId" component={UserDetailRoute} />
               <Route path="/:appId/campaigns" component={CampaignRoute} />
               <Route path="/:appId/campaigns/new" component={EditorRoute} />
               <Route path="/:appId/campaigns/:campaignId" component={DetailRoute} />
@@ -69,6 +106,5 @@ render(
         </AuthProvider>
       </QueryClientProvider>
     </ErrorBoundary>
-  ),
-  root,
-);
+  );
+}, root);

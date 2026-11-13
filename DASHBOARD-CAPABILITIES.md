@@ -98,8 +98,9 @@ data visible as if access remains valid.
 - Application lifecycle activation, staff/role/grant administration and pilot
   policy controls.
 - Campaign cancellation, which has no implemented API.
-- Template/segment/user management, bulk imports and a rich visual message
-  builder. Scoped read-only audience lookup is part of draft creation.
+- Bulk imports, user mutation and a rich visual message builder. The subsequent
+  [operations expansion](docs/specs/dashboard-operations.md) adds scoped template
+  and manual segment management, audience/device inspection and profile settings.
 - Self-registration, password-reset workflows and third-party sign-in.
 - iOS/client SDK development, production provider configuration or unrestricted
   notification sending.

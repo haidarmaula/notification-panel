@@ -1,5 +1,5 @@
 import { Show, For, createSignal, createEffect, onCleanup } from 'solid-js';
-import { A, useNavigate, useParams, useBeforeLeave } from '@solidjs/router';
+import { A, useNavigate, useParams, useBeforeLeave, useSearchParams } from '@solidjs/router';
 import { createQuery, useQueryClient } from '@tanstack/solid-query';
 import { ArrowLeft, Check, Plus, X } from 'lucide-solid';
 import { useAuth } from '../../app/auth';
@@ -15,6 +15,27 @@ export default function Editor() {
     alive = false;
   });
   const params = useParams();
+  const [search] = useSearchParams();
+  const selectedTemplate = () =>
+    !params.campaignId &&
+    typeof search.template === 'string' &&
+    /^[1-9][0-9]{0,18}$/.test(search.template)
+      ? search.template
+      : null;
+  const template = createQuery(() => ({
+    queryKey: ['template', params.appId, selectedTemplate()],
+    queryFn: ({ signal }) =>
+      data<{
+        id: string;
+        name: string;
+        title_template: string;
+        body_template: string;
+        is_active: boolean;
+      }>(`/apps/${params.appId}/templates/${selectedTemplate()}`, signal),
+    enabled: !!selectedTemplate(),
+  }));
+  const templateData = () => (template.isSuccess ? template.data : undefined);
+  const [templateLoaded, setTemplateLoaded] = createSignal(false);
   const auth = useAuth();
   const navigate = useNavigate();
   const client = useQueryClient();
@@ -30,6 +51,15 @@ export default function Editor() {
   const [uncertain, setUncertain] = createSignal(false);
   const [savedTitle, setSavedTitle] = createSignal<string | null>(null);
   const editing = () => !!params.campaignId;
+  createEffect(() => {
+    const selected = templateData();
+    if (selected?.is_active && !templateLoaded()) {
+      setTemplateLoaded(true);
+      setTitle(selected.title_template);
+      setBody(selected.body_template);
+      setDirty(true);
+    }
+  });
   const draft = createQuery(() => ({
     queryKey: ['campaign', params.appId, params.campaignId],
     queryFn: ({ signal }) =>
@@ -110,7 +140,10 @@ export default function Editor() {
         {
           method: editing() ? 'PUT' : 'POST',
           csrf: auth.csrf(),
-          body: { ...parsed.data, template_id: draft.data?.template_id ?? null },
+          body: {
+            ...parsed.data,
+            template_id: draft.data?.template_id ?? (templateLoaded() ? selectedTemplate() : null),
+          },
         },
       );
       if (alive) setDirty(false);
@@ -143,10 +176,26 @@ export default function Editor() {
       <header class="page-heading">
         <div>
           <span class="eyebrow">{editing() ? `DRAFT #${params.campaignId}` : 'CAMPAIGN BARU'}</span>
-          <h1>{editing() ? 'Edit draft' : 'Mulai dengan sebuah pesan.'}</h1>
+          <h1>{editing() ? 'Edit draft' : 'Buat campaign'}</h1>
           <p class="muted">Simpan sebagai draft. Pengiriman dilakukan pada langkah terpisah.</p>
         </div>
       </header>
+      <Show when={selectedTemplate()}>
+        <Show when={template.isError}>
+          <Failure error={template.error} retry={() => void template.refetch()} />
+        </Show>
+        <Show when={templateData() && !templateData()?.is_active}>
+          <p class="notice" role="alert">
+            Template ini sudah nonaktif. Pilih template lain atau buat draft tanpa template.
+          </p>
+        </Show>
+        <Show when={templateData()?.is_active}>
+          <p class="notice">
+            Dari template: {templateData()?.name}. Periksa dan sesuaikan isi pesan sebelum
+            menyimpan.
+          </p>
+        </Show>
+      </Show>
       <Show when={!editing() || !draft.isPending} fallback={<Loading />}>
         <Show
           when={!draft.isError}
@@ -183,7 +232,11 @@ export default function Editor() {
                       }}
                       placeholder="Apa yang ingin Anda sampaikan?"
                       required
-                      disabled={pending() || uncertain()}
+                      disabled={
+                        pending() ||
+                        uncertain() ||
+                        (!!selectedTemplate() && (!templateLoaded() || !templateData()?.is_active))
+                      }
                     />
                     <span id="title-bytes" class="field-hint">
                       {new TextEncoder().encode(title()).length}/255 byte
@@ -202,7 +255,11 @@ export default function Editor() {
                       }}
                       placeholder="Tulis pesan untuk penerima Anda…"
                       required
-                      disabled={pending() || uncertain()}
+                      disabled={
+                        pending() ||
+                        uncertain() ||
+                        (!!selectedTemplate() && (!templateLoaded() || !templateData()?.is_active))
+                      }
                     />
                     <span id="body-bytes" class="field-hint">
                       {new TextEncoder().encode(body()).length}/4096 byte
@@ -221,7 +278,11 @@ export default function Editor() {
                     <input
                       type="checkbox"
                       checked={targets().some((target) => target.type === 'BROADCAST')}
-                      disabled={pending() || uncertain()}
+                      disabled={
+                        pending() ||
+                        uncertain() ||
+                        (!!selectedTemplate() && (!templateLoaded() || !templateData()?.is_active))
+                      }
                       onChange={(event) => {
                         setTargets(event.currentTarget.checked ? [{ type: 'BROADCAST' }] : []);
                         setDirty(true);
@@ -233,7 +294,12 @@ export default function Editor() {
                     <label>
                       Jenis penerima
                       <select
-                        disabled={pending() || uncertain()}
+                        disabled={
+                          pending() ||
+                          uncertain() ||
+                          (!!selectedTemplate() &&
+                            (!templateLoaded() || !templateData()?.is_active))
+                        }
                         value={kind()}
                         onChange={(event) => {
                           setKind(event.currentTarget.value as 'INDIVIDUAL' | 'SEGMENT');
@@ -311,7 +377,12 @@ export default function Editor() {
                             <button
                               type="button"
                               class="icon-button"
-                              disabled={pending() || uncertain()}
+                              disabled={
+                                pending() ||
+                                uncertain() ||
+                                (!!selectedTemplate() &&
+                                  (!templateLoaded() || !templateData()?.is_active))
+                              }
                               aria-label={`Hapus target ${'id' in target ? target.id : ''}`}
                               onClick={() => {
                                 setTargets(targets().filter((_, i) => i !== index()));
@@ -346,7 +417,15 @@ export default function Editor() {
                   <A class="button secondary" href={`/apps/${params.appId}/campaigns`}>
                     Kembali
                   </A>
-                  <button type="submit" class="button primary" disabled={pending() || uncertain()}>
+                  <button
+                    type="submit"
+                    class="button primary"
+                    disabled={
+                      pending() ||
+                      uncertain() ||
+                      (!!selectedTemplate() && (!templateLoaded() || !templateData()?.is_active))
+                    }
+                  >
                     <Check size={17} />
                     {pending() ? 'Menyimpan…' : 'Simpan draft'}
                   </button>

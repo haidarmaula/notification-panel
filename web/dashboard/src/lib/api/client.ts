@@ -31,7 +31,9 @@ export async function request<T>(
       cache: 'no-store',
       signal: options.signal,
       headers: {
-        ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.body !== undefined || (options.method && options.method !== 'GET')
+          ? { 'Content-Type': 'application/json' }
+          : {}),
         ...(options.csrf ? { 'X-CSRF-Token': options.csrf } : {}),
         ...(options.idempotencyKey ? { 'Idempotency-Key': options.idempotencyKey } : {}),
       },

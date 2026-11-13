@@ -72,7 +72,7 @@ export default function Results() {
       <header class="page-heading">
         <div>
           <span class="eyebrow">CAMPAIGN #{params.campaignId}</span>
-          <h1>Ikuti perjalanan pesan.</h1>
+          <h1>Hasil pengiriman</h1>
           <p class="muted">
             Penerimaan provider, laporan perangkat, dan pembukaan dicatat terpisah.
           </p>
@@ -89,6 +89,22 @@ export default function Results() {
           Perbarui
         </button>
       </header>
+      <p class="help-text" aria-live="polite">
+        Diperbarui:{' '}
+        {statistics.dataUpdatedAt
+          ? new Date(statistics.dataUpdatedAt).toLocaleTimeString('id-ID')
+          : 'belum tersedia'}
+        . Waktu mengikuti zona perangkat Anda.
+      </p>
+      <details class="receipt-help">
+        <summary>Pesan sampai, tetapi receipt belum muncul?</summary>
+        <p>
+          Laporan perangkat bergantung pada aplikasi penerima. Periksa sesi aplikasi, koneksi ke
+          API, serta pelaporan event DELIVERED dan OPENED. Nilai nol berarti belum teramati oleh
+          backend; bukan bukti pesan tidak diterima. Jangan mengirim ulang hanya untuk memperbarui
+          hitungan.
+        </p>
+      </details>
       <Show when={!statistics.isPending} fallback={<Loading />}>
         <Show
           when={!statistics.isError}

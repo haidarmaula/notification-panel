@@ -754,3 +754,28 @@ same nonblocking lock at minute 07. A health win skipped the entire backup hour.
 Backup cron now waits up to five minutes for that lock, while health/CD polling
 retains skip-if-busy behavior. A file-lock contention regression verifies that
 a short health check cannot silently suppress the backup.
+
+## Dashboard operational UX review — 2026-11-13
+
+**FE1 — P2, fixed locally.** The root passed `makeQueryClient()` directly into
+a reactive provider property, creating different clients on subsequent access.
+Mutation invalidation could fail to update other observers, including campaign
+status and the sidebar profile. The root now creates one client per application
+root. Browser regressions verify profile propagation and segment membership
+with isolated upstream fixtures.
+
+**FE2 — P2, fixed locally.** Empty-body dashboard mutations omitted the JSON
+media type required by the BFF, rejecting segment membership and deletion before
+forwarding. The client now supplies the media type for mutations while leaving
+the body empty where the upstream contract requires it. Segment membership and
+delete browser regressions exercise the real BFF boundary.
+
+**FE3 — P2, fixed locally.** Reading unresolved template data suspended the
+entire campaign editor instead of showing locked inputs. Template data is now
+read only after query success; the delayed-response browser regression verifies
+that both message controls remain disabled until the template is applied.
+
+**FE4 — P2, fixed locally.** Template save and membership completion used live
+route parameters after an asynchronous write. They now update caches using the
+originating application and membership path, preventing cross-application cache
+pollution or invalidation of the wrong segment after navigation.

@@ -10,10 +10,17 @@ rows; do not add decorative statistic cards, gradients, promotional heroes or
 fabricated charts. Icons support labels. Strong focus rings, named form controls,
 inline errors and reduced-motion support are mandatory.
 
-Desktop: persistent 232px navigation, application context in the header and a
+Desktop: hideable 232px navigation, application context in the header and a
 content column with a useful line length. Narrow screens: collapse navigation
 into a labeled menu, stack the editor and preview, and retain campaign title,
 status and detail access. Restrict overflow to actual data tables.
+
+Appearance supports Light/Dark/System with semantic surface/text/status colors.
+Persist only user-selected appearance and sidebar preferences. The header shows
+the actual host outside loopback; do not infer production/staging from an IP.
+Operational navigation includes templates, manual segments, audience/device
+inspection, campaign-scoped logs, settings and a recent-campaign overview. Add
+metrics or filters only when the API supplies their real scope and values.
 
 Consulted references: https://github.com/miqdadbadjuber/anti-slop and
 https://impeccable.style/docs/. Apply their content-first hierarchy, purposeful

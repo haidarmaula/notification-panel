@@ -1,13 +1,23 @@
 import { For, Show, createSignal } from 'solid-js';
-import { A, useParams } from '@solidjs/router';
+import { A, useParams, useNavigate, useSearchParams } from '@solidjs/router';
 import { createQuery } from '@tanstack/solid-query';
 import { ArrowLeft, ArrowRight, Megaphone, Plus } from 'lucide-solid';
 import { data } from '../../lib/api/client';
 import type { CampaignSummary, Page } from '../../lib/api/types';
 import { Failure, Loading, Status } from '../../components/ui/Feedback';
-export default function Campaigns() {
+export default function Campaigns(props: { results?: boolean } = {}) {
   const params = useParams();
-  const [cursors, setCursors] = createSignal<string[]>([]);
+  const navigate = useNavigate();
+  const [search, setSearch] = useSearchParams();
+  const [lookup, setLookup] = createSignal('');
+  const cursors = () =>
+    typeof search.pages === 'string' &&
+    search.pages.length < 2000 &&
+    /^[1-9][0-9]*(,[1-9][0-9]*)*$/.test(search.pages)
+      ? search.pages.split(',')
+      : [];
+  const setCursors = (value: string[]) =>
+    setSearch({ pages: value.length ? value.join(',') : undefined });
   const query = createQuery(() => ({
     queryKey: ['campaigns', params.appId, cursors().at(-1) ?? ''],
     queryFn: ({ signal }) =>
@@ -21,14 +31,44 @@ export default function Campaigns() {
       <header class="page-heading">
         <div>
           <span class="eyebrow">KOMUNIKASI</span>
-          <h1>Campaign</h1>
-          <p class="muted">Dari sebuah pesan menjadi percakapan yang berarti.</p>
+          <h1>{props.results ? 'Log pengiriman' : 'Campaign'}</h1>
+          <p class="muted">
+            {props.results
+              ? 'Pilih campaign untuk melihat catatan provider, perangkat, dan pembukaan.'
+              : 'Kelola draft, jadwal, dan hasil pengiriman campaign.'}
+          </p>
         </div>
         <A class="button primary" href={`/apps/${params.appId}/campaigns/new`}>
           <Plus size={18} />
           Buat campaign
         </A>
       </header>
+      <form
+        class="campaign-lookup"
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (/^[1-9][0-9]{0,18}$/.test(lookup()))
+            navigate(
+              `/apps/${params.appId}/campaigns/${lookup()}${props.results ? '/results' : ''}`,
+            );
+        }}
+      >
+        <label for="campaign-id">Buka berdasarkan ID campaign</label>
+        <div class="actions">
+          <input
+            id="campaign-id"
+            required
+            inputmode="numeric"
+            pattern="[1-9][0-9]{0,18}"
+            value={lookup()}
+            onInput={(event) => setLookup(event.currentTarget.value)}
+            placeholder="Contoh: 13"
+          />
+          <button class="button secondary" type="submit">
+            Buka
+          </button>
+        </div>
+      </form>
       <div class="section-bar">
         <h2>Semua campaign</h2>
         <span class="muted">Status terbaru dari aplikasi ini</span>
@@ -72,7 +112,7 @@ export default function Campaigns() {
                         <td>
                           <A
                             class="campaign-title"
-                            href={`/apps/${params.appId}/campaigns/${campaign.id}`}
+                            href={`/apps/${params.appId}/campaigns/${campaign.id}${props.results ? '/results' : ''}`}
                           >
                             {campaign.title}
                           </A>
@@ -84,7 +124,7 @@ export default function Campaigns() {
                         <td>
                           <A
                             class="row-action"
-                            href={`/apps/${params.appId}/campaigns/${campaign.id}`}
+                            href={`/apps/${params.appId}/campaigns/${campaign.id}${props.results ? '/results' : ''}`}
                             aria-label={`Buka ${campaign.title}`}
                           >
                             <ArrowRight size={18} />
