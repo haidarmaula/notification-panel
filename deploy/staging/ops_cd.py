@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import subprocess
 import time
-from cd_protocol import REPOSITORY, verify_message
+from cd_protocol import REPOSITORY, verify_message, checked_schema
 from ops_common import ROOT, atomic, lock, run, save, state, inspect, db
 from ops_backup import backup
 from ops_health import health
@@ -45,6 +45,7 @@ def poll():
     header,separator,message=tag.partition('\n\n')
     if not separator or not header.startswith('object '+sha+'\ntype commit\n'):raise RuntimeError('Readiness tag does not reference current main commit.')
     authorization=verify_message(message.strip(),folder/'verification.pem',sha,config['schema'])
+    checked_schema(git('ls-tree','-r','--name-only',sha,'db/migrations').decode().splitlines(),config['schema'])
     deployed=json.loads((folder/'last-deployed.json').read_text()) if (folder/'last-deployed.json').exists() else {}
     if authorization['ci_run_id']<deployed.get('ci_run_id',0):raise RuntimeError('Older CI authorization cannot replace a newer deployment.')
     attempts=old.get('attempts',0) if old.get('sha')==sha else 0

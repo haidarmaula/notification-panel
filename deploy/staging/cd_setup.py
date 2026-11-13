@@ -28,9 +28,15 @@ def main():
     os.umask(0o077);LOCAL.mkdir(mode=0o700,parents=True,exist_ok=True)
     private=LOCAL/'signing-private.pem';public=LOCAL/'verification.pem'
     if private.is_symlink() or public.is_symlink():raise RuntimeError('Refusing CD key symlink.')
+    if private.exists()!=public.exists():raise RuntimeError('Incomplete local CD identity; restore it without rotating trust.')
     if not private.exists():run(['openssl','genpkey','-algorithm','ED25519','-out',str(private)])
     private.chmod(0o600)
-    run(['openssl','pkey','-in',str(private),'-pubout','-out',str(public)])
+    derived=run(['openssl','pkey','-in',str(private),'-pubout'])
+    if public.exists() and public.read_bytes()!=derived:raise RuntimeError('Local CD key pair differs; refuse rotation.')
+    public.write_bytes(derived)
+    check="from pathlib import Path; import hashlib,json; p=Path('/home/haidar/hello-staging-ops/cd'); print(json.dumps({'key':hashlib.sha256((p/'verification.pem').read_bytes()).hexdigest() if (p/'verification.pem').exists() else None,'config':json.loads((p/'config.json').read_text()) if (p/'config.json').exists() else None}))"
+    pinned=json.loads(run(['ssh','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','kafka-vps',shlex.join(['python3','-c',check])]))
+    if pinned['key'] not in [None,hashlib.sha256(derived).hexdigest()] or pinned['config'] not in [None,{'repository':REPOSITORY,'schema':41,'enabled':True}]:raise RuntimeError('Existing VM trust or scope differs; refuse GitHub secret mutation.')
     result=subprocess.run(['gh','api','repos/'+REPOSITORY+'/environments/staging'],capture_output=True)
     policy={'protected_branches':False,'custom_branch_policies':True}
     if result.returncode==0:

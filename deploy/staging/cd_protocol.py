@@ -23,6 +23,18 @@ def checked_run(run,jobs,sha):
         if len(found)!=1 or found[0].get('conclusion')!='success':raise ValueError('Missing, duplicate or unsuccessful CI gate: '+name)
 
 
+def checked_schema(paths,schema):
+    versions=[]
+    for path in paths:
+        name=Path(path).name
+        if not name.endswith('.up.sql'):continue
+        match=re.fullmatch(r'([0-9]{6})_.+\.up\.sql',name)
+        if not match:raise ValueError('Malformed committed migration filename.')
+        versions.append(int(match[1]))
+    if type(schema) is not int or not versions or max(versions)!=schema:
+        raise ValueError('Committed migrations differ from reviewed staging schema; migrate/review separately.')
+
+
 def canonical(payload):return json.dumps(payload,sort_keys=True,separators=(',',':')).encode()
 
 

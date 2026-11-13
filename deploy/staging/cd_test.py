@@ -5,7 +5,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from cd_protocol import REPOSITORY, REQUIRED_JOBS, checked_run, signed_message, verify_message
+from cd_protocol import REPOSITORY, REQUIRED_JOBS, checked_run, signed_message, verify_message, checked_schema
 
 SHA='a'*40
 
@@ -19,6 +19,11 @@ class CDProtocolTests(unittest.TestCase):
     def test_every_gate_must_have_exactly_one_success(self):
         for jobs in [self.jobs()[:-1],[*self.jobs(),self.jobs()[0]],[{**j,'conclusion':'skipped'} if i==0 else j for i,j in enumerate(self.jobs())]]:
             with self.assertRaises(ValueError):checked_run(self.run_info(),jobs,SHA)
+    def test_pending_or_missing_migrations_require_explicit_target_review(self):
+        checked_schema(['db/migrations/000001_first.up.sql','db/migrations/000041_guard.up.sql'],41)
+        for paths in [[],['db/migrations/000040_old.up.sql'],['db/migrations/000041_guard.up.sql','db/migrations/000042_new.up.sql']]:
+            with self.assertRaises(ValueError):checked_schema(paths,41)
+
     def test_signed_marker_rejects_tampering_wrong_scope_and_wrong_key(self):
         with tempfile.TemporaryDirectory() as d:
             d=Path(d)
@@ -59,6 +64,7 @@ class CDPollTests(unittest.TestCase):
                 if args[0]=='rev-parse':return SHA.encode()
                 if args[0]=='cat-file':return tag.encode()
                 if args[0]=='archive':return b'archive'
+                if args[0]=='ls-tree':return b'db/migrations/000041_guard.up.sql\n'
                 raise AssertionError(args)
             def prepare(release,sha,schema,archive=None):
                 p=root/'releases'/release;p.mkdir(parents=True)

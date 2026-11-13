@@ -21,7 +21,8 @@ the VM makes outbound, read-only HTTPS Git fetches.
    An annotated `staging-ready/<sha>` tag carries this canonical signed metadata.
 4. The VM's minutely CD job fetches main and readiness tags. It verifies the tag
    target and signature against a separately pinned public key. It accepts only
-   the configured repository and clean schema 41. It suppresses stale completions
+   the configured repository and clean schema 41. The committed migration maximum
+   must match that reviewed schema on both publisher and receiver. It suppresses stale completions
    and cannot replace a newer deployment with an older CI authorization.
 5. The existing image gate builds/checks that exact committed source. Immediately
    before replacement, the agent checks remote main again under the deployment

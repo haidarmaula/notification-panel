@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 import urllib.error
 import urllib.request
-from cd_protocol import REPOSITORY, checked_run, signed_message, verify_message
+from cd_protocol import REPOSITORY, checked_run, signed_message, verify_message, checked_schema
 
 
 def main():
@@ -30,6 +30,7 @@ def main():
         print('Newer main commit exists; skipping stale CI completion.');return
     schema=int(os.environ['STAGING_SCHEMA_VERSION'])
     if schema<1:raise RuntimeError('Explicit staging schema compatibility is required.')
+    checked_schema(Path('db/migrations').glob('*.up.sql'),schema)
     payload={'version':1,'repository':REPOSITORY,'sha':sha,'schema':schema,'ci_run_id':run_id,'ci_run_attempt':run['run_attempt']}
     tag='staging-ready/'+sha
     with tempfile.TemporaryDirectory() as directory:
