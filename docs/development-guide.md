@@ -10,7 +10,7 @@ The version must support [go.mod](../go.mod). These checks distinguish a shell s
 
 ## 1. Start without infrastructure
 
-Use the Go version in [go.mod](../go.mod), currently 1.26.10. Docker, `.env`, Firebase credentials, tmux, and a particular editor are not needed for ordinary unit tests.
+Use the Go version in [go.mod](../go.mod), currently 1.26.11. Docker, `.env`, Firebase credentials, tmux, and a particular editor are not needed for ordinary unit tests.
 
 ```bash
 go test -mod=readonly ./internal/jsonobject/...

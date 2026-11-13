@@ -39,6 +39,8 @@ jobs:
         run: bash scripts/ci.sh format
       - name: Verify pinned Go skills
         run: python3 scripts/check-go-skills.py
+      - name: Check staging operations and signed CD protocol
+        run: python3 -m unittest discover -s deploy/staging -p '*_test.py'
       - name: Check consumer routes and examples
         run: |
           python3 scripts/check-api-routes.py
@@ -131,6 +133,8 @@ jobs:
         run: bash scripts/check-monitoring.sh
       - name: Pull the pinned recovery fixture image
         run: docker pull postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+      - name: Verify restricted server database grants
+        run: bash scripts/server-grants.sh
       - name: Verify physical recovery and missing-WAL rejection
         run: python3 scripts/pitr-drill.py
 

@@ -733,3 +733,23 @@ apply to the project routes. Legacy route retirement is tracked separately.
 
 The project campaign draft create route addresses H41 with a single transaction
 for the campaign, targets and audit. Legacy route retirement is separate.
+
+## Staging CD gate reconciliation — 2026-11-13
+
+**CD1 — fixed.** Hosted CI for revision `90749a9` found GO-2026-6859 in the
+Go 1.26.10 standard library, superseding earlier zero-advisory verification.
+The maintained toolchain and builder pins now use 1.26.11, including a freshly
+verified official OCI index digest. Reachable-vulnerability scanning remains
+required and passes locally with the patch; no advisory is suppressed.
+
+**CD2 — fixed.** Two hosted replay integration tests compared otherwise identical
+events whose timestamp locations were `time.Local` versus `time.UTC` on a UTC
+runner. The accepted-event fixture now canonicalizes both database timestamps
+to UTC before full structural equality. All epoch/deadline/idempotency/offset
+assertions remain intact; production timestamp handling is unchanged.
+
+**CD3 — fixed.** The hourly backup and minutely health cron jobs raced for the
+same nonblocking lock at minute 07. A health win skipped the entire backup hour.
+Backup cron now waits up to five minutes for that lock, while health/CD polling
+retains skip-if-busy behavior. A file-lock contention regression verifies that
+a short health check cannot silently suppress the backup.

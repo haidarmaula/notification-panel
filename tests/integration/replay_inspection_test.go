@@ -29,6 +29,8 @@ func (f replayRegistrationFixture) acceptedEvent(t *testing.T, ctx context.Conte
 	event := kafka.ScopedSendRequested{SchemaVersion: 1, ApplicationID: f.project.String(), NotificationID: f.campaign}
 	var origin, source pgtype.UUID
 	require.NoError(t, f.pool.QueryRow(ctx, "SELECT queued_at,deadline_at,origin_epoch,source_epoch FROM notifications WHERE id=$1", f.campaign).Scan(&event.RequestedAt, &event.DeadlineAt, &origin, &source))
+	// Match decoded wire timestamps regardless of the host local timezone.
+	event.RequestedAt, event.DeadlineAt = event.RequestedAt.UTC(), event.DeadlineAt.UTC()
 	event.OriginEpoch, event.SourceEpoch = origin.String(), source.String()
 	return event
 }

@@ -3,7 +3,7 @@
 Build a role locally with `docker build --target server -t hello-server:local .`.
 The same Dockerfile has worker, scheduler, bootstrap, requeue and retention targets. Each
 image contains one static Go executable and the builder's CA bundle. The official
-Go 1.26.10 Alpine builder is pinned by OCI index digest. Its Go toolchain cannot
+Go 1.26.11 Alpine builder is pinned by OCI index digest. Its Go toolchain cannot
 auto-upgrade. The build verifies module checksums and compiles in readonly module
 mode. The build context includes Go source and module manifests. Development
 hot-reload tools and local policy files stay outside the context.
@@ -63,3 +63,6 @@ Use the protected integration fixtures for DB, Kafka and provider behavior.
 Related decisions: [transport topology](../adr/adr-07-kafka-topology.md),
 [deployment security](../adr/adr-11-security-baseline.md) and
 [process lifecycle](../specs/process-lifecycle.md).
+
+Automated staging deployment uses the [signed main-only CD authorization](../../deploy/staging/CD.md)
+and the existing guarded maintenance, readiness and rollback controller.
