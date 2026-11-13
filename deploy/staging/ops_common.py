@@ -18,6 +18,16 @@ ROLES={'server':('hello-staging-server-mobile-policy','server.json',19101),
        'admission':('hello-staging-admission-policy','worker.json',19103),
        'delivery':('hello-staging-delivery-policy','worker.json',19104)}
 ORDER=['delivery','admission','scheduler','server']
+def refresh_inventory():
+    # Call only after acquiring the command lock; imports may predate bootstrap.
+    if (ROOT/'dashboard-enabled.json').exists():
+        ROLES['dashboard']=('hello-staging-dashboard-policy','dashboard.json',19105)
+        if 'dashboard' not in ORDER:ORDER.insert(0,'dashboard')
+    else:
+        ROLES.pop('dashboard',None)
+        if 'dashboard' in ORDER:ORDER.remove('dashboard')
+
+refresh_inventory()
 
 
 def run(args,data=None,timeout=60):

@@ -111,7 +111,7 @@ jobs:
         run: bash scripts/restore-drill.sh
 
   release-images:
-    name: Build and check six offline production images
+    name: Build and check seven offline production images
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:

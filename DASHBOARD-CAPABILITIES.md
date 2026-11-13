@@ -136,6 +136,8 @@ Local implementation now covers the browser journey, in-memory BFF sessions,
 draft workflows, explicit submission, history and a frontend CI gate. Advanced
 table/form/chart dependencies and template selection remain deferred.
 
-Next: protected deployment configuration, authenticated gateway transport,
-container and CD integration, staging UAT, and production release gates. Local
-fixture verification does not establish staging or production readiness.
+Protected deployment configuration, authenticated gateway transport, container
+and CD integration are implemented and covered by local checks. Staging
+activation and acceptance follow the staging dashboard runbook. Interactive UAT
+and production release gates remain separate; local fixtures do not prove target
+readiness.

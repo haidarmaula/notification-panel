@@ -23,7 +23,16 @@ func main() {
 	}
 }
 func run() error {
-	runtime, err := dashboard.Load(os.Getenv("HELLO_DASHBOARD_CONFIG"))
+	var runtime dashboard.Runtime
+	var err error
+	switch {
+	case len(os.Args) == 2 && os.Args[1] == "--deployment":
+		runtime, err = dashboard.LoadDeployment()
+	case len(os.Args) == 1:
+		runtime, err = dashboard.Load(os.Getenv("HELLO_DASHBOARD_CONFIG"))
+	default:
+		return errors.New("invalid dashboard configuration")
+	}
 	if err != nil {
 		return errors.New("invalid protected dashboard configuration")
 	}
@@ -33,6 +42,8 @@ func run() error {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("/bff/", bff)
+	mux.Handle("POST /bff/login", bff)
+	mux.Handle("POST /bff/logout", bff)
 	if runtime.Assets != "" {
 		if _, err := os.Stat(filepath.Join(runtime.Assets, "index.html")); err != nil {
 			return errors.New("dashboard assets unavailable")
@@ -59,6 +70,9 @@ func run() error {
 	server := &http.Server{Addr: runtime.ListenAddress, Handler: mux, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 16384}
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+	if runtime.Gateway != nil {
+		return runtime.Serve(ctx, mux)
+	}
 	done := make(chan error, 1)
 	go func() { done <- server.ListenAndServe() }()
 	select {

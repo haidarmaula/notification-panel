@@ -108,3 +108,17 @@ func TestGatewayBudgets(t *testing.T) {
 	}
 	post("/api/v1/other", "192.0.2.4", 429)
 }
+
+func TestDashboardLoginUsesAuthenticationBudget(t *testing.T) {
+	g := testGateway(t)
+	mux := http.NewServeMux()
+	mux.HandleFunc("POST /bff/login", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(204) })
+	handler := g.Protect(mux)
+	for i, want := range []int{204, 429} {
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, gatewayRequest("/bff/login", "192.0.2.9"))
+		if w.Code != want {
+			t.Fatalf("request %d: got %d, want %d", i, w.Code, want)
+		}
+	}
+}

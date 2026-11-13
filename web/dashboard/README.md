@@ -81,12 +81,14 @@ deferred until their concrete screens need them.
 
 ## Release boundaries
 
-This implementation is locally tested and is not yet deployed to staging or
-certified for production. Before staging enablement, review root-owned deployment
-policy/secret/CA loading, the authenticated gateway-to-BFF transport, container
-hardening, login rate limiting and the CD rollout/rollback integration. The
-current loopback listener is not an authenticated production ingress. Do not
-expose it directly. Multi-replica/persistent sessions require a separate design.
+The protected staging deployment is implemented separately from development:
+`--deployment` reads only the root-owned `/etc/hello/dashboard.json`, requires
+mTLS ingress/diagnostics, pins upstream identity and applies verified-client login
+rate limits. The runtime image is nonroot and readonly. Follow
+[the staging dashboard runbook](../../docs/runbooks/staging-dashboard.md) for
+journaled activation, CD, backup and rollback. Target acceptance must be checked
+on the VM before reporting a deployment successful. Multi-replica/persistent
+sessions require a separate design.
 
 Production also requires real-browser TLS trust, UAT, accessibility/performance
 validation on target devices, operational monitoring and the existing backend

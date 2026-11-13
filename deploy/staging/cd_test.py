@@ -44,7 +44,7 @@ class CDProtocolTests(unittest.TestCase):
 
 
 class CDPollTests(unittest.TestCase):
-    def exercise(self,stale=False,tamper=False,paused=False,blocked=False):
+    def exercise(self,stale=False,tamper=False,paused=False,blocked=False,migrate_dashboard=False):
         import contextlib
         from unittest.mock import patch,Mock
         import ops_cd as cd
@@ -75,7 +75,7 @@ class CDPollTests(unittest.TestCase):
             def lock(**kwargs):
                 if paused and not kwargs:(folder/'config.json').write_text(json.dumps({'repository':REPOSITORY,'schema':41,'enabled':False}))
                 yield
-            with patch.multiple(cd,ROOT=root,git=git,current_remote_sha=lambda:'b'*40 if stale else SHA,lock=lock,
+            with patch.multiple(cd,ROOT=root,ROLES=dict(cd.ROLES),git=git,current_remote_sha=lambda:'b'*40 if stale else SHA,lock=lock,
                 state=lambda:{'schema':{'version':41,'dirty':False}},backup=Mock(),deploy=deployed,run=Mock(),db=incident,rollback=Mock(side_effect=RuntimeError('pending deliveries')),health=lambda:{'roles':{'server':'unready' if blocked else 'ready'},'alerts':[]}),patch.object(ops,'prepare',prepare):
                 if tamper:
                     with self.assertRaises(ValueError):cd.poll()
@@ -89,9 +89,16 @@ class CDPollTests(unittest.TestCase):
                 if stale:self.assertEqual(result['phase'],'superseded');deployed.assert_not_called()
                 else:
                     self.assertEqual(result['phase'],'deployed');deployed.assert_called_once()
-                    self.assertEqual(cd.poll()['phase'],'unchanged');deployed.assert_called_once()
+                    if migrate_dashboard:
+                        cd.ROLES['dashboard']=('hello-staging-dashboard-policy','dashboard.json',19105)
+                        migrated=cd.poll();self.assertEqual(migrated['phase'],'deployed')
+                        self.assertTrue(migrated['release'].endswith('-dashboard'))
+                        self.assertEqual(deployed.call_count,2)
+                        self.assertEqual(cd.poll()['phase'],'unchanged');self.assertEqual(deployed.call_count,2)
+                    else:self.assertEqual(cd.poll()['phase'],'unchanged');deployed.assert_called_once()
 
     def test_current_signed_commit_deploys_once(self):self.exercise()
+    def test_dashboard_inventory_upgrade_redeploys_same_signed_commit_once(self):self.exercise(migrate_dashboard=True)
     def test_newer_main_suppresses_old_ci_completion(self):self.exercise(stale=True)
     def test_invalid_signature_never_builds_or_deploys(self):self.exercise(tamper=True)
     def test_pause_during_build_prevents_activation(self):self.exercise(paused=True)

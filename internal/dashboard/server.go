@@ -37,11 +37,12 @@ type session struct {
 
 // Config is immutable after New. Development permits HTTP only on a loopback origin.
 type Config struct {
-	Origin      string
-	Upstream    string
-	APIKey      string
-	Development bool
-	MaxSessions int
+	Origin           string
+	Upstream         string
+	APIKey           string
+	Development      bool
+	MaxSessions      int
+	VerifiedClientIP func(*http.Request) string
 }
 
 // Server owns a bounded single-replica session store; restarting requires login.
@@ -333,6 +334,14 @@ func (s *Server) call(r *http.Request, method, path, query string, body []byte, 
 	request, err := http.NewRequestWithContext(r.Context(), method, target, bytes.NewReader(body))
 	if err != nil {
 		return 0, nil, err
+	}
+	if s.config.VerifiedClientIP != nil {
+		ip := s.config.VerifiedClientIP(r)
+		if ip == "" {
+			return 0, nil, errors.New("verified gateway client required")
+		}
+		request.Header.Set("X-Forwarded-For", ip)
+		request.Header.Set("X-Forwarded-Proto", "https")
 	}
 	request.Header.Set("X-API-Key", s.config.APIKey)
 	request.Header.Set("Accept", "application/json")

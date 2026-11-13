@@ -41,7 +41,7 @@ def install():
         os.chmod(key,0o600);os.chmod(cert,0o600)
     if key.is_symlink() or key.stat().st_mode&0o077:raise RuntimeError('Backup private key must be a private regular file.')
     call(SSH+['umask 077; mkdir -p '+REMOTE])
-    files={name:(HERE/name).read_bytes() for name in ['ops.py','ops_common.py','ops_backup.py','ops_health.py','ops_release.py','ops_setup.py','ops_cd.py','cd_protocol.py','ops_docs.py','ops_gateway_docs.py']}
+    files={name:(HERE/name).read_bytes() for name in ['ops.py','ops_common.py','ops_backup.py','ops_health.py','ops_release.py','ops_setup.py','ops_cd.py','cd_protocol.py','ops_docs.py','ops_gateway_docs.py','ops_dashboard.py']}
     version=hashlib.sha256(b''.join(name.encode()+files[name] for name in sorted(files))).hexdigest()[:20]
     payload=io.BytesIO()
     with tarfile.open(fileobj=payload,mode='w') as tar:
@@ -90,7 +90,7 @@ def fetch_backup():
 def main():
     os.umask(0o077)
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('command',choices=['install','diagnostics','schedule','health','backup','restore-check','capture','deploy','rollback','recover','status','health-drill','docs-gateway'])
+    p.add_argument('command',choices=['install','diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','docs-gateway','dashboard-bootstrap'])
     p.add_argument('--release');p.add_argument('--ref');p.add_argument('--schema',type=int)
     a=p.parse_args()
     if a.command=='install':install();return
@@ -99,7 +99,8 @@ def main():
         file,manifest=fetch_backup()
         archive=call(['openssl','cms','-decrypt','-binary','-inform','DER','-in',str(file),'-recip',str(LOCAL/'backup-recipient.crt'),'-inkey',str(LOCAL/'backup-private.pem')])
         print(remote('restore-check',data=archive,timeout=180).decode());return
-    if a.command=='deploy' and a.ref:
+    if a.command=='prepare' and not a.ref:raise RuntimeError('prepare requires an explicit --ref and --schema.')
+    if a.command in ['prepare','deploy'] and a.ref:
         if a.schema is None:raise RuntimeError('Explicit reviewed --schema version required; no automatic migrations.')
         revision=call(['git','-C',str(REPO),'rev-parse',a.ref+'^{commit}']).decode().strip()
         if not re.fullmatch('[0-9a-f]{40}',revision):raise RuntimeError('Invalid commit.')
@@ -108,6 +109,7 @@ def main():
         release=a.release or 'git-'+revision[:12]+'-'+str(int(time.time()))
         source=call(['git','-C',str(REPO),'archive','--format=tar',revision])
         print(remote('prepare','--release',release,'--revision',revision,'--schema',a.schema,data=source,timeout=1900).decode())
+        if a.command=='prepare':return
         print(remote('deploy','--release',release,timeout=300).decode());return
     args=[]
     if a.command in ['capture','deploy']:

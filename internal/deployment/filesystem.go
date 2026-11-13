@@ -14,7 +14,7 @@ import (
 // override exists. Symlinks, extended ACLs and unsafe ownership/modes fail closed.
 func Read(component Component) ([]byte, error) {
 	switch component {
-	case Requeue, Worker, Scheduler, Server, Bootstrap, Retention:
+	case Requeue, Worker, Scheduler, Server, Bootstrap, Retention, Dashboard:
 	default:
 		return nil, ErrConfiguration
 	}

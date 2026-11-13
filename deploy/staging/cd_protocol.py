@@ -11,7 +11,7 @@ REQUIRED_JOBS={
  'Skill integrity, format, build, unit race tests and vet',
  'Isolated worker, PostgreSQL, Kafka and simulated provider',
  'Full integration, migrations and sealed recovery',
- 'Build and check six offline production images',
+ 'Build and check seven offline production images',
  'Monitoring rules and physical PITR','Reachable Go vulnerabilities','Release readiness gates',
  'Dashboard build, security boundary and browser workflows'}
 

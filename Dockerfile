@@ -10,6 +10,13 @@ COPY pkg ./pkg
 
 RUN go build -mod=readonly -trimpath -buildvcs=false -o /out/ ./cmd/...
 
+FROM node:22.23.4-alpine@sha256:0e1754758c2df4cfa3e68d59e2e1b7374bb7fd9ea6328eaaacf15cc934af8202 AS dashboard-build
+WORKDIR /app
+COPY web/dashboard/package.json web/dashboard/pnpm-lock.yaml ./
+RUN npm install --global pnpm@11.25.0 --ignore-scripts && pnpm install --frozen-lockfile
+COPY web/dashboard ./
+RUN pnpm build && pnpm budget
+
 FROM scratch AS runtime
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 USER 65532:65532
@@ -39,3 +46,8 @@ FROM runtime AS server
 COPY --from=build /out/server /server
 EXPOSE 8080
 ENTRYPOINT ["/server", "--deployment"]
+
+FROM runtime AS dashboard
+COPY --from=build /out/dashboard /dashboard
+COPY --from=dashboard-build /app/dist /app
+ENTRYPOINT ["/dashboard", "--deployment"]

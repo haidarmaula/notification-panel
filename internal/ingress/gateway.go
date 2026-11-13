@@ -101,7 +101,7 @@ func (g *Gateway) ProtectHandler(mux *http.ServeMux, handler http.Handler) http.
 			return
 		}
 		_, pattern := mux.Handler(r)
-		if strings.HasPrefix(pattern, "POST /api/v1/auth/") {
+		if strings.HasPrefix(pattern, "POST /api/v1/auth/") || pattern == "POST /bff/login" || pattern == "POST /bff/logout" {
 			if ok, delay := g.authIP.Allow(ip, now); !ok {
 				limited(w, delay)
 				return

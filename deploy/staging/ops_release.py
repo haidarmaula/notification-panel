@@ -44,7 +44,7 @@ def capture(release):
 def image_check(role,image):
     obj=json.loads(run(['docker','image','inspect',image]))[0]
     target='worker' if role in ['admission','delivery'] else role
-    expected=['/'+target]+(['--deployment'] if role=='server' else [])
+    expected=['/'+target]+(['--deployment'] if role in ['server','dashboard'] else [])
     if obj['Config']['User']!='65532:65532' or obj['Config']['Entrypoint']!=expected:raise RuntimeError('Unexpected candidate image identity.')
     if obj['Os']!='linux' or obj['Architecture']!='amd64':raise RuntimeError('Candidate image platform mismatch.')
 
@@ -83,7 +83,7 @@ def deploy(release):
     for role,image in manifest['images'].items():
         image_check(role,image);clone_args(role,image,current[role])
     prior=ROOT/'deployment.json'
-    if prior.exists() and json.loads(prior.read_text())['phase'] not in ['committed','rolled-back']:
+    if prior.exists() and json.loads(prior.read_text())['phase'] not in ['committed','rolled-back','baseline']:
         raise RuntimeError('Incomplete deployment requires recover first.')
     next_docs=docs.publish(release,manifest['docs_sha256']) if manifest.get('docs_sha256') else manifest.get('docs_release')
     suffix=str(int(time.time()))
@@ -128,7 +128,7 @@ def rollback():
 
 def recover():
     journal=json.loads((ROOT/'deployment.json').read_text())
-    if journal['phase'] in ['committed','rolled-back']:raise RuntimeError('No incomplete deployment.')
+    if journal['phase'] in ['committed','rolled-back','baseline']:raise RuntimeError('No incomplete deployment.')
     if journal['phase'] in ['reopening','rollback-reopening'] and state()==journal['before']:
         expected=(json.loads((ROOT/'releases'/journal['release']/'release.json').read_text())['images']
                   if journal['phase']=='reopening' else journal['old_images'])

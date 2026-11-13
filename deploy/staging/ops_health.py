@@ -65,6 +65,12 @@ def health(persist=True):
             report['metrics'][role]=metrics
             report['alerts']+=evaluate(metrics,previous.get('metrics',{}).get(role,{}))
         except Exception:report['roles'][role]='unready';report['alerts'].append(role+' diagnostics unavailable or unready')
+    if 'dashboard' in ROLES:
+        try:
+            from ops_dashboard import verify
+            verify()
+        except Exception:
+            report['roles']['dashboard']='unready';report['alerts'].append('dashboard HTTPS routing/session boundary unavailable')
     if shutil.disk_usage(ROOT).free<3*1024**3:report['alerts'].append('VM free disk below 3 GiB')
     backups=list((ROOT/'backups').glob('*.cms'))
     if not backups or time.time()-max(f.stat().st_mtime for f in backups)>7200:report['alerts'].append('encrypted backup missing or older than 2h')
@@ -85,7 +91,7 @@ def health(persist=True):
             import ops_docs
             docs_release=ops_docs.current()
             journal=json.loads((ROOT/'deployment.json').read_text()) if (ROOT/'deployment.json').exists() else {}
-            expected=journal.get('new_docs') if journal.get('phase')=='committed' else journal.get('old_docs') if journal.get('phase')=='rolled-back' else docs_release
+            expected=journal.get('new_docs') if journal.get('phase') in ['committed','baseline'] else journal.get('old_docs') if journal.get('phase')=='rolled-back' else docs_release
             if docs_release!=expected:raise RuntimeError('Documentation pointer drifted from deployed backend.')
             ops_docs.verify(docs_release)
             report['docs_release']=docs_release

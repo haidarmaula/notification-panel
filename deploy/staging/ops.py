@@ -11,7 +11,7 @@ import subprocess
 import sys
 import tarfile
 import time
-from ops_common import ROOT, ROLES, SEED, atomic, lock, run, save, state, enter_maintenance, leave_maintenance
+from ops_common import ROOT, ROLES, SEED, atomic, lock, run, save, state, enter_maintenance, leave_maintenance, refresh_inventory
 from ops_backup import backup, validate_restore
 from ops_health import health
 from ops_release import capture, deploy, recover, rollback, ready
@@ -30,7 +30,7 @@ def prepare(name,revision,schema,archive=None):
         for member in tar.getmembers():
             if not (member.isfile() or member.isdir()) or member.name.startswith('/') or '..' in Path(member.name).parts:raise RuntimeError('Unsafe source archive member.')
         tar.extractall(source,filter='data')
-    # The existing image gate builds/checks all six targets, with isolated synthetic policies.
+    # The existing image gate builds/checks all seven targets, with isolated synthetic policies.
     with (directory/'image-check.log').open('wb') as log:
         r=subprocess.run([sys.executable,'scripts/check-images.py'],cwd=source,stdout=log,stderr=subprocess.STDOUT,timeout=1800)
     if r.returncode:raise RuntimeError('Image gate failed; inspect '+str(directory/'image-check.log'))
@@ -42,7 +42,7 @@ def prepare(name,revision,schema,archive=None):
         obj=json.loads(run(['docker','image','inspect','hello-'+target+':local-verify']))[0]
         images[role]=obj['Id']
     manifest={'release':name,'revision':revision,'schema':current['schema'],'images':images,'source_sha256':hashlib.sha256(archive).hexdigest(),
-        'created':time.time(),'checks':['six offline hardened image gates'],'hosted_ci':'not asserted; verify repository CI separately','scope':'staging only'}
+        'created':time.time(),'checks':['seven offline hardened image gates'],'hosted_ci':'not asserted; verify repository CI separately','scope':'staging only'}
     docs_source=source/'scripts/api_docs.py'
     if docs_source.exists():
         run([sys.executable,str(docs_source),'--output',str(directory/'api-docs'),'--release',name])
@@ -52,6 +52,7 @@ def prepare(name,revision,schema,archive=None):
                 if path.is_file():tar.add(path,arcname=str(path.relative_to(directory/'api-docs')),recursive=False)
         atomic(directory/'api-docs.tar',out.getvalue())
         manifest['docs_sha256']=hashlib.sha256(out.getvalue()).hexdigest()
+    manifest['dashboard_image']=json.loads(run(['docker','image','inspect','hello-dashboard:local-verify']))[0]['Id']
     save(directory/'release.json',manifest)
     return manifest
 
@@ -59,13 +60,17 @@ def prepare(name,revision,schema,archive=None):
 def main():
     os.umask(0o077)
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','cd','docs-gateway'])
+    parser.add_argument('command',choices=['diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','cd','docs-gateway','dashboard-bootstrap'])
     parser.add_argument('--release');parser.add_argument('--revision');parser.add_argument('--schema',type=int);parser.add_argument('--cron',action='store_true')
     args=parser.parse_args()
     if args.command in ['capture','prepare','deploy'] and (not args.release or not re.fullmatch('[a-z0-9][a-z0-9-]{0,63}',args.release)):raise SystemExit('Valid --release is required.')
     try:
-        with lock(nonblocking=args.cron and args.command!='backup',name='cd.lock' if args.command=='cd' else 'build.lock' if args.command=='prepare' else 'operations.lock',timeout=300 if args.cron and args.command=='backup' else None):
-            if args.command=='docs-gateway':
+        with lock(nonblocking=args.cron and args.command!='backup',name='cd.lock' if args.command in ['cd','dashboard-bootstrap'] else 'build.lock' if args.command=='prepare' else 'operations.lock',timeout=300 if args.cron and args.command=='backup' else None):
+            refresh_inventory()
+            if args.command=='dashboard-bootstrap':
+                from ops_dashboard import configure
+                with lock():result=configure()
+            elif args.command=='docs-gateway':
                 from ops_gateway_docs import configure
                 result=configure()
             elif args.command=='cd':

@@ -16,6 +16,7 @@ type Component string
 
 const (
 	Server    Component = "server"
+	Dashboard Component = "dashboard"
 	Bootstrap Component = "bootstrap"
 	Worker    Component = "worker"
 	Scheduler Component = "scheduler"

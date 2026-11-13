@@ -6,7 +6,7 @@ import re
 import subprocess
 import time
 from cd_protocol import REPOSITORY, verify_message, checked_schema
-from ops_common import ROOT, atomic, lock, run, save, state, inspect, db
+from ops_common import ROOT, ROLES, atomic, lock, run, save, state, inspect, db
 from ops_backup import backup
 from ops_health import health
 from ops_release import deploy, rollback
@@ -38,7 +38,7 @@ def poll():
     sha=git('rev-parse','refs/remotes/origin/main').decode().strip()
     status_file=folder/'status.json'
     old=json.loads(status_file.read_text()) if status_file.exists() else {}
-    if old.get('sha')==sha and old.get('phase')=='deployed':return {'phase':'unchanged','sha':sha}
+    if old.get('sha')==sha and old.get('phase')=='deployed' and old.get('roles',sorted(role for role in ROLES if role!='dashboard'))==sorted(ROLES):return {'phase':'unchanged','sha':sha}
     ref='refs/tags/staging-ready/'+sha
     try:tag=git('cat-file','tag',ref).decode()
     except RuntimeError:return {'phase':'waiting-for-successful-ci','sha':sha}
@@ -52,9 +52,9 @@ def poll():
     if old.get('sha')==sha and old.get('phase') in ['failed','rollback-blocked'] and (old.get('phase')=='rollback-blocked' or attempts>=3 or time.time()<old.get('retry_after',0)):
         return {'phase':'retry-paused','sha':sha,'attempts':attempts}
     (folder/'last-error.json').unlink(missing_ok=True)
-    record={**authorization,'phase':'preparing','attempts':attempts+1,'started':time.time()}
+    record={**authorization,'phase':'preparing','roles':sorted(ROLES),'attempts':attempts+1,'started':time.time()}
     save(status_file,record)
-    release=f'cd-{sha[:12]}-{authorization["ci_run_id"]}-a{authorization["ci_run_attempt"]}'
+    release=f'cd-{sha[:12]}-{authorization["ci_run_id"]}-a{authorization["ci_run_attempt"]}'+('-dashboard' if 'dashboard' in ROLES else '')
     try:
         manifest=ROOT/'releases'/release/'release.json'
         if not manifest.exists():

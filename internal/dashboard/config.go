@@ -6,6 +6,8 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"hello/internal/deployment"
+	"hello/internal/ingress"
 	"io"
 	"net"
 	"net/http"
@@ -19,6 +21,8 @@ type Runtime struct {
 	ListenAddress string
 	Assets        string
 	Client        *http.Client
+	Gateway       *ingress.Gateway
+	Diagnostics   *deployment.PrivateListener
 }
 
 // Load reads protected configuration and secrets once, without environment fallbacks.

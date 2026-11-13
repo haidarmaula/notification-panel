@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and exercise all six production entrypoints with disposable offline policies."""
+"""Build and exercise all seven production entrypoints with disposable offline policies."""
 
 import base64
 import io
@@ -10,11 +10,12 @@ import secrets
 import subprocess
 import tarfile
 import tempfile
+import time
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SEED = "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d"
-ROLES = ("server", "bootstrap", "worker", "scheduler", "requeue", "retention")
+ROLES = ("server", "bootstrap", "worker", "scheduler", "requeue", "retention", "dashboard")
 OFFLINE = ["--rm", "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"]
 
 
@@ -44,7 +45,12 @@ def policies(directory):
                             "staff_tokens": staff, "ingress": {"endpoint": endpoint, "gateway_ips": ["127.0.0.1"],
                             "ip_per_minute": 120, "auth_ip_per_minute": 8, "auth_total_per_minute": 60, "concurrent_requests": 4}},
             "bootstrap.json": {"database_url": closed_db, "admin_name": "Fixture", "admin_email": "fixture@example.invalid",
-                               "admin_password": fixture_key()}}
+                               "admin_password": fixture_key()},
+            "dashboard.json": {"origin": "https://dashboard.example.invalid", "upstream": "https://127.0.0.1:1", "api_key": fixture_key(),
+                "upstream_ca_pem": cert.read_text(), "upstream_client_certificate_pem": cert.read_text(), "upstream_client_key_pem": key.read_text(),
+                "upstream_server_name": "localhost", "max_sessions": 10,
+                "ingress": {"endpoint": endpoint, "gateway_ips": ["127.0.0.1"], "ip_per_minute": 120, "auth_ip_per_minute": 8, "auth_total_per_minute": 60, "concurrent_requests": 4},
+                "monitoring": {**endpoint, "listen": "127.0.0.1:19105"}}}
 
 
 def mount_policies(volume, bundle, mode):
@@ -74,7 +80,7 @@ def main():
         tag = f"hello-{role}:local-verify"
         docker("build", "--target", role, "--tag", tag, ".")
         metadata = json.loads(docker("image", "inspect", tag, capture_output=True).stdout)[0]
-        entrypoint = ["/" + role] + (["--deployment"] if role in ("server", "bootstrap") else [])
+        entrypoint = ["/" + role] + (["--deployment"] if role in ("server", "bootstrap", "dashboard") else [])
         if metadata["Config"]["User"] != "65532:65532" or metadata["Config"]["Entrypoint"] != entrypoint:
             raise RuntimeError(f"{role}: unexpected production identity or entrypoint")
         images[role] = metadata["Id"]
@@ -87,15 +93,25 @@ def main():
             for role, image in images.items():
                 if role in ("server", "bootstrap"):
                     expect_denial(flags, image, role + " database startup failed")
+                elif role == "dashboard":
+                    container = docker("run", "-d", *[f for f in flags if f != "--rm"], image, capture_output=True, text=True).stdout.strip()
+                    try:
+                        time.sleep(0.5)
+                        obj = json.loads(docker("inspect", container, capture_output=True).stdout)[0]
+                        if not obj["State"]["Running"]: raise RuntimeError("Dashboard protected startup failed")
+                        docker("stop", "--time", "10", container, capture_output=True)
+                        obj = json.loads(docker("inspect", container, capture_output=True).stdout)[0]
+                        if obj["State"]["ExitCode"] != 0: raise RuntimeError("Dashboard shutdown failed")
+                    finally: docker("rm", "-f", container, capture_output=True)
                 else:
                     docker("run", *OFFLINE, image, "--help", timeout=30)
                 print(f"{role} {image} passed offline startup", flush=True)
             mount_policies(volume, bundle, 0o660)
-            for role in ("server", "bootstrap"):
+            for role in ("server", "bootstrap", "dashboard"):
                 expect_denial(flags, images[role], "invalid " + role + " configuration")
     finally:
         docker("volume", "rm", volume)
-    print("All six images passed. Group-writable server and bootstrap policies were rejected.")
+    print("All seven images passed. Group-writable deployed policies were rejected.")
 
 
 if __name__ == "__main__":

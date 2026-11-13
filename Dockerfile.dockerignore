@@ -12,3 +12,14 @@
 !pkg/**/
 !pkg/**/*.go
 **/*_test.go
+!web
+!web/dashboard
+!web/dashboard/package.json
+!web/dashboard/pnpm-lock.yaml
+!web/dashboard/index.html
+!web/dashboard/tsconfig.json
+!web/dashboard/vite.config.ts
+!web/dashboard/src
+!web/dashboard/src/**
+!web/dashboard/scripts
+!web/dashboard/scripts/bundle-budget.mjs
