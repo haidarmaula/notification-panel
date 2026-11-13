@@ -12,6 +12,9 @@ MARKER='HELLO_API_DOCS'
 BLOCK='''    # HELLO_API_DOCS: public reference files only, in a separate readonly volume.
     location = /docs { return 308 /docs/; }
     location = /docs/ {
+      rewrite ^ /docs/index.html last;
+    }
+    location = /docs/index.html {
       alias /api-docs/current/index.html;
       default_type text/html;
       add_header Cache-Control "no-store" always;
