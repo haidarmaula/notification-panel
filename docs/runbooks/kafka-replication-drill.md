@@ -1,5 +1,8 @@
 # Authenticated Kafka replication and offset recovery
 
+For host installation and the optional drill tools, see [machine setup](../setup.md)
+and [operational prerequisites](../tooling/development-tools.md#operational-drill-prerequisites).
+
 Run this drill with Docker, Go, OpenSSL and Python 3 from the repository root.
 The pinned Apache Kafka 4.3.1 image must already be available locally. Each run
 creates a unique Compose project, an internal network with no published ports,

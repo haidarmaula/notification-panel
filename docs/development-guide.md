@@ -4,7 +4,16 @@ Read the [domain model](domain-model.md) and [notification journey](notification
 
 ## Toolchain preflight
 
-Run `command -v go` and `go version` in the same shell you will use below. A Go installation outside PATH is not a missing installation: for the standard `/usr/local/go` layout, use `export PATH="/usr/local/go/bin:$PATH"` in that shell, then verify again. Other installation methods can use a different directory; do not replace an existing toolchain or change global shell settings just to run this guide.
+On a fresh machine, start with the canonical [machine setup guide](setup.md).
+For plain Go checks, you need the toolchain version in [go.mod](../go.mod).
+Run `command -v go` and `go version` in the same shell you will use below.
+A Go installation outside PATH is not a missing installation: for the standard
+`/usr/local/go` layout, use `export PATH="/usr/local/go/bin:$PATH"` in that shell,
+then verify again. Other installation methods can use a different directory;
+do not replace an existing toolchain or change global shell settings just to run
+this guide. The full local stack has additional requirements; see
+[full local development](local-development.md). Optional tools by task are in
+the [tool capability guide](tooling/development-tools.md).
 
 The version must support [go.mod](../go.mod). These checks distinguish a shell setup problem from a failing build before you start infrastructure.
 
@@ -41,7 +50,7 @@ python3 scripts/check-onboarding.py --run
 python3 -B -m unittest discover -s scripts -p 'test_check_onboarding.py'
 ```
 
-The first command checks the six onboarding pages' local links/headings, Bash syntax, and allowed safe examples. `--run` additionally executes the actual first safe Go block from this guide and the README, deduplicating repeated commands and failing on a nonzero exit or a test filter that runs no tests. It requires Go on PATH and may download dependencies. It never executes later database, API, integration, or provider examples. The last command tests the checker itself, including deliberately broken examples; these checks do not establish that the login walkthrough or live delivery works.
+The first command checks onboarding pages' local links/headings, Bash syntax, and allowed safe examples. `--run` additionally executes the actual first safe Go block from this guide and the README, deduplicating repeated commands and failing on a nonzero exit or a test filter that runs no tests. It requires Go on PATH and may download dependencies. It never executes later database, API, integration, or provider examples. The last command tests the checker itself, including deliberately broken examples; these checks do not establish that the login walkthrough or live delivery works.
 
 ## 2. Run the complete local environment
 
@@ -103,7 +112,7 @@ Only after the previous steps, inspect the fixture prerequisites and resource ow
 bash scripts/integration.sh
 ```
 
-This is an opt-in runner requiring Docker, Go, Python 3, migrate, and Postman CLI. It reserves local fixture ports (15432, 19092, 19095, 14010), builds/exercises the real delivery worker against a provider simulator, and removes its owned disposable resources. It does not load development `.env` or prove real Firebase/APNs/device behavior. The current runner is broader than the historical description "repository smoke only"; see [integration evidence and limits](analysis/integration-readiness.md).
+This is an opt-in runner requiring Docker, Go, Python 3, migrate, and Postman CLI. It reserves local fixture ports (15432, 19092, 19095, 14010), builds/exercises the real delivery worker against a provider simulator, and removes its owned disposable resources. It does not load development `.env` or prove real Firebase/APNs/device behavior. These extra tools are not needed for ordinary Go tests or `./dev`; see the [tool capability guide](tooling/development-tools.md). The current runner is broader than the historical description "repository smoke only"; see [integration evidence and limits](analysis/integration-readiness.md).
 
 For a small isolated load/pipeline exercise, the existing harness supports:
 

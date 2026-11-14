@@ -6,6 +6,9 @@ Laravel replacement, app-origin verifier, or platform attestation broker.
 
 ## Prerequisites
 
+- The Go toolchain from `go.mod`; see [machine setup](../../docs/setup.md).
+- [Android SDK Platform-Tools](https://developer.android.com/tools/releases/platform-tools)
+  providing `adb` on PATH for USB reverse forwarding. Verify with `adb version`.
 - An existing `ACTIVE` local application with a configured Android `FCM_FID`
   route.
 - An existing active local user and `mobile_identities` mapping for the chosen

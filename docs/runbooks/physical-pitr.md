@@ -1,5 +1,8 @@
 # PostgreSQL physical backup and point-in-time recovery drill
 
+For host installation and required fixture tools, see [machine setup](../setup.md)
+and [operational prerequisites](../tooling/development-tools.md#operational-drill-prerequisites).
+
 Run the following from the repository root with Python 3 and a local Docker Unix
 socket. The PostgreSQL 17 image pinned in the runner must already exist locally.
 All records, storage volumes and encryption keys belong to this one synthetic

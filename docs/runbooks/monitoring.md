@@ -191,6 +191,9 @@ require their own evidence. [Local drill](kafka-replication-drill.md#what-the-dr
 
 ## Local validation
 
+Host and image requirements are listed in the
+[operational tool guide](../tooling/development-tools.md#operational-drill-prerequisites).
+
 `bash scripts/check-monitoring.sh` checks scraper syntax, alert rules, firing
 and resolution, freshness across duplicate schedulers, and all dashboard
 expressions. It provisions the dashboard in an isolated Grafana and reads the

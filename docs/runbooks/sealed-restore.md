@@ -1,5 +1,9 @@
 # Sealed restore and rollback drill
 
+Install the [integration tools](../tooling/development-tools.md#opt-in-integration-checks)
+and review the [drill prerequisites](../tooling/development-tools.md#operational-drill-prerequisites)
+before using this workflow. For ordinary local startup, use [machine setup](../setup.md).
+
 ## Run the disposable drill
 
 From the repository root, run the following with the prerequisites for the

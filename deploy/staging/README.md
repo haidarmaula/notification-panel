@@ -1,5 +1,8 @@
 # Single-VM staging preparation
 
+For first-time local development, start with [machine setup](../../docs/setup.md).
+This document describes the existing staging target and its operational procedures.
+
 Target: `kafka-vps` (`haidar@10.1.16.109:10022`, hostname `srv-kafka`).
 These scripts extend the existing migration-41 PostgreSQL/Kafka setup. They do
 not provision an empty host or provide production availability.

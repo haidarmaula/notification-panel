@@ -59,6 +59,14 @@ commands, hot reload and verification. It starts the API, BFF, database, Kafka,
 admission worker, delivery worker, scheduler and dashboard with simulated
 external OAuth/FCM.
 
+For fresh-machine installs and task-specific optional tools, see the [machine
+setup guide](setup.md) and [tool capability guide](tooling/development-tools.md).
+Plain Go unit/build work does not need Docker, `.env`, SQL migration tools,
+Postman, Playwright, or provider credentials. `./dev` needs Bash, Docker with
+Compose, Go, Python 3, Node and pnpm; it does not need host PostgreSQL, Kafka,
+or migrate. The repository `.env` is used by Make targets and is separate from
+the private settings created by `./dev`.
+
 - **`Makefile:1` is `include .env`.** With no `.env`, *every* target fails — including
   `make help` and `make sqlc`. Copy `.env.example` first. Do not "fix" this by removing the include.
 - The full local runner initializes its own persistent stack and synthetic

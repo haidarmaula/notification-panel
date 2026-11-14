@@ -5,8 +5,10 @@ SolidJS/Vite browser application with a separate Go session BFF. See
 
 ## Local verification
 
-Use Node 22.23.4 (or a compatible supported Node release), pnpm 11.25.0 and the
-Go toolchain pinned in the repository. Run from this directory:
+Dashboard checks are optional for backend-only work. On a fresh machine, use
+the [machine setup guide](../../docs/setup.md); dashboard checks use Node 22.23.4,
+pnpm 11.25.0, Bash for selected project scripts, and the Go toolchain pinned in
+the repository. These are the exact versions used by CI. Run from this directory:
 
 ```sh
 pnpm install --frozen-lockfile
@@ -15,9 +17,14 @@ pnpm lint
 pnpm test
 pnpm build
 pnpm budget
-pnpm exec playwright install chromium
+pnpm exec playwright install --with-deps chromium
 pnpm test:e2e
 ```
+
+The Playwright browser and its system dependencies are needed only for `test:e2e`.
+See the [tool capability guide](../../docs/tooling/development-tools.md) for
+install references and the distinction between dashboard, backend, and local
+stack prerequisites.
 
 Browser tests start a temporary verified HTTPS API fixture and the real Go BFF
 on loopback ports 8091 and 4173. No staging/provider requests occur. Fixture
