@@ -4,6 +4,7 @@ package integration
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,19 +12,14 @@ import (
 	"testing"
 	"time"
 
-	jwtlib "github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
-	"hello/internal/config"
 	"hello/internal/database"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
+	"hello/internal/features/applications"
 	"hello/internal/features/auth"
-	"hello/internal/features/mobile"
-	"hello/internal/features/notifications"
 	"hello/internal/features/profile"
-	"hello/internal/features/segments"
 	"hello/internal/features/staff"
-	"hello/internal/features/users"
 	"hello/internal/httprequest"
 	"hello/internal/middleware"
 	"hello/internal/token"
@@ -44,35 +40,30 @@ func TestJSONRequestLimitsAPI(t *testing.T) {
 	tokens := token.NewTokenManager("fixture-access-not-production", "fixture-refresh-not-production")
 	access, err := fixtureAccess(ctx, q, tokens, actor, "VIEWER", "")
 	require.NoError(t, err)
-	mobileAccess, err := jwtlib.NewWithClaims(jwtlib.SigningMethodHS256, jwtlib.MapClaims{"external_id": "body-fixture", "exp": time.Now().Add(time.Hour).Unix()}).SignedString([]byte("fixture-mobile-secret"))
+	var applicationID int64
+	var appID string
+	require.NoError(t, tx.QueryRow(ctx, `INSERT INTO applications(key,name) VALUES($1,'Request limits fixture') RETURNING id,public_id::text`, fmt.Sprintf("request-limits-%d", actor)).Scan(&applicationID, &appID))
+	_, err = tx.Exec(ctx, `INSERT INTO application_staff_grants(application_id,staff_id) VALUES($1,$2)`, applicationID, actor)
 	require.NoError(t, err)
 	api := middleware.NewAPIKeyMiddleware("fixture-api-key")
 	jwt := middleware.NewJWTMiddleware(tokens, repository.NewStaffUserRepository(q))
-	mobileJWT := middleware.NewMobileJWTMiddleware("fixture-mobile-secret")
 	auditMW := middleware.NewAuditMiddleware()
-	cfg := &config.ServerConfig{MobileJWTSecret: "fixture-mobile-secret", KafkaBroker: "127.0.0.1:19092", SendTopic: "notification.send.requested"}
 	mux := http.NewServeMux()
 	auth.NewAuthModule(q, tokens, api.Use).RegisterRoutes(mux)
-	// Keep the current server wiring: mobile/sync has no outer middleware.
-	mobile.NewMobileModule(q, cfg).RegisterRoutes(mux)
+	applications.NewModule(q, staffFixtureTransaction{tx}, api.Use, jwt.Use, auditMW.Use).RegisterRoutes(mux)
 	profile.NewProfileModule(q, staffFixtureTransaction{tx}, api.Use, jwt.Use).RegisterRoutes(mux)
 	staff.NewStaffModule(q, staffFixtureTransaction{tx}, api.Use, jwt.Use, auditMW.Use).RegisterRoutes(mux)
-	segments.NewSegmentModule(q, api.Use, jwt.Use, auditMW.Use).RegisterRoutes(mux)
-	notifications.NewNotificationModule(q, cfg, api.Use, jwt.Use, auditMW.Use).RegisterRoutes(mux)
-	users.NewUserModule(q, pool, []middleware.Middleware{api.Use, jwt.Use}, []middleware.Middleware{mobileJWT.Use}).RegisterRoutes(mux)
 	snapshot := func() string {
 		var data string
 		require.NoError(t, tx.QueryRow(ctx, `SELECT jsonb_build_array(
-  (SELECT jsonb_agg(x ORDER BY id) FROM users x),
-  (SELECT jsonb_agg(x ORDER BY id) FROM device_tokens x),
+  (SELECT jsonb_agg(x ORDER BY id) FROM applications x),
+  (SELECT jsonb_agg(x ORDER BY application_id,staff_id) FROM application_staff_grants x),
   (SELECT jsonb_agg(x ORDER BY id) FROM staff_users x),
   (SELECT jsonb_agg(x ORDER BY id) FROM notifications x),
-  (SELECT jsonb_agg(x ORDER BY id) FROM notification_targets x),
   (SELECT jsonb_agg(x ORDER BY id) FROM segments x),
-  (SELECT jsonb_agg(x ORDER BY id) FROM segment_members x),
   (SELECT jsonb_agg(x ORDER BY id) FROM audit_logs x),
-  (SELECT jsonb_agg(x ORDER BY id) FROM notification_deliveries x),
-  (SELECT jsonb_agg(x ORDER BY id) FROM notification_reads x))::text`).Scan(&data))
+  (SELECT jsonb_agg(x ORDER BY id) FROM notification_send_outbox x),
+  (SELECT jsonb_agg(x ORDER BY id) FROM notification_delivery_intents x))::text`).Scan(&data))
 		return data
 	}
 	request := func(method, path, body, access, omit string, unknown bool) *httptest.ResponseRecorder {
@@ -95,31 +86,22 @@ func TestJSONRequestLimitsAPI(t *testing.T) {
 	for _, route := range []struct {
 		method, path string
 		limit        int64
-		mobile       bool
 	}{
-		{"POST", "/api/v1/auth/login", httprequest.DefaultJSONLimit, false},
-		{"POST", "/api/v1/auth/refresh", httprequest.DefaultJSONLimit, false},
-		{"POST", "/api/v1/auth/logout", httprequest.DefaultJSONLimit, false},
-		{"POST", "/api/v1/mobile/sync", httprequest.DefaultJSONLimit, false},
-		{"PATCH", "/api/v1/profile", httprequest.DefaultJSONLimit, false},
-		{"PATCH", "/api/v1/profile/password", httprequest.DefaultJSONLimit, false},
-		{"POST", "/api/v1/staff", httprequest.DefaultJSONLimit, false},
-		{"PATCH", "/api/v1/staff/1", httprequest.DefaultJSONLimit, false},
-		{"PATCH", "/api/v1/staff/1/status", httprequest.DefaultJSONLimit, false},
-		{"PATCH", "/api/v1/staff/1/password", httprequest.DefaultJSONLimit, false},
-		{"POST", "/api/v1/segments", httprequest.DefaultJSONLimit, false},
-		{"PATCH", "/api/v1/segments/1", httprequest.DefaultJSONLimit, false},
-		{"POST", "/api/v1/segments/1/members", httprequest.DefaultJSONLimit, false},
-		{"POST", "/api/v1/device-tokens", httprequest.DefaultJSONLimit, true},
-		{"PATCH", "/api/v1/device-tokens/1", httprequest.DefaultJSONLimit, true},
-		{"POST", "/api/v1/notifications", httprequest.CampaignJSONLimit, false},
-		{"PATCH", "/api/v1/notifications/1", httprequest.CampaignJSONLimit, false},
+		{"POST", "/api/v1/auth/login", httprequest.DefaultJSONLimit},
+		{"POST", "/api/v1/auth/refresh", httprequest.DefaultJSONLimit},
+		{"POST", "/api/v1/auth/logout", httprequest.DefaultJSONLimit},
+		{"PATCH", "/api/v1/profile", httprequest.DefaultJSONLimit},
+		{"PATCH", "/api/v1/profile/password", httprequest.DefaultJSONLimit},
+		{"POST", "/api/v1/staff", httprequest.DefaultJSONLimit},
+		{"PATCH", "/api/v1/staff/1", httprequest.DefaultJSONLimit},
+		{"PATCH", "/api/v1/staff/1/status", httprequest.DefaultJSONLimit},
+		{"PATCH", "/api/v1/staff/1/password", httprequest.DefaultJSONLimit},
+		{"POST", "/api/v1/apps/" + appID + "/segments", httprequest.DefaultJSONLimit},
+		{"PUT", "/api/v1/apps/" + appID + "/segments/1", httprequest.DefaultJSONLimit},
+		{"POST", "/api/v1/apps/" + appID + "/campaigns", httprequest.DefaultJSONLimit},
+		{"PUT", "/api/v1/apps/" + appID + "/campaigns/1", httprequest.DefaultJSONLimit},
 	} {
 		t.Run(route.method+" "+route.path, func(t *testing.T) {
-			token := access
-			if route.mobile {
-				token = mobileAccess
-			}
 			for _, variant := range []struct {
 				name, body string
 				unknown    bool
@@ -131,7 +113,7 @@ func TestJSONRequestLimitsAPI(t *testing.T) {
 			} {
 				t.Run(variant.name, func(t *testing.T) {
 					before := snapshot()
-					w := request(route.method, route.path, variant.body, token, "", variant.unknown)
+					w := request(route.method, route.path, variant.body, access, "", variant.unknown)
 					require.Equal(t, variant.want, w.Code, w.Body.String())
 					require.Equal(t, before, snapshot(), "rejected body mutated business/audit data")
 					message := "request body too large"
@@ -182,11 +164,11 @@ func TestJSONRequestLimitsAPI(t *testing.T) {
 		_, err = tx.Exec(ctx, "UPDATE staff_users SET role_id=(SELECT id FROM roles WHERE name='VIEWER') WHERE id=$1", actor)
 		require.NoError(t, err)
 		demotedBefore := snapshot()
-		w = request("POST", "/api/v1/notifications", oversized, access, "", true)
+		w = request("POST", "/api/v1/apps/"+appID+"/campaigns", oversized, access, "", true)
 		require.Equal(t, 401, w.Code)
 		viewer, err := fixtureAccess(ctx, q, tokens, actor, "SUPER_ADMIN", "")
 		require.NoError(t, err)
-		w = request("POST", "/api/v1/notifications", oversized, viewer, "", true)
+		w = request("POST", "/api/v1/apps/"+appID+"/campaigns", oversized, viewer, "", true)
 		require.Equal(t, 403, w.Code)
 		require.Equal(t, demotedBefore, snapshot())
 		_, err = tx.Exec(ctx, "ROLLBACK TO SAVEPOINT limits_demotion; RELEASE SAVEPOINT limits_demotion")
@@ -197,13 +179,15 @@ func TestJSONRequestLimitsAPI(t *testing.T) {
 		path, body string
 		limit      int64
 	}{
-		{"/api/v1/segments", `{"name":"Exact limit fixture"}`, httprequest.DefaultJSONLimit},
-		{"/api/v1/notifications", `{"title":"Exact limit fixture","body":"Fixture"}`, httprequest.CampaignJSONLimit},
+		{"/api/v1/apps/" + appID + "/segments", `{"name":"Exact limit fixture"}`, httprequest.DefaultJSONLimit},
+		{"/api/v1/apps/" + appID + "/campaigns", `{"title":"Exact limit fixture","body":"Fixture","targets":[{"type":"BROADCAST"}]}`, httprequest.DefaultJSONLimit},
 	} {
 		t.Run("exact limit "+route.path, func(t *testing.T) {
 			body := route.body + strings.Repeat(" ", int(route.limit)-len(route.body))
+			before := snapshot()
 			w := request("POST", route.path, body, access, "", true)
-			require.Equal(t, 201, w.Code, w.Body.String())
+			require.Equal(t, 409, w.Code, w.Body.String()) // Decoding succeeded; the app remains provisioning.
+			require.Equal(t, before, snapshot(), "exact-limit request must not mutate business/audit data")
 		})
 	}
 	require.Equal(t, offsets, []int64{lastTopicOffset(t, ctx, "notification.send.requested"), lastTopicOffset(t, ctx, "notification.delivery.updated")}, "body rejections/exact-limit drafts must not publish Kafka events")

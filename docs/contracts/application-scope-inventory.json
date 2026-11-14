@@ -599,30 +599,6 @@
       "disposition": "retain-provisioning-registry"
     },
     {
-      "pattern": "DELETE /api/v1/device-tokens/{id}",
-      "source": "internal/features/users/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "DELETE /api/v1/notifications/{id}",
-      "source": "internal/features/notifications/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "DELETE /api/v1/segments/{id}",
-      "source": "internal/features/segments/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "DELETE /api/v1/segments/{id}/members/{userId}",
-      "source": "internal/features/segments/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
       "pattern": "DELETE /api/v1/staff/{id}",
       "source": "internal/features/staff/routes.go",
       "scope": "global-control",
@@ -665,40 +641,10 @@
       "disposition": "retain-provisioning-registry"
     },
     {
-      "pattern": "GET /api/v1/notifications",
-      "source": "internal/features/notifications/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "GET /api/v1/notifications/{id}",
-      "source": "internal/features/notifications/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
       "pattern": "GET /api/v1/profile",
       "source": "internal/features/profile/routes.go",
       "scope": "global-control",
       "disposition": "retain-global"
-    },
-    {
-      "pattern": "GET /api/v1/segments",
-      "source": "internal/features/segments/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "GET /api/v1/segments/{id}",
-      "source": "internal/features/segments/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "GET /api/v1/segments/{id}/members",
-      "source": "internal/features/segments/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
     },
     {
       "pattern": "GET /api/v1/staff",
@@ -713,58 +659,10 @@
       "disposition": "retain-global"
     },
     {
-      "pattern": "GET /api/v1/users",
-      "source": "internal/features/users/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "GET /api/v1/users/search",
-      "source": "internal/features/users/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "GET /api/v1/users/{id}",
-      "source": "internal/features/users/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "GET /api/v1/users/{id}/device-tokens",
-      "source": "internal/features/users/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "GET /api/v1/users/{id}/notifications",
-      "source": "internal/features/users/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "GET /api/v1/users/{id}/segments",
-      "source": "internal/features/users/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
       "pattern": "PATCH /api/v1/admin/apps/{app_id}",
       "source": "internal/features/applications/module.go",
       "scope": "registry-control",
       "disposition": "retain-provisioning-registry"
-    },
-    {
-      "pattern": "PATCH /api/v1/device-tokens/{id}",
-      "source": "internal/features/users/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "PATCH /api/v1/notifications/{id}",
-      "source": "internal/features/notifications/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
     },
     {
       "pattern": "PATCH /api/v1/profile",
@@ -777,12 +675,6 @@
       "source": "internal/features/profile/routes.go",
       "scope": "global-control",
       "disposition": "retain-global"
-    },
-    {
-      "pattern": "PATCH /api/v1/segments/{id}",
-      "source": "internal/features/segments/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
     },
     {
       "pattern": "PATCH /api/v1/staff/{id}",
@@ -821,42 +713,6 @@
       "disposition": "retain-global"
     },
     {
-      "pattern": "POST /api/v1/device-tokens",
-      "source": "internal/features/users/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "POST /api/v1/mobile/sync",
-      "source": "internal/features/mobile/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "POST /api/v1/notifications",
-      "source": "internal/features/notifications/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "POST /api/v1/notifications/{id}/send",
-      "source": "internal/features/notifications/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "POST /api/v1/segments",
-      "source": "internal/features/segments/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
-      "pattern": "POST /api/v1/segments/{id}/members",
-      "source": "internal/features/segments/routes.go",
-      "scope": "application-legacy",
-      "disposition": "retired-unmounted"
-    },
-    {
       "pattern": "POST /api/v1/staff",
       "source": "internal/features/staff/routes.go",
       "scope": "global-control",
@@ -893,16 +749,20 @@
       "disposition": "Keep global roles/staff bootstrap; never infer or seed a default business application."
     },
     {
+      "path": "cmd/dashboard/main.go",
+      "disposition": "Loads dashboard policy and serves the staff browser session BFF."
+    },
+    {
       "path": "cmd/scheduler/main.go",
-      "disposition": "Retired entry point exits before starting database or Kafka work."
+      "disposition": "Loads protected scheduler policy and runs the scoped durable scheduler."
     },
     {
       "path": "cmd/server/main.go",
-      "disposition": "Only scoped business and staff/control routes are mounted."
+      "disposition": "Loads local or protected server policy and mounts scoped business plus global staff/control routes."
     },
     {
       "path": "cmd/worker/main.go",
-      "disposition": "Retired entry point exits before starting database or provider work."
+      "disposition": "Loads protected worker policy and runs the selected admission or delivery role."
     },
     {
       "path": "cmd/requeue/main.go",

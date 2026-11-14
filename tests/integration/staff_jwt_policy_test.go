@@ -16,8 +16,8 @@ import (
 	"hello/internal/database"
 	"hello/internal/database/repository"
 	"hello/internal/database/sqlc"
+	"hello/internal/features/applications"
 	"hello/internal/features/auth"
-	"hello/internal/features/segments"
 	"hello/internal/middleware"
 	"hello/internal/token"
 )
@@ -40,9 +40,9 @@ func TestStaffJWTPolicyAPI(t *testing.T) {
 	jwt := middleware.NewJWTMiddleware(manager, repository.NewStaffUserRepository(q))
 	mux := http.NewServeMux()
 	auth.NewAuthModule(q, manager, api.Use).RegisterRoutes(mux)
-	segments.NewSegmentModule(q, api.Use, jwt.Use).RegisterRoutes(mux)
+	applications.NewModule(q, pool, api.Use, jwt.Use).RegisterRoutes(mux)
 	request := func(purpose, signed string) *httptest.ResponseRecorder {
-		method, path, body := "GET", "/api/v1/segments", ""
+		method, path, body := "GET", "/api/v1/apps", ""
 		if purpose == "refresh" {
 			method = "POST"
 			path = "/api/v1/auth/refresh"

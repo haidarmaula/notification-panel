@@ -63,24 +63,42 @@ func TestKafkaProducerRoundTrip(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 			startOffset := lastTopicOffset(t, ctx, topic)
-			producer := kafka.NewProducer("127.0.0.1:19092", topic)
+			producer := kafka.NewScopedProducer("127.0.0.1:19092", topic)
 			defer producer.Close()
 			wantKey := "notification_42"
 			var wantPayload []byte
 			if topic == "notification.send.requested" {
-				event := kafka.NotificationSendRequested{NotificationID: 42, RequestedAt: time.Now().UTC()}
+				event := kafka.ScopedSendRequested{
+					SchemaVersion: 1, ApplicationID: "11111111-1111-4111-8111-111111111111",
+					NotificationID: 42, OriginEpoch: "22222222-2222-4222-8222-222222222222",
+					SourceEpoch: "33333333-3333-4333-8333-333333333333",
+					RequestedAt: time.Now().UTC().Truncate(time.Microsecond),
+					DeadlineAt:  time.Now().UTC().Add(time.Hour).Truncate(time.Microsecond),
+				}
 				var err error
 				wantPayload, err = json.Marshal(event)
 				require.NoError(t, err)
-				err = producer.PublishSendRequested(ctx, event)
+				err = producer.PublishScopedSend(ctx, event)
 				require.NoError(t, err)
 			} else {
-				wantKey = "delivery_42"
-				event := kafka.DeliveryUpdated{NotificationID: 42, UserID: 7, Status: "SENT", Provider: "fixture", OccurredAt: time.Now().UTC()}
+				wantKey = string(kafka.DeliveryUpdateKey(42))
+				now := time.Now().UTC().Truncate(time.Microsecond)
+				providerMessageID := "fixture-message-42"
+				providerAcceptedAt := now
+				event := kafka.ScopedDeliveryUpdated{
+					SchemaVersion: 2, ApplicationID: "11111111-1111-4111-8111-111111111111",
+					OriginEpoch:     "22222222-2222-4222-8222-222222222222",
+					SourceEpoch:     "33333333-3333-4333-8333-333333333333",
+					EventID:         "44444444-4444-4444-8444-444444444444",
+					DeliveryID:      "55555555-5555-4555-8555-555555555555",
+					DeliveryVersion: 1, EventKind: "submission", NotificationID: 42, UserID: 7,
+					Provider: "FCM", Status: "SENT", ProviderMessageID: &providerMessageID,
+					ProviderAcceptedAt: &providerAcceptedAt, OccurredAt: now,
+				}
 				var err error
 				wantPayload, err = json.Marshal(event)
 				require.NoError(t, err)
-				err = producer.PublishDeliveryUpdated(ctx, event)
+				err = producer.PublishScopedDelivery(ctx, wantPayload)
 				require.NoError(t, err)
 			}
 			reader := broker.NewReader(broker.ReaderConfig{
@@ -123,7 +141,7 @@ func TestFirebaseSDKAgainstSimulation(t *testing.T) {
 		check   func(error) bool
 	}{
 		{"fixture-accepted", nil},
-		{"fixture-unregistered", messaging.IsRegistrationTokenNotRegistered},
+		{"fixture-unregistered", messaging.IsUnregistered},
 		{"fixture-quota", messaging.IsQuotaExceeded},
 		{"fixture-unavailable", messaging.IsUnavailable},
 	} {

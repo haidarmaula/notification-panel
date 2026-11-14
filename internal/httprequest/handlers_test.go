@@ -8,13 +8,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+	"hello/internal/features/applications"
 	"hello/internal/features/auth"
-	"hello/internal/features/mobile"
-	"hello/internal/features/notifications"
 	"hello/internal/features/profile"
-	"hello/internal/features/segments"
 	"hello/internal/features/staff"
-	"hello/internal/features/users"
 	"hello/internal/httprequest"
 	"hello/internal/middleware"
 	"hello/internal/token"
@@ -23,13 +20,9 @@ import (
 func TestAllJSONHandlersRejectBeforeService(t *testing.T) {
 	// Nil services make accidental business calls fail the test immediately.
 	a := auth.NewAuthHandler(nil)
-	m := mobile.NewMobileHandler(nil)
-	n := notifications.NewNotificationHandler(nil)
+	apps := &applications.Handler{}
 	p := profile.NewProfileHandler(nil)
-	s := segments.NewSegmentHandler(nil)
-	members := segments.NewMembersHandler(nil)
 	staffHandler := staff.NewStaffHandler(nil)
-	devices := users.NewDeviceTokenHandler(nil)
 	for _, tc := range []struct {
 		name  string
 		h     http.HandlerFunc
@@ -37,17 +30,16 @@ func TestAllJSONHandlersRejectBeforeService(t *testing.T) {
 	}{
 		{"auth.login", a.Login, httprequest.DefaultJSONLimit}, {"auth.refresh", a.RefreshToken, httprequest.DefaultJSONLimit},
 		{"auth.logout", a.Logout, httprequest.DefaultJSONLimit},
-		{"mobile.sync", m.Sync, httprequest.DefaultJSONLimit},
+		{"campaign.create", apps.CreateCampaignDraft, httprequest.DefaultJSONLimit},
 		{"profile.update", p.UpdateProfile, httprequest.DefaultJSONLimit}, {"profile.password", p.UpdatePassword, httprequest.DefaultJSONLimit},
-		{"notification.create", n.Create, httprequest.CampaignJSONLimit}, {"notification.update", n.Update, httprequest.CampaignJSONLimit},
 		{"staff.create", staffHandler.Create, httprequest.DefaultJSONLimit}, {"staff.update", staffHandler.Update, httprequest.DefaultJSONLimit},
 		{"staff.status", staffHandler.UpdateStatus, httprequest.DefaultJSONLimit}, {"staff.password", staffHandler.UpdatePassword, httprequest.DefaultJSONLimit},
-		{"segment.create", s.Create, httprequest.DefaultJSONLimit}, {"segment.update", s.Update, httprequest.DefaultJSONLimit},
-		{"member.add", members.AddMember, httprequest.DefaultJSONLimit},
-		{"device.register", devices.Register, httprequest.DefaultJSONLimit}, {"device.update", devices.Update, httprequest.DefaultJSONLimit},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			prefix := `{"title":"Fixture","body":"Fixture","role":"ADMIN","name":"Fixture","email":"fixture@example.invalid","password":"fixture-password","current_password":"fixture-password","jwt":"fixture-jwt","push_token":"fixture-token","platform":"android","user_id":1}`
+			if tc.name == "campaign.create" {
+				prefix = `{"title":"Fixture","body":"Fixture"}`
+			}
 			for _, variant := range []struct {
 				name, body string
 				want       int
@@ -62,6 +54,7 @@ func TestAllJSONHandlersRejectBeforeService(t *testing.T) {
 					r.Header.Set("Content-Type", "application/json")
 					r.ContentLength = -1
 					r.SetPathValue("id", "1")
+					r.SetPathValue("app_id", "123e4567-e89b-12d3-a456-426614174000")
 					w := httptest.NewRecorder()
 					tc.h(w, r)
 					require.Equal(t, variant.want, w.Code)
