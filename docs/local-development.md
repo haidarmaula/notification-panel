@@ -7,17 +7,36 @@ simulated. It is independent of office Wi-Fi, VPN and staging. The repository
 
 ## Start
 
-Prerequisites: Docker Desktop/Engine running with Compose 2.24.4+, the Go
-toolchain in `go.mod`, Python 3, Node 22.12+ (tested with 22.23.4), and pnpm
-11.25.0. Initial dependency/image downloads require internet; cached resources
-can subsequently run locally. No host PostgreSQL, Kafka or migrate binary is
-required. The runner selects an already-installed nvm Node 22 if the active
-Node is too old; it never installs or changes global toolchains.
+For a fresh machine, use the canonical [machine setup guide](setup.md) to install
+the required runtime tools. This `./dev` launcher requires Bash. Have Docker Desktop/Engine running
+with Compose 2.24.4+, the Go toolchain in `go.mod`, Python 3, Node 22.12+ (the
+project-tested release is 22.23.4), and pnpm 11.25.0 on `PATH`. The runner can
+select an already-installed nvm Node 22 when the active Node is too old, but
+nvm is optional: it does not install or change toolchains. Initial dependency
+and image downloads require internet; cached resources can subsequently run
+locally. No host PostgreSQL, Kafka or migrate binary is required. See the
+[tool capability guide](tooling/development-tools.md) for which tools this
+workflow needs.
+
+Quick preflight from the repository root:
+
+```bash
+command -v bash go python3 node pnpm docker
+go version
+python3 --version
+node --version
+pnpm --version
+docker compose version
+docker info
+```
+
+If one is missing or has the wrong version, follow [machine setup](setup.md).
+The runner needs Node 22.12 or newer; repository dashboard checks use the exact
+CI-pinned Node and pnpm versions documented in the [tool guide](tooling/development-tools.md).
 
 From the repository root:
 
 ```bash
-nvm use 22.23.4
 ./dev up
 ./dev credentials
 ```
@@ -64,8 +83,15 @@ Host listeners:
 | Endpoint | Purpose |
 | --- | --- |
 | `http://127.0.0.1:5173` | Vite frontend and browser entry point |
+| `http://127.0.0.1:5173/docs/` | OpenAPI reference with all three guides |
 | `http://127.0.0.1:18090/bff/` | Local BFF; Vite proxies `/bff` here |
 | `https://127.0.0.1:18082/api/v1/` | Actual API behind a verified mTLS development gateway |
+
+The API reference is rebuilt on `./dev up`. Its **Try it out** calls the local
+API through Vite's verified mTLS proxy; it does not call staging. Supply local
+API credentials through Swagger Authorize; no credentials are prefilled. Writes
+change local data. The API key remains server-side during ordinary dashboard
+use; manually entering it into Swagger exposes it to that documentation page.
 
 The local BFF listens on port 18090, and Vite proxies `/bff` requests there.
 The standalone Vite configuration defaults to BFF port 8090; the local runner
@@ -87,9 +113,15 @@ validation. Source edits can build/reload without regenerating credentials.
 
 ## End-to-end checks
 
+The commands below use the tools already needed by the local runtime, plus the
+dashboard's installed Playwright dependency. See the [dashboard guide](../web/dashboard/README.md)
+for browser test setup and the [tool capability guide](tooling/development-tools.md)
+for optional tools used by other workflows.
+
 ```bash
 ./dev smoke
 ./dev test-seed
+pnpm --dir web/dashboard exec playwright install chromium
 node scripts/local-dev/browser.mjs
 ```
 

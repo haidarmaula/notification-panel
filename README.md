@@ -6,6 +6,24 @@ A Go backend for push-notification campaigns across multiple mobile applications
 
 This repository contains the backend and a staff dashboard under `web/dashboard`; production mobile applications are external clients. The Go module/import prefix is `hello`.
 
+## Quick start
+
+Setting up a new machine? Follow the [new machine setup guide](docs/setup.md) for
+official tool installation links, version checks, and the local application
+startup steps. It covers the complete local stack without staging or provider
+credentials.
+
+After completing setup, run this from the repository root:
+
+```bash
+./dev up
+./dev credentials
+./dev check
+```
+
+Open <http://127.0.0.1:5173/login>. The setup guide explains the generated local
+account and the successful check output.
+
 ## Start here
 
 Read in this order; each page answers a different question.
