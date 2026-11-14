@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 const { URL, URLSearchParams } = require('node:url');
-async function load(query) {
+async function load(query, origin = 'https://staging.test') {
   const nodes = new Map();
   const node = id => {
     if (!nodes.has(id)) nodes.set(id, { replaceChildren(...children) { this.children = children; }, addEventListener(name, listener) { this[name] = listener; }, classList: { add() {} } });
@@ -12,7 +12,7 @@ async function load(query) {
   };
   const guides = [{ id: 'staff', title: 'Staff & campaigns', file: 'staff.json', operations: 38 }, { id: 'mobile', title: 'Mobile & receipts', file: 'mobile.json', operations: 9 }];
   const calls = []; let config;
-  const window = { location: { origin: 'https://staging.test', search: query }, SwaggerUIBundle(value) { config = value; value.onComplete(); } };
+  const window = { location: { origin, search: query }, SwaggerUIBundle(value) { config = value; value.onComplete(); } };
   const document = { body: { dataset: { docsBase: '/docs/releases/reference' } }, getElementById: node, createElement: () => ({}) };
   await vm.runInNewContext(fs.readFileSync(path.join(__dirname, 'app.js'), 'utf8'), { window, document, URL, URLSearchParams, fetch: async (url, options) => {
     calls.push({ url, options });
@@ -39,4 +39,15 @@ test('unknown guide parameters cannot inject a specification URL', async () => {
   const result = await load('?api=https://evil.test/schema');
   assert.equal(result.nodes.get('api-picker').value, 'staff');
   assert.ok(result.calls[1].url.endsWith('/staff.json'));
+});
+test('local reference uses its own origin and retains request restrictions', async () => {
+  const origin = 'http://127.0.0.1:5173';
+  const { config } = await load('', origin);
+  assert.equal(config.spec.servers[0].url, origin);
+  assert.equal(config.spec.servers[0].description, 'Current environment');
+  assert.equal(config.persistAuthorization, false);
+  assert.equal(config.requestInterceptor({ url: `${origin}/api/v1/apps` }).credentials, 'omit');
+  for (const url of ['https://127.0.0.1:18082/api/v1/apps', 'https://staging.test/api/v1/apps', '/docs/private']) {
+    assert.throws(() => config.requestInterceptor({ url }));
+  }
 });

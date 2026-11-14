@@ -87,12 +87,6 @@ Host listeners:
 | `http://127.0.0.1:18090/bff/` | Local BFF; Vite proxies `/bff` here |
 | `https://127.0.0.1:18082/api/v1/` | Actual API behind a verified mTLS development gateway |
 
-The API reference is rebuilt on `./dev up`. Its **Try it out** calls the local
-API through Vite's verified mTLS proxy; it does not call staging. Supply local
-API credentials through Swagger Authorize; no credentials are prefilled. Writes
-change local data. The API key remains server-side during ordinary dashboard
-use; manually entering it into Swagger exposes it to that documentation page.
-
 The local BFF listens on port 18090, and Vite proxies `/bff` requests there.
 The standalone Vite configuration defaults to BFF port 8090; the local runner
 sets `HELLO_DASHBOARD_PROXY` to its own listener. This server-only routing
@@ -110,6 +104,42 @@ Development certificates last seven days and rotate on `up`. The ordinary
 integration fixture retains its six-hour certificate lifetime. If TLS fails after
 leaving the stack running for a week, run `./dev up` rather than disabling TLS
 validation. Source edits can build/reload without regenerating credentials.
+
+## Local API reference
+
+After `./dev up`, open <http://127.0.0.1:5173/docs/>. Choose **Staff & campaigns**,
+**Applications & access**, or **Mobile & receipts**. The reference uses the
+canonical contracts in `docs/contracts/`, with bundled Swagger UI assets and
+no external validator. Reading the reference requires no credentials.
+
+**Try it out** sends requests to this local origin's `/api/v1/` paths. Vite
+forwards them to the local TLS gateway using the generated client certificate
+and verified server CA. No API key or bearer token is supplied automatically;
+dashboard login cookies do not authenticate these requests.
+
+For staff API exploration:
+
+1. Read the synthetic API key from `tmp/local-dev/config/api-key` on your machine
+   and enter it in Swagger's **Authorize → ApiKey** field.
+2. Execute `POST /api/v1/auth/login` using the email/password shown by
+   `./dev credentials`.
+3. Copy the returned access token into the bearer scheme shown by **Authorize**
+   before calling protected staff/application operations. Choose an application
+   returned by the local API when an operation requires an application UUID.
+
+Mobile operations use their own mobile identity and proof contracts; staff login
+does not issue a mobile credential. Keep synthetic credentials private. Swagger
+holds authorization in page memory and clears it on reload or guide changes.
+The API key remains server-side during ordinary dashboard use; entering it here
+makes it available to the documentation page. Writes modify the persistent local
+database, and sends use the local simulator.
+
+`./dev up` rebuilds the reference under `tmp/local-dev/api-docs/` and verifies
+that `/docs/` responds. Run it again after changing contracts or documentation
+assets; `./dev watch` watches Go and migrations, not those files. Standalone
+`pnpm dev` does not provision this reference: the local runner supplies the
+artifact and TLS paths through server-only environment settings. Staging
+publication follows its separate [API reference runbook](runbooks/staging-api-docs.md).
 
 ## End-to-end checks
 

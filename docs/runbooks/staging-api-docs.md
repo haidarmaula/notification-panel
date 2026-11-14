@@ -1,5 +1,9 @@
 # Staging API reference
 
+For the complete local environment, use `./dev up` and open
+`http://127.0.0.1:5173/docs/`; see [local API reference](../local-development.md#local-api-reference).
+The procedures below apply to staging publication.
+
 Open `https://10.1.16.109:8443/docs/` while connected to the office network or
 VPN. The browser must trust the existing staging CA. The documentation uses
 the same private gateway and firewall policy as the API.

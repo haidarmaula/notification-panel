@@ -19,6 +19,22 @@ def configuration():
 
 
 class LocalDevelopmentTests(unittest.TestCase):
+    def test_docs_build_uses_local_release_and_replaces_previous_output(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            with patch.object(dev, "STATE", state):
+                dev.build_docs()
+                output = state / "api-docs"
+                self.assertIn('/docs/releases/local', (output / "index.html").read_text())
+                self.assertIn('Local API reference', (output / "index.html").read_text())
+                self.assertIn('isolated provider simulator', (output / "index.html").read_text())
+                self.assertNotIn('Staging API reference', (output / "index.html").read_text())
+                catalog = json.loads((output / "catalog.json").read_text())
+                self.assertEqual(len(catalog["guides"]), 3)
+                (output / "obsolete.txt").write_text("old")
+                dev.build_docs()
+                self.assertFalse((output / "obsolete.txt").exists())
+
     def validate(self, value):
         with patch.object(dev, "compose", return_value=json.dumps(value)):
             dev.validate_compose()

@@ -28,7 +28,16 @@ def build(destination,release):
         if doc.get('openapi')!='3.1.0':raise ValueError('Unexpected OpenAPI version.')
         (dest/'contracts').mkdir(exist_ok=True);(dest/'contracts'/file).write_bytes(raw)
         guides.append({'id':id,'title':title,'file':file,'description':description,'operations':sum(k in METHODS for p in doc['paths'].values() for k in p)})
-    html=(source/'index.html').read_text().replace('__DOCS_BASE__','/docs/releases/'+release).replace('__RELEASE__',release)
+    environment='Local' if release=='local' else 'Staging'
+    notice=('Writes change local data; sending uses the isolated provider simulator.'
+            if release=='local' else 'Sending notifications remains subject to the staging pilot.')
+    html=(source/'index.html').read_text()
+    for placeholder,value in {
+        '__DOCS_BASE__':'/docs/releases/'+release, '__RELEASE__':release,
+        '__ENVIRONMENT__':environment, '__ENVIRONMENT_LOWER__':environment.lower(),
+        '__DELIVERY_NOTICE__':notice,
+    }.items():
+        html=html.replace(placeholder,value)
     (dest/'index.html').write_text(html)
     for name in ['app.js','style.css']:shutil.copyfile(source/name,dest/name)
     shutil.copytree(source/'vendor',dest/'vendor')

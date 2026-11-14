@@ -137,6 +137,10 @@ the read-only check yourself any time with:
 A successful check prints `Local login, application grant, audience and process
 checks passed.`
 
+Browse the local OpenAPI reference at <http://127.0.0.1:5173/docs/>. Reading the
+three API guides requires no credentials. For local authentication and **Try it
+out**, follow [the API reference instructions](local-development.md#local-api-reference).
+
 The first `up` builds the local binaries, downloads dashboard dependencies and
 container images, creates local TLS material, starts the services, applies
 migrations, seeds the sample workspace, and verifies login and audience access.

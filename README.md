@@ -23,6 +23,8 @@ After completing setup, run this from the repository root:
 
 Open <http://127.0.0.1:5173/login>. The setup guide explains the generated local
 account and the successful check output.
+The local OpenAPI reference is available at <http://127.0.0.1:5173/docs/>;
+see [local API documentation](docs/local-development.md#local-api-reference).
 
 ## Start here
 

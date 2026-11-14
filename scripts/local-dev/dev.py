@@ -271,6 +271,13 @@ def wait_url(url, timeout=40):
     raise RuntimeError(f"Startup timed out: {url}; inspect {LOGS}")
 
 
+def build_docs():
+    destination = STATE / "api-docs"
+    if destination.exists():
+        shutil.rmtree(destination)
+    run([sys.executable, str(ROOT / "scripts/api_docs.py"), "--output", str(destination), "--release", "local"])
+
+
 def serve():
     children = []
     def terminate(*_):
@@ -288,6 +295,8 @@ def serve():
     env = os.environ.copy()
     env["HELLO_DASHBOARD_CONFIG"] = str(CONFIG / "dashboard.json")
     env["HELLO_DASHBOARD_PROXY"] = "http://127.0.0.1:18090"
+    env["HELLO_LOCAL_DOCS_DIR"] = str(STATE / "api-docs")
+    env["HELLO_LOCAL_TLS_DIR"] = str(TLS)
     for name, args, cwd in (("bff", [str(BIN / "dashboard")], ROOT),
                             ("frontend", ["pnpm", "dev", "--port", "5173", "--strictPort"], ROOT / "web/dashboard")):
         with (LOGS / f"{name}.log").open("ab") as log:
@@ -310,6 +319,7 @@ def start_host():
     (STATE / "supervisor.pid").write_text(str(process.pid))
     wait_url("http://127.0.0.1:18090/bff/session")
     wait_url("http://127.0.0.1:5173/login")
+    wait_url("http://127.0.0.1:5173/docs/")
 
 
 def session_client():
@@ -386,6 +396,7 @@ def up():
     stop_host()
     compose("stop", timeout=60)
     build(architecture)
+    build_docs()
     fresh_tls = STATE / "tls-new"
     if fresh_tls.exists():
         shutil.rmtree(fresh_tls)
@@ -410,7 +421,7 @@ def up():
     start_host()
     verify()
     (STATE / "enabled").touch()
-    print(f"Local dashboard: http://127.0.0.1:5173/login\nLocal credentials: {CONFIG / 'settings.json'}\nLogs: {LOGS}")
+    print(f"Local dashboard: http://127.0.0.1:5173/login\nLocal API docs: http://127.0.0.1:5173/docs/\nLocal credentials: {CONFIG / 'settings.json'}\nLogs: {LOGS}")
 
 
 def main():

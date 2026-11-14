@@ -20,7 +20,7 @@
     const response = await fetch(url, { credentials: 'omit' });
     if (!response.ok) throw new Error('The selected API contract is unavailable.');
     const spec = await response.json();
-    spec.servers = [{ url: window.location.origin, description: 'Current staging environment' }];
+    spec.servers = [{ url: window.location.origin, description: 'Current environment' }];
     spec.info.title = guide.title;
     document.title = `${guide.title} · Hello API`;
     document.getElementById('target-origin').textContent = window.location.origin;
@@ -35,7 +35,7 @@
       requestInterceptor(request) {
         const target = new URL(request.url, window.location.origin);
         if (target.origin !== window.location.origin || target.username || target.password || !target.pathname.startsWith('/api/v1/')) {
-          throw new Error('Requests must target this staging API.');
+          throw new Error('Requests must target the current API.');
         }
         request.credentials = 'omit';
         return request;
@@ -43,7 +43,7 @@
       onComplete() { status.textContent = `${guide.operations} operations · ${guide.description}`; }
     });
   } catch (error) {
-    status.textContent = 'The API reference could not load. Reload the page or contact the staging maintainer.';
+    status.textContent = 'The API reference could not load. Reload the page or contact the maintainer.';
     status.classList.add('load-error');
   }
 }());
