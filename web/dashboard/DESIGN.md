@@ -36,6 +36,12 @@ at least 40px on desktop and 44px on mobile. Campaign loading and empty states
 reserve stable space, while populated lists fit their actual content. Do not add
 per-row requests or invent metadata beyond the list API's title, ID, and status.
 
+Administration stays separate from the granted application workspace: registry
+access does not imply business access. Keep credential actions in dedicated forms,
+show destructive targets before confirmation, and require explicit review after
+a stale resource version. Large staff directories may scroll inside their table;
+the page itself must fit a 320px viewport, including screen-reader-only labels.
+
 Performance: route-split detail/editor/results; no chart runtime on campaign list.
 Initial production JS budget: 160 KiB gzip, measured from emitted files and
 reported with test conditions. This is a proposed engineering budget, not a

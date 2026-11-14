@@ -2,6 +2,10 @@
 
 SolidJS/Vite browser application with a separate Go session BFF. See
 `../../DASHBOARD-CAPABILITIES.md` for scope and `DESIGN.md` for the visual contract.
+Staff administration, registry/grant management, scoped upload/audit reads, and
+self-service password changes are described in the
+[dashboard administration expansion](../../docs/specs/dashboard-administration.md).
+Local frontend and browser verification of that expansion is pending.
 
 ## Local verification
 
@@ -93,8 +97,9 @@ With the full `./dev` stack, the separate OpenAPI reference is available at
 `http://127.0.0.1:5173/docs/`. Its explicitly executed requests use the local
 API proxy and Swagger credentials, independently of BFF sessions; see the
 [local reference guide](../../docs/local-development.md#local-api-reference).
-Charts, advanced table/form packages and administrative workflows are intentionally
-deferred until their concrete screens need them.
+Charts and advanced table/form packages remain deferred until their concrete
+screens need them. Administrative workflows are implemented locally; see the
+scope and pending verification status in the linked administration spec.
 
 ## Release boundaries
 

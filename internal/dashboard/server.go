@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -327,18 +328,23 @@ func decodeTokens(raw []byte) (credentials, error) {
 	return out.Data, nil
 }
 func (s *Server) call(r *http.Request, method, path, query string, body []byte, token string) (int, []byte, error) {
+	status, raw, _, err := s.callWithHeaders(r, method, path, query, body, token)
+	return status, raw, err
+}
+
+func (s *Server) callWithHeaders(r *http.Request, method, path, query string, body []byte, token string) (int, []byte, http.Header, error) {
 	target := s.config.Upstream + path
 	if query != "" {
 		target += "?" + query
 	}
 	request, err := http.NewRequestWithContext(r.Context(), method, target, bytes.NewReader(body))
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	if s.config.VerifiedClientIP != nil {
 		ip := s.config.VerifiedClientIP(r)
 		if ip == "" {
-			return 0, nil, errors.New("verified gateway client required")
+			return 0, nil, nil, errors.New("verified gateway client required")
 		}
 		request.Header.Set("X-Forwarded-For", ip)
 		request.Header.Set("X-Forwarded-Proto", "https")
@@ -351,26 +357,37 @@ func (s *Server) call(r *http.Request, method, path, query string, body []byte, 
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
+	if conditionalRoute(method, strings.TrimPrefix(path, "/api/v1")) {
+		for _, name := range []string{"If-Match", "If-None-Match"} {
+			if value := r.Header.Get(name); value != "" {
+				request.Header.Set(name, value)
+			}
+		}
+	}
 	if key := r.Header.Get("Idempotency-Key"); key != "" && strings.HasSuffix(path, "/send") {
 		request.Header.Set("Idempotency-Key", key)
 	}
 	response, err := s.client.Do(request)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	defer response.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(response.Body, responseLimit+1))
 	if len(raw) > responseLimit {
-		return 0, nil, errors.New("upstream response too large")
+		return 0, nil, nil, errors.New("upstream response too large")
 	}
-	return response.StatusCode, raw, err
+	return response.StatusCode, raw, response.Header.Clone(), err
 }
 func (s *Server) forward(w http.ResponseWriter, r *http.Request, id string, value *session, path string) {
 	body, ok := readBody(w, r)
 	if !ok {
 		return
 	}
-	status, raw, err := s.call(r, r.Method, "/api/v1"+path, r.URL.RawQuery, body, value.tokens.Access)
+	status, raw, headers, err := s.callWithHeaders(r, r.Method, "/api/v1"+path, r.URL.RawQuery, body, value.tokens.Access)
+	if err == nil && isSelfPasswordFailure(path, status, raw) {
+		fail(w, http.StatusUnprocessableEntity, "current password is incorrect")
+		return
+	}
 	if err == nil && status == 401 {
 		refresh, _ := json.Marshal(map[string]string{"refresh_token": value.tokens.Refresh})
 		code, pair, refreshErr := s.call(r, "POST", "/api/v1/auth/refresh", "", refresh, "")
@@ -388,7 +405,11 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, id string, valu
 			return
 		}
 		value.tokens = tokens
-		status, raw, err = s.call(r, r.Method, "/api/v1"+path, r.URL.RawQuery, body, tokens.Access)
+		status, raw, headers, err = s.callWithHeaders(r, r.Method, "/api/v1"+path, r.URL.RawQuery, body, tokens.Access)
+		if err == nil && isSelfPasswordFailure(path, status, raw) {
+			fail(w, http.StatusUnprocessableEntity, "current password is incorrect")
+			return
+		}
 	}
 	if err != nil {
 		fail(w, 502, "request outcome unavailable")
@@ -398,14 +419,21 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, id string, valu
 		s.discard(id, value)
 		s.cookie(w, "", -1)
 	}
-	if status == 503 {
+	if status == http.StatusServiceUnavailable && campaignAcceptancePath(path) {
 		w.Header().Set("Retry-After", "5")
-		fail(w, 503, "campaign acceptance is held")
+		fail(w, http.StatusServiceUnavailable, "campaign acceptance is held")
 		return
 	}
 	if status >= 500 || status < 200 || status >= 300 && status < 400 {
 		fail(w, 502, "upstream service unavailable")
 		return
+	}
+	if etag := headers.Get("ETag"); etag != "" && isRegistryPath(path) {
+		w.Header().Set("ETag", etag)
+	}
+	if path == "/profile/password" && r.Method == http.MethodPatch && status >= 200 && status < 300 {
+		s.discard(id, value)
+		s.cookie(w, "", -1)
 	}
 	if status == 204 {
 		w.WriteHeader(status)
@@ -423,8 +451,84 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, id string, valu
 var appPath = regexp.MustCompile(`^/apps/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}(/.*)?$`)
 var itemPath = regexp.MustCompile(`^/(campaigns|users|segments|templates)/[1-9][0-9]*(/(statistics|deliveries|reads|send|schedule))?$`)
 var audiencePath = regexp.MustCompile(`^/(users/[1-9][0-9]*/devices|segments/[1-9][0-9]*/members)(/[1-9][0-9]*)?$`)
+var staffDetailPath = regexp.MustCompile(`^/staff/([1-9][0-9]*)(/(status|password))?$`)
+var registryAppPath = regexp.MustCompile(`^/admin/apps/([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})(/staff-grants(?:/([1-9][0-9]*))?)?$`)
+var scopedReadPath = regexp.MustCompile(`^/(uploads(?:/([1-9][0-9]*)/rows)?|audit-logs)$`)
+
+func positiveInt64(value string) bool {
+	parsed, err := strconv.ParseInt(value, 10, 64)
+	return err == nil && parsed > 0
+}
+
+func isRegistryPath(path string) bool {
+	return path == "/admin/apps" || registryAppPath.MatchString(path)
+}
+
+func conditionalRoute(method, path string) bool {
+	if method == http.MethodPatch && registryAppPath.MatchString(path) {
+		match := registryAppPath.FindStringSubmatch(path)
+		return match[2] == ""
+	}
+	if method != http.MethodPut && method != http.MethodDelete {
+		return false
+	}
+	match := registryAppPath.FindStringSubmatch(path)
+	return match != nil && match[2] != "" && match[3] != ""
+}
+
+func isSelfPasswordFailure(path string, status int, raw []byte) bool {
+	if path != "/profile/password" || status != http.StatusUnauthorized {
+		return false
+	}
+	var response struct {
+		Message string `json:"message"`
+	}
+	return json.Unmarshal(raw, &response) == nil && response.Message == "current password is incorrect"
+}
+
+func campaignAcceptancePath(path string) bool {
+	app := appPath.FindStringSubmatch(path)
+	if app == nil {
+		return false
+	}
+	item := itemPath.FindStringSubmatch(app[1])
+	return item != nil && item[1] == "campaigns" && (item[3] == "send" || item[3] == "schedule")
+}
 
 func allowed(method, path string) bool {
+	if path == "/profile/password" {
+		return method == http.MethodPatch
+	}
+	if path == "/staff" {
+		return method == http.MethodGet || method == http.MethodPost
+	}
+	if match := staffDetailPath.FindStringSubmatch(path); match != nil && positiveInt64(match[1]) {
+		if match[2] == "" {
+			return method == http.MethodGet || method == http.MethodPatch || method == http.MethodDelete
+		}
+		return method == http.MethodPatch
+	}
+	if path == "/admin/apps" {
+		return method == http.MethodGet || method == http.MethodPost
+	}
+	if match := registryAppPath.FindStringSubmatch(path); match != nil {
+		if match[2] == "" {
+			return method == http.MethodGet || method == http.MethodPatch
+		}
+		if match[3] == "" {
+			return method == http.MethodGet
+		}
+		return positiveInt64(match[3]) && (method == http.MethodGet || method == http.MethodPut || method == http.MethodDelete)
+	}
+	if method == http.MethodGet && strings.HasPrefix(path, "/apps/") {
+		match := appPath.FindStringSubmatch(path)
+		if match != nil {
+			readMatch := scopedReadPath.FindStringSubmatch(match[1])
+			if readMatch != nil && (readMatch[2] == "" || positiveInt64(readMatch[2])) {
+				return true
+			}
+		}
+	}
 	if method == "PATCH" && path == "/profile" {
 		return true
 	}

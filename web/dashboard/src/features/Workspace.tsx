@@ -56,7 +56,11 @@ export function Workspace(props: ParentProps) {
   const [leaving, setLeaving] = createSignal(false);
   const profile = createQuery(() => ({
     queryKey: ['profile'],
-    queryFn: ({ signal }) => data<{ name: string; email: string }>('/profile', signal),
+    queryFn: ({ signal }) =>
+      data<{ name: string; email: string; role_name: string; is_active: boolean }>(
+        '/profile',
+        signal,
+      ),
     enabled: !!auth.authenticated(),
   }));
   const application = createQuery(() => ({
@@ -226,7 +230,67 @@ export function Workspace(props: ParentProps) {
                   <Settings size={18} />
                   Pengaturan
                 </A>
+                <A
+                  href={`/apps/${params.appId}/uploads`}
+                  activeClass="nav-active"
+                  onClick={() => {
+                    if (menu()) closeMenu();
+                  }}
+                >
+                  <FileText size={18} />
+                  Riwayat upload
+                </A>
+                <Show
+                  when={
+                    profile.data?.is_active &&
+                    ['SUPER_ADMIN', 'ADMIN'].includes(profile.data.role_name)
+                  }
+                >
+                  <A
+                    href={`/apps/${params.appId}/audit`}
+                    activeClass="nav-active"
+                    onClick={() => {
+                      if (menu()) closeMenu();
+                    }}
+                  >
+                    <ListChecks size={18} />
+                    Audit aktivitas
+                  </A>
+                </Show>
               </Show>
+              <Show when={profile.data?.is_active && profile.data.role_name === 'SUPER_ADMIN'}>
+                <span class="sidebar-caption nav-group">ADMINISTRASI</span>
+                <A
+                  href="/apps/admin/staff"
+                  activeClass="nav-active"
+                  onClick={() => {
+                    if (menu()) closeMenu();
+                  }}
+                >
+                  <Users size={18} />
+                  Kelola staff
+                </A>
+                <A
+                  href="/apps/admin/applications"
+                  activeClass="nav-active"
+                  onClick={() => {
+                    if (menu()) closeMenu();
+                  }}
+                >
+                  <Boxes size={18} />
+                  Registry aplikasi
+                </A>
+              </Show>
+              <A
+                href="/apps/settings"
+                activeClass="nav-active"
+                onClick={() => {
+                  if (menu()) closeMenu();
+                }}
+              >
+                <Settings size={18} />
+                Akun saya
+              </A>
               <a href="/docs/" target="_blank" rel="noreferrer">
                 <FileText size={18} />
                 Referensi API

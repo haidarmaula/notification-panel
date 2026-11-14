@@ -26,6 +26,21 @@ const UserDetail = lazy(() =>
   import('./features/management/Audience').then((module) => ({ default: module.UserDetail })),
 );
 const Results = lazy(() => import('./features/results/Results'));
+const Staff = lazy(() => import('./features/admin/Staff'));
+const StaffEditor = lazy(() =>
+  import('./features/admin/Staff').then((module) => ({ default: module.StaffEditor })),
+);
+const Registry = lazy(() => import('./features/admin/Registry'));
+const RegistryDetail = lazy(() =>
+  import('./features/admin/Registry').then((module) => ({ default: module.RegistryDetail })),
+);
+const Uploads = lazy(() => import('./features/management/Activity'));
+const UploadRows = lazy(() =>
+  import('./features/management/Activity').then((module) => ({ default: module.UploadRows })),
+);
+const AuditLog = lazy(() =>
+  import('./features/management/Activity').then((module) => ({ default: module.AuditLog })),
+);
 function keyed(Page: Component): Component {
   return () => {
     const location = useLocation();
@@ -50,6 +65,13 @@ const SegmentsRoute = keyed(Segments);
 const SegmentEditorRoute = keyed(SegmentEditor);
 const AudienceRoute = keyed(Audience);
 const UserDetailRoute = keyed(UserDetail);
+const StaffRoute = keyed(Staff);
+const StaffEditorRoute = keyed(StaffEditor);
+const RegistryRoute = keyed(Registry);
+const RegistryDetailRoute = keyed(RegistryDetail);
+const UploadsRoute = keyed(Uploads);
+const UploadRowsRoute = keyed(UploadRows);
+const AuditRoute = keyed(AuditLog);
 const root = document.getElementById('root');
 if (!root) throw new Error('Missing root');
 render(() => {
@@ -74,6 +96,15 @@ render(() => {
             <Route path="/login" component={Login} />
             <Route path="/apps" component={Workspace}>
               <Route path="/" component={ApplicationRoute} />
+              <Route path="/settings" component={SettingsRoute} />
+              <Route path="/admin/staff" component={StaffRoute} />
+              <Route path="/admin/staff/new" component={StaffEditorRoute} />
+              <Route path="/admin/staff/:staffId" component={StaffEditorRoute} />
+              <Route path="/admin/applications" component={RegistryRoute} />
+              <Route path="/admin/applications/:managedAppId" component={RegistryDetailRoute} />
+              <Route path="/:appId/audit" component={AuditRoute} />
+              <Route path="/:appId/uploads" component={UploadsRoute} />
+              <Route path="/:appId/uploads/:batchId" component={UploadRowsRoute} />
               <Route path="/:appId/logs" component={LogsRoute} />
               <Route path="/:appId/overview" component={OverviewRoute} />
               <Route path="/:appId/settings" component={SettingsRoute} />

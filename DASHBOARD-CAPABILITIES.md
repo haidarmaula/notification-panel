@@ -1,7 +1,10 @@
 # Staff dashboard: MVP capability map
 
-Status: MVP journey and Solid/Vite stack approved for implementation. Staging
-and production deployment remain separate validation milestones.
+Status: MVP journey and Solid/Vite stack approved. Staff administration,
+managed application registry, grants, scoped audit/upload reads, and self-service
+password change are implemented locally; local frontend/browser verification
+is pending. Staging and production deployment remain separate validation
+milestones. See the [dashboard administration expansion](docs/specs/dashboard-administration.md).
 
 ## Objective and assumptions
 
@@ -31,6 +34,7 @@ overflow. Detailed wireframes and component choices belong to the design phase.
 | campaign-drafts | Campaign list/detail, draft creation/replacement/deletion, scoped recipient lookup | application-workspace |
 | campaign-acceptance | Explicit immediate-send or schedule confirmation, stable idempotency and conflict handling | campaign-drafts |
 | delivery-results | Per-campaign statistics and paginated delivery/read history | application-workspace |
+| dashboard-administration | Staff account management, managed application registry, explicit grants and scoped operational reads | staff-session, application-workspace |
 | frontend-release | Repeatable builds, CI, private staging deployment, health checks and rollback | staff-session, application-workspace, campaign-drafts, campaign-acceptance, delivery-results |
 
 Build order: staff-session -> application-workspace -> campaign-drafts ->
@@ -92,16 +96,24 @@ data visible as if access remains valid.
   Automated checks use isolated fixtures; real-device tests require explicit
   authorization for the recipient and send count.
 
-## Outside the first release
+## Original first-release boundary and current scope
 
 - Global cross-application analytics or invented dashboard metrics.
-- Application lifecycle activation, staff/role/grant administration and pilot
-  policy controls.
-- Campaign cancellation, which has no implemented API.
+- Application lifecycle activation and pilot policy controls remain unsupported.
+- Campaign cancellation remains unsupported because the backend has no
+  cancellation API.
 - Bulk imports, user mutation and a rich visual message builder. The subsequent
   [operations expansion](docs/specs/dashboard-operations.md) adds scoped template
   and manual segment management, audience/device inspection and profile settings.
-- Self-registration, password-reset workflows and third-party sign-in.
+- Staff CRUD/status, administrative password reset, managed application
+  registry, staff grants, read-only upload/audit history, and self-service
+  password changes were outside the original first-release boundary. They are
+  now implemented locally as described in the [dashboard administration
+  expansion](docs/specs/dashboard-administration.md); local frontend/browser
+  verification is pending.
+- Self-registration, forgotten-password recovery and third-party sign-in. Staff
+  administration can reset another account's password, and signed-in users can
+  change their own password as described in the administration expansion.
 - iOS/client SDK development, production provider configuration or unrestricted
   notification sending.
 
@@ -133,8 +145,10 @@ data visible as if access remains valid.
 - Canonical wire contracts: `docs/contracts/staff-business.openapi.json` and
   `docs/contracts/application-registry.openapi.json`.
 
-Local implementation now covers the browser journey, in-memory BFF sessions,
-draft workflows, explicit submission, history and a frontend CI gate. Advanced
+Local implementation covers the browser journey, in-memory BFF sessions, draft
+workflows, explicit submission, history and a frontend CI gate. The administration
+expansion adds account, registry, grant, upload/audit-read and self-password
+workflows; its local frontend/browser verification is pending. Advanced
 table/form/chart dependencies and template selection remain deferred.
 
 Protected deployment configuration, authenticated gateway transport, container

@@ -73,6 +73,40 @@ fieldset {
   margin: 0;
   overflow-wrap: anywhere;
 }
+.mono {
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.admin-staff-table {
+  min-width: 640px;
+}
+.admin-submit {
+  align-self: start;
+}
+.inline-form,
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 12px;
+}
+.inline-form label {
+  flex: 1 1 200px;
+  max-width: 440px;
+  min-width: 0;
+}
+.grant-review {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.main-content > .surface + .surface {
+  margin-top: 24px;
+}
 .check-label {
   flex-direction: row;
   align-items: center;
@@ -991,6 +1025,8 @@ fieldset[aria-invalid='true']:focus-within {
   padding-bottom: 12px;
 }
 .table-wrap {
+  /* Contain absolute screen-reader labels within the table's scroll boundary. */
+  position: relative;
   overflow: auto;
   max-width: 100%;
   min-width: 0;

@@ -1,7 +1,7 @@
 import { Show, createSignal, type JSX } from 'solid-js';
 import { createQuery } from '@tanstack/solid-query';
 import { useAuth } from '../../app/auth';
-import { ApiError, data, errorMessage, request } from '../../lib/api/client';
+import { ApiError, data, errorMessage, request, type WriteConditions } from '../../lib/api/client';
 import type { Page } from '../../lib/api/types';
 import { Failure, Loading } from '../../components/ui/Feedback';
 
@@ -62,15 +62,28 @@ export function useWrite() {
   const auth = useAuth();
   const [pending, setPending] = createSignal(false);
   const [error, setError] = createSignal('');
+  const [status, setStatus] = createSignal<number | null>(null);
   const [uncertain, setUncertain] = createSignal(false);
-  async function write<T>(path: string, method: string, body?: unknown): Promise<T | undefined> {
+  async function write<T>(
+    path: string,
+    method: string,
+    body?: unknown,
+    conditions: WriteConditions = {},
+  ): Promise<T | undefined> {
     if (pending() || uncertain()) return;
     setPending(true);
     setError('');
+    setStatus(null);
     try {
-      const result = await request<T>(`/bff/api${path}`, { method, body, csrf: auth.csrf() });
+      const result = await request<T>(`/bff/api${path}`, {
+        method,
+        body,
+        csrf: auth.csrf(),
+        ...conditions,
+      });
       return result ?? ({} as T);
     } catch (cause) {
+      setStatus(cause instanceof ApiError ? cause.status : null);
       if (cause instanceof ApiError && cause.status === 401)
         window.dispatchEvent(new Event('hello:session-expired'));
       if (!(cause instanceof ApiError) || cause.status === 0 || cause.status >= 500)
@@ -84,7 +97,7 @@ export function useWrite() {
       setPending(false);
     }
   }
-  return { write, pending, error, uncertain, blocked: () => pending() || uncertain() };
+  return { write, pending, error, status, uncertain, blocked: () => pending() || uncertain() };
 }
 export function WriteFeedback(props: { operation: ReturnType<typeof useWrite> }) {
   return (

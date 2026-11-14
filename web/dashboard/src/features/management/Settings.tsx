@@ -7,6 +7,7 @@ import { preferences, setTheme } from '../../app/preferences';
 import { QueryState, useWrite, WriteFeedback } from './shared';
 import { useUnsaved } from '../../app/unsaved';
 import { Status } from '../../components/ui/Feedback';
+import PasswordForm from './PasswordForm';
 export default function Settings() {
   const params = useParams();
   const client = useQueryClient();
@@ -22,6 +23,7 @@ export default function Settings() {
   const app = createQuery(() => ({
     queryKey: ['application', params.appId],
     queryFn: ({ signal }) => data<Application>(`/apps/${params.appId}`, signal),
+    enabled: !!params.appId,
   }));
   let loaded = false;
   createEffect(() => {
@@ -49,7 +51,7 @@ export default function Settings() {
       <header class="page-heading">
         <div>
           <h1>Pengaturan</h1>
-          <p class="muted">Preferensi tampilan, profil Anda, dan identitas aplikasi.</p>
+          <p class="muted">Preferensi tampilan, profil, dan keamanan akun Anda.</p>
         </div>
       </header>
       <div class="settings-grid">
@@ -74,29 +76,31 @@ export default function Settings() {
             disimpan di sana.
           </p>
         </section>
-        <section class="surface stack">
-          <h2>Aplikasi &amp; lingkungan</h2>
-          <QueryState query={app}>
-            <dl class="settings-details">
-              <dt>Nama</dt>
-              <dd>{app.data?.name}</dd>
-              <dt>Kunci aplikasi</dt>
-              <dd>{app.data?.key}</dd>
-              <dt>ID aplikasi</dt>
-              <dd class="mono">{app.data?.id}</dd>
-              <dt>Status</dt>
-              <dd>
-                <Show when={app.data?.status}>{(status) => <Status value={status()} />}</Show>
-              </dd>
-              <dt>Alamat dashboard</dt>
-              <dd class="mono">{window.location.origin}</dd>
-            </dl>
-          </QueryState>
-          <p class="help-text">
-            Konfigurasi provider dan kebijakan pengiriman dikelola melalui prosedur operasional yang
-            terlindungi.
-          </p>
-        </section>
+        <Show when={params.appId}>
+          <section class="surface stack">
+            <h2>Aplikasi &amp; lingkungan</h2>
+            <QueryState query={app}>
+              <dl class="settings-details">
+                <dt>Nama</dt>
+                <dd>{app.data?.name}</dd>
+                <dt>Kunci aplikasi</dt>
+                <dd>{app.data?.key}</dd>
+                <dt>ID aplikasi</dt>
+                <dd class="mono">{app.data?.id}</dd>
+                <dt>Status</dt>
+                <dd>
+                  <Show when={app.data?.status}>{(status) => <Status value={status()} />}</Show>
+                </dd>
+                <dt>Alamat dashboard</dt>
+                <dd class="mono">{window.location.origin}</dd>
+              </dl>
+            </QueryState>
+            <p class="help-text">
+              Konfigurasi provider dan kebijakan pengiriman dikelola melalui prosedur operasional
+              yang terlindungi.
+            </p>
+          </section>
+        </Show>
         <section class="surface stack">
           <h2>Profil saya</h2>
           <QueryState query={profile}>
@@ -143,6 +147,7 @@ export default function Settings() {
             </form>
           </QueryState>
         </section>
+        <PasswordForm />
       </div>
     </>
   );

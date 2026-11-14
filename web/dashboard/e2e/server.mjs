@@ -4,8 +4,10 @@ import { mkdtempSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFileSync, spawn } from 'node:child_process';
+import { createAdminFixture } from './admin-fixture.mjs';
 const directory = mkdtempSync(join(tmpdir(), 'hello-dashboard-e2e-'));
 const appId = '11111111-1111-4111-8111-111111111111';
+const adminFixture = createAdminFixture();
 const app = {
   id: appId,
   key: 'fixture-app',
@@ -46,7 +48,6 @@ const users = [
     status: 'ACTIVE',
   },
 ];
-const profile = { name: 'Staf Pengujian', email: 'staff@example.invalid' };
 const sessions = new Set();
 let sequence = 0;
 function send(response, status, data) {
@@ -124,11 +125,7 @@ const api = createServer(
       send(response, 401, {});
       return;
     }
-    if (url.pathname === '/api/v1/profile') {
-      if (request.method === 'PATCH') Object.assign(profile, body);
-      send(response, 200, profile);
-      return;
-    }
+    if (adminFixture.handle(request, response, url, body, text)) return;
     if (url.pathname === '/api/v1/apps') {
       send(response, 200, { items: [app], total: 1, page: 1, limit: 20 });
       return;

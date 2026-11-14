@@ -180,7 +180,7 @@ func TestLogoutAndExpiredSessionsCannotReachUpstream(t *testing.T) {
 func TestRejectsUnlistedProxyRoutesAndWrongMethods(t *testing.T) {
 	_, bff := fixture(t, loginAPI)
 	cookie, csrf := signedIn(t, bff)
-	for _, path := range []string{"/bff/api/auth/login", "/bff/api/admin/apps", "/bff/api/apps/not-a-uuid/campaigns"} {
+	for _, path := range []string{"/bff/api/auth/login", "/bff/api/admin/apps/11111111-1111-4111-8111-111111111111/activate", "/bff/api/apps/not-a-uuid/campaigns"} {
 		if r := request(t, bff, "GET", path, "", cookie, ""); r.StatusCode != 404 {
 			t.Fatal(path, r.StatusCode)
 		}
