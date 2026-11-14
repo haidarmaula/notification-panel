@@ -12,10 +12,8 @@ import (
 // ServerConfig holds the configuration required by the HTTP API server
 // (cmd/server) in addition to the shared database settings.
 //
-// It covers authentication secrets used to sign and verify
-// JWTs, the shared API key used by the admin portal for coarse-grained
-// authorisation, browser CORS origins, and Kafka producer parameters used
-// when a staff member triggers an immediate notification send.
+// It covers the HTTP listener, staff JWT secrets, the shared API key, browser
+// CORS origins, and mobile installation policy used by current server routes.
 type ServerConfig struct {
 	Gateway            *ingress.Gateway
 	Monitoring         *observability.Admin
@@ -41,22 +39,6 @@ type ServerConfig struct {
 	// (REFRESH_SECRET). It is kept separate from AccessSecret so that the
 	// blast radius of a leak is limited to one token class.
 	RefreshSecret string
-
-	// MobileJWTSecret is the shared HMAC secret used to verify tokens issued
-	// by the Laravel mobile backend (MOBILE_JWT_SECRET). The API server does
-	// not mint these tokens; it only verifies them. It must match the
-	// corresponding value in the Laravel deployment.
-	MobileJWTSecret string
-
-	// KafkaBroker is the address of the Kafka broker used to publish send
-	// requests when a staff member triggers an immediate notification send
-	// (KAFKA_BROKER).
-	KafkaBroker string
-
-	// SendTopic is the Kafka topic to which immediate-send events are
-	// published (KAFKA_SEND_TOPIC). It must match the topic the worker
-	// consumes from.
-	SendTopic string
 }
 
 // StaffTokens returns the immutable protected issuer or the local environment issuer.
@@ -90,12 +72,9 @@ func LoadServerConfig() *ServerConfig {
 		ListenAddress:    os.Getenv("HTTP_LISTEN_ADDRESS"),
 		mobilePolicyFile: os.Getenv("MOBILE_POLICY_FILE"),
 
-		APIKey:          os.Getenv("API_KEY"),
-		AccessSecret:    os.Getenv("ACCESS_SECRET"),
-		RefreshSecret:   os.Getenv("REFRESH_SECRET"),
-		MobileJWTSecret: os.Getenv("MOBILE_JWT_SECRET"),
-		KafkaBroker: os.Getenv("KAFKA_BROKER"),
-		SendTopic:   os.Getenv("KAFKA_SEND_TOPIC"),
+		APIKey:        os.Getenv("API_KEY"),
+		AccessSecret:  os.Getenv("ACCESS_SECRET"),
+		RefreshSecret: os.Getenv("REFRESH_SECRET"),
 	}
 	if cfg.ListenAddress == "" {
 		cfg.ListenAddress = "127.0.0.1:8080"

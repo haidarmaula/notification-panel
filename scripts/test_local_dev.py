@@ -72,6 +72,37 @@ class LocalDevelopmentTests(unittest.TestCase):
             self.assertEqual(path.stat().st_mode & 0o777, 0o600)
             self.assertEqual(json.loads(path.read_text()), {"password": "synthetic"})
 
+    def test_configure_preserves_existing_mobile_setting_without_exporting_it(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            config = state / "config"
+            settings = config / "settings.json"
+            settings.parent.mkdir()
+            values = {
+                "email": "developer@hello.local", "password": "password",
+                "api_key": "api-key", "access": "access", "refresh": "refresh",
+                "mobile": "existing-mobile-secret",
+            }
+            settings.write_text(json.dumps(values))
+            with patch.object(dev, "STATE", state), patch.object(dev, "CONFIG", config), \
+                    patch.object(dev, "TLS", state / "tls"), patch.object(dev, "BIN", state / "bin"), \
+                    patch.object(dev, "LOGS", state / "logs"):
+                dev.configure()
+            self.assertEqual(json.loads(settings.read_text()), values)
+            server_env = (config / "server.env").read_text()
+            for obsolete in ("MOBILE_JWT_SECRET", "KAFKA_BROKER", "KAFKA_SEND_TOPIC"):
+                self.assertNotIn(obsolete, server_env)
+
+    def test_new_settings_do_not_generate_mobile_secret(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            config = state / "config"
+            with patch.object(dev, "STATE", state), patch.object(dev, "CONFIG", config), \
+                    patch.object(dev, "TLS", state / "tls"), patch.object(dev, "BIN", state / "bin"), \
+                    patch.object(dev, "LOGS", state / "logs"):
+                dev.configure()
+            self.assertNotIn("mobile", json.loads((config / "settings.json").read_text()))
+
     def test_stale_supervisor_pid_never_terminates_unrelated_process(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)

@@ -126,9 +126,7 @@ func TestLocalServerListenerDefaultsToLoopback(t *testing.T) {
 		"DB_HOST": "localhost", "DB_PORT": "5432", "DB_USER": "fixture",
 		"DB_PASSWORD": "fixture-only", "DB_NAME": "hello", "DB_SSLMODE": "disable",
 		"API_KEY": "fixture-api-key", "ACCESS_SECRET": "fixture-access-secret",
-		"REFRESH_SECRET": "fixture-refresh-secret", "MOBILE_JWT_SECRET": "fixture-mobile-secret",
-		"KAFKA_BROKER": "localhost:9092",
-		"KAFKA_SEND_TOPIC": "notification.send.requested", "HTTP_LISTEN_ADDRESS": "",
+		"REFRESH_SECRET": "fixture-refresh-secret", "HTTP_LISTEN_ADDRESS": "",
 		"CORS_ALLOWED_ORIGINS": "https://admin.example.test, http://localhost:3000",
 	} {
 		t.Setenv(name, value)

@@ -130,17 +130,12 @@ def configure():
     if not settings.exists():
         private_json(settings, {"email": "developer@hello.local", "password": secrets.token_hex(16),
                                 "api_key": secrets.token_hex(32), "access": secrets.token_hex(32),
-                                "refresh": secrets.token_hex(32), "mobile": secrets.token_hex(32)})
+                                "refresh": secrets.token_hex(32)})
     values = json.loads(settings.read_text())
-    if "mobile" not in values:
-        values["mobile"] = secrets.token_hex(32)
-        private_json(settings, values)
     env = {"DB_HOST": "postgres", "DB_PORT": "5432", "DB_USER": "integration", "DB_PASSWORD": "integration_only",
            "DB_NAME": "notification_integration", "DB_SSLMODE": "disable", "API_KEY": values["api_key"],
            "ACCESS_SECRET": values["access"], "REFRESH_SECRET": values["refresh"],
-           "MOBILE_JWT_SECRET": values["mobile"],
-           "HTTP_LISTEN_ADDRESS": "0.0.0.0:8080", "KAFKA_BROKER": "kafka:9094",
-           "KAFKA_SEND_TOPIC": TOPICS[0], "CORS_ALLOWED_ORIGINS": ""}
+           "HTTP_LISTEN_ADDRESS": "0.0.0.0:8080", "CORS_ALLOWED_ORIGINS": ""}
     (CONFIG / "server.env").write_text("".join(f"{key}={value}\n" for key, value in env.items()))
     (CONFIG / "server.env").chmod(0o600)
     (CONFIG / "api-key").write_text(values["api_key"])

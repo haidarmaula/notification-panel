@@ -24,7 +24,7 @@ media type` before service work.
 
 The JWT identifies the account. Both route and service independently load its
 current database authority; only active SUPER_ADMIN accounts have `staff.manage`.
-The JWT role claim and legacy `SUPER_ADMIN_ROLE` config do not grant permission.
+The JWT role claim alone does not grant permission.
 Implemented locally in M02b (2026-11-03), not deployed; see
 [contract and evidence](../analysis/m02b-verification.md).
 
