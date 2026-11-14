@@ -258,8 +258,7 @@ func (r *UserRepository) Update(ctx context.Context, params sqlc.UpdateUserParam
 // repository performs an unconditional UPDATE — it does not read the current
 // status first — so applying a transition to a row already in the target
 // state is a no-op at the SQL level. Suspending a user does not deactivate
-// their device tokens; a caller that requires that invariant must also call
-// DeviceTokenRepository.UpdateStatus for each token.
+// their associated device-token rows.
 func (r *UserRepository) UpdateStatus(ctx context.Context, params sqlc.UpdateUserStatusParams) error {
 	return r.q.UpdateUserStatus(ctx, params)
 }
