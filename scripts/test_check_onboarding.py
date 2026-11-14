@@ -11,8 +11,42 @@ SPEC.loader.exec_module(checker)
 
 
 class OnboardingChecksTest(unittest.TestCase):
-    def test_canonical_local_development_guide_is_checked(self):
-        self.assertIn("docs/local-development.md", checker.PAGES)
+    def test_canonical_onboarding_guides_and_dashboard_readme_are_checked(self):
+        self.assertTrue(
+            {
+                "docs/local-development.md",
+                "docs/setup.md",
+                "docs/tooling/development-tools.md",
+                "web/dashboard/README.md",
+            }.issubset(checker.PAGES)
+        )
+
+    def test_setup_quickstart_is_never_a_run_example(self):
+        self.assertNotIn("docs/setup.md", checker.EXAMPLES)
+        self.assertEqual(
+            checker.EXAMPLES,
+            {
+                "README.md": "First safe command",
+                "docs/development-guide.md": "1. Start without infrastructure",
+            },
+        )
+
+    def test_setup_tool_versions_match_repository_pins(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "docs").mkdir()
+            (root / "web/dashboard").mkdir(parents=True)
+            (root / "go.mod").write_text("module hello\n\ngo 1.26.11\n")
+            (root / "web/dashboard/package.json").write_text('{"packageManager":"pnpm@11.25.0"}')
+            setup = root / "docs/setup.md"
+            setup.write_text("| Go | `1.26.11` |\n| pnpm | `11.25.0` |\n")
+            checker.check_pinned_tool_versions(root)
+            setup.write_text("| Go | `1.26.10` |\n| pnpm | `11.25.0` |\n")
+            with self.assertRaisesRegex(ValueError, "Go version must match"):
+                checker.check_pinned_tool_versions(root)
+            setup.write_text("| Go | `1.26.11` |\n| pnpm | `11.24.0` |\n")
+            with self.assertRaisesRegex(ValueError, "pnpm version must match"):
+                checker.check_pinned_tool_versions(root)
 
     def test_numbered_and_duplicate_headings(self):
         self.assertEqual(checker.heading_ids("## 2. Run locally\n## Same\n## Same\n"), {"2-run-locally", "same", "same-1"})
@@ -42,6 +76,26 @@ class OnboardingChecksTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "unclosed code fence"):
                 checker.check_page(root, "README.md")
 
+    def test_indented_bash_fences_are_checked_and_dedented(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            page = root / "README.md"
+            page.write_text("- Example:\n  ```bash\n  if\n  ```\n")
+            with self.assertRaisesRegex(ValueError, "invalid Bash"):
+                checker.check_page(root, "README.md")
+
+            page.write_text(
+                "- Example:\n"
+                "  ```bash\n"
+                "  if true; then\n"
+                "    cat <<'EOF'\n"
+                "    heredoc text with `fence-looking` content\n"
+                "EOF\n"
+                "  fi\n"
+                "  ```\n"
+            )
+            checker.check_page(root, "README.md")
+
     def test_only_first_safe_section_block_is_selected(self):
         text = "## Safe\n```bash\ngo build -mod=readonly ./...\n```\n```bash\ndocker compose up\n```\n## Other\n"
         self.assertEqual(checker.example_commands(text, "Safe"), [["go", "build", "-mod=readonly", "./..."]])
@@ -51,6 +105,9 @@ class OnboardingChecksTest(unittest.TestCase):
     def test_side_effecting_commands_cannot_enter_run_mode(self):
         for command in (
             ["bash", "scripts/integration.sh"],
+            ["docker", "compose", "up"],
+            ["npm", "install"],
+            ["go", "install", "example/tool"],
             ["go", "run", "-mod=readonly", "./cmd/server"],
             ["go", "test", "-mod=readonly", "./tests/integration/..."],
             ["go", "test", "./internal/jsonobject/..."],
