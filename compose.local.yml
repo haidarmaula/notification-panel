@@ -1,0 +1,75 @@
+# Invoked only by ./dev with its private generated paths; no .env is consumed.
+services:
+  postgres:
+    ports: !reset []
+    tmpfs: !reset []
+    volumes:
+      - local-postgres:/var/lib/postgresql/data
+    networks: !override [delivery]
+  kafka-volume:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    entrypoint: [bash, -ec, 'chown 1000:1000 /data']
+    volumes: [local-kafka:/data]
+    networks: [delivery]
+  kafka:
+    ports: !reset []
+    tmpfs: !reset []
+    volumes:
+      - local-kafka:/tmp/integration-kafka
+    networks: !override [delivery]
+    depends_on:
+      kafka-volume:
+        condition: service_completed_successfully
+  provider-fixture:
+    environment:
+      HELLO_PROVIDER_LOCAL: synthetic
+  worker-fixture:
+    volumes:
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}:/local-tls:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}:/local-config'
+  server:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    entrypoint: [/fixture-bin/server]
+    env_file: ['${HELLO_LOCAL_CONFIG_DIR:?local config required}/server.env']
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+    networks: [delivery]
+  api-tls:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    entrypoint: [/fixture-bin/setup, gateway]
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}:/local-tls:ro'
+    ports: ['127.0.0.1:18082:8082']
+    networks: [delivery, ingress]
+  admission:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    entrypoint: [bash, -ec, 'install -d -m 0750 /etc/hello; install -m 0640 /input/admission.json /etc/hello/worker.json; install -m 0644 /tls/ca.crt /etc/hello/ca.crt; exec env -i PATH=/usr/bin:/bin /fixture-bin/worker']
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/generated:/input:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}:/tls:ro'
+    networks: [delivery]
+  scheduler:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    entrypoint: [bash, -ec, 'install -d -m 0750 /etc/hello; install -m 0640 /input/scheduler.json /etc/hello/scheduler.json; install -m 0644 /tls/ca.crt /etc/hello/ca.crt; exec env -i PATH=/usr/bin:/bin /fixture-bin/scheduler']
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/generated:/input:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}:/tls:ro'
+    networks: [delivery]
+  delivery-worker:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    entrypoint: [bash, -ec, 'install -d -m 0750 /etc/hello; install -m 0640 /input/delivery.json /etc/hello/worker.json; install -m 0640 /tls/service-account.json /etc/hello/service-account.json; install -m 0644 /tls/ca.crt /etc/hello/ca.crt; install -m 0644 /tls/ca.crt /etc/ssl/certs/ca-certificates.crt; exec env -i PATH=/usr/bin:/bin /fixture-bin/worker']
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/generated:/input:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}:/tls:ro'
+    networks: [delivery]
+volumes:
+  local-postgres:
+  local-kafka:
+
+networks:
+  ingress:
+    driver: bridge

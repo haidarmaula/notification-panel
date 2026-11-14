@@ -32,6 +32,12 @@ process when finished. Send/schedule endpoints are held in the fixture.
 
 ## Real API development
 
+For the entire actual local stack, run `./dev up` from the repository root and
+open `http://127.0.0.1:5173/login`. Use `./dev credentials` for its generated
+local account. See [full local development](../../docs/local-development.md).
+This uses the real backend and persistent database, with only external FCM
+simulated; `node e2e/server.mjs` remains an isolated frontend/BFF fixture.
+
 The Go command requires `HELLO_DASHBOARD_CONFIG` to point at a private regular
 JSON file (mode 0600). A local example, with operator-supplied paths:
 

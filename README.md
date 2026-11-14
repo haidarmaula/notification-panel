@@ -58,6 +58,12 @@ This tests strict JSON decoding without Docker, a database, `.env`, or provider 
 
 **Do not expect `make up` to send notifications.** The default Compose file defines PostgreSQL, Kafka, Kafka UI, and the development API, but no scheduler or worker. Its current Air build also needs care; use the [package-based API startup](docs/development-guide.md#2-run-the-local-api-not-live-delivery). Protected policy and approved delivery setup are additional requirements.
 
+For a complete actual local environment, run `./dev up` and open
+`http://127.0.0.1:5173/login`. Run `./dev credentials` for the local account and
+`./dev down` to stop without deleting data. The API, BFF, database, Kafka, workers
+and scheduler are real; external FCM is an isolated simulator. See
+[full local development](docs/local-development.md) for hot reload and checks.
+
 ## Where to go for a task
 
 | Task | Start here |

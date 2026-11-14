@@ -23,6 +23,9 @@ case "${1:-}" in
     ;;
   test)
     go test -mod=readonly -race ./...
+    go test -mod=readonly -race scripts/integration-provider.go scripts/integration_provider_test.go
+    go test -mod=readonly scripts/local-dev/setup.go
+    python3 -B -m unittest discover -s scripts -p test_local_dev.py
     ;;
   vet)
     go vet -mod=readonly ./...

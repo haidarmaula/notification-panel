@@ -45,6 +45,11 @@ The first command checks the five onboarding pages' local links/headings, Bash s
 
 ## 2. Run the local API, not live delivery
 
+For the complete persistent developer stack (frontend, BFF, API, PostgreSQL,
+Kafka, workers, scheduler and an isolated external-provider simulator), use
+[full local development](local-development.md): `./dev up` from the repository
+root. The smaller manual API recipe below remains useful for API-only work.
+
 Prerequisites: Docker with Compose, Make, host `migrate`, curl, and jq for the smoke example. Reserve the configured PostgreSQL host port and API port 8080. Use a development-only database: migration commands change its schema.
 
 Before starting, run `docker context show` and `docker info` to confirm the intended daemon is reachable. Having the Docker CLI installed is not enough. If `docker info` hangs, interrupt it and resolve Docker Desktop/daemon availability with the environment owner before proceeding; do not reset Docker or stop existing workloads to make this guide run.

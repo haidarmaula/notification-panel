@@ -47,6 +47,7 @@ func main() {
 		log.Fatal("failed to bind fixture")
 	}
 	load := os.Getenv("HELLO_PROVIDER_LOAD") == "synthetic"
+	local := os.Getenv("HELLO_PROVIDER_LOCAL") == "synthetic"
 	stats := &loadStats{seen: make(map[string]time.Time)}
 	server := &http.Server{
 		ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 10 * time.Second,
@@ -72,7 +73,7 @@ func main() {
 						stats.respond(w, r)
 						return
 					}
-					if _, _, _, valid := readSend(r, false); !valid {
+					if _, _, _, valid := readSend(r, false, local); !valid {
 						break
 					}
 					w.Header().Set("Content-Type", "application/json")
@@ -107,7 +108,7 @@ func validAssertion(r *http.Request, public *rsa.PublicKey) bool {
 		claims.Scope == "https://www.googleapis.com/auth/firebase.messaging"
 }
 
-func readSend(r *http.Request, load bool) (token, delivery, mode string, valid bool) {
+func readSend(r *http.Request, load, local bool) (token, delivery, mode string, valid bool) {
 	var body struct {
 		Message struct {
 			Token   string
@@ -121,6 +122,10 @@ func readSend(r *http.Request, load bool) (token, delivery, mode string, valid b
 	m := body.Message
 	ttl, err := time.ParseDuration(m.Android.TTL)
 	fixture := ttl <= 5*time.Minute && (m.Token == "execution-address-0" || m.Token == "execution-address-1") && m.Data["fixture"] == "integration"
+	if local {
+		n, numErr := strconv.Atoi(strings.TrimPrefix(m.Token, "load-"))
+		fixture = numErr == nil && m.Token == "load-"+strconv.Itoa(n) && n >= 1 && n <= 3 && ttl <= time.Hour
+	}
 	if load {
 		n, numErr := strconv.Atoi(strings.TrimPrefix(m.Token, "load-"))
 		fixture = numErr == nil && m.Token == "load-"+strconv.Itoa(n) && n >= 1 && n <= 50000 &&
@@ -171,7 +176,7 @@ func (s *loadStats) respond(w http.ResponseWriter, r *http.Request) {
 		s.LastResponseUTC = time.Now().UTC()
 		s.mu.Unlock()
 	}()
-	token, delivery, mode, valid := readSend(r, true)
+	token, delivery, mode, valid := readSend(r, true, false)
 	if !valid {
 		s.mu.Lock()
 		s.Invalid++

@@ -824,3 +824,18 @@ receipt diagnostics despite no send having occurred. Results now load campaign
 state first, show a draft-specific review action, and fetch delivery data only
 for non-drafts. Browser regressions cover draft-to-queued refresh, failed campaign
 lookup and recovery, and preserved incomplete statistics for non-drafts.
+
+## Full local developer runtime — 2026-11-14
+
+The old Compose/Air recipe did not provide a complete current local delivery
+stack. `./dev up` now supplies a persistent, independently owned local stack:
+actual API/BFF/Kafka/admission/delivery/scheduler, with only external OAuth/FCM
+simulated on an internal network. No production loader checks were relaxed.
+Live checks verified immediate and scheduled campaigns reaching simulator
+acceptance, login/seven dashboard screens/logout, stable data across restart,
+backend hot reload, and down without watcher resurrection. Seed account/audience
+and completion marker commit together; fault injection verified rollback and
+successful retry. Expired unused application approvals are replaced with fresh
+synthetic approvals while preserving prior evidence. A separate temporary-DB
+regression verified that recovery. This is local evidence, not real-device
+receipt verification or production readiness. See `docs/local-development.md`.

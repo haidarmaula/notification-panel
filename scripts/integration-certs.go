@@ -23,16 +23,20 @@ import (
 )
 
 func main() {
-	if len(os.Args) != 2 {
-		fmt.Fprintln(os.Stderr, "usage: integration-certs <fixture-directory>")
+	if len(os.Args) != 2 && (len(os.Args) != 3 || os.Args[2] != "--local-dev") {
+		fmt.Fprintln(os.Stderr, "usage: integration-certs <fixture-directory> [--local-dev]")
 		os.Exit(2)
 	}
-	if err := generate(os.Args[1]); err != nil {
+	lifetime := 6 * time.Hour
+	if len(os.Args) == 3 {
+		lifetime = 7 * 24 * time.Hour
+	}
+	if err := generate(os.Args[1], lifetime); err != nil {
 		fmt.Fprintln(os.Stderr, "fixture certificate generation failed")
 		os.Exit(1)
 	}
 }
-func generate(directory string) error {
+func generate(directory string, lifetime time.Duration) error {
 	if err := os.Mkdir(directory, 0755); err != nil {
 		return err
 	}
@@ -41,7 +45,7 @@ func generate(directory string) error {
 		return err
 	}
 	now := time.Now()
-	root := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "hello-isolated-fixture-ca"}, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(6 * time.Hour), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature}
+	root := &x509.Certificate{SerialNumber: big.NewInt(1), Subject: pkix.Name{CommonName: "hello-isolated-fixture-ca"}, NotBefore: now.Add(-time.Minute), NotAfter: now.Add(lifetime), IsCA: true, BasicConstraintsValid: true, KeyUsage: x509.KeyUsageCertSign | x509.KeyUsageDigitalSignature}
 	rootDER, err := x509.CreateCertificate(rand.Reader, root, root, &rootKey.PublicKey, rootKey)
 	if err != nil {
 		return err
