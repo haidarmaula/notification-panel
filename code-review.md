@@ -1,17 +1,31 @@
 # Notification Panel Backend — Code Review Findings
 
-**Version:** 1.7
+**Version:** 1.8
 
-**Last Updated:** 2026-11-10
+**Last Updated:** 2026-11-14
 
 **Scope:** Full codebase audit conducted during the Godoc documentation pass  
 **Coverage:** `cmd/`, `internal/`, `pkg/` — every non-test, non-generated `.go` file
+
+## Legacy feature and provider retirement — 2026-11-14
+
+The unmounted global notification, mobile, users, and segments feature graph was
+retired, including its OneSignal adapter, legacy FCM adapter, old event contracts,
+and `internal/kafka/producer.go`. The active application-scoped and protected
+daemon paths remain. H25's deprecated `SendAll` use is resolved by retiring its
+unused adapter; the active FCM client is separate. H27, H47, H48, and M48 describe
+removed legacy paths, not defects in the mounted runtime. The scoped Kafka
+transport retains hash routing, bounded writes, and delivery envelopes. The
+integration broker round trip now uses the scoped producer, and its Firebase
+fixture uses `messaging.IsUnregistered`. Detailed historical findings below are
+preserved as audit history; consult this dated status before treating them as
+current defects.
 
 ---
 
 ## Overview
 
-This is a live inventory of bugs, security gaps, correctness issues, and design weaknesses. The original audit was drawn from the Godoc pass; later targeted reviews verify implementation and pinned dependency behavior directly. Older rows/checklists are not a reconciled list of still-open defects. Findings H47/H48/M48 were reconciled on 2026-11-09 against the pinned kafka-go source and now describe only the unmounted legacy producer; the mounted scoped transport already satisfies their remediation. The protected daemon uses the scoped Kafka transport described below. C21 was remediated and locally verified in M02a on 2026-11-02; see its row/evidence. Proposed ADRs alone do not fix runtime behavior.
+This is a live inventory of bugs, security gaps, correctness issues, and design weaknesses. The original audit was drawn from the Godoc pass; later targeted reviews verify implementation and pinned dependency behavior directly. Older rows/checklists are not a reconciled list of still-open defects. The H47/H48/M48 reconciliation on 2026-11-09 documented defects limited to the legacy producer; that producer was removed on 2026-11-14 (see the dated retirement status above). The protected daemon uses the scoped Kafka transport. C21 was remediated and locally verified in M02a on 2026-11-02; see its row/evidence. Proposed ADRs alone do not fix runtime behavior.
 
 The November 8 mount review traced `cmd/server` to the auth, applications,
 staff and profile modules and to the configured installation/receipt routes.
@@ -28,7 +42,7 @@ Dependency baseline update (2026-11-02): step 18's govulncheck found 24 reachabl
 advisories initially. Go/module security updates and a final scan reduced the
 reachable result to zero; uncalled dependency advisories remain informational.
 See [CI evidence](docs/analysis/ci-readiness.md) for versions and limitations.
-The dependency scan does not close runtime findings; C21 is separately remediated by M02a code/tests. H47/H48/M48 are reconciled to the unmounted legacy producer; other older rows remain unreconciled.
+The dependency scan does not close runtime findings; C21 is separately remediated by M02a code/tests. The 2026-11-14 retirement status above supersedes the legacy-path references in H47/H48/M48; other older rows remain unreconciled.
 
 ## Android staging enrollment verification — 2026-11-12
 

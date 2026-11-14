@@ -1,5 +1,10 @@
 # Dependency integration evidence
 
+> **Status update — 2026-11-14:** The root Docker/Air development stack was
+> retired. The persistent local runtime is `./dev`; integration, load, Kafka
+> drill, and security fixtures remain separate. The dated verification records
+> below are historical evidence for the source and configuration tested then.
+
 Original checkpoint, 2026-11-02. Step 19/M01 tested the dependency foundation on
 darwin/arm64 and Docker Desktop. [SPEC](../specs/integration-environment.md),
 [runner](../../scripts/integration.sh), [Compose](../../compose.integration.yml),

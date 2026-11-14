@@ -36,7 +36,7 @@ legacy integration fixture as evidence for the current protected delivery path.
 
 ## Generated code and migrations
 
-- `internal/database/sqlc/` (17 files) is **generated but committed**. `make sqlc` currently
+- `internal/database/sqlc/` is **generated but committed**. `make sqlc` currently
   produces no diff. Never hand-edit it; change `db/queries/*.sql` or `db/migrations/*.sql`
   and regenerate, then commit both sides.
 - `db/sqlc.yaml` reads `./migrations` as the schema. **A new migration must exist before you

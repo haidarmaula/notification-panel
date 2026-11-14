@@ -11,7 +11,7 @@ help:
 	@echo "Available commands:"
 	@echo ""
 	@echo "  ./dev up             - Start the complete isolated local environment"
-	@echo "  ./dev logs           - Follow local environment logs"
+	@echo "  ./dev logs           - View local environment logs"
 	@echo "  ./dev down           - Stop local processes; retain local data"
 	@echo ""
 	@echo "  🗄️  Database Commands:"
