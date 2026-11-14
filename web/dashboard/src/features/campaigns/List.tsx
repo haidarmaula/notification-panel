@@ -30,7 +30,6 @@ export default function Campaigns(props: { results?: boolean } = {}) {
     <>
       <header class="page-heading">
         <div>
-          <span class="eyebrow">KOMUNIKASI</span>
           <h1>{props.results ? 'Log pengiriman' : 'Campaign'}</h1>
           <p class="muted">
             {props.results
@@ -43,7 +42,7 @@ export default function Campaigns(props: { results?: boolean } = {}) {
           Buat campaign
         </A>
       </header>
-      <div class="section-bar">
+      <div class="section-bar campaign-toolbar">
         <h2>Semua campaign</h2>
         <details class="campaign-shortcut">
           <summary>Buka berdasarkan ID</summary>
@@ -75,7 +74,11 @@ export default function Campaigns(props: { results?: boolean } = {}) {
           </form>
         </details>
       </div>
-      <div class="campaign-data-region" aria-busy={query.isPending}>
+      <div
+        class="campaign-data-region"
+        aria-busy={query.isPending}
+        data-populated={!query.isPending && !query.isError && !!query.data?.items.length}
+      >
         <Show when={!query.isPending} fallback={<Loading rows={5} />}>
           <Show
             when={!query.isError}

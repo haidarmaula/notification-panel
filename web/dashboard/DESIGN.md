@@ -23,8 +23,18 @@ inspection, campaign-scoped logs, settings and a recent-campaign overview. Add
 metrics or filters only when the API supplies their real scope and values.
 
 Consulted references: https://github.com/miqdadbadjuber/anti-slop and
-https://impeccable.style/docs/. Apply their content-first hierarchy, purposeful
-decoration and browser-review principles without installing external agent rules.
+https://impeccable.style/docs/. Project-local copies are installed under
+`../../.agents/skills/`; dashboard routing is documented in `AGENTS.md`.
+
+Refinement direction: ENERGY 1 / RHYTHM 2 / MOTION 1. Use compact record rows
+with semibold names and monospace identifiers, keeping status and actions aligned.
+Identifiers are technical metadata; ordinary body copy stays in the system sans.
+Use distinct canvas, panel, and header surfaces in both themes. Content panels
+separate heading and body; preparation links form a compact navigation list with
+semantic destination icons rather than three oversized cards. Keep action targets
+at least 40px on desktop and 44px on mobile. Campaign loading and empty states
+reserve stable space, while populated lists fit their actual content. Do not add
+per-row requests or invent metadata beyond the list API's title, ID, and status.
 
 Performance: route-split detail/editor/results; no chart runtime on campaign list.
 Initial production JS budget: 160 KiB gzip, measured from emitted files and

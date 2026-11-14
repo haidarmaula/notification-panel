@@ -1,6 +1,7 @@
 import { For, Show } from 'solid-js';
 import { A, useParams } from '@solidjs/router';
 import { createQuery } from '@tanstack/solid-query';
+import { ChevronRight, FileText, Users, Smartphone } from 'lucide-solid';
 import { data } from '../../lib/api/client';
 import type { CampaignSummary, Page } from '../../lib/api/types';
 import { Status } from '../../components/ui/Feedback';
@@ -23,15 +24,17 @@ export default function Overview() {
           Buat campaign
         </A>
       </header>
-      <section class="surface stack">
-        <div class="section-bar">
+      <section class="surface data-panel">
+        <div class="section-bar data-panel-heading">
           <h2>Campaign terbaru</h2>
           <A href={`/apps/${params.appId}/campaigns`}>Lihat semua</A>
         </div>
         <QueryState query={recent}>
           <Show
             when={recent.data?.items.length}
-            fallback={<p>Belum ada campaign. Mulai dengan membuat draft pertama.</p>}
+            fallback={
+              <p class="panel-message">Belum ada campaign. Mulai dengan membuat draft pertama.</p>
+            }
           >
             <div class="table-wrap">
               <table class="directory-table">
@@ -47,7 +50,12 @@ export default function Overview() {
                     {(item) => (
                       <tr>
                         <td>
-                          <A href={`/apps/${params.appId}/campaigns/${item.id}`}>{item.title}</A>
+                          <A
+                            class="campaign-title"
+                            href={`/apps/${params.appId}/campaigns/${item.id}`}
+                          >
+                            {item.title}
+                          </A>
                           <span class="row-meta">#{item.id}</span>
                         </td>
                         <td>
@@ -72,17 +80,31 @@ export default function Overview() {
       <section class="management-section">
         <h2>Siapkan pengiriman</h2>
         <div class="workflow-links">
-          <A class="surface" href={`/apps/${params.appId}/templates`}>
+          <A href={`/apps/${params.appId}/templates`}>
+            <span class="workflow-icon" aria-hidden="true">
+              <FileText size={18} />
+            </span>
             <strong>Template pesan</strong>
-            <span>Gunakan kembali isi pesan untuk draft baru.</span>
+            <span class="workflow-description">Gunakan kembali isi pesan untuk draft baru.</span>
+            <ChevronRight class="workflow-arrow" size={18} aria-hidden="true" />
           </A>
-          <A class="surface" href={`/apps/${params.appId}/segments`}>
+          <A href={`/apps/${params.appId}/segments`}>
+            <span class="workflow-icon" aria-hidden="true">
+              <Users size={18} />
+            </span>
             <strong>Segment penerima</strong>
-            <span>Kelola kelompok pengguna untuk target campaign.</span>
+            <span class="workflow-description">
+              Kelola kelompok pengguna untuk target campaign.
+            </span>
+            <ChevronRight class="workflow-arrow" size={18} aria-hidden="true" />
           </A>
-          <A class="surface" href={`/apps/${params.appId}/audience`}>
+          <A href={`/apps/${params.appId}/audience`}>
+            <span class="workflow-icon" aria-hidden="true">
+              <Smartphone size={18} />
+            </span>
             <strong>Pengguna &amp; perangkat</strong>
-            <span>Periksa registrasi perangkat penerima.</span>
+            <span class="workflow-description">Periksa registrasi perangkat penerima.</span>
+            <ChevronRight class="workflow-arrow" size={18} aria-hidden="true" />
           </A>
         </div>
       </section>

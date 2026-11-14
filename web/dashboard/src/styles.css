@@ -90,16 +90,40 @@ fieldset {
 }
 .workflow-links {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 20px;
-  margin-top: 20px;
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--paper);
 }
 .workflow-links a {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+  display: grid;
+  grid-template-columns: 36px minmax(160px, 0.65fr) minmax(0, 1fr) 18px;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
 }
-.workflow-links span {
+.workflow-links a:last-child {
+  border-bottom: 0;
+}
+.workflow-links a:hover {
+  background: var(--surface-hover);
+}
+.workflow-links a:focus-visible {
+  outline-offset: -4px;
+}
+.workflow-icon {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--link);
+}
+.workflow-links .workflow-description {
   color: var(--muted);
   font-size: 13px;
 }
@@ -172,11 +196,11 @@ fieldset {
   color-scheme: dark;
   --ink: #e1e9e3;
   --muted: #a9b8ae;
-  --line: #3b4c41;
-  --paper: #1d2922;
-  --canvas: #141c18;
-  --surface-soft: #233128;
-  --surface-hover: #2a3c30;
+  --line: #3d4b43;
+  --paper: #202b25;
+  --canvas: #131b17;
+  --surface-soft: #2a3830;
+  --surface-hover: #304236;
   --text-secondary: #bfcec1;
   --link: #b2d6ad;
   --error: #ffb5a6;
@@ -208,7 +232,7 @@ fieldset {
   color: #a1b0a6;
 }
 [data-theme='dark'] :is(.topbar, th, .tabs, .target-chip, .audience-picker) {
-  background: #233128;
+  background: var(--surface-soft);
   color: var(--muted);
 }
 [data-theme='dark'] :is(td, .preview-heading, .confirmation-summary, .surface, .application-row) {
@@ -498,9 +522,26 @@ fieldset[aria-invalid='true']:focus-within {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  overflow: hidden;
+}
+.campaign-data-region[data-populated='true'] {
+  min-block-size: 0;
+}
+.campaign-data-region .table-wrap {
+  border: 0;
+  border-radius: 0;
+}
+.campaign-data-region .pagination {
+  margin-top: 0;
+  padding: 14px 18px;
+  border-top: 1px solid var(--line);
+  background: var(--surface-soft);
 }
 .campaign-data-region > :is(.loading-state, .empty-state) {
-  min-block-size: var(--campaign-region-size);
+  min-block-size: calc(var(--campaign-region-size) - 2px);
   flex: 1;
 }
 .campaign-data-region > .empty-state {
@@ -916,7 +957,7 @@ fieldset[aria-invalid='true']:focus-within {
   align-items: center;
   justify-content: space-between;
   gap: 22px;
-  margin-bottom: 37px;
+  margin-bottom: 28px;
 }
 .page-heading h1 {
   margin: 8px 0 10px;
@@ -939,17 +980,23 @@ fieldset[aria-invalid='true']:focus-within {
   padding-bottom: 15px;
 }
 .section-bar h2 {
-  font-size: 15px;
+  font-size: 18px;
+  letter-spacing: -0.35px;
 }
 .section-bar > span {
   font-size: 12px;
+}
+.campaign-toolbar {
+  border-bottom: 0;
+  padding-bottom: 12px;
 }
 .table-wrap {
   overflow: auto;
   max-width: 100%;
   min-width: 0;
   background: var(--paper);
-  border-bottom: 1px solid var(--line);
+  border: 1px solid var(--line);
+  border-radius: 10px;
 }
 table {
   width: 100%;
@@ -962,19 +1009,23 @@ th {
   color: var(--muted);
   background: var(--surface-soft);
   font-weight: 600;
-  padding: 12px 19px;
+  padding: 11px 18px;
   border-bottom: 1px solid var(--line);
 }
 td {
   font-size: 14px;
-  padding: 18px 19px;
-  border-bottom: 1px solid #ebeee7;
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
 }
 tr:last-child td {
   border-bottom: 0;
 }
 .campaign-table th:first-child {
-  width: 60%;
+  width: auto;
+}
+.campaign-table th:nth-child(2) {
+  width: 150px;
 }
 .campaign-table th:last-child {
   width: 64px;
@@ -989,7 +1040,10 @@ tr:last-child td {
   width: 18%;
 }
 tbody tr:hover {
-  background: #fbfcf8;
+  background: var(--surface-hover);
+}
+tbody tr:focus-within {
+  background: var(--surface-hover);
 }
 .campaign-title {
   font-size: 14px;
@@ -1006,7 +1060,8 @@ tbody tr:hover {
   display: block;
   font-size: 12px;
   color: var(--muted);
-  margin-top: 5px;
+  margin-top: 3px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
   font-variant-numeric: tabular-nums;
 }
 .row-action {
@@ -1016,6 +1071,10 @@ tbody tr:hover {
   min-height: 40px;
   align-items: center;
   justify-content: center;
+  border-radius: 6px;
+}
+.row-action:hover {
+  background: var(--surface-soft);
 }
 .status {
   display: inline-flex;
@@ -1073,7 +1132,7 @@ tbody tr:hover {
 }
 .page-footnote {
   border-top: 1px solid var(--line);
-  margin-top: 46px;
+  margin-top: 24px;
   padding-top: 18px;
   font-size: 12px;
   color: var(--muted);
@@ -1203,7 +1262,35 @@ tbody tr:hover {
   padding: 27px;
 }
 .surface h2 {
-  font-size: 15px;
+  font-size: 18px;
+  letter-spacing: -0.35px;
+}
+.surface.data-panel {
+  padding: 0;
+  overflow: hidden;
+  border-radius: 10px;
+}
+.data-panel-heading {
+  padding: 18px 20px;
+  background: var(--surface-soft);
+}
+.data-panel-heading > a {
+  font-size: 13px;
+  color: var(--link);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.data-panel .table-wrap {
+  border: 0;
+  border-radius: 0;
+}
+.data-panel th {
+  background: var(--paper);
+}
+.data-panel .panel-message {
+  padding: 20px;
+  color: var(--muted);
 }
 .message-detail {
   margin: 24px 0 0;
@@ -1701,6 +1788,21 @@ tbody tr:hover {
   .section-bar {
     align-items: start;
   }
+  .workflow-links a {
+    grid-template-columns: 36px minmax(0, 1fr) 18px;
+    gap: 4px 12px;
+    padding: 14px;
+  }
+  .workflow-icon {
+    grid-row: span 2;
+  }
+  .workflow-links .workflow-description {
+    grid-column: 2;
+  }
+  .workflow-arrow {
+    grid-column: 3;
+    grid-row: 1 / span 2;
+  }
   .section-bar > span {
     max-width: 150px;
     text-align: right;
@@ -1729,6 +1831,9 @@ tbody tr:hover {
   }
   .campaign-title {
     font-size: 14px;
+  }
+  .campaign-table th:nth-child(2) {
+    width: 90px;
   }
   .status {
     padding: 4px 6px;

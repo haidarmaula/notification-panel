@@ -325,7 +325,7 @@ test('dark login themes the full panel without a card and supports password visi
   await page.addInitScript(() => localStorage.setItem('hello.theme', 'dark'));
   await page.goto('/login');
   await expect(page.getByRole('heading', { name: 'Selamat datang kembali.' })).toBeVisible();
-  await expect(page.locator('.login-form-area')).toHaveCSS('background-color', 'rgb(20, 28, 24)');
+  await expect(page.locator('.login-form-area')).toHaveCSS('background-color', 'rgb(19, 27, 23)');
   await expect(page.locator('.login-form-wrap')).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
   await page.getByLabel('Kata sandi', { exact: true }).fill('fixture-only');
   await page.getByRole('button', { name: 'Tampilkan kata sandi' }).click();

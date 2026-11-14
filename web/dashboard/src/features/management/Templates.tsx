@@ -46,7 +46,12 @@ export default function Templates() {
                   {(item) => (
                     <tr>
                       <td>
-                        <A href={`/apps/${params.appId}/templates/${item.id}`}>{item.name}</A>
+                        <A
+                          class="campaign-title"
+                          href={`/apps/${params.appId}/templates/${item.id}`}
+                        >
+                          {item.name}
+                        </A>
                         <span class="row-meta">#{item.id}</span>
                       </td>
                       <td>{item.title_template}</td>
