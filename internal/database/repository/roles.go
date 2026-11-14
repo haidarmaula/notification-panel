@@ -51,11 +51,9 @@ func (r *RoleRepository) FindByID(ctx context.Context, id int64) (sqlc.Role, err
 
 // FindByName retrieves a role by its unique name.
 //
-// It is the primary lookup during bootstrap and during login, where the role
-// name — not the numeric ID — is the stable identifier that appears in
-// configuration (SUPER_ADMIN_ROLE) and in the middleware. As with FindByID,
-// pgx.ErrNoRows is passed through unchanged; the bootstrap utility uses
-// exactly this error to detect that migrations have not been applied.
+// It is used during bootstrap and login. As with FindByID, pgx.ErrNoRows is
+// passed through unchanged; bootstrap uses it to detect that migrations have
+// not been applied.
 func (r *RoleRepository) FindByName(ctx context.Context, name string) (sqlc.Role, error) {
 	return r.q.GetRoleByName(ctx, name)
 }

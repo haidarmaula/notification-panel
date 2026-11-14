@@ -8,8 +8,8 @@
 //   - Create the initial super-admin staff user if (and only if) no account
 //     with the configured bootstrap email already exists.
 //
-// The package is designed to be invoked from a deployment job — a Kubernetes
-// init container, a `make bootstrap` target, or a manual operator command —
+// The package is designed to be invoked from a deployment job or a manual
+// operator command —
 // after migrations have been applied and before the API server begins
 // serving traffic. It is NOT intended to be part of the running service's
 // hot path.
@@ -96,11 +96,7 @@ func New(
 //
 // # Role resolution
 //
-// The role is looked up by the literal string "SUPER_ADMIN", not by a value
-// from cfg. This is intentional but subtle: unlike the middleware layer,
-// which is parameterised by cfg.SuperAdminRole, the bootstrap utility
-// assumes the canonical role name. A deployment that renames the super-admin
-// role will fail here with a not-found error until the literal is updated.
+// The role is looked up by the canonical database name "SUPER_ADMIN".
 //
 // # Password handling
 //

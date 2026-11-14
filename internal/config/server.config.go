@@ -48,11 +48,6 @@ type ServerConfig struct {
 	// corresponding value in the Laravel deployment.
 	MobileJWTSecret string
 
-	// SuperAdminRole retains the required legacy SUPER_ADMIN_ROLE setting for
-	// config compatibility. Staff routes/services now use the fixed current-DB
-	// staff.manage policy in internal/authz; this value cannot grant permission.
-	SuperAdminRole string
-
 	// KafkaBroker is the address of the Kafka broker used to publish send
 	// requests when a staff member triggers an immediate notification send
 	// (KAFKA_BROKER).
@@ -99,8 +94,6 @@ func LoadServerConfig() *ServerConfig {
 		AccessSecret:    os.Getenv("ACCESS_SECRET"),
 		RefreshSecret:   os.Getenv("REFRESH_SECRET"),
 		MobileJWTSecret: os.Getenv("MOBILE_JWT_SECRET"),
-		SuperAdminRole:  os.Getenv("SUPER_ADMIN_ROLE"),
-
 		KafkaBroker: os.Getenv("KAFKA_BROKER"),
 		SendTopic:   os.Getenv("KAFKA_SEND_TOPIC"),
 	}

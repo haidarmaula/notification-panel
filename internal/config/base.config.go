@@ -1,21 +1,17 @@
-// Package config supports local environment and protected per-role configuration for every
-// executable in the Notification Panel: the HTTP API server, the Kafka
-// delivery worker, the scheduled-notification processor, and the one-shot
-// bootstrap utility.
+// Package config supports local environment and protected per-role configuration
+// for the server, bootstrap utility, worker, scheduler, and requeue process.
 //
 // # Loading model
 //
-// Each executable loads exactly one specialised config struct — ServerConfig,
-// WorkerConfig, SchedulerConfig, or BootstrapConfig — each of which embeds
-// the shared BaseConfig and adds the environment variables that matter to
-// that binary for local development. Production server/bootstrap commands
-// require protected JSON policy via --deployment. Worker, scheduler and
-// requeue delegate directly to protected per-component deployment loaders.
+// ServerConfig and BootstrapConfig embed BaseConfig for local development.
+// Production server and bootstrap commands require protected JSON policy via
+// --deployment. Worker, scheduler, and requeue use protected per-component
+// deployment loaders and do not have local environment config structs.
 //
 // # Fail-fast policy
 //
-// The Load* constructors do not return an error. They validate every required
-// environment variable and terminate the process with log.Fatal if any is
+// The local environment loaders do not return an error. They validate every
+// required environment variable and terminate the process with log.Fatal if any is
 // missing. This is deliberate: a misconfigured process cannot serve traffic
 // meaningfully, and surfacing the problem at startup is preferable to a
 // partial rollout followed by a runtime panic. Callers therefore never need
@@ -26,15 +22,14 @@
 //
 // LoadBaseConfig calls godotenv.Load, which reads a .env file in the current
 // working directory and injects its values into the process environment
-// without overwriting variables that are already set. Every specialised
-// loader invokes LoadBaseConfig as its first step, so .env is loaded exactly
-// once during local startup. The protected loaders do not read .env.
+// without overwriting variables that are already set. Each local environment
+// loader invokes LoadBaseConfig. The protected loaders do not read .env.
 //
 // # Concurrency
 //
 // Config values are read once at startup and treated as immutable thereafter.
 // No synchronisation is performed on the structs, because none is needed:
-// after Load* returns, the config is read-only and safe to share across
+// after a config loader returns, the config is read-only and safe to share across
 // goroutines. Callers must not mutate config fields after handing the struct
 // to other components.
 package config
@@ -57,7 +52,7 @@ import (
 // executable in the system.
 //
 // It is embedded by value into the specialised config structs (ServerConfig,
-// WorkerConfig, SchedulerConfig, BootstrapConfig), which is why it is
+// BootstrapConfig), which is why it is
 // exported but rarely used directly. Construct one via LoadBaseConfig rather
 // than assembling it by hand so that the environment-variable contract is
 // enforced consistently.

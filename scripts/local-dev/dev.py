@@ -138,7 +138,7 @@ def configure():
     env = {"DB_HOST": "postgres", "DB_PORT": "5432", "DB_USER": "integration", "DB_PASSWORD": "integration_only",
            "DB_NAME": "notification_integration", "DB_SSLMODE": "disable", "API_KEY": values["api_key"],
            "ACCESS_SECRET": values["access"], "REFRESH_SECRET": values["refresh"],
-           "MOBILE_JWT_SECRET": values["mobile"], "SUPER_ADMIN_ROLE": "SUPER_ADMIN",
+           "MOBILE_JWT_SECRET": values["mobile"],
            "HTTP_LISTEN_ADDRESS": "0.0.0.0:8080", "KAFKA_BROKER": "kafka:9094",
            "KAFKA_SEND_TOPIC": TOPICS[0], "CORS_ALLOWED_ORIGINS": ""}
     (CONFIG / "server.env").write_text("".join(f"{key}={value}\n" for key, value in env.items()))
