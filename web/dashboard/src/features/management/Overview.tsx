@@ -34,7 +34,7 @@ export default function Overview() {
             fallback={<p>Belum ada campaign. Mulai dengan membuat draft pertama.</p>}
           >
             <div class="table-wrap">
-              <table>
+              <table class="directory-table">
                 <thead>
                   <tr>
                     <th>Campaign</th>

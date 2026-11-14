@@ -128,6 +128,10 @@ export default function Detail() {
                         <Pencil size={16} />
                         Edit draft
                       </A>
+                      <button class="button secondary" onClick={() => open('schedule')}>
+                        <CalendarClock size={17} />
+                        Jadwalkan pengiriman
+                      </button>
                       <button class="button primary" onClick={() => open('send')}>
                         <Send size={16} />
                         Tinjau pengiriman
@@ -187,24 +191,20 @@ export default function Detail() {
                     <p class="help-text preview-note">
                       Tampilan sebenarnya mengikuti pengaturan perangkat penerima.
                     </p>
-                    <Show when={campaign().status === 'DRAFT' && !accepted() && !uncertain()}>
-                      <div class="secondary-actions">
-                        <button class="button secondary" onClick={() => open('schedule')}>
-                          <CalendarClock size={17} />
-                          Jadwalkan pengiriman
-                        </button>
-                        <button class="button text-danger" onClick={() => open('delete')}>
-                          <Trash2 size={16} />
-                          Hapus draft
-                        </button>
-                      </div>
-                    </Show>
-                    <A class="quiet-link" href={`${path()}/results`}>
-                      Riwayat dan hasil campaign
-                      <ArrowUpRight size={14} />
-                    </A>
                   </aside>
                 </div>
+                <footer class="detail-footer">
+                  <A class="quiet-link" href={`${path()}/results`}>
+                    Riwayat dan hasil campaign
+                    <ArrowUpRight size={14} />
+                  </A>
+                  <Show when={campaign().status === 'DRAFT' && !accepted() && !uncertain()}>
+                    <button class="button text-danger" onClick={() => open('delete')}>
+                      <Trash2 size={16} />
+                      Hapus draft
+                    </button>
+                  </Show>
+                </footer>
               </>
             )}
           </Show>
@@ -259,6 +259,7 @@ export default function Detail() {
                     type="datetime-local"
                     required
                     value={scheduled()}
+                    disabled={pending() || uncertain() || accepted()}
                     onInput={(event) => setScheduled(event.currentTarget.value)}
                   />
                 </label>

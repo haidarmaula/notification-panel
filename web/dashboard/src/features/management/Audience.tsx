@@ -4,6 +4,7 @@ import { createQuery } from '@tanstack/solid-query';
 import { data } from '../../lib/api/client';
 import type { components } from '../../lib/api/generated/staff';
 import { createPage, Pager, QueryState, date } from './shared';
+import { Status } from '../../components/ui/Feedback';
 type User = components['schemas']['User'];
 type Device = components['schemas']['Device'];
 export default function Audience() {
@@ -32,7 +33,7 @@ export default function Audience() {
           }
         >
           <div class="table-wrap">
-            <table>
+            <table class="directory-table">
               <thead>
                 <tr>
                   <th>Pengguna</th>
@@ -51,7 +52,9 @@ export default function Audience() {
                         <span class="row-meta">#{item.id}</span>
                       </td>
                       <td>{item.external_id}</td>
-                      <td>{item.status}</td>
+                      <td>
+                        <Status value={item.status} />
+                      </td>
                     </tr>
                   )}
                 </For>
@@ -82,8 +85,9 @@ export function UserDetail() {
           <div>
             <span class="eyebrow">PENGGUNA #{params.userId}</span>
             <h1>{user.data?.name || user.data?.external_id}</h1>
-            <p class="muted">
-              {user.data?.email || 'Email tidak tersedia'} · {user.data?.status}
+            <p class="muted">{user.data?.email || 'Email tidak tersedia'}</p>
+            <p>
+              <Show when={user.data?.status}>{(status) => <Status value={status()} />}</Show>
             </p>
           </div>
         </header>
@@ -99,7 +103,7 @@ export function UserDetail() {
               fallback={<p>Belum ada perangkat terdaftar.</p>}
             >
               <div class="table-wrap">
-                <table>
+                <table class="device-table">
                   <thead>
                     <tr>
                       <th>Perangkat</th>
@@ -114,7 +118,9 @@ export function UserDetail() {
                         <tr>
                           <td>#{item.id}</td>
                           <td>{item.platform}</td>
-                          <td>{item.is_active ? 'Aktif' : 'Nonaktif'}</td>
+                          <td>
+                            <Status value={item.is_active ? 'ACTIVE' : 'INACTIVE'} />
+                          </td>
                           <td>{date(item.last_seen_at)}</td>
                         </tr>
                       )}

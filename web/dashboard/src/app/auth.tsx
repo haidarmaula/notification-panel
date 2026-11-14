@@ -14,6 +14,7 @@ import {
   MutationCache,
 } from '@tanstack/solid-query';
 import { ApiError, request, sessionSchema, type Session } from '../lib/api/client';
+import { confirmUnsavedChanges, discardUnsavedChanges } from './unsaved';
 
 export function makeQueryClient() {
   return new QueryClient({
@@ -71,10 +72,13 @@ function createAuth() {
       client.setQueryData<Session>(['session'], result);
     },
     async logout() {
+      if (!confirmUnsavedChanges()) return false;
       await request('/bff/logout', { method: 'POST', csrf: csrf(), body: {} });
+      discardUnsavedChanges();
       setCsrf('');
       client.clear();
       window.location.replace('/login');
+      return true;
     },
   };
 }

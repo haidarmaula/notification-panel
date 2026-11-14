@@ -1,5 +1,6 @@
 import { Show, For, createSignal, createEffect, onCleanup, onMount } from 'solid-js';
-import { A, useNavigate, useParams, useBeforeLeave, useSearchParams } from '@solidjs/router';
+import { A, useNavigate, useParams, useSearchParams } from '@solidjs/router';
+import { useUnsaved } from '../../app/unsaved';
 import { createQuery, useQueryClient } from '@tanstack/solid-query';
 import { ArrowLeft, Check, Plus, X } from 'lucide-solid';
 import { useAuth } from '../../app/auth';
@@ -64,7 +65,7 @@ export default function Editor() {
   });
   const [error, setError] = createSignal('');
   const [pending, setPending] = createSignal(false);
-  const [dirty, setDirty] = createSignal(false);
+  const setDirty = useUnsaved();
   const [uncertain, setUncertain] = createSignal(false);
   const [savedTitle, setSavedTitle] = createSignal<string | null>(null);
   const editing = () => !!params.campaignId;
@@ -115,18 +116,6 @@ export default function Editor() {
       );
       setLoaded(identity);
     }
-  });
-  const beforeUnload = (event: BeforeUnloadEvent) => {
-    if (dirty()) {
-      event.preventDefault();
-      event.returnValue = '';
-    }
-  };
-  window.addEventListener('beforeunload', beforeUnload);
-  onCleanup(() => window.removeEventListener('beforeunload', beforeUnload));
-  useBeforeLeave((event) => {
-    if (dirty() && !window.confirm('Perubahan belum disimpan. Tinggalkan halaman?'))
-      event.preventDefault();
   });
   function add(item: { id: string; name?: string | null; external_id?: string }) {
     const selected: Target = { type: kind(), id: item.id };

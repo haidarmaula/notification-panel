@@ -3,7 +3,8 @@ import { A, useNavigate, useParams } from '@solidjs/router';
 import { createQuery, useQueryClient } from '@tanstack/solid-query';
 import { data } from '../../lib/api/client';
 import type { components } from '../../lib/api/generated/staff';
-import { createPage, Pager, QueryState, useWrite, WriteFeedback, useUnsaved } from './shared';
+import { createPage, Pager, QueryState, useWrite, WriteFeedback } from './shared';
+import { useUnsaved } from '../../app/unsaved';
 type Segment = components['schemas']['Segment'];
 type Member = components['schemas']['Member'];
 type User = components['schemas']['User'];
@@ -33,7 +34,7 @@ export default function Segments() {
           }
         >
           <div class="table-wrap">
-            <table>
+            <table class="directory-table">
               <thead>
                 <tr>
                   <th>Segment</th>
@@ -225,7 +226,7 @@ function SegmentMembers() {
           fallback={<p>Belum ada anggota di segment ini.</p>}
         >
           <div class="table-wrap">
-            <table>
+            <table class="directory-table">
               <thead>
                 <tr>
                   <th>Pengguna</th>

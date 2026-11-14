@@ -806,3 +806,21 @@ that both message controls remain disabled until the template is applied.
 route parameters after an asynchronous write. They now update caches using the
 originating application and membership path, preventing cross-application cache
 pollution or invalidation of the wrong segment after navigation.
+
+**FE5 — P1, fixed locally.** Logout revoked the session before the browser asked
+whether to discard unsaved work. Cancelling left an editor open with no valid
+session. Campaign and management forms now share an unsaved-work guard checked
+before logout; dirty state is cleared only after success. Browser regressions
+cover cancellation and confirmation for campaign, template, segment and profile
+forms, plus retained navigation protection after a failed logout.
+
+**FE6 — P2, fixed locally.** The scheduling field remained editable while its
+previous value was being submitted. It is now locked while pending or when the
+outcome is uncertain or accepted. A gated browser regression verifies that the
+visible time matches the submitted time and remains editable after a held request.
+
+**FE7 — P2, fixed locally.** Draft results showed incomplete statistics and
+receipt diagnostics despite no send having occurred. Results now load campaign
+state first, show a draft-specific review action, and fetch delivery data only
+for non-drafts. Browser regressions cover draft-to-queued refresh, failed campaign
+lookup and recovery, and preserved incomplete statistics for non-drafts.

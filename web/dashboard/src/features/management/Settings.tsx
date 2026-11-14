@@ -4,7 +4,9 @@ import { createQuery, useQueryClient } from '@tanstack/solid-query';
 import { data } from '../../lib/api/client';
 import type { Application } from '../../lib/api/types';
 import { preferences, setTheme } from '../../app/preferences';
-import { QueryState, useWrite, WriteFeedback, useUnsaved } from './shared';
+import { QueryState, useWrite, WriteFeedback } from './shared';
+import { useUnsaved } from '../../app/unsaved';
+import { Status } from '../../components/ui/Feedback';
 export default function Settings() {
   const params = useParams();
   const client = useQueryClient();
@@ -83,7 +85,9 @@ export default function Settings() {
               <dt>ID aplikasi</dt>
               <dd class="mono">{app.data?.id}</dd>
               <dt>Status</dt>
-              <dd>{app.data?.status}</dd>
+              <dd>
+                <Show when={app.data?.status}>{(status) => <Status value={status()} />}</Show>
+              </dd>
               <dt>Alamat dashboard</dt>
               <dd class="mono">{window.location.origin}</dd>
             </dl>

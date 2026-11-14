@@ -46,9 +46,7 @@ test('creates and edits a draft using scoped recipients without sending', async 
   await page.getByRole('button', { name: 'Simpan draft' }).click();
   await expect(page.getByText('Pesan yang diperbarui.', { exact: true }).first()).toBeVisible();
 });
-test('shows held acceptance and preserves draft; statistics stay explicitly incomplete', async ({
-  page,
-}) => {
+test('shows held acceptance and preserves the draft results state', async ({ page }) => {
   await login(page);
   await page.goto(`/apps/${app}/campaigns/9007199254740993`);
   await page.getByRole('button', { name: 'Tinjau pengiriman' }).click();
@@ -58,8 +56,8 @@ test('shows held acceptance and preserves draft; statistics stay explicitly inco
   await expect(page.getByRole('alert')).toContainText('Pengiriman sedang ditahan');
   await page.getByRole('button', { name: 'Kembali', exact: true }).click();
   await page.getByRole('link', { name: 'Riwayat dan hasil campaign' }).click();
-  await expect(page.getByRole('heading', { name: 'Statistik belum lengkap' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Belum ada catatan pengiriman.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Campaign belum dikirim' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Statistik belum lengkap' })).toHaveCount(0);
 });
 test('mobile navigation and list fit a narrow screen', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });

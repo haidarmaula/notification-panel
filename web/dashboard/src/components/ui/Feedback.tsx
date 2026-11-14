@@ -91,6 +91,7 @@ export function Status(props: { value: string }) {
     OPENED: 'Dibuka',
     PENDING: 'Menunggu',
     ACTIVE: 'Aktif',
+    INACTIVE: 'Nonaktif',
     HELD: 'Ditahan',
     PROVISIONING: 'Disiapkan',
     RETIRED: 'Nonaktif',

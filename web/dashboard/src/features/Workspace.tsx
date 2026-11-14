@@ -67,8 +67,9 @@ export function Workspace(props: ParentProps) {
   async function logout() {
     if (leaving()) return;
     setLeaving(true);
+    setLogoutError('');
     try {
-      await auth.logout();
+      if (!(await auth.logout())) setLeaving(false);
     } catch (error) {
       setLogoutError(errorMessage(error));
       setLeaving(false);

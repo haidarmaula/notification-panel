@@ -1,5 +1,4 @@
-import { Show, createSignal, onCleanup, type JSX } from 'solid-js';
-import { useBeforeLeave } from '@solidjs/router';
+import { Show, createSignal, type JSX } from 'solid-js';
 import { createQuery } from '@tanstack/solid-query';
 import { useAuth } from '../../app/auth';
 import { ApiError, data, errorMessage, request } from '../../lib/api/client';
@@ -109,20 +108,4 @@ export function date(value?: string | null) {
   return new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(
     new Date(value),
   );
-}
-export function useUnsaved() {
-  const [dirty, setDirty] = createSignal(false);
-  useBeforeLeave((event) => {
-    if (dirty() && !window.confirm('Perubahan belum disimpan. Tinggalkan halaman?'))
-      event.preventDefault();
-  });
-  const unload = (event: BeforeUnloadEvent) => {
-    if (dirty()) {
-      event.preventDefault();
-      event.returnValue = '';
-    }
-  };
-  window.addEventListener('beforeunload', unload);
-  onCleanup(() => window.removeEventListener('beforeunload', unload));
-  return setDirty;
 }

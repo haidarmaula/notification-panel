@@ -3,7 +3,9 @@ import { A, useNavigate, useParams } from '@solidjs/router';
 import { createQuery, useQueryClient } from '@tanstack/solid-query';
 import { data } from '../../lib/api/client';
 import type { components } from '../../lib/api/generated/staff';
-import { createPage, Pager, QueryState, useWrite, WriteFeedback, useUnsaved } from './shared';
+import { createPage, Pager, QueryState, useWrite, WriteFeedback } from './shared';
+import { useUnsaved } from '../../app/unsaved';
+import { Status } from '../../components/ui/Feedback';
 type Template = components['schemas']['Template'];
 export default function Templates() {
   const params = useParams();
@@ -30,7 +32,7 @@ export default function Templates() {
           }
         >
           <div class="table-wrap">
-            <table>
+            <table class="directory-table template-table">
               <thead>
                 <tr>
                   <th>Template</th>
@@ -48,7 +50,9 @@ export default function Templates() {
                         <span class="row-meta">#{item.id}</span>
                       </td>
                       <td>{item.title_template}</td>
-                      <td>{item.is_active ? 'Aktif' : 'Nonaktif'}</td>
+                      <td>
+                        <Status value={item.is_active ? 'ACTIVE' : 'INACTIVE'} />
+                      </td>
                       <td>
                         <Show when={item.is_active}>
                           <A

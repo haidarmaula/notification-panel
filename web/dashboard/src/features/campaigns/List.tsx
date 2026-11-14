@@ -98,7 +98,7 @@ export default function Campaigns(props: { results?: boolean } = {}) {
               }
             >
               <div class="table-wrap">
-                <table>
+                <table class="campaign-table">
                   <thead>
                     <tr>
                       <th>Nama campaign</th>

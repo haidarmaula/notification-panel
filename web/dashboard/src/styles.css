@@ -449,7 +449,7 @@ input[type='checkbox'] {
   text-align: right;
 }
 .help-text {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   line-height: 1.65;
 }
@@ -922,8 +922,9 @@ fieldset[aria-invalid='true']:focus-within {
   margin: 8px 0 10px;
 }
 .page-heading p {
-  font-size: 12px;
+  font-size: 14px;
   line-height: 1.65;
+  max-width: 64ch;
 }
 .page-heading > .button {
   flex-shrink: 0;
@@ -938,7 +939,7 @@ fieldset[aria-invalid='true']:focus-within {
   padding-bottom: 15px;
 }
 .section-bar h2 {
-  font-size: 13px;
+  font-size: 15px;
 }
 .section-bar > span {
   font-size: 12px;
@@ -972,8 +973,20 @@ td {
 tr:last-child td {
   border-bottom: 0;
 }
-td:first-child {
-  width: 65%;
+.campaign-table th:first-child {
+  width: 60%;
+}
+.campaign-table th:last-child {
+  width: 64px;
+}
+.directory-table th:first-child {
+  width: 38%;
+}
+.template-table th:nth-child(2) {
+  width: 34%;
+}
+.device-table th:first-child {
+  width: 18%;
 }
 tbody tr:hover {
   background: #fbfcf8;
@@ -1081,9 +1094,9 @@ tbody tr:hover {
 }
 .empty-state p {
   color: var(--muted);
-  font-size: 12px;
-  max-width: 360px;
-  line-height: 1.8;
+  font-size: 14px;
+  max-width: 48ch;
+  line-height: 1.65;
 }
 .empty-state .button {
   margin-top: 9px;
@@ -1165,9 +1178,16 @@ tbody tr:hover {
   align-items: center;
   gap: 13px;
 }
+.detail-heading {
+  flex-wrap: wrap;
+  align-items: start;
+}
 .detail-heading h1 {
   overflow-wrap: anywhere;
   max-width: 690px;
+}
+.detail-heading .actions {
+  margin-top: 8px;
 }
 .detail-grid,
 .editor-grid {
@@ -1210,8 +1230,8 @@ tbody tr:hover {
   margin: 17px 0;
   padding-left: 18px;
   color: var(--text-secondary);
-  font-size: 12px;
-  line-height: 1.9;
+  font-size: 14px;
+  line-height: 1.7;
 }
 .notification-preview {
   padding: 23px;
@@ -1233,26 +1253,30 @@ tbody tr:hover {
   margin-bottom: 7px;
 }
 .notification-preview > p {
-  font-size: 12px;
-  line-height: 1.8;
+  font-size: 14px;
+  line-height: 1.65;
   color: var(--text-secondary);
 }
 .preview-note {
   margin: 13px 8px 0;
 }
-.secondary-actions {
+.detail-footer {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
   margin-top: 28px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
 }
 .quiet-link {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  font-size: 12px;
+  font-size: 14px;
   color: var(--link);
-  margin-top: 20px;
+  min-height: 44px;
 }
 .section-heading {
   display: flex;
@@ -1395,6 +1419,9 @@ tbody tr:hover {
   line-height: 1.9;
   color: var(--muted);
 }
+.editor-grid :is(input, select, textarea, fieldset) {
+  scroll-margin-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+}
 .editor-actions {
   grid-column: 1 / -1;
   display: flex;
@@ -1402,7 +1429,12 @@ tbody tr:hover {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 15px;
-  padding-bottom: 20px;
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  background: var(--canvas);
+  border-top: 1px solid var(--line);
+  padding: 16px 0 calc(16px + env(safe-area-inset-bottom, 0px));
 }
 .dialog-overlay {
   position: fixed;
@@ -1721,20 +1753,12 @@ tbody tr:hover {
   .editor-grid {
     grid-template-columns: minmax(0, 1fr);
   }
-  .editor-grid :is(input, select, textarea, fieldset) {
-    scroll-margin-bottom: calc(100px + env(safe-area-inset-bottom, 0px));
-  }
   .editor-preview {
     grid-column: auto;
     grid-row: auto;
     position: static;
   }
   .editor-actions {
-    position: sticky;
-    bottom: 0;
-    z-index: 10;
-    background: var(--canvas);
-    border-top: 1px solid var(--line);
     padding: 12px 0 calc(12px + env(safe-area-inset-bottom, 0px));
     gap: 10px;
   }
@@ -1762,9 +1786,14 @@ tbody tr:hover {
   .detail-grid aside {
     max-width: none;
   }
-  .detail-grid .secondary-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
+  .detail-heading .actions {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    width: 100%;
+    gap: 8px;
+  }
+  .detail-heading .actions .primary {
+    grid-column: 1 / -1;
   }
   .surface {
     padding: 22px 18px;
