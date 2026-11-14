@@ -10,18 +10,9 @@ DB_URL=postgres://$(DB_USER):$(DB_PASSWORD)@localhost:$(DB_PORT)/$(DB_NAME)?sslm
 help:
 	@echo "Available commands:"
 	@echo ""
-	@echo "  🐳 Docker Commands:"
-	@echo "  make up              - Start all containers (server-dev, hot reload)"
-	@echo "  make up-fg           - Same as 'make up' but attached, to watch Air rebuild logs"
-	@echo "  make down            - Stop all containers"
-	@echo "  make restart         - Restart all containers"
-	@echo "  make logs            - View logs from all containers"
-	@echo "  make logs-server     - View logs from server-dev"
-	@echo "  make reset           - Reset database & start fresh"
-	@echo ""
-	@echo "  🔨 Development Commands (all run inside the server-dev container):"
-	@echo "  make bootstrap       - Create initial roles & admin user"
-	@echo "  make sh-server       - Shell into server-dev container"
+	@echo "  ./dev up             - Start the complete isolated local environment"
+	@echo "  ./dev logs           - Follow local environment logs"
+	@echo "  ./dev down           - Stop local processes; retain local data"
 	@echo ""
 	@echo "  🗄️  Database Commands:"
 	@echo "  make migrate-up      - Run database migrations up"
@@ -30,54 +21,8 @@ help:
 	@echo "  make migrate-version - Show current migration version"
 	@echo "  make migrate-create  - Create new migration (NAME=xxx)"
 	@echo ""
-	@echo "  🏗️  Build Commands:"
-	@echo "  make sqlc             - Generate code from SQL queries"
-	@echo "  make build-server     - Build server-dev image (with Air)"
-	@echo "  make build-all        - Build the server-dev image"
-
-# ============================================
-# DOCKER
-# ============================================
-.PHONY: up up-fg down restart logs logs-server reset
-
-up:
-	docker compose up -d
-
-up-fg:
-	docker compose up
-
-down:
-	docker compose down
-
-restart: down up
-
-logs:
-	docker compose logs -f
-
-logs-server:
-	docker compose logs -f server-dev
-
-reset:
-	docker compose down -v
-	docker compose up -d
-	sleep 5
-	$(MAKE) migrate-up
-
-# ============================================
-# DEVELOPMENT
-# ============================================
-.PHONY: bootstrap sh-server build-server build-all
-
-bootstrap:
-	docker compose exec server-dev go run ./cmd/bootstrap/main.go
-
-sh-server:
-	docker compose exec server-dev sh
-
-build-server:
-	docker build -f Dockerfile.dev --build-arg AIR_CONFIG=.air.server.toml -t notification-server-dev:latest .
-
-build-all: build-server
+	@echo "  🏗️  Code generation:"
+	@echo "  make sqlc            - Generate code from SQL queries"
 
 # ============================================
 # DATABASE MIGRATION

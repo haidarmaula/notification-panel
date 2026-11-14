@@ -41,72 +41,20 @@ python3 scripts/check-onboarding.py --run
 python3 -B -m unittest discover -s scripts -p 'test_check_onboarding.py'
 ```
 
-The first command checks the five onboarding pages' local links/headings, Bash syntax, and allowed safe examples. `--run` additionally executes the actual first safe Go block from this guide and the README, deduplicating repeated commands and failing on a nonzero exit or a test filter that runs no tests. It requires Go on PATH and may download dependencies. It never executes later database, API, integration, or provider examples. The last command tests the checker itself, including deliberately broken examples; these checks do not establish that the login walkthrough or live delivery works.
+The first command checks the six onboarding pages' local links/headings, Bash syntax, and allowed safe examples. `--run` additionally executes the actual first safe Go block from this guide and the README, deduplicating repeated commands and failing on a nonzero exit or a test filter that runs no tests. It requires Go on PATH and may download dependencies. It never executes later database, API, integration, or provider examples. The last command tests the checker itself, including deliberately broken examples; these checks do not establish that the login walkthrough or live delivery works.
 
-## 2. Run the local API, not live delivery
+## 2. Run the complete local environment
 
-For the complete persistent developer stack (frontend, BFF, API, PostgreSQL,
-Kafka, workers, scheduler and an isolated external-provider simulator), use
-[full local development](local-development.md): `./dev up` from the repository
-root. The smaller manual API recipe below remains useful for API-only work.
+Use [`./dev`](local-development.md) as the canonical local runtime. It starts
+the persistent isolated frontend, BFF, API, PostgreSQL, Kafka, workers and
+scheduler with a synthetic provider. The runner uses private local settings and
+Docker volumes; it does not load the repository `.env` or staging credentials.
+Follow its prerequisites, startup, login, checks and stop instructions before
+using infrastructure-dependent examples.
 
-Prerequisites: Docker with Compose, Make, host `migrate`, curl, and jq for the smoke example. Reserve the configured PostgreSQL host port and API port 8080. Use a development-only database: migration commands change its schema.
-
-Before starting, run `docker context show` and `docker info` to confirm the intended daemon is reachable. Having the Docker CLI installed is not enough. If `docker info` hangs, interrupt it and resolve Docker Desktop/daemon availability with the environment owner before proceeding; do not reset Docker or stop existing workloads to make this guide run.
-
-Inspect the [Compose file](../docker-compose.yml) and any existing `.env`. The default file has fixed container names, so a different Compose project name alone does not isolate it from an existing development stack. Do not overwrite credentials, reuse an occupied service, or migrate a shared database. Every Make target includes `.env`, including `make help` and `make sqlc`.
-
-```bash
-test -f .env || cp .env.example .env
-```
-
-Edit `.env` with local `DB_USER`, `DB_PASSWORD`, `DB_NAME`, `DB_PORT`, `DB_SSLMODE`, `API_KEY`, `ACCESS_SECRET`, `REFRESH_SECRET`, and `BOOTSTRAP_SUPER_ADMIN_*` values. Keep `DB_HOST=postgres` for the container network. Use a valid bootstrap email and an 8–72-byte password. Treat `.env` as private; never commit secrets. The older OneSignal/Kafka entries in the template are not a deployment policy for the current workers.
-
-For this local recipe, choose a long random alphanumeric database password: the Makefile interpolates credentials directly into its migration URL without encoding URL-special characters.
-
-Start PostgreSQL, migrate it, and bootstrap from the host:
-
-```bash
-docker compose up -d --wait postgres
-make migrate-up
-DB_HOST=127.0.0.1 go run ./cmd/bootstrap
-```
-
-Then start the API in its own terminal from the repository root:
-
-```bash
-DB_HOST=127.0.0.1 HTTP_LISTEN_ADDRESS=127.0.0.1:8080 go run ./cmd/server
-```
-
-These commands run whole Go packages, including sibling source files. Host environment overrides point at the published PostgreSQL port; the remaining values load from `.env`. `make migrate-up` also targets `localhost:DB_PORT`, regardless of `DB_HOST`. Migrations seed roles; bootstrap creates the first super-admin using that existing role and should log `bootstrap completed`. It does not reset an existing account's password. Wait for the API listener message, then use another terminal for the smoke requests below. API logs appear in the server terminal.
-
-**Current hot-reload caveat:** [the Air recipe](../.air.server.toml) builds only `cmd/server/main.go`, but HTTP lifecycle functions now live in sibling [lifecycle.go](../cmd/server/lifecycle.go). Do not use the current `server-dev`/`make up` recipe as the verified API startup path; the package command above includes those definitions without changing deployment configuration.
-
-This minimal path intentionally does not start Kafka. The broader Compose file also defines Kafka and Kafka UI (loopback port 8090), but no scheduler or worker. Running the API does not enable FCM delivery, mobile enrollment, or receipts. A working profile endpoint does not prove those flows work.
-
-### Verify login and a protected read
-
-Use Bash for this example. Read local values interactively rather than putting passwords into shell history; the script does not print tokens. The subshell stops on login/token/profile errors and keeps its credential variables out of the calling shell. Install jq before running it, and do not enable shell tracing.
-
-```bash
-(
-set -euo pipefail
-read -r -s -p 'Local API key: ' K; printf '\n'
-read -r -p 'Bootstrap email: ' E
-read -r -s -p 'Bootstrap password: ' P; printf '\n'
-LOGIN=$(jq -n --arg email "$E" --arg password "$P" \
-  '{email:$email,password:$password}' | \
-  curl -fsS http://127.0.0.1:8080/api/v1/auth/login \
-    -H "X-API-Key: $K" -H 'Content-Type: application/json' --data-binary @-)
-T=$(printf '%s' "$LOGIN" | jq -er '.data.access_token')
-curl -fiSs http://127.0.0.1:8080/api/v1/profile \
-  -H "X-API-Key: $K" -H "Authorization: Bearer $T"
-)
-```
-
-Expected: login succeeds with access/refresh tokens; profile returns HTTP 200 and the bootstrap user's identity with `role_name: SUPER_ADMIN`, not a password/hash. A request with no API key returns 401. If login fails, stop before the profile request and check the key, bootstrap identity, migrations, and API terminal logs. Do not share raw login output.
-
-Stop the host API with Ctrl-C in its terminal. Stop the local Compose dependencies with `make down` when appropriate; it preserves named data volumes. `make reset` destroys development volumes and is not an ordinary recovery step. Do not run a second local stack over someone else's existing ports or database.
+The Makefile remains for migration authoring and SQL code generation. Its
+targets include `.env`; see [`.env.example`](../.env.example) for the values
+used by host migration commands. `make help` does not start the runtime.
 
 ### Why a new application cannot immediately send
 
@@ -172,7 +120,5 @@ Neither fixture needs real FCM credentials. Do not substitute a live token or pr
 Protected server/bootstrap deployment uses `--deployment`; worker/scheduler use fixed protected policies. Restricted replay and retention require their own authority and review. Do not change file ownership/permissions or execute grant scripts just to make a tutorial succeed. There is no production onboarding shortcut in `.env.example`.
 
 The current working tree may contain deployment/migration work under review. A local file's presence does not prove that its grants are installed or reviewed for the target environment. Migration tools apply pending files too: inspect the tree and coordinate ownership before migrating a shared database.
-
-The old `scripts/dev.sh` tmux helper is optional convenience, not a prerequisite. Its worker/scheduler log windows do not correspond to services in the default Compose stack. Use the explicit commands above as the onboarding path.
 
 Next: consult the [architecture failure table](architecture.md#failure-questions-to-ask-while-reading) when diagnosing an issue, and the [readiness plan](analysis/production-readiness-plan.md) when deciding what has actually been verified in a deployment.

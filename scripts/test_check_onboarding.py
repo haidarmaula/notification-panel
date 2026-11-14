@@ -11,6 +11,9 @@ SPEC.loader.exec_module(checker)
 
 
 class OnboardingChecksTest(unittest.TestCase):
+    def test_canonical_local_development_guide_is_checked(self):
+        self.assertIn("docs/local-development.md", checker.PAGES)
+
     def test_numbered_and_duplicate_headings(self):
         self.assertEqual(checker.heading_ids("## 2. Run locally\n## Same\n## Same\n"), {"2-run-locally", "same", "same-1"})
 

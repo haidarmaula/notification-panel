@@ -17,6 +17,7 @@ PAGES = (
     "docs/notification-journey.md",
     "docs/architecture.md",
     "docs/development-guide.md",
+    "docs/local-development.md",
 )
 EXAMPLES = {
     "README.md": "First safe command",
