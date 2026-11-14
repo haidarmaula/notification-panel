@@ -1,5 +1,10 @@
 # Mobile Sync API Documentation
 
+> **Historical, unmounted API contract.** This legacy sync route is not
+> registered by the current server. Use the current
+> [mobile installation API](mobile-installations-api.md) and
+> [mobile receipt API](mobile-receipts.md).
+
 JSON input limits and shared 413/400 behavior are documented in
 [request body contract](request-bodies-api.md) (M02d, locally verified; not deployed).
 

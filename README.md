@@ -4,7 +4,7 @@ A Go backend for push-notification campaigns across multiple mobile applications
 
 **The key idea:** accepting a campaign, sending it to FCM, and receiving it on a device are different events. PostgreSQL records durable progress; Kafka transports work and delivery updates.
 
-This repository contains the backend, not the staff portal or production mobile applications. The Go module/import prefix is `hello`.
+This repository contains the backend and a staff dashboard under `web/dashboard`; production mobile applications are external clients. The Go module/import prefix is `hello`.
 
 ## Start here
 
@@ -54,11 +54,9 @@ With the Go version declared in [go.mod](go.mod) available on PATH, from the rep
 go test -mod=readonly ./internal/jsonobject/...
 ```
 
-This tests strict JSON decoding without Docker, a database, `.env`, or provider credentials. The first run may need network access to download Go tooling/modules. Continue with the [developer guide](docs/development-guide.md), which separates unit checks, the API-only local environment, and isolated delivery fixtures.
+This tests strict JSON decoding without Docker, a database, `.env`, or provider credentials. The first run may need network access to download Go tooling/modules. Continue with the [developer guide](docs/development-guide.md) for unit checks and the canonical full local environment in [full local development](docs/local-development.md).
 
-**Do not expect `make up` to send notifications.** The default Compose file defines PostgreSQL, Kafka, Kafka UI, and the development API, but no scheduler or worker. Its current Air build also needs care; use the [package-based API startup](docs/development-guide.md#2-run-the-local-api-not-live-delivery). Protected policy and approved delivery setup are additional requirements.
-
-For a complete actual local environment, run `./dev up` and open
+For the canonical full local environment, run `./dev up` and open
 `http://127.0.0.1:5173/login`. Run `./dev credentials` for the local account and
 `./dev down` to stop without deleting data. The API, BFF, database, Kafka, workers
 and scheduler are real; external FCM is an isolated simulator. See
@@ -81,6 +79,10 @@ and scheduler are real; external FCM is an isolated simulator. See
 
 Production dispatch remains on hold; local tests and recorded Android smoke evidence are not staging or production acceptance. The [readiness plan](docs/analysis/production-readiness-plan.md) is the live register of open gates, not this introductory page.
 
-Legacy packages and historical documents remain. In particular, `internal/features/notifications` is not registered by the current server; scoped campaign routes live in `internal/features/applications`. Start with [actual executable wiring](cmd/server/main.go), not a directory name. Older database-reference sections and ADRs retain historical context; check current migrations and implementation for the behavior being changed.
+Retired global feature packages have been removed. Historical API contracts,
+database references and ADRs remain for context; they do not establish current
+runtime behavior. Scoped campaign routes live in
+`internal/features/applications`. Start with [actual executable wiring](cmd/server/main.go)
+and check current migrations and implementation when changing behavior.
 
 For contributions, follow [repository instructions](AGENTS.md), [Go standards](docs/go-standards.md), and [pinned skill provenance](docs/tooling/go-skills.md). Keep relevant API contracts, onboarding explanations, and tests aligned when changing behavior. Never infer production readiness from a green unit suite.

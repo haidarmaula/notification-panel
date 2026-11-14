@@ -1,5 +1,11 @@
 # Notifications API Documentation
 
+> **Historical, unmounted API contract.** The global notification routes on
+> this page are not registered by the current server. Use the current
+> [campaign acceptance API](campaign-acceptance-api.md),
+> [applications API](applications-api.md), and
+> [mobile receipt API](mobile-receipts.md).
+
 JSON input limits and shared 413/400 behavior are documented in
 [request body contract](request-bodies-api.md) (M02d, locally verified; not deployed).
 

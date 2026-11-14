@@ -67,11 +67,12 @@ Host listeners:
 | `http://127.0.0.1:18090/bff/` | Local BFF; Vite proxies `/bff` here |
 | `https://127.0.0.1:18082/api/v1/` | Actual API behind a verified mTLS development gateway |
 
-The BFF uses port 18090 to avoid the older Compose Kafka UI on 8090. Vite's
-`HELLO_DASHBOARD_PROXY` is a server-only development routing setting, not an API
-key. The ordinary manual BFF recipe retains its default port 8090. Published
-ports bind loopback only. If a port is already occupied, stop its owner yourself;
-the runner never kills unrelated processes.
+The local BFF listens on port 18090, and Vite proxies `/bff` requests there.
+The standalone Vite configuration defaults to BFF port 8090; the local runner
+sets `HELLO_DASHBOARD_PROXY` to its own listener. This server-only routing
+setting is not an API key. Published ports bind loopback only. If a port is
+already occupied, stop its owner yourself; the runner never kills unrelated
+processes.
 
 Private generated material, host binaries, logs, screenshots and supervisor state
 live under ignored `tmp/local-dev/`. PostgreSQL and Kafka data live in named

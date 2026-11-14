@@ -1,5 +1,11 @@
 # Users & Device Tokens API Documentation
 
+> **Historical, unmounted API contract.** These global `/users` and
+> `/device-tokens` routes are not registered by the current server. Do not use
+> this page as a live contract. See the current [application API](applications-api.md),
+> [mobile installation API](mobile-installations-api.md), and
+> [mobile receipt API](mobile-receipts.md).
+
 JSON input limits and shared 413/400 behavior are documented in
 [request body contract](request-bodies-api.md) (M02d, locally verified; not deployed).
 
@@ -17,7 +23,10 @@ All endpoints require authentication via:
 
 The authenticated staff ID is extracted from the JWT and used for authorization checks.
 
-**Note:** Device token endpoints (`/device-tokens`) are designed for mobile app usage. For production, authentication should use a mobile JWT or API key. Currently, `user_id` is passed in the request body for simplicity.
+**Historical note:** The examples below show a body-supplied `user_id` from the
+retired global contract. The current API does not accept this route or use a
+body-supplied user ID to establish mobile identity; see the mobile installation
+API for the current enrollment contract.
 
 ---
 

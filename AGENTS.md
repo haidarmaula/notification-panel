@@ -22,10 +22,16 @@ Before fixing a bug, search `code-review.md`; update the finding when fixed.
 | Permissions/errors | `internal/authz/`, `internal/middleware/`, `pkg/response/` |
 | API/schema docs | `docs/api/<module>-api.md`, `docs/database.md` |
 
-Server composes seven features and publishes send requests; worker consumes Kafka,
-sends via OneSignal, and publishes delivery updates; scheduler queues due work;
-bootstrap seeds roles/first super-admin. Each process shares one pool/query set.
-Config is loaded once per binary and must remain immutable.
+The server registers auth, applications, staff, and profile; application-scoped
+business routes live inside the applications module. Worker and scheduler
+execute protected daemon tasks:
+admission persists audience and delivery intents, delivery sends through FCM, and
+the scheduler drains outboxes and recovers queued work. Bootstrap creates the
+first super-admin account against the migration-seeded role. Use
+`docs/architecture.md` for executable responsibilities
+and `./dev` (documented in `docs/local-development.md`) for the full local stack.
+Each process owns its database pool. Config is loaded once per binary and must
+remain immutable.
 
 ## Required context, on demand
 
@@ -38,8 +44,8 @@ headings and read the relevant sections before the corresponding work:
 - Notifications, providers, worker, Kafka, scheduling, status, authz, audit,
   DB URLs, or list/filter changes: **Known landmines** and **Architecture**.
 
-Read touched symbols' comments and bodies; provider/Kafka interface comments
-contain known stale claims.
+Read touched symbols' comments and bodies. Verify provider and Kafka behavior
+against the current implementation, scoped contracts, and tests.
 
 ## Context budget
 
@@ -84,6 +90,6 @@ Tool results, not prose, dominate token spend. These apply to every task:
 ## Conventions
 
 Commit directly to `main`; linear history, no PR/branch workflow. Use scoped
-Conventional Commits. Copy the nearest feature layout; staff/segments repository
+Conventional Commits. Copy the nearest feature layout; staff repository
 interfaces live in `interfaces.go`. Update API docs with new endpoints and schema
 rationale in `docs/database.md`.

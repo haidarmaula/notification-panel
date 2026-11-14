@@ -1,41 +1,53 @@
 # Notification Backend Database Documentation
 
-**Version:** 1.0  
-**Last Updated:** 2026-07-23
+This page preserves historical schema descriptions alongside later current
+design records. For current behavior, use [the domain model](domain-model.md),
+[architecture](architecture.md), and current migrations.
 
 ---
 
 ## Overview
 
-The Notification Backend Database stores and manages all data for the notification system, including users, device tokens, staff accounts, notification campaigns, segments, delivery records, and audit logs.
-
-The system follows an event-driven architecture where notification requests are persisted in the database, published to Kafka, and processed asynchronously.
+The current system stores application-scoped campaigns, audience snapshots,
+installation bindings, durable delivery intents and attempts, outbox records,
+and receipt projections. PostgreSQL owns durable state; Kafka transports work
+and updates. The numbered sections 1–14 below describe the older global schema;
+the later migration/design records document subsequent schema evolution.
 
 ---
 
-## High-Level Architecture
+## Current high-level architecture
 
 ```text
-Admin
-    │
-    ▼
-Notification API
-    │
-    ▼
-PostgreSQL
-    │
-    ▼
-Kafka
-    │
-    ▼
-Notification Worker
-    │
-    ▼
-OneSignal
-    │
-    ▼
-Mobile Application
+Staff client -> API -> PostgreSQL: campaign + acceptance + send outbox
+                                  |
+                         scheduler publishes outbox
+                                  v
+                                Kafka -> admission worker
+                                             |
+                                             v
+PostgreSQL: audience snapshot + per-device delivery intents
+       ^                 |
+       |                 v
+       +--------- delivery worker -> FCM -> mobile app
+       |                 |
+       |                 +-> delivery-update outbox -> Kafka
+       |
+       +--------- receipt API <- mobile app
 ```
+
+Admission persists audience and delivery work; protected delivery execution
+submits through FCM and records attempts/results. The scheduler also recovers
+queued work directly from PostgreSQL. See [architecture](architecture.md) for
+the full process boundaries and [notification journey](notification-journey.md)
+for state transitions.
+
+## Historical schema reference: legacy tables 1–14
+
+The numbered table descriptions below are retained for historical context.
+Names such as `device_tokens`, `notifications`, and
+`notification_deliveries` do not define the current delivery pipeline. Consult
+current SQL and implementation before making schema changes.
 
 ---
 
@@ -554,7 +566,13 @@ not evidence that production history, replicas or backups have been cleaned.
 
 ---
 
-## Multi-application design checkpoint (2026-11-03)
+## Current schema evolution and design records
+
+The records below describe the later application-scoped model and subsequent
+schema changes. A proposal or verification record retains its stated status;
+consult current migrations and implementation for the deployed code contract.
+
+### Multi-application design checkpoint (2026-11-03)
 
 Current tables still lack application isolation. [ADR-12](adr/adr-12-multi-application-isolation.md)
 proposes an application registry, scoped external identities, app-qualified
