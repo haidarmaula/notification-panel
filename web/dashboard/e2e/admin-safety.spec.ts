@@ -8,7 +8,11 @@ async function login(page: Page, waitForWorkspace = true) {
   await page.getByRole('textbox', { name: /^Password/ }).fill('fixture-only');
   const signIn = page.getByRole('button', { name: 'Sign in' });
   await expect(signIn).toBeEnabled();
+  const loginResponse = page.waitForResponse('**/bff/login');
   await signIn.click();
+  const response = await loginResponse;
+  expect(response.status()).toBe(200);
+  await response.finished();
   if (waitForWorkspace) {
     await expect(page.getByRole('heading', { name: 'Choose application' })).toBeVisible();
   } else {
