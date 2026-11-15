@@ -38,6 +38,8 @@ func TestApplicationHTTP(t *testing.T) {
 		require.NoError(t, e)
 		_, e = pool.Exec(context.Background(), "DELETE FROM application_staff_grants WHERE application_id IN(SELECT id FROM applications WHERE key=ANY($1))", keys)
 		require.NoError(t, e)
+		_, e = pool.Exec(context.Background(), "DELETE FROM application_onboarding WHERE application_id IN(SELECT id FROM applications WHERE key=ANY($1))", keys)
+		require.NoError(t, e)
 		_, e = pool.Exec(context.Background(), "DELETE FROM applications WHERE key=ANY($1)", keys)
 		require.NoError(t, e)
 		_, e = pool.Exec(context.Background(), "DELETE FROM staff_sessions WHERE staff_user_id=ANY($1)", ids)

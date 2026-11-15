@@ -6,7 +6,9 @@ async function login(page: Page, waitForWorkspace = true) {
   await page.goto('/login');
   await page.getByRole('textbox', { name: /^Email/ }).fill('staff@example.invalid');
   await page.getByRole('textbox', { name: /^Password/ }).fill('fixture-only');
-  await page.getByRole('button', { name: 'Sign in' }).click();
+  const signIn = page.getByRole('button', { name: 'Sign in' });
+  await expect(signIn).toBeEnabled();
+  await signIn.click();
   if (waitForWorkspace) {
     await expect(page.getByRole('heading', { name: 'Choose application' })).toBeVisible();
   } else {

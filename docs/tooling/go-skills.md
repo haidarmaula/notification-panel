@@ -14,11 +14,13 @@ loading the complete collection for each task.
 
 ## Integrity and updates
 
-Run `python3 scripts/check-go-skills.py` from any directory. It checks installed
-skill names, entry points, file-tree hashes and license against
-[the lock file](go-skills.lock.json), without network access. CI runs the same
-check. Hashes detect drift against the reviewed snapshot; they are not an
-independent signature or guarantee of upstream trustworthiness.
+Run `python3 scripts/check-go-skills.py` from any directory. It checks the
+`golang-*` skill directories against the locked names, entry points and file-tree
+hashes, and verifies the upstream license hash, without network access.
+Unrelated skill directories may coexist under `.agents/skills/`; they are outside
+the Go snapshot check. CI runs the same check. Hashes detect drift against the
+reviewed snapshot; they are not an independent signature or guarantee of
+upstream trustworthiness.
 
 For updates, select an explicit upstream commit and install into a temporary
 directory using the official Codex skill installer. Review changes to skills,

@@ -16,6 +16,10 @@
 !web/dashboard
 !web/dashboard/package.json
 !web/dashboard/pnpm-lock.yaml
+!web/dashboard/pnpm-workspace.yaml
+!web/dashboard/theme-fonts.config.ts
+!web/dashboard/fonts
+!web/dashboard/fonts/**
 !web/dashboard/index.html
 !web/dashboard/tsconfig.json
 !web/dashboard/vite.config.ts
@@ -23,3 +27,4 @@
 !web/dashboard/src/**
 !web/dashboard/scripts
 !web/dashboard/scripts/bundle-budget.mjs
+**/node_modules

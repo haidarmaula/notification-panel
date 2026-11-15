@@ -262,8 +262,10 @@ func TestApplicationRegistryLockAndCAS(t *testing.T) {
 	app, err := repo.Create(ctx, "concurrent-app", "Concurrent")
 	require.NoError(t, err)
 	defer func() {
-		_, err := pool.Exec(context.Background(), "DELETE FROM applications WHERE id=$1", app.ID)
-		require.NoError(t, err)
+		_, cleanupErr := pool.Exec(context.Background(), "DELETE FROM application_onboarding WHERE application_id=$1", app.ID)
+		require.NoError(t, cleanupErr)
+		_, cleanupErr = pool.Exec(context.Background(), "DELETE FROM applications WHERE id=$1", app.ID)
+		require.NoError(t, cleanupErr)
 	}()
 	first, err := pool.Begin(ctx)
 	require.NoError(t, err)

@@ -24,8 +24,9 @@ def tree_hash(directory):
     return digest.hexdigest()
 
 
-def main():
-    lock = json.loads(LOCK.read_text())
+def check_snapshot(skills_dir, lock_path):
+    """Validate only the locked Go skill namespace and shared upstream license."""
+    lock = json.loads(lock_path.read_text())
     if (
         lock["version"] != 1
         or lock["repository"] != "https://github.com/samber/cc-skills-golang"
@@ -39,19 +40,30 @@ def main():
         Path(name).name != name or not name.startswith("golang-") for name in names
     ):
         raise ValueError("invalid or duplicate locked skill names")
-    actual = sorted(path.name for path in SKILLS.iterdir() if path.is_dir())
+    actual = sorted(
+        path.name
+        for path in skills_dir.iterdir()
+        if path.name.startswith("golang-") and (path.is_dir() or path.is_symlink())
+    )
     if actual != sorted(names):
-        raise ValueError("installed skill directories differ from the lock file")
+        raise ValueError("installed Go skill directories differ from the lock file")
     for entry in entries:
-        directory = SKILLS / entry["name"]
+        directory = skills_dir / entry["name"]
         if directory.is_symlink() or not (directory / "SKILL.md").is_file():
             raise ValueError(f"invalid skill entry point: {entry['name']}")
         if tree_hash(directory) != entry["sha256"]:
             raise ValueError(f"skill snapshot drift: {entry['name']}")
-    license_path = SKILLS / "cc-skills-golang.LICENSE"
-    if license_path.is_symlink() or hashlib.sha256(license_path.read_bytes()).hexdigest() != lock["license_sha256"]:
+    license_path = skills_dir / "cc-skills-golang.LICENSE"
+    if license_path.is_symlink() or hashlib.sha256(license_path.read_bytes()).hexdigest() != lock[
+        "license_sha256"
+    ]:
         raise ValueError("upstream license differs from the lock file")
-    print(f"Verified {len(entries)} pinned Go skills at {lock['commit']} (offline).")
+    return len(entries), lock["commit"]
+
+
+def main():
+    count, commit = check_snapshot(SKILLS, LOCK)
+    print(f"Verified {count} pinned Go skills at {commit} (offline).")
 
 
 if __name__ == "__main__":

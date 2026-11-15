@@ -186,6 +186,7 @@ for (const theme of ['light', 'dark']) {
       await page.screenshot({ path: `test-results/polish-editor-${width}-${theme}.png` });
       page.once('dialog', (dialog) => dialog.accept());
       await page.getByRole('link', { name: 'All campaigns', exact: true }).click();
+      await expect(page).toHaveURL(`/apps/${app}/campaigns`);
       await page.goto(campaign);
       await expect(
         page.getByRole('button', { name: 'Schedule delivery', exact: true }),
