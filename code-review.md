@@ -839,6 +839,15 @@ state first, show a draft-specific review action, and fetch delivery data only
 for non-drafts. Browser regressions cover draft-to-queued refresh, failed campaign
 lookup and recovery, and preserved incomplete statistics for non-drafts.
 
+**FE8 — P2, fixed locally.** Campaign and delivery-log tables reserved only
+64 pixels for the `Open` column, leaving less space than its label after Astryx
+cell padding. Other data-mode tables relied on a 60-pixel default column floor.
+Action and data columns now have explicit readable width budgets. Browser
+regressions measure rendered header text against available cell space across
+application selection, campaigns/logs, staff, registry/grants, and delivery/open
+results in Stone, Y2K, and Matcha at 320 and 1440 pixels; page-level overflow
+remains absent while tables retain their own horizontal scrolling.
+
 ## Full local developer runtime — 2026-11-14
 
 The old Compose/Air recipe did not provide a complete current local delivery

@@ -10,7 +10,7 @@ export default defineConfig({
   webServer: {
     command: 'node e2e/server.mjs',
     url: 'http://127.0.0.1:4173/login',
-    reuseExistingServer: false,
+    reuseExistingServer: process.env.HELLO_E2E_REUSE_SERVER === '1',
     timeout: 90000,
   },
 });

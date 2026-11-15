@@ -1,178 +1,195 @@
-import { For, Show, createSignal } from 'solid-js';
-import { A, useParams, useNavigate, useSearchParams } from '@solidjs/router';
-import { createQuery } from '@tanstack/solid-query';
-import { ArrowLeft, ArrowRight, Megaphone, Plus } from 'lucide-solid';
+import { useState, type FormEvent } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { ArrowRightIcon, MegaphoneIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { Button } from '@astryxdesign/core/Button';
+import { Collapsible } from '@astryxdesign/core/Collapsible';
+import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { Heading } from '@astryxdesign/core/Heading';
+import { Icon } from '@astryxdesign/core/Icon';
+import { Link } from '@astryxdesign/core/Link';
+import { Layout, LayoutContent, LayoutFooter, LayoutHeader } from '@astryxdesign/core/Layout';
+import { HStack, VStack } from '@astryxdesign/core/Stack';
+import { Table, proportional, pixel } from '@astryxdesign/core/Table';
+import { Text } from '@astryxdesign/core/Text';
+import { TextInput } from '@astryxdesign/core/TextInput';
 import { data } from '../../lib/api/client';
 import type { CampaignSummary, Page } from '../../lib/api/types';
 import { Failure, Loading, Status } from '../../components/ui/Feedback';
-export default function Campaigns(props: { results?: boolean } = {}) {
-  const params = useParams();
+
+export default function Campaigns({ results = false }: { results?: boolean }) {
+  const { appId = '' } = useParams();
   const navigate = useNavigate();
   const [search, setSearch] = useSearchParams();
-  const [lookup, setLookup] = createSignal('');
-  const cursors = () =>
-    typeof search.pages === 'string' &&
-    search.pages.length < 2000 &&
-    /^[1-9][0-9]*(,[1-9][0-9]*)*$/.test(search.pages)
-      ? search.pages.split(',')
+  const [lookup, setLookup] = useState('');
+  const cursors =
+    typeof search.get('pages') === 'string' &&
+    (search.get('pages')?.length ?? 0) < 2000 &&
+    /^[1-9][0-9]*(,[1-9][0-9]*)*$/.test(search.get('pages') ?? '')
+      ? (search.get('pages') ?? '').split(',')
       : [];
   const setCursors = (value: string[]) =>
-    setSearch({ pages: value.length ? value.join(',') : undefined });
-  const query = createQuery(() => ({
-    queryKey: ['campaigns', params.appId, cursors().at(-1) ?? ''],
+    setSearch((current) => {
+      const next = new URLSearchParams(current);
+      if (value.length) next.set('pages', value.join(','));
+      else next.delete('pages');
+      return next;
+    });
+  const query = useQuery({
+    queryKey: ['campaigns', appId, cursors.at(-1) ?? ''],
     queryFn: ({ signal }) =>
       data<Page<CampaignSummary>>(
-        `/apps/${params.appId}/campaigns?limit=20${cursors().length ? `&after_id=${encodeURIComponent(cursors().at(-1)!)}` : ''}`,
+        `/apps/${appId}/campaigns?limit=20${cursors.length ? `&after_id=${encodeURIComponent(cursors.at(-1)!)}` : ''}`,
         signal,
       ),
-  }));
+  });
+  const destination = (id: string) => `/apps/${appId}/campaigns/${id}${results ? '/results' : ''}`;
+  const rows = (query.data?.items ?? []) as (CampaignSummary & Record<string, unknown>)[];
+
+  function openCampaign(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (/^[1-9][0-9]{0,18}$/.test(lookup)) navigate(destination(lookup));
+  }
+
   return (
-    <>
-      <header class="page-heading">
-        <div>
-          <h1>{props.results ? 'Log pengiriman' : 'Campaign'}</h1>
-          <p class="muted">
-            {props.results
-              ? 'Pilih campaign untuk melihat catatan provider, perangkat, dan pembukaan.'
-              : 'Kelola draft, jadwal, dan hasil pengiriman campaign.'}
-          </p>
-        </div>
-        <A class="button primary" href={`/apps/${params.appId}/campaigns/new`}>
-          <Plus size={18} />
-          Buat campaign
-        </A>
-      </header>
-      <div class="section-bar campaign-toolbar">
-        <h2>Semua campaign</h2>
-        <details class="campaign-shortcut">
-          <summary>Buka berdasarkan ID</summary>
-          <form
-            class="campaign-lookup"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (/^[1-9][0-9]{0,18}$/.test(lookup()))
-                navigate(
-                  `/apps/${params.appId}/campaigns/${lookup()}${props.results ? '/results' : ''}`,
-                );
-            }}
-          >
-            <label for="campaign-id">Buka berdasarkan ID campaign</label>
-            <div class="actions">
-              <input
-                id="campaign-id"
-                required
-                inputmode="numeric"
-                pattern="[1-9][0-9]{0,18}"
-                value={lookup()}
-                onInput={(event) => setLookup(event.currentTarget.value)}
-                placeholder="Contoh: 13"
-              />
-              <button class="button secondary" type="submit">
-                Buka
-              </button>
-            </div>
-          </form>
-        </details>
-      </div>
-      <div
-        class="campaign-data-region"
-        aria-busy={query.isPending}
-        data-populated={!query.isPending && !query.isError && !!query.data?.items.length}
-      >
-        <Show when={!query.isPending} fallback={<Loading rows={5} />}>
-          <Show
-            when={!query.isError}
-            fallback={<Failure error={query.error} retry={() => void query.refetch()} />}
-          >
-            <Show
-              when={query.data?.items.length}
-              fallback={
-                <div class="empty-state">
-                  <span class="empty-icon">
-                    <Megaphone size={27} />
-                  </span>
-                  <h2>Mulai dari pesan pertama.</h2>
-                  <p>Buat draft, pilih penerima, lalu tinjau sebelum mengirim.</p>
-                  <A class="button primary" href={`/apps/${params.appId}/campaigns/new`}>
-                    <Plus size={16} />
-                    Buat campaign pertama
-                  </A>
-                </div>
-              }
-            >
-              <div class="table-wrap">
-                <table class="campaign-table">
-                  <thead>
-                    <tr>
-                      <th>Nama campaign</th>
-                      <th>Status</th>
-                      <th>
-                        <span class="sr-only">Tindakan</span>
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <For each={query.data?.items}>
-                      {(campaign) => (
-                        <tr>
-                          <td>
-                            <A
-                              class="campaign-title"
-                              href={`/apps/${params.appId}/campaigns/${campaign.id}${props.results ? '/results' : ''}`}
-                            >
-                              {campaign.title}
-                            </A>
-                            <span class="row-meta">#{campaign.id}</span>
-                          </td>
-                          <td>
-                            <Status value={campaign.status} />
-                          </td>
-                          <td>
-                            <A
-                              class="row-action"
-                              href={`/apps/${params.appId}/campaigns/${campaign.id}${props.results ? '/results' : ''}`}
-                              aria-label={`Buka ${campaign.title}`}
-                            >
-                              <ArrowRight size={18} />
-                            </A>
-                          </td>
-                        </tr>
-                      )}
-                    </For>
-                  </tbody>
-                </table>
-              </div>
-            </Show>
-            <div class="pagination">
-              <span>Halaman {cursors().length + 1}</span>
-              <div>
-                <button
-                  class="button secondary small"
-                  disabled={!cursors().length}
-                  onClick={() => setCursors(cursors().slice(0, -1))}
-                >
-                  <ArrowLeft size={15} />
-                  Sebelumnya
-                </button>
-                <button
-                  class="button secondary small"
-                  disabled={!query.data?.next_after_id}
+    <Layout
+      height="fill"
+      padding={6}
+      header={
+        <LayoutHeader>
+          <HStack gap={4} wrap="wrap" hAlign="between" vAlign="center">
+            <VStack gap={1}>
+              <Heading level={1}>{results ? 'Delivery logs' : 'Campaigns'}</Heading>
+              <Text color="secondary">
+                {results
+                  ? 'Choose a campaign to review provider, device, and open records.'
+                  : 'Manage campaign drafts, schedules, and delivery results.'}
+              </Text>
+            </VStack>
+            <Button
+              label="Create campaign"
+              variant="primary"
+              icon={<Icon icon={PlusIcon} size="sm" />}
+              href={`/apps/${appId}/campaigns/new`}
+            />
+          </HStack>
+        </LayoutHeader>
+      }
+      footer={
+        <LayoutFooter hasDivider>
+          <HStack gap={4} wrap="wrap" hAlign="between" vAlign="center">
+            <Text>Messages are sent only after you review and confirm the campaign.</Text>
+            <HStack gap={3} wrap="wrap" hAlign="between" vAlign="center">
+              <Text>Page {cursors.length + 1}</Text>
+              <HStack gap={2}>
+                <Button
+                  label="Previous"
+                  variant="secondary"
+                  size="sm"
+                  isDisabled={!cursors.length || query.isFetching}
+                  onClick={() => setCursors(cursors.slice(0, -1))}
+                />
+                <Button
+                  label="Next"
+                  variant="secondary"
+                  size="sm"
+                  isDisabled={!query.data?.next_after_id || query.isFetching}
                   onClick={() => {
                     const cursor = query.data?.next_after_id;
-                    if (cursor) setCursors([...cursors(), cursor]);
+                    if (cursor) setCursors([...cursors, cursor]);
                   }}
-                >
-                  Berikutnya
-                  <ArrowRight size={15} />
-                </button>
-              </div>
-            </div>
-          </Show>
-        </Show>
-      </div>
-      <p class="page-footnote">
-        Pesan hanya dikirim setelah Anda meninjau dan mengonfirmasi campaign.
-      </p>
-    </>
+                />
+              </HStack>
+            </HStack>
+          </HStack>
+        </LayoutFooter>
+      }
+    >
+      <LayoutContent>
+        <VStack gap={4}>
+          <HStack gap={4} wrap="wrap" hAlign="end" vAlign="center">
+            <Collapsible
+              trigger={
+                <Text type="supporting" color="secondary">
+                  Open by campaign ID
+                </Text>
+              }
+              defaultIsOpen={false}
+            >
+              <form onSubmit={openCampaign}>
+                <HStack gap={2} wrap="wrap" vAlign="end">
+                  <TextInput
+                    label="Open by campaign ID"
+                    type="text"
+                    inputMode="numeric"
+                    value={lookup}
+                    onChange={setLookup}
+                    placeholder="Example: 13"
+                    isRequired
+                  />
+                  <Button label="Open" variant="secondary" type="submit" />
+                </HStack>
+              </form>
+            </Collapsible>
+          </HStack>
+          {query.isPending ? (
+            <Loading rows={5} />
+          ) : query.isError ? (
+            <Failure error={query.error} retry={() => void query.refetch()} />
+          ) : rows.length === 0 ? (
+            <EmptyState
+              icon={<Icon icon={MegaphoneIcon} size="md" />}
+              title="Start with your first message"
+              description="Create a draft, choose recipients, then review before sending."
+              actions={
+                <Button
+                  label="Create your first campaign"
+                  variant="primary"
+                  icon={<Icon icon={PlusIcon} size="sm" />}
+                  href={`/apps/${appId}/campaigns/new`}
+                />
+              }
+            />
+          ) : (
+            <Table
+              data={rows}
+              idKey="id"
+              density="balanced"
+              columns={[
+                {
+                  key: 'title',
+                  width: proportional(3, { minWidth: 220 }),
+                  header: 'Campaign name',
+                  renderCell: (item) => (
+                    <Link href={destination(item.id)}>
+                      <VStack gap={0}>
+                        <Text>{item.title}</Text>
+                        <Text color="secondary">Campaign #{item.id}</Text>
+                      </VStack>
+                    </Link>
+                  ),
+                },
+                {
+                  key: 'status',
+                  width: pixel(150),
+                  header: 'Status',
+                  renderCell: (item) => <Status value={item.status} />,
+                },
+                {
+                  key: 'action',
+                  width: pixel(112),
+                  header: 'Open',
+                  renderCell: (item) => (
+                    <Link href={destination(item.id)} label={`Open ${item.title}`}>
+                      <Icon icon={ArrowRightIcon} size="sm" />
+                    </Link>
+                  ),
+                },
+              ]}
+            />
+          )}
+        </VStack>
+      </LayoutContent>
+    </Layout>
   );
 }

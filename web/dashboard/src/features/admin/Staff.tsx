@@ -1,13 +1,27 @@
-import { For, Show, createEffect, createSignal, onCleanup } from 'solid-js';
-import { A, useNavigate, useParams, useSearchParams } from '@solidjs/router';
-import { createQuery, useQueryClient } from '@tanstack/solid-query';
-import { ArrowLeft, ArrowRight, Plus, Search, Shield } from 'lucide-solid';
+import { useEffect, useRef, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Banner } from '@astryxdesign/core/Banner';
+import { Button } from '@astryxdesign/core/Button';
+import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { HStack, VStack } from '@astryxdesign/core/Stack';
+import { Heading } from '@astryxdesign/core/Heading';
+import { Link } from '@astryxdesign/core/Link';
+import { Section } from '@astryxdesign/core/Section';
+import { FormLayout } from '@astryxdesign/core/FormLayout';
+import { Selector } from '@astryxdesign/core/Selector';
+import { Table, proportional } from '@astryxdesign/core/Table';
+import { Text } from '@astryxdesign/core/Text';
+import { TextInput } from '@astryxdesign/core/TextInput';
 import { data } from '../../lib/api/client';
 import { Failure, Loading, Status } from '../../components/ui/Feedback';
-import { useWrite, WriteFeedback } from '../management/shared';
+import { useWrite } from '../management/data-hooks';
+import { WriteFeedback } from '../management/shared';
 import { useUnsaved } from '../../app/unsaved';
+import { PageFrame } from '../../components/ui/PageFrame';
 
 type StaffId = number | string;
+type StaffRole = 'SUPER_ADMIN' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
 type StaffMember = {
   id: StaffId;
   role_id: number;
@@ -18,7 +32,6 @@ type StaffMember = {
   created_at: string;
   updated_at: string;
 };
-type StaffRole = 'SUPER_ADMIN' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
 type StaffPage = {
   data: StaffMember[];
   total: number;
@@ -27,205 +40,181 @@ type StaffPage = {
   total_pages: number;
 };
 type Envelope<T> = { data: T };
+
 const roles: StaffRole[] = ['SUPER_ADMIN', 'ADMIN', 'OPERATOR', 'VIEWER'];
 const staffIdPattern = /^[1-9][0-9]{0,18}$/;
 const maxStaffId = 9223372036854775807n;
+
 function isStaffId(value: string) {
   return staffIdPattern.test(value) && BigInt(value) <= maxStaffId;
 }
+
 function passwordBytes(value: string) {
   return new TextEncoder().encode(value).length;
 }
 
+function StaffLink({ id, children }: { id: string; children: React.ReactNode }) {
+  return <Link href={`/apps/admin/staff/${id}`}>{children}</Link>;
+}
+
 export default function Staff() {
   const [params, setParams] = useSearchParams();
-  const initialSearch = typeof params.search === 'string' ? params.search.slice(0, 255) : '';
-  const [term, setTerm] = createSignal(initialSearch);
-  const pageNumber = () => {
-    const value = typeof params.page === 'string' ? Number(params.page) : 1;
+  const [term, setTerm] = useState(() => (params.get('search') ?? '').slice(0, 255));
+  const pageNumber = (() => {
+    const value = Number(params.get('page') ?? '1');
     return Number.isSafeInteger(value) && value > 0 ? value : 1;
-  };
-  const search = () => (typeof params.search === 'string' ? params.search : '');
-  const page = createQuery(() => ({
-    queryKey: ['admin-staff', search(), pageNumber()],
+  })();
+  const search = params.get('search') ?? '';
+  const page = useQuery({
+    queryKey: ['admin-staff', search, pageNumber],
     queryFn: ({ signal }) =>
       data<StaffPage>(
-        `/staff?page=${pageNumber()}&limit=20${search() ? `&search=${encodeURIComponent(search())}` : ''}`,
+        `/staff?page=${pageNumber}&limit=20${search ? `&search=${encodeURIComponent(search)}` : ''}`,
         signal,
       ),
-  }));
-  const profile = createQuery(() => ({
+  });
+  const profile = useQuery({
     queryKey: ['profile'],
     queryFn: ({ signal }) => data<{ id: StaffId }>('/profile', signal),
-  }));
+  });
   const operation = useWrite();
   const client = useQueryClient();
-  const profileKnown = () => profile.isSuccess && profile.data?.id !== undefined;
+  const profileKnown = profile.isSuccess && profile.data?.id !== undefined;
   const isCurrentStaff = (staff: StaffMember) =>
-    profileKnown() && String(profile.data!.id) === String(staff.id);
-  function applySearch(event: SubmitEvent) {
+    profileKnown && String(profile.data!.id) === String(staff.id);
+
+  function applySearch(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const next = term().trim().slice(0, 255);
-    setParams({ search: next || undefined, page: undefined });
+    const next = term.trim().slice(0, 255);
+    setParams(next ? { search: next } : {});
   }
+
   async function toggleActive(staff: StaffMember) {
-    if (!profileKnown() || isCurrentStaff(staff) || operation.blocked()) return;
+    if (!profileKnown || isCurrentStaff(staff) || operation.blocked()) return;
     const result = await operation.write<Envelope<StaffMember>>(
       `/staff/${String(staff.id)}/status`,
       'PATCH',
-      {
-        is_active: !staff.is_active,
-      },
+      { is_active: !staff.is_active },
     );
     if (result) await client.invalidateQueries({ queryKey: ['admin-staff'] });
   }
+
+  const rows = page.data?.data ?? [];
+  const tableRows = rows as (StaffMember & Record<string, unknown>)[];
   return (
-    <>
-      <header class="page-heading">
-        <div>
-          <h1>Kelola staf</h1>
-          <p class="muted">Atur akun operator yang dapat mengakses dashboard.</p>
-        </div>
-        <A class="button primary" href="/apps/admin/staff/new">
-          <Plus size={18} />
-          Tambah staf
-        </A>
-      </header>
-      <section class="surface stack">
-        <div class="section-heading">
-          <div>
-            <h2>Direktori staf</h2>
-            <p class="muted">Cari berdasarkan nama atau email.</p>
-          </div>
-        </div>
-        <form class="campaign-lookup" onSubmit={applySearch} role="search">
-          <label for="staff-search">Cari staf</label>
-          <div class="actions">
-            <input
-              id="staff-search"
-              type="search"
-              maxlength="255"
-              value={term()}
-              onInput={(event) => setTerm(event.currentTarget.value)}
-              placeholder="Nama atau email"
+    <PageFrame
+      title="Staff management"
+      description="Manage accounts that can access the dashboard."
+      actions={<Button label="Add staff" href="/apps/admin/staff/new" variant="primary" />}
+    >
+      <Section padding={6}>
+        <VStack gap={3}>
+          <Text color="secondary">Search by name or email.</Text>
+          <form onSubmit={applySearch} role="search">
+            <HStack gap={2} wrap="wrap" align="end">
+              <TextInput
+                label="Search staff"
+                type="search"
+                value={term}
+                onChange={(value) => setTerm(value.slice(0, 255))}
+                placeholder="Name or email"
+              />
+              <Button label="Search" type="submit" />
+            </HStack>
+          </form>
+          <WriteFeedback operation={operation} />
+          {page.isPending ? (
+            <Loading rows={5} />
+          ) : page.isError ? (
+            <Failure error={page.error} retry={() => void page.refetch()} />
+          ) : rows.length === 0 ? (
+            <EmptyState
+              title={search ? 'No matching staff accounts' : 'No staff accounts yet'}
+              description={
+                search
+                  ? 'Try a different search term.'
+                  : 'Create a staff account to provide dashboard access.'
+              }
+              actions={
+                !search ? (
+                  <Link href="/apps/admin/staff/new">Add the first staff account</Link>
+                ) : undefined
+              }
             />
-            <button class="button secondary" type="submit">
-              <Search size={16} />
-              Cari
-            </button>
-          </div>
-        </form>
-        <WriteFeedback operation={operation} />
-        <div aria-busy={page.isFetching}>
-          <Show when={!page.isPending} fallback={<Loading rows={5} />}>
-            <Show
-              when={!page.isError}
-              fallback={<Failure error={page.error} retry={() => void page.refetch()} />}
-            >
-              <Show
-                when={page.data?.data.length}
-                fallback={
-                  <div class="empty-state">
-                    <span class="empty-icon">
-                      <Shield size={26} />
-                    </span>
-                    <h2>{search() ? 'Tidak ada staf yang cocok.' : 'Belum ada akun staf.'}</h2>
-                    <p>
-                      {search()
-                        ? 'Coba kata pencarian lain.'
-                        : 'Buat akun staf untuk memberikan akses dashboard.'}
-                    </p>
-                    <Show when={!search()}>
-                      <A class="button primary" href="/apps/admin/staff/new">
-                        <Plus size={16} />
-                        Tambah staf pertama
-                      </A>
-                    </Show>
-                  </div>
-                }
-              >
-                <div class="table-wrap">
-                  <table class="directory-table admin-staff-table">
-                    <thead>
-                      <tr>
-                        <th>Nama staf</th>
-                        <th>Peran</th>
-                        <th>Status</th>
-                        <th>
-                          <span class="sr-only">Tindakan</span>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <For each={page.data?.data}>
-                        {(staff) => (
-                          <tr>
-                            <td>
-                              <A
-                                class="campaign-title"
-                                href={`/apps/admin/staff/${String(staff.id)}`}
-                              >
-                                {staff.name}
-                              </A>
-                              <span class="row-meta">
-                                {staff.email} · #{staff.id}
-                              </span>
-                            </td>
-                            <td>
-                              <span class="mono">{staff.role_name}</span>
-                            </td>
-                            <td>
-                              <Status value={staff.is_active ? 'ACTIVE' : 'INACTIVE'} />
-                            </td>
-                            <td>
-                              <button
-                                class="row-action"
-                                type="button"
-                                disabled={
-                                  operation.blocked() || !profileKnown() || isCurrentStaff(staff)
-                                }
-                                aria-label={`${staff.is_active ? 'Nonaktifkan' : 'Aktifkan'} akun ${staff.name}${isCurrentStaff(staff) ? ', akun Anda' : !profileKnown() ? ', identitas belum diverifikasi' : ''}`}
-                                onClick={() => void toggleActive(staff)}
-                              >
-                                {staff.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-                              </button>
-                            </td>
-                          </tr>
-                        )}
-                      </For>
-                    </tbody>
-                  </table>
-                </div>
-                <div class="pagination">
-                  <span>
-                    {page.data?.total ?? 0} akun · Halaman {pageNumber()} dari{' '}
-                    {Math.max(page.data?.total_pages ?? 0, 1)}
-                  </span>
-                  <div>
-                    <button
-                      class="button secondary small"
-                      disabled={pageNumber() <= 1 || page.isFetching}
-                      onClick={() =>
-                        setParams({ page: pageNumber() > 2 ? String(pageNumber() - 1) : undefined })
-                      }
-                    >
-                      Sebelumnya
-                    </button>
-                    <button
-                      class="button secondary small"
-                      disabled={pageNumber() >= (page.data?.total_pages ?? 0) || page.isFetching}
-                      onClick={() => setParams({ page: String(pageNumber() + 1) })}
-                    >
-                      Berikutnya <ArrowRight size={15} />
-                    </button>
-                  </div>
-                </div>
-              </Show>
-            </Show>
-          </Show>
-        </div>
-      </section>
-    </>
+          ) : (
+            <Table
+              data={tableRows}
+              columns={[
+                {
+                  key: 'name',
+                  header: 'Staff member',
+                  width: proportional(2, { minWidth: 220 }),
+                  renderCell: (staff) => (
+                    <VStack gap={0.5}>
+                      <StaffLink id={String(staff.id)}>{staff.name}</StaffLink>
+                      <Text type="supporting" color="secondary">
+                        {staff.email} · #{staff.id}
+                      </Text>
+                    </VStack>
+                  ),
+                },
+                { key: 'role_name', header: 'Role', width: proportional(1, { minWidth: 120 }) },
+                {
+                  key: 'is_active',
+                  header: 'Status',
+                  width: proportional(1, { minWidth: 120 }),
+                  renderCell: (staff) => <Status value={staff.is_active ? 'ACTIVE' : 'INACTIVE'} />,
+                },
+                {
+                  key: 'actions',
+                  header: 'Actions',
+                  width: proportional(1, { minWidth: 160 }),
+                  renderCell: (staff) => (
+                    <Button
+                      label={`${staff.is_active ? 'Deactivate' : 'Activate'} ${staff.name}${isCurrentStaff(staff) ? ', your account' : !profileKnown ? ', identity not verified' : ''}`}
+                      size="sm"
+                      isDisabled={operation.blocked() || !profileKnown || isCurrentStaff(staff)}
+                      onClick={() => void toggleActive(staff)}
+                    />
+                  ),
+                },
+              ]}
+              density="compact"
+              hasHover
+            />
+          )}
+          {!page.isPending && !page.isError && rows.length > 0 && (
+            <HStack gap={2} wrap="wrap" align="center" justify="between">
+              <Text>
+                {page.data?.total ?? 0} accounts · Page {pageNumber} of{' '}
+                {Math.max(page.data?.total_pages ?? 0, 1)}
+              </Text>
+              <HStack gap={2}>
+                <Button
+                  label="Previous"
+                  size="sm"
+                  isDisabled={pageNumber <= 1 || page.isFetching}
+                  onClick={() =>
+                    setParams({
+                      ...(search ? { search } : {}),
+                      ...(pageNumber > 2 ? { page: String(pageNumber - 1) } : {}),
+                    })
+                  }
+                />
+                <Button
+                  label="Next"
+                  size="sm"
+                  isDisabled={pageNumber >= (page.data?.total_pages ?? 0) || page.isFetching}
+                  onClick={() =>
+                    setParams({ ...(search ? { search } : {}), page: String(pageNumber + 1) })
+                  }
+                />
+              </HStack>
+            </HStack>
+          )}
+        </VStack>
+      </Section>
+    </PageFrame>
   );
 }
 
@@ -236,122 +225,138 @@ export function StaffEditor() {
   const operation = useWrite();
   const passwordOperation = useWrite();
   const setDirty = useUnsaved();
-  const editing = () => !!params.staffId;
-  const validId = () => !!params.staffId && isStaffId(params.staffId);
-  const [name, setName] = createSignal('');
-  const [email, setEmail] = createSignal('');
-  const [role, setRole] = createSignal<StaffRole>('OPERATOR');
-  const [password, setPassword] = createSignal('');
-  const [currentPassword, setCurrentPassword] = createSignal('');
-  const [newPassword, setNewPassword] = createSignal('');
-  const [profileError, setProfileError] = createSignal('');
-  const [passwordValidationError, setPasswordValidationError] = createSignal('');
-  const [resetSuccess, setResetSuccess] = createSignal(false);
-  const profile = createQuery(() => ({
+  const editing = Boolean(params.staffId);
+  const validId = Boolean(params.staffId && isStaffId(params.staffId));
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState<StaffRole>('OPERATOR');
+  const [password, setPassword] = useState('');
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [profileError, setProfileError] = useState('');
+  const [passwordValidationError, setPasswordValidationError] = useState('');
+  const [resetSuccess, setResetSuccess] = useState(false);
+  const loadedId = useRef('');
+  const createPasswordRef = useRef<HTMLInputElement>(null);
+  const currentPasswordRef = useRef<HTMLInputElement>(null);
+  const newPasswordRef = useRef<HTMLInputElement>(null);
+  const profile = useQuery({
     queryKey: ['profile'],
     queryFn: ({ signal }) => data<{ id: StaffId; role_name: string }>('/profile', signal),
-  }));
-  const profileKnown = () => profile.isSuccess && profile.data?.id !== undefined;
-  const staff = createQuery(() => ({
+  });
+  const profileKnown = profile.isSuccess && profile.data?.id !== undefined;
+  const staff = useQuery({
     queryKey: ['admin-staff-detail', params.staffId],
     queryFn: ({ signal }) => data<StaffMember>(`/staff/${params.staffId}`, signal),
-    enabled: editing() && validId(),
-  }));
-  let loadedId = '';
-  createEffect(() => {
-    if (staff.data && loadedId !== params.staffId) {
-      loadedId = params.staffId ?? '';
+    enabled: editing && validId,
+  });
+
+  useEffect(() => {
+    if (staff.data && loadedId.current !== params.staffId) {
+      loadedId.current = params.staffId ?? '';
       setName(staff.data.name);
       setEmail(staff.data.email);
       setRole(staff.data.role_name);
     }
-  });
-  onCleanup(() => {
-    setPassword('');
-    setCurrentPassword('');
-    setNewPassword('');
-  });
-  const self = () =>
-    editing() &&
-    profileKnown() &&
+  }, [staff.data, params.staffId]);
+
+  useEffect(
+    () => () => {
+      if (createPasswordRef.current) createPasswordRef.current.value = '';
+      if (currentPasswordRef.current) currentPasswordRef.current.value = '';
+      if (newPasswordRef.current) newPasswordRef.current.value = '';
+    },
+    [],
+  );
+
+  const self = Boolean(
+    editing &&
+    profileKnown &&
     staff.data?.id !== undefined &&
-    String(profile.data!.id) === String(staff.data.id);
-  const selfSensitiveBlocked = () => editing() && (!profileKnown() || self());
+    String(profile.data!.id) === String(staff.data.id),
+  );
+  const selfSensitiveBlocked = editing && (!profileKnown || self);
+
   function changed() {
     setDirty(true);
     setProfileError('');
   }
-  async function save(event: SubmitEvent) {
+
+  async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setProfileError('');
     if (operation.blocked()) return;
-    const body = editing()
+    const body = editing
       ? {
-          role: profileKnown() && !self() && role() !== staff.data?.role_name ? role() : '',
-          name: name().trim(),
-          email: email().trim(),
+          role: profileKnown && !self && role !== staff.data?.role_name ? role : '',
+          name: name.trim(),
+          email: email.trim(),
         }
-      : { role: role(), name: name().trim(), email: email().trim(), password: password() };
-    if (!body.name || !body.email || (!editing() && !body.password)) {
-      setProfileError('Nama, email, dan kata sandi wajib diisi.');
+      : { role, name: name.trim(), email: email.trim(), password };
+    if (!body.name || !body.email || (!editing && !body.password)) {
+      setProfileError('Name, email, and password are required.');
       return;
     }
-    if (!editing()) {
-      const size = passwordBytes(password());
+    if (!editing) {
+      const size = passwordBytes(password);
       if (size < 8 || size > 72) {
-        setProfileError('Kata sandi awal harus berukuran 8–72 byte.');
+        setProfileError('The initial password must be 8–72 bytes.');
         return;
       }
     }
     const result = await operation.write<Envelope<StaffMember>>(
-      editing() ? `/staff/${params.staffId}` : '/staff',
-      editing() ? 'PATCH' : 'POST',
+      editing ? `/staff/${params.staffId}` : '/staff',
+      editing ? 'PATCH' : 'POST',
       body,
     );
     if (result) {
       setDirty(false);
       setPassword('');
+      if (createPasswordRef.current) createPasswordRef.current.value = '';
       await client.invalidateQueries({ queryKey: ['admin-staff'] });
-      if (editing())
+      if (editing)
         await client.invalidateQueries({ queryKey: ['admin-staff-detail', params.staffId] });
-      if (self()) await client.invalidateQueries({ queryKey: ['profile'] });
+      if (self) await client.invalidateQueries({ queryKey: ['profile'] });
       navigate(`/apps/admin/staff/${result.data.id}`);
     }
   }
-  async function resetTargetPassword(event: SubmitEvent) {
+
+  async function resetTargetPassword(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!staff.data || !profileKnown() || self() || passwordOperation.blocked()) return;
+    if (!staff.data || !profileKnown || self || passwordOperation.blocked()) return;
     setResetSuccess(false);
     setPasswordValidationError('');
-    if (!currentPassword()) {
-      setPasswordValidationError('Masukkan kata sandi Anda saat ini.');
+    if (!currentPassword) {
+      setPasswordValidationError('Enter your current password.');
       return;
     }
-    const size = passwordBytes(newPassword());
+    const size = passwordBytes(newPassword);
     if (size < 8 || size > 72) {
-      setPasswordValidationError('Kata sandi baru harus berukuran 8–72 byte.');
+      setPasswordValidationError('The new password must be 8–72 bytes.');
       return;
     }
     const result = await passwordOperation.write<Envelope<null>>(
       `/staff/${params.staffId}/password`,
       'PATCH',
-      {
-        current_password: currentPassword(),
-        password: newPassword(),
-      },
+      { current_password: currentPassword, password: newPassword },
     );
     if (result) {
       setCurrentPassword('');
       setNewPassword('');
+      if (currentPasswordRef.current) currentPasswordRef.current.value = '';
+      if (newPasswordRef.current) newPasswordRef.current.value = '';
       setResetSuccess(true);
     }
   }
+
   async function remove() {
-    if (!staff.data || !profileKnown() || self() || operation.blocked()) return;
-    const confirmed = window.confirm(
-      `Hapus akun ${staff.data.name} (${staff.data.email})? Tindakan ini tidak dapat dibatalkan.`,
-    );
-    if (!confirmed) return;
+    if (!staff.data || !profileKnown || self || operation.blocked()) return;
+    if (
+      !window.confirm(
+        `Delete staff account ${staff.data.name} (${staff.data.email})? This cannot be undone.`,
+      )
+    )
+      return;
     const result = await operation.write<Envelope<null>>(`/staff/${params.staffId}`, 'DELETE');
     if (result) {
       setDirty(false);
@@ -359,8 +364,9 @@ export function StaffEditor() {
       navigate('/apps/admin/staff');
     }
   }
+
   async function toggleStatus() {
-    if (!staff.data || !profileKnown() || self() || operation.blocked()) return;
+    if (!staff.data || !profileKnown || self || operation.blocked()) return;
     const result = await operation.write<Envelope<StaffMember>>(
       `/staff/${params.staffId}/status`,
       'PATCH',
@@ -371,207 +377,223 @@ export function StaffEditor() {
       await client.invalidateQueries({ queryKey: ['admin-staff'] });
     }
   }
+
   return (
-    <>
-      <A class="back-link" href="/apps/admin/staff">
-        <ArrowLeft size={16} />
-        Semua staf
-      </A>
-      <header class="page-heading">
-        <div>
-          <h1>{editing() ? 'Edit staf' : 'Tambah staf'}</h1>
-          <p class="muted">
-            {editing()
-              ? 'Perbarui detail dan akses akun staf.'
-              : 'Buat akun untuk anggota tim administrasi.'}
-          </p>
-        </div>
-      </header>
-      <Show
-        when={!editing() || validId()}
-        fallback={
-          <div class="notice notice-error" role="alert">
-            ID akun staf tidak valid.
-          </div>
-        }
-      >
-        <Show when={!editing() || !staff.isPending} fallback={<Loading />}>
-          <Show
-            when={!editing() || !staff.isError}
-            fallback={<Failure error={staff.error} retry={() => void staff.refetch()} />}
-          >
-            <div class="settings-grid">
-              <section class="surface stack">
-                <h2>Informasi akun</h2>
-                <form class="stack" onInput={changed} onSubmit={(event) => void save(event)}>
-                  <fieldset class="stack" disabled={operation.blocked()}>
-                    <label for="staff-name">Nama</label>
-                    <input
-                      id="staff-name"
-                      value={name()}
-                      maxlength="255"
-                      required
-                      onInput={(event) => setName(event.currentTarget.value)}
+    <PageFrame
+      title={editing ? 'Edit staff account' : 'Add staff account'}
+      description={
+        editing
+          ? 'Update staff account details and access.'
+          : 'Create an account for a member of the administration team.'
+      }
+      back={{ label: 'All staff', href: '/apps/admin/staff' }}
+      contentWidth={720}
+    >
+      {!editing || validId ? (
+        staff.isPending && editing ? (
+          <Loading />
+        ) : staff.isError && editing ? (
+          <Failure error={staff.error} retry={() => void staff.refetch()} />
+        ) : (
+          <VStack gap={3}>
+            <Section padding={6}>
+              <VStack gap={3}>
+                <Heading level={2}>Account information</Heading>
+                <form onInput={changed} onSubmit={(event) => void save(event)}>
+                  <FormLayout>
+                    <TextInput
+                      label="Name"
+                      value={name}
+                      onChange={setName}
+                      isRequired
+                      isDisabled={operation.blocked()}
                     />
-                    <label for="staff-email">Email masuk</label>
-                    <input
-                      id="staff-email"
-                      value={email()}
+                    <TextInput
+                      label="Sign-in email"
                       type="email"
-                      maxlength="255"
-                      required
-                      onInput={(event) => setEmail(event.currentTarget.value)}
+                      value={email}
+                      onChange={setEmail}
+                      isRequired
+                      isDisabled={operation.blocked()}
                     />
-                    <label for="staff-role">Peran</label>
-                    <select
-                      id="staff-role"
-                      value={role()}
-                      disabled={selfSensitiveBlocked()}
-                      onChange={(event) => setRole(event.currentTarget.value as StaffRole)}
-                    >
-                      <For each={roles}>{(choice) => <option value={choice}>{choice}</option>}</For>
-                    </select>
-                    <Show when={self()}>
-                      <p class="help-text">Peran akun Anda tidak dapat diubah dari halaman ini.</p>
-                    </Show>
-                    <Show when={editing() && !profileKnown()}>
-                      <p class="help-text" role="status">
-                        Identitas Anda belum dapat diverifikasi. Perubahan peran dan tindakan
-                        sensitif dinonaktifkan.
-                      </p>
-                    </Show>
-                    <Show when={!editing()}>
-                      <label for="staff-create-password">Kata sandi awal</label>
-                      <input
-                        id="staff-create-password"
-                        type="password"
-                        autocomplete="new-password"
-                        required
-                        value={password()}
-                        onInput={(event) => setPassword(event.currentTarget.value)}
+                    <Selector
+                      label="Role"
+                      options={roles}
+                      value={role}
+                      onChange={(value) => setRole(value as StaffRole)}
+                      isDisabled={operation.blocked() || selfSensitiveBlocked}
+                    />
+                    {self && (
+                      <Text color="secondary">Your account role cannot be changed here.</Text>
+                    )}
+                    {editing && !profileKnown && (
+                      <Text role="status">
+                        Your identity could not be verified. Role changes and sensitive actions are
+                        disabled.
+                      </Text>
+                    )}
+                    {!editing && (
+                      <>
+                        <TextInput
+                          ref={createPasswordRef}
+                          label="Initial password"
+                          type="password"
+                          autoComplete="new-password"
+                          value={password}
+                          onChange={setPassword}
+                          isRequired
+                          isDisabled={operation.blocked()}
+                          description="Use 8–72 bytes. The password will not be shown again."
+                        />
+                      </>
+                    )}
+                    {profileError && (
+                      <Banner
+                        status="error"
+                        title="Account was not saved"
+                        description={profileError}
+                        role="alert"
                       />
-                      <p class="help-text">
-                        Gunakan kata sandi sepanjang 8–72 byte. Kata sandi tidak akan ditampilkan
-                        kembali.
-                      </p>
-                    </Show>
-                    <Show when={profileError()}>
-                      <p class="field-error" role="alert">
-                        {profileError()}
-                      </p>
-                    </Show>
+                    )}
                     <WriteFeedback operation={operation} />
-                    <button class="button primary" type="submit">
-                      {operation.pending()
-                        ? 'Menyimpan…'
-                        : editing()
-                          ? 'Simpan perubahan'
-                          : 'Buat akun staf'}
-                    </button>
-                  </fieldset>
+                    <HStack gap={2} wrap="wrap" justify="end">
+                      <Button
+                        label={
+                          operation.pending()
+                            ? 'Saving…'
+                            : editing
+                              ? 'Save changes'
+                              : 'Create staff account'
+                        }
+                        type="submit"
+                        variant="primary"
+                        isDisabled={operation.blocked()}
+                      />
+                    </HStack>
+                  </FormLayout>
                 </form>
-              </section>
-              <Show when={editing() && staff.data}>
-                <section class="surface stack">
-                  <h2>Akses akun</h2>
-                  <p class="muted">Status masuk untuk {staff.data?.email}.</p>
-                  <p>
-                    <Status value={staff.data?.is_active ? 'ACTIVE' : 'INACTIVE'} />
-                  </p>
-                  <button
-                    class="button secondary"
-                    disabled={operation.blocked() || selfSensitiveBlocked()}
-                    onClick={() => void toggleStatus()}
-                  >
-                    {staff.data?.is_active ? 'Nonaktifkan akun' : 'Aktifkan akun'}
-                  </button>
-                  <Show when={self()}>
-                    <p class="help-text">
-                      Akun yang sedang digunakan tidak dapat dinonaktifkan di sini.
-                    </p>
-                  </Show>
-                </section>
-                <section class="surface stack">
-                  <h2>Atur kata sandi staf</h2>
-                  <p class="muted">
-                    Konfirmasi dengan kata sandi Anda sebelum menetapkan kata sandi baru.
-                  </p>
-                  <Show when={profileKnown() && !self()}>
-                    <form class="stack" onSubmit={(event) => void resetTargetPassword(event)}>
-                      <fieldset class="stack" disabled={passwordOperation.blocked()}>
-                        <label for="admin-current-password">Kata sandi Anda saat ini</label>
-                        <input
-                          id="admin-current-password"
-                          type="password"
-                          autocomplete="current-password"
-                          required
-                          value={currentPassword()}
-                          onInput={(event) => {
-                            setCurrentPassword(event.currentTarget.value);
-                            setResetSuccess(false);
-                          }}
-                        />
-                        <label for="staff-new-password">Kata sandi baru staf</label>
-                        <input
-                          id="staff-new-password"
-                          type="password"
-                          autocomplete="new-password"
-                          required
-                          value={newPassword()}
-                          onInput={(event) => {
-                            setNewPassword(event.currentTarget.value);
-                            setResetSuccess(false);
-                          }}
-                        />
-                        <p class="help-text">
-                          Gunakan kata sandi sepanjang 8–72 byte. Perubahan berlaku saat staf masuk
-                          berikutnya.
-                        </p>
-                        <Show when={passwordValidationError()}>
-                          <p class="field-error" role="alert">
-                            {passwordValidationError()}
-                          </p>
-                        </Show>
-                        <WriteFeedback operation={passwordOperation} />
-                        <Show when={resetSuccess()}>
-                          <p class="notice notice-success" role="status">
-                            Kata sandi staf berhasil diperbarui.
-                          </p>
-                        </Show>
-                        <button class="button secondary" type="submit">
-                          {passwordOperation.pending() ? 'Menyimpan…' : 'Atur kata sandi'}
-                        </button>
-                      </fieldset>
-                    </form>
-                  </Show>
-                  <Show when={self()}>
-                    <p class="help-text">
-                      Untuk mengubah kata sandi sendiri, buka{' '}
-                      <A href="/apps/settings">pengaturan akun</A>. Anda akan diminta masuk kembali
-                      setelah perubahan.
-                    </p>
-                  </Show>
-                </section>
-                <section class="surface stack">
-                  <h2>Hapus akun</h2>
-                  <p class="muted">Akun staf yang dihapus tidak dapat dipulihkan.</p>
-                  <WriteFeedback operation={operation} />
-                  <button
-                    class="button danger"
-                    disabled={operation.blocked() || selfSensitiveBlocked()}
-                    onClick={() => void remove()}
-                  >
-                    Hapus akun staf
-                  </button>
-                  <Show when={self()}>
-                    <p class="help-text">Akun yang sedang digunakan tidak dapat dihapus.</p>
-                  </Show>
-                </section>
-              </Show>
-            </div>
-          </Show>
-        </Show>
-      </Show>
-    </>
+              </VStack>
+            </Section>
+            {editing && staff.data && (
+              <>
+                <Section padding={6}>
+                  <VStack gap={3}>
+                    <Heading level={2}>Account access</Heading>
+                    <Text color="secondary">Sign-in status for {staff.data.email}.</Text>
+                    <Status value={staff.data.is_active ? 'ACTIVE' : 'INACTIVE'} />
+                    <Button
+                      label={staff.data.is_active ? 'Deactivate account' : 'Activate account'}
+                      isDisabled={operation.blocked() || selfSensitiveBlocked}
+                      onClick={() => void toggleStatus()}
+                    />
+                    {self && (
+                      <Text color="secondary">
+                        The account currently in use cannot be deactivated here.
+                      </Text>
+                    )}
+                  </VStack>
+                </Section>
+                <Section padding={6}>
+                  <VStack gap={3}>
+                    <Heading level={2}>Set staff password</Heading>
+                    <Text color="secondary">
+                      Confirm with your current password before setting a new password.
+                    </Text>
+                    {profileKnown && !self ? (
+                      <form onSubmit={(event) => void resetTargetPassword(event)}>
+                        <VStack gap={3} maxWidth={720} width="100%">
+                          <FormLayout>
+                            <TextInput
+                              ref={currentPasswordRef}
+                              label="Your current password"
+                              type="password"
+                              autoComplete="current-password"
+                              value={currentPassword}
+                              onChange={(value) => {
+                                setCurrentPassword(value);
+                                setResetSuccess(false);
+                              }}
+                              isRequired
+                              isDisabled={passwordOperation.blocked()}
+                            />
+                            <TextInput
+                              ref={newPasswordRef}
+                              label="Staff member’s new password"
+                              type="password"
+                              autoComplete="new-password"
+                              value={newPassword}
+                              onChange={(value) => {
+                                setNewPassword(value);
+                                setResetSuccess(false);
+                              }}
+                              isRequired
+                              isDisabled={passwordOperation.blocked()}
+                              description="Use 8–72 bytes. The change takes effect the next time the staff member signs in."
+                            />
+                            {passwordValidationError && (
+                              <Banner
+                                status="error"
+                                title="Password was not changed"
+                                description={passwordValidationError}
+                                role="alert"
+                              />
+                            )}
+                            <WriteFeedback operation={passwordOperation} />
+                            {resetSuccess && (
+                              <Banner
+                                status="success"
+                                title="Password updated"
+                                description="The staff password was updated."
+                                role="status"
+                              />
+                            )}
+                            <HStack gap={2} wrap="wrap" justify="end">
+                              <Button
+                                label={passwordOperation.pending() ? 'Saving…' : 'Set password'}
+                                type="submit"
+                                isDisabled={passwordOperation.blocked()}
+                              />
+                            </HStack>
+                          </FormLayout>
+                        </VStack>
+                      </form>
+                    ) : self ? (
+                      <Text>
+                        To change your own password, open{' '}
+                        <Link href="/apps/settings">account settings</Link>. You will be asked to
+                        sign in again afterward.
+                      </Text>
+                    ) : null}
+                  </VStack>
+                </Section>
+                <Section padding={6}>
+                  <VStack gap={3}>
+                    <Heading level={2}>Delete account</Heading>
+                    <Text color="secondary">Deleted staff accounts cannot be restored.</Text>
+                    <WriteFeedback operation={operation} />
+                    <Button
+                      label="Delete staff account"
+                      variant="destructive"
+                      isDisabled={operation.blocked() || selfSensitiveBlocked}
+                      onClick={() => void remove()}
+                    />
+                    {self && (
+                      <Text color="secondary">The account currently in use cannot be deleted.</Text>
+                    )}
+                  </VStack>
+                </Section>
+              </>
+            )}
+          </VStack>
+        )
+      ) : (
+        <Banner
+          status="error"
+          title="Invalid staff ID"
+          description="Return to the staff directory and choose a valid account."
+          role="alert"
+        />
+      )}
+    </PageFrame>
   );
 }

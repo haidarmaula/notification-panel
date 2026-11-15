@@ -4,3 +4,7 @@ pnpm-lock.yaml
 src/lib/api/generated/
 playwright-report/
 test-results/
+
+# Astryx validates the exact CLI-generated module format.
+src/astryx-themes.ts
+preview/astryx-themes.ts

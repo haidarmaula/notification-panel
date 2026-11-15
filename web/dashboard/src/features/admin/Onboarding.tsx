@@ -1,6 +1,19 @@
-import { A } from '@solidjs/router';
-import { For, Show, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
-import { useAuth } from '../../app/auth';
+import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from 'react';
+import { VStack, HStack } from '@astryxdesign/core/Stack';
+import { Heading, Text } from '@astryxdesign/core/Text';
+import { Section } from '@astryxdesign/core/Section';
+import { Button } from '@astryxdesign/core/Button';
+import { Banner } from '@astryxdesign/core/Banner';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { FileInput } from '@astryxdesign/core/FileInput';
+import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
+import { Selector } from '@astryxdesign/core/Selector';
+import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList';
+import { FormLayout } from '@astryxdesign/core/FormLayout';
+import { Token } from '@astryxdesign/core/Token';
+import { Loading, Status } from '../../components/ui/Feedback';
+import { PageFrame } from '../../components/ui/PageFrame';
+import { useAuth } from '../../app/auth-context';
 import { useUnsaved } from '../../app/unsaved';
 import { ApiError, request } from '../../lib/api/client';
 import type { components } from '../../lib/api/generated/onboarding';
@@ -55,80 +68,78 @@ const allowedAccountKeys = new Set([
 
 function safeError(error: unknown): string {
   const status = error instanceof ApiError ? error.status : 0;
-  if (status === 400) return 'Data belum diterima. Periksa pilihan dan format yang diisi.';
-  if (status === 401) return 'Sesi berakhir. Masuk kembali untuk melanjutkan.';
-  if (status === 403) return 'Akses untuk menyiapkan aplikasi ini tidak tersedia.';
-  if (status === 404) return 'Fitur persiapan belum tersedia untuk aplikasi ini.';
+  if (status === 400) return 'Invalid input. Check the selected options and field formats.';
+  if (status === 401) return 'Your session has expired. Sign in to continue.';
+  if (status === 403) return 'You do not have access to set up this application.';
+  if (status === 404) return 'Setup is unavailable for this application.';
   if (status === 412)
-    return 'Data setup telah berubah. Muat ulang dan tinjau versi terbaru sebelum mengirim lagi.';
-  if (status === 428) return 'Versi data tidak tersedia. Muat ulang sebelum mencoba kembali.';
-  if (status === 429) return 'Terlalu banyak permintaan. Tunggu sebentar sebelum mencoba lagi.';
-  if (status === 503)
-    return 'Layanan persiapan belum tersedia. Periksa status sebelum mencoba lagi.';
-  if (status === 0)
-    return 'Hasil permintaan belum diketahui. Gunakan Coba lagi untuk mengulang permintaan yang sama.';
-  if (status >= 500) return 'Layanan sedang bermasalah. Periksa status terbaru sebelum mengulang.';
-  return 'Permintaan belum dapat diproses.';
+    return 'Setup has changed. Reload and review the latest version before submitting again.';
+  if (status === 428) return 'The resource version is unavailable. Reload before trying again.';
+  if (status === 429) return 'Too many requests. Wait before trying again.';
+  if (status === 503) return 'Setup is unavailable. Check the status before trying again.';
+  if (status === 0) return 'The outcome is unknown. Retry the same request to recover its result.';
+  if (status >= 500) return 'The service is unavailable. Check the latest status before retrying.';
+  return 'The request could not be processed.';
 }
 
 function formatDate(value: string) {
   const date = new Date(value);
   return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat('id-ID', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
-    : 'Waktu tidak tersedia';
+    ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
+    : 'Time unavailable';
 }
 
 function blockerLabel(code: string) {
   const labels: Record<string, string> = {
-    FCM_NOT_CONFIGURED: 'Kredensial Firebase belum disimpan.',
-    FCM_NOT_VERIFIED: 'Kredensial Firebase belum diperiksa.',
-    VERIFIER_NOT_CONFIGURED: 'Pemeriksa OAuth belum tersedia. Status akan diperiksa kembali.',
-    FCM_CREDENTIAL_REJECTED: 'Kredensial service account ditolak.',
-    FCM_CHECK_INCONCLUSIVE: 'Pemeriksaan OAuth belum dapat dipastikan.',
-    FCM_CONFIGURATION_UNAVAILABLE: 'Konfigurasi service account tidak tersedia.',
-    ENROLLMENT_NOT_CONFIGURED: 'Profil pendaftaran aplikasi belum dipilih.',
-    RUNTIME_PENDING: 'Pendaftaran perangkat belum diaktifkan.',
+    FCM_NOT_CONFIGURED: 'Firebase credentials have not been saved.',
+    FCM_NOT_VERIFIED: 'Firebase credentials have not been checked.',
+    VERIFIER_NOT_CONFIGURED: 'The OAuth verifier is unavailable. Status will be checked again.',
+    FCM_CREDENTIAL_REJECTED: 'The service account credentials were rejected.',
+    FCM_CHECK_INCONCLUSIVE: 'The OAuth check is inconclusive.',
+    FCM_CONFIGURATION_UNAVAILABLE: 'The service account configuration is unavailable.',
+    ENROLLMENT_NOT_CONFIGURED: 'An enrollment profile has not been selected.',
+    RUNTIME_PENDING: 'Device enrollment has not been enabled.',
     LEGACY_ADOPTION_REQUIRED:
-      'Pengelola platform perlu meninjau konfigurasi aplikasi yang sudah ada.',
-    PLATFORM_HOLD: 'Persiapan platform masih ditahan.',
-    TEST_DEVICE_REQUIRED: 'Perangkat uji belum disiapkan.',
-    ROUTE_REVIEW_REQUIRED: 'Rute perangkat belum ditinjau.',
-    DISPATCH_APPROVAL_REQUIRED: 'Persetujuan distribusi belum tersedia.',
+      'Platform operators must review the existing application configuration.',
+    PLATFORM_HOLD: 'Platform setup is held.',
+    TEST_DEVICE_REQUIRED: 'A test device has not been configured.',
+    ROUTE_REVIEW_REQUIRED: 'Device routes have not been reviewed.',
+    DISPATCH_APPROVAL_REQUIRED: 'Dispatch approval is not available.',
   };
-  return labels[code] ?? 'Masih ada persiapan yang perlu diselesaikan.';
+  return labels[code] ?? 'Additional setup is required.';
 }
 
 function checkLabel(code: string) {
   const labels: Record<string, string> = {
-    LOCAL_FORMAT: 'Format kredensial',
-    OAUTH: 'Koneksi OAuth',
-    TARGET_PERMISSION: 'Izin pengiriman',
-    DEVICE_DELIVERY: 'Penerimaan perangkat',
+    LOCAL_FORMAT: 'Credential format',
+    OAUTH: 'OAuth connection',
+    TARGET_PERMISSION: 'Delivery permission',
+    DEVICE_DELIVERY: 'Device receipt',
   };
-  return labels[code] ?? 'Pemeriksaan';
+  return labels[code] ?? 'Check';
 }
 
 function outcomeLabel(value: string) {
-  if (value === 'PASSED') return 'Lulus';
-  if (value === 'FAILED') return 'Gagal';
-  if (value === 'INCONCLUSIVE') return 'Belum dipastikan';
-  return 'Belum diperiksa';
+  if (value === 'PASSED') return 'Passed';
+  if (value === 'FAILED') return 'Failed';
+  if (value === 'INCONCLUSIVE') return 'Inconclusive';
+  return 'Not checked';
 }
 
 function operationMessage(operation: Operation) {
   if (operation.state === 'SUCCEEDED')
-    return 'OAuth berhasil. Izin mengirim notifikasi dan penerimaan di perangkat belum diperiksa.';
+    return 'OAuth succeeded. Delivery permissions and device receipt have not been checked.';
   if (operation.failure_code === 'FCM_CREDENTIAL_REJECTED')
-    return 'Service account ditolak oleh penyedia. Periksa kredensial sebelum mencoba lagi.';
+    return 'The provider rejected the service account. Check the credentials before trying again.';
   if (operation.failure_code === 'FCM_CHECK_INCONCLUSIVE')
-    return 'Pemeriksaan OAuth belum dapat dipastikan. Anda dapat mengirim pemeriksaan baru.';
+    return 'The OAuth check is inconclusive. You can submit a new check.';
   if (operation.failure_code === 'FCM_CONFIGURATION_UNAVAILABLE')
-    return 'Konfigurasi service account tidak tersedia untuk diperiksa.';
+    return 'The service account configuration is unavailable for verification.';
   if (operation.state === 'SUPERSEDED')
-    return 'Pemeriksaan sebelumnya sudah tidak berlaku. Muat ulang status setup.';
+    return 'The previous check was superseded. Reload setup status.';
   if (operation.state === 'FAILED')
-    return 'Pemeriksaan OAuth gagal. Periksa konfigurasi sebelum mencoba lagi.';
-  return 'Pemeriksaan OAuth sedang berjalan.';
+    return 'The OAuth check failed. Check the configuration before trying again.';
+  return 'The OAuth check is running.';
 }
 
 function strongETag(value: string | null): value is string {
@@ -160,61 +171,62 @@ export default function Onboarding(props: { applicationID: string }) {
   const setDirty = useUnsaved();
   const applicationIDValid = () => uuidPattern.test(props.applicationID);
   const base = () => `/admin/apps/${encodeURIComponent(props.applicationID)}/onboarding`;
-  const [readiness, setReadiness] = createSignal<Readiness>();
-  const [application, setApplication] = createSignal<Pick<Application, 'id' | 'name' | 'key'>>();
-  const [applicationError, setApplicationError] = createSignal('');
-  const [etag, setEtag] = createSignal('');
-  const [profiles, setProfiles] = createSignal<Profile[]>([]);
-  const [approvals, setApprovals] = createSignal<Approval[]>([]);
-  const [loading, setLoading] = createSignal(true);
-  const [refreshing, setRefreshing] = createSignal(false);
-  const [loadError, setLoadError] = createSignal('');
-  const [profileError, setProfileError] = createSignal('');
-  const [approvalError, setApprovalError] = createSignal('');
-  const [writeError, setWriteError] = createSignal('');
-  const [writeNotice, setWriteNotice] = createSignal('');
-  const [conflict, setConflict] = createSignal(false);
-  const [busy, setBusy] = createSignal(false);
-  const [pendingMutation, setPendingMutation] = createSignal<PendingMutation>();
-  const [retryAfter, setRetryAfter] = createSignal('');
-  const [profileID, setProfileID] = createSignal('');
-  const [editingProfile, setEditingProfile] = createSignal(false);
-  const [profileDirty, setProfileDirty] = createSignal(false);
-  const [selectedPlatforms, setSelectedPlatforms] = createSignal<Platform[]>([]);
-  const [identifiers, setIdentifiers] = createSignal<Record<Platform, string>>({
+  const [readiness, setReadiness] = useState<Readiness>();
+  const [application, setApplication] = useState<Pick<Application, 'id' | 'name' | 'key'>>();
+  const [applicationError, setApplicationError] = useState('');
+  const [etag, setEtag] = useState('');
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [profileError, setProfileError] = useState('');
+  const [approvalError, setApprovalError] = useState('');
+  const [writeError, setWriteError] = useState('');
+  const [writeNotice, setWriteNotice] = useState('');
+  const [conflict, setConflict] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [pendingMutation, setPendingMutation] = useState<PendingMutation>();
+  const [retryAfter, setRetryAfter] = useState('');
+  const [profileID, setProfileID] = useState('');
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileDirty, setProfileDirty] = useState(false);
+  const [selectedPlatforms, setSelectedPlatforms] = useState<Platform[]>([]);
+  const [identifiers, setIdentifiers] = useState<Record<Platform, string>>({
     ANDROID: '',
     IOS: '',
   });
-  const [environment, setEnvironment] = createSignal<Environment | ''>('');
-  const [account, setAccount] = createSignal<ServiceAccount>();
-  const [fileError, setFileError] = createSignal('');
-  const [holdReason, setHoldReason] = createSignal('');
-  const [operation, setOperation] = createSignal<Operation>();
-  const [operationError, setOperationError] = createSignal('');
-  createEffect(() =>
-    setDirty(
-      profileDirty() || !!account() || !!pendingMutation() || busy() || !!holdReason().trim(),
-    ),
-  );
-  let fileInput: HTMLInputElement | undefined;
-  let credentialSelection = 0;
-  let alive = true;
-  let readinessTimer: ReturnType<typeof setTimeout> | undefined;
-  let operationTimer: ReturnType<typeof setTimeout> | undefined;
-  const lifetime = new AbortController();
+  const [environment, setEnvironment] = useState<Environment | ''>('');
+  const [account, setAccount] = useState<ServiceAccount>();
+  const [fileError, setFileError] = useState('');
+  const [holdReason, setHoldReason] = useState('');
+  const [operation, setOperation] = useState<Operation>();
+  const [operationError, setOperationError] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null);
+  const [credentialFile, setCredentialFile] = useState<File | null>(null);
+  const credentialSelection = useRef(0);
+  const alive = useRef(true);
+  const readinessTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const operationTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const lifetime = useRef(new AbortController());
+  const mutationInFlight = useRef(false);
+  useEffect(() => {
+    setDirty(profileDirty || !!account || !!pendingMutation || busy || !!holdReason.trim());
+  }, [profileDirty, account, pendingMutation, busy, holdReason, setDirty]);
 
   function clearTimers() {
-    if (readinessTimer) clearTimeout(readinessTimer);
-    if (operationTimer) clearTimeout(operationTimer);
-    readinessTimer = undefined;
-    operationTimer = undefined;
+    if (readinessTimer.current) clearTimeout(readinessTimer.current);
+    if (operationTimer.current) clearTimeout(operationTimer.current);
+    readinessTimer.current = undefined;
+    operationTimer.current = undefined;
   }
 
   function clearCredential() {
-    credentialSelection++;
+    credentialSelection.current++;
     setAccount(undefined);
     setFileError('');
-    if (fileInput) fileInput.value = '';
+    setCredentialFile(null);
+    if (fileInput.current) fileInput.current.value = '';
   }
 
   function handleUnauthorized(error: unknown) {
@@ -223,6 +235,7 @@ export default function Onboarding(props: { applicationID: string }) {
   }
 
   async function readReadiness(showLoading = false): Promise<Readiness | undefined> {
+    const signal = lifetime.current.signal;
     if (showLoading) setRefreshing(true);
     setLoadError('');
     try {
@@ -230,7 +243,7 @@ export default function Onboarding(props: { applicationID: string }) {
       const envelope = await request<components['schemas']['ReadinessEnvelope']>(
         `/bff/api${base()}`,
         {
-          signal: lifetime.signal,
+          signal,
           onHeaders: (headers) => {
             responseETag = headers.get('ETag');
           },
@@ -238,23 +251,23 @@ export default function Onboarding(props: { applicationID: string }) {
       );
       if (!strongETag(responseETag) || envelope.data.application_id !== props.applicationID)
         throw new ApiError(502, 'Invalid application context');
-      if (!alive) return undefined;
+      if (!alive.current || signal.aborted) return undefined;
       setReadiness(envelope.data);
       if (envelope.data.environment) setEnvironment(envelope.data.environment);
       setEtag(responseETag);
-      if (readinessTimer) clearTimeout(readinessTimer);
-      readinessTimer = undefined;
+      if (readinessTimer.current) clearTimeout(readinessTimer.current);
+      readinessTimer.current = undefined;
       if (envelope.data.blockers.includes('VERIFIER_NOT_CONFIGURED')) {
-        readinessTimer = setTimeout(() => void readReadiness(), 2000);
+        readinessTimer.current = setTimeout(() => void readReadiness(), 2000);
       }
       return envelope.data;
     } catch (error) {
-      if (!alive) return undefined;
+      if (!alive.current || signal.aborted) return undefined;
       handleUnauthorized(error);
       setLoadError(safeError(error));
       return undefined;
     } finally {
-      if (alive) {
+      if (alive.current && !signal.aborted) {
         setLoading(false);
         setRefreshing(false);
       }
@@ -262,56 +275,59 @@ export default function Onboarding(props: { applicationID: string }) {
   }
 
   async function readProfiles() {
+    const signal = lifetime.current.signal;
     setProfileError('');
     try {
       const response = await request<components['schemas']['ProfileListEnvelope']>(
         `/bff/api${base()}/enrollment-profiles`,
-        { signal: lifetime.signal },
+        { signal },
       );
-      if (alive) setProfiles(response.data.items);
+      if (alive.current && !signal.aborted) setProfiles(response.data.items);
     } catch (error) {
-      if (!alive) return;
+      if (!alive.current || signal.aborted) return;
       handleUnauthorized(error);
       setProfileError(
         error instanceof ApiError && error.status === 404
-          ? 'Profil pendaftaran belum tersedia untuk aplikasi ini.'
+          ? 'Enrollment profiles are unavailable for this application.'
           : safeError(error),
       );
     }
   }
 
   async function readApprovals() {
+    const signal = lifetime.current.signal;
     setApprovalError('');
     try {
       const response = await request<components['schemas']['ApprovalListEnvelope']>(
         `/bff/api${base()}/approvals`,
-        { signal: lifetime.signal },
+        { signal },
       );
-      if (alive) setApprovals(response.data.items);
+      if (alive.current && !signal.aborted) setApprovals(response.data.items);
     } catch (error) {
-      if (!alive) return;
+      if (!alive.current || signal.aborted) return;
       handleUnauthorized(error);
       setApprovalError(
         error instanceof ApiError && error.status === 404
-          ? 'Daftar persetujuan belum tersedia untuk aplikasi ini.'
+          ? 'Approvals are unavailable for this application.'
           : safeError(error),
       );
     }
   }
 
   async function readApplication() {
+    const signal = lifetime.current.signal;
     try {
       const result = await request<{ data: Application }>(
         `/bff/api/admin/apps/${encodeURIComponent(props.applicationID)}`,
-        { signal: lifetime.signal },
+        { signal },
       );
-      if (!alive) return;
+      if (!alive.current || signal.aborted) return;
       if (result.data.id !== props.applicationID)
         throw new ApiError(502, 'Invalid application context');
       setApplication({ id: result.data.id, name: result.data.name, key: result.data.key });
       setApplicationError('');
     } catch (error) {
-      if (!alive) return;
+      if (!alive.current || signal.aborted) return;
       setApplication(undefined);
       handleUnauthorized(error);
       setApplicationError(safeError(error));
@@ -320,7 +336,9 @@ export default function Onboarding(props: { applicationID: string }) {
 
   async function refreshAll() {
     if (!applicationIDValid()) {
-      setLoadError('ID aplikasi tidak valid. Kembali ke daftar aplikasi dan pilih ulang.');
+      setLoadError(
+        'Invalid application ID. Return to the registry and select the application again.',
+      );
       setLoading(false);
       return;
     }
@@ -332,7 +350,7 @@ export default function Onboarding(props: { applicationID: string }) {
     const result = await readReadiness(true);
     if (result) {
       setConflict(false);
-      setWriteNotice('Status terbaru dimuat. Tinjau kembali revisi dan langkah berikutnya.');
+      setWriteNotice('Latest status loaded. Review the revision and next steps.');
     }
   }
 
@@ -342,9 +360,16 @@ export default function Onboarding(props: { applicationID: string }) {
     method: PendingMutation['method'],
     body: PendingMutation['body'],
   ): PendingMutation | undefined {
-    const version = etag();
-    if (!version || conflict() || !application() || !uuidPattern.test(props.applicationID)) {
-      setWriteError('Muat ulang status setup sebelum mengirim perubahan.');
+    const version = etag;
+    if (
+      !version ||
+      conflict ||
+      pendingMutation ||
+      mutationInFlight.current ||
+      !application ||
+      !uuidPattern.test(props.applicationID)
+    ) {
+      setWriteError('Reload setup status before submitting changes.');
       return undefined;
     }
     return {
@@ -358,7 +383,8 @@ export default function Onboarding(props: { applicationID: string }) {
   }
 
   async function runMutation(mutation: PendingMutation) {
-    if (busy()) return;
+    if (mutationInFlight.current) return;
+    mutationInFlight.current = true;
     setBusy(true);
     setWriteError('');
     setWriteNotice('');
@@ -374,7 +400,7 @@ export default function Onboarding(props: { applicationID: string }) {
         csrf: auth.csrf(),
         idempotencyKey: mutation.key,
         ifMatch: mutation.etag,
-        signal: lifetime.signal,
+        signal: lifetime.current.signal,
         onHeaders: (headers) => {
           responseETag = headers.get('ETag');
           replayed = headers.get('Idempotency-Replayed') === 'true';
@@ -383,7 +409,7 @@ export default function Onboarding(props: { applicationID: string }) {
           if (/^[1-9][0-9]{0,3}$/.test(retry) && Number(retry) <= 3600) retryHeader = retry;
         },
       });
-      if (!alive) return;
+      if (!alive.current) return;
       setPendingMutation(undefined);
       setConflict(false);
       if (strongETag(responseETag)) setEtag(responseETag);
@@ -395,29 +421,27 @@ export default function Onboarding(props: { applicationID: string }) {
       if (mutation.kind === 'hold') setHoldReason('');
       setWriteNotice(
         replayed
-          ? 'Permintaan sebelumnya sudah diterapkan.'
+          ? 'The previous request has already been applied.'
           : mutation.kind === 'verify'
-            ? 'Pemeriksaan OAuth diterima.'
+            ? 'OAuth check accepted.'
             : mutation.kind === 'credential'
-              ? 'Kredensial tersimpan sebagai kandidat.'
+              ? 'Credentials saved as a candidate.'
               : mutation.kind === 'enrollment'
-                ? 'Profil pendaftaran disimpan.'
-                : 'Distribusi ditahan.',
+                ? 'Enrollment profile saved.'
+                : 'Dispatch held.',
       );
       if (mutation.kind === 'verify') {
         const envelope = response as components['schemas']['OperationEnvelope'];
         const operationID = envelope?.data?.id;
         if (!operationID || !uuidPattern.test(operationID)) {
-          setOperationError(
-            'Status pemeriksaan belum tersedia. Muat ulang untuk melihat hasilnya.',
-          );
+          setOperationError('Check status is unavailable. Reload to view the result.');
         } else {
           setOperationError('');
           setOperation(envelope.data);
           const expectedLocation = `/bff/api${base()}/operations/${operationID}`;
           if (responseLocation && responseLocation !== expectedLocation) {
             setOperationError(
-              'Lokasi status pemeriksaan tidak sesuai. Status akan dibaca dari aplikasi ini.',
+              'Unexpected check location. Status will be read from this application.',
             );
           }
           void pollOperation(operationID);
@@ -425,7 +449,7 @@ export default function Onboarding(props: { applicationID: string }) {
       }
       void readReadiness();
     } catch (error) {
-      if (!alive) return;
+      if (!alive.current) return;
       handleUnauthorized(error);
       const status = error instanceof ApiError ? error.status : 0;
       if (status === 412) setConflict(true);
@@ -438,38 +462,40 @@ export default function Onboarding(props: { applicationID: string }) {
         if (mutation.kind === 'credential') clearCredential();
       }
     } finally {
-      if (alive) setBusy(false);
+      mutationInFlight.current = false;
+      if (alive.current) setBusy(false);
     }
   }
 
   async function pollOperation(operationID: string) {
-    if (!alive || !uuidPattern.test(operationID)) return;
+    const signal = lifetime.current.signal;
+    if (!alive.current || signal.aborted || !uuidPattern.test(operationID)) return;
     try {
       const response = await request<components['schemas']['OperationEnvelope']>(
         `/bff/api${base()}/operations/${operationID}`,
-        { signal: lifetime.signal },
+        { signal },
       );
-      if (!alive) return;
+      if (!alive.current || signal.aborted) return;
       setOperation(response.data);
       setOperationError('');
       if (response.data.state === 'PENDING' || response.data.state === 'RUNNING') {
-        operationTimer = setTimeout(() => void pollOperation(operationID), 2000);
+        operationTimer.current = setTimeout(() => void pollOperation(operationID), 2000);
       } else {
-        operationTimer = undefined;
+        operationTimer.current = undefined;
         void readReadiness();
       }
     } catch (error) {
-      if (!alive) return;
+      if (!alive.current || signal.aborted) return;
       handleUnauthorized(error);
       setOperationError(safeError(error));
-      operationTimer = setTimeout(() => void pollOperation(operationID), 2000);
+      operationTimer.current = setTimeout(() => void pollOperation(operationID), 2000);
     }
   }
 
   function selectProfile(value: string) {
     setProfileDirty(true);
     setProfileID(value);
-    const profile = profiles().find((item) => item.id === value);
+    const profile = profiles.find((item) => item.id === value);
     setSelectedPlatforms(profile?.platforms.slice(0, 1) ?? []);
   }
 
@@ -484,71 +510,69 @@ export default function Onboarding(props: { applicationID: string }) {
     setIdentifiers((current) => ({ ...current, [platform]: value }));
   }
 
-  async function saveEnrollment(event: SubmitEvent) {
+  async function saveEnrollment(event: FormEvent) {
     event.preventDefault();
     setWriteError('');
-    const profile = profiles().find((item) => item.id === profileID());
-    const platforms =
-      profile?.platforms.filter((value) => selectedPlatforms().includes(value)) ?? [];
+    const profile = profiles.find((item) => item.id === profileID);
+    const platforms = profile?.platforms.filter((value) => selectedPlatforms.includes(value)) ?? [];
     if (
       !profile ||
       platforms.length < 1 ||
       platforms.some((value) => {
-        const identifier = identifiers()[value].trim();
+        const identifier = identifiers[value].trim();
         return !validText(identifier, 255);
       })
     ) {
-      setWriteError('Pilih profil, minimal satu platform, dan ID paket aplikasi yang valid.');
+      setWriteError('Select a profile, at least one platform, and valid application identifiers.');
       return;
     }
     const body: EnrollmentInput = {
       profile_id: profile.id,
       platforms: platforms.map((platform) => ({
         platform,
-        application_identifier: identifiers()[platform].trim(),
+        application_identifier: identifiers[platform].trim(),
       })),
     };
     const mutation = makePending('enrollment', '/enrollment', 'PUT', body);
     if (mutation) await runMutation(mutation);
   }
 
-  async function chooseCredential(event: Event & { currentTarget: HTMLInputElement }) {
-    const input = event.currentTarget;
-    const file = input.files?.[0];
-    const selection = ++credentialSelection;
+  async function chooseCredential(files: File | File[] | null) {
+    if (busy || conflict || pendingMutation) return;
+    const file = Array.isArray(files) ? files[0] : files;
+    setCredentialFile(file ?? null);
+    const selection = ++credentialSelection.current;
     setAccount(undefined);
     setFileError('');
     setWriteError('');
     if (!file) return;
     if (file.size > 64 * 1024) {
       clearCredential();
-      setFileError('Berkas JSON harus berukuran maksimal 64 KiB.');
+      setFileError('The JSON file must not exceed 64 KiB.');
       return;
     }
     try {
       const parsed: unknown = JSON.parse(await file.text());
-      if (!alive || selection !== credentialSelection || input.files?.[0] !== file) return;
+      if (!alive.current || selection !== credentialSelection.current) return;
       if (!serviceAccount(parsed)) throw new Error('invalid account');
       setAccount(parsed);
     } catch {
-      if (!alive || selection !== credentialSelection || input.files?.[0] !== file) return;
+      if (!alive.current || selection !== credentialSelection.current) return;
       clearCredential();
-      setFileError(
-        'Berkas tidak sesuai format service account yang didukung. Pilih berkas JSON lain.',
-      );
+      setFileError('The file is not a supported service account. Choose another JSON file.');
     }
   }
 
-  async function storeCredential(event: SubmitEvent) {
+  async function storeCredential(event: FormEvent) {
     event.preventDefault();
     setWriteError('');
-    const value = account();
-    if (!value || !environment()) {
-      setFileError('Pilih lingkungan dan berkas kredensial terlebih dahulu.');
+    const value = account;
+    if (!value || !environment) {
+      setFileError('Select an environment and credential file first.');
       return;
     }
     const body: FcmInput = {
-      environment: environment() as Environment,
+      environment: environment as Environment,
       target_project_id: value.project_id,
       service_account: value,
     };
@@ -557,18 +581,18 @@ export default function Onboarding(props: { applicationID: string }) {
   }
 
   async function verifyCredential() {
-    const candidate = readiness()?.candidate_configuration_id;
-    if (!candidate || readiness()?.blockers.includes('VERIFIER_NOT_CONFIGURED')) return;
+    const candidate = readiness?.candidate_configuration_id;
+    if (!candidate || readiness?.blockers.includes('VERIFIER_NOT_CONFIGURED')) return;
     const body: VerifyInput = { configuration_id: candidate };
     const mutation = makePending('verify', '/fcm/verify', 'POST', body);
     if (mutation) await runMutation(mutation);
   }
 
-  async function holdDispatch(event: SubmitEvent) {
+  async function holdDispatch(event: FormEvent) {
     event.preventDefault();
-    const reason = holdReason().trim();
+    const reason = holdReason.trim();
     if (!validText(reason, 256)) {
-      setWriteError('Jelaskan alasan penahanan, maksimal 256 byte UTF-8.');
+      setWriteError('Enter a hold reason of at most 256 UTF-8 bytes.');
       return;
     }
     const body: HoldInput = { reason };
@@ -576,519 +600,435 @@ export default function Onboarding(props: { applicationID: string }) {
     if (mutation) await runMutation(mutation);
   }
 
-  onMount(() => {
-    if (!applicationIDValid()) {
-      setLoadError('ID aplikasi tidak valid. Kembali ke daftar aplikasi dan pilih ulang.');
-      setLoading(false);
-      return;
-    }
+  const initialize = useEffectEvent(() => {
     void refreshAll();
   });
-  onCleanup(() => {
-    alive = false;
-    clearTimers();
-    lifetime.abort();
-    setPendingMutation(undefined);
-    setAccount(undefined);
-  });
+  useEffect(() => {
+    alive.current = true;
+    const selection = credentialSelection;
+    const controller = new AbortController();
+    lifetime.current = controller;
+    initialize();
+    return () => {
+      alive.current = false;
+      selection.current++;
+      clearTimers();
+      controller.abort();
+    };
+  }, []);
 
-  const selectedProfile = () => profiles().find((item) => item.id === profileID());
-  const verifierReady = () => !readiness()?.blockers.includes('VERIFIER_NOT_CONFIGURED');
-  const credentialReady = () =>
-    !!account() && !!environment() && !!etag() && !conflict() && !busy();
+  const selectedProfile = () => profiles.find((item) => item.id === profileID);
+  const verifierReady = () => !readiness?.blockers.includes('VERIFIER_NOT_CONFIGURED');
+  const credentialReady = () => !!account && !!environment && !!etag && !conflict && !busy;
 
+  const locked = busy || conflict || !!pendingMutation || !application;
   return (
-    <>
-      <A class="back-link" href={`/apps/admin/applications/${props.applicationID}`}>
-        ← Registry aplikasi
-      </A>
-      <header class="page-heading">
-        <div>
-          <h1>Konfigurasi notifikasi</h1>
-          <Show when={application()}>
-            {(target) => (
-              <p style={{ 'overflow-wrap': 'anywhere' }}>
-                <strong>{target().name}</strong> · {target().key}
-              </p>
-            )}
-          </Show>
-          <p class="muted">Siapkan profil pendaftaran dan periksa kredensial Firebase aplikasi.</p>
-        </div>
-        <button
-          class="button secondary"
-          type="button"
+    <PageFrame
+      title="Notification setup"
+      description="Configure enrollment and check the application's Firebase credentials."
+      back={{
+        label: 'Application registry',
+        href: `/apps/admin/applications/${props.applicationID}`,
+      }}
+      actions={
+        <Button
+          label={refreshing ? 'Refreshing…' : 'Refresh status'}
           onClick={() => void refreshAll()}
-          disabled={refreshing()}
-        >
-          {refreshing() ? 'Memuat…' : 'Muat ulang status'}
-        </button>
-      </header>
-
-      <Show when={loadError()}>
-        <div class="notice notice-error" role="alert">
-          <p>{loadError()}</p>
-          <button class="button secondary" type="button" onClick={() => void refreshAll()}>
-            Coba muat ulang
-          </button>
-        </div>
-      </Show>
-      <Show when={applicationError()}>
-        <p class="notice notice-error" role="alert">
-          {applicationError()}
-        </p>
-      </Show>
-      <Show when={loading()}>
-        <p class="loading-state" role="status">
-          Memuat status persiapan…
-        </p>
-      </Show>
-
-      <Show when={readiness()}>
-        {(current) => (
-          <div class="stack">
-            <section class="surface stack" aria-labelledby="onboarding-status-heading">
-              <h2 id="onboarding-status-heading">Status aplikasi</h2>
-              <dl class="settings-details">
-                <dt>ID aplikasi</dt>
-                <dd class="mono">{props.applicationID}</dd>
-                <dt>Status aplikasi</dt>
-                <dd>{statusLabel(current().application_status)}</dd>
-                <dt>Distribusi</dt>
-                <dd>{dispatchLabel(current().dispatch_mode)}</dd>
-                <dt>Revisi setup</dt>
-                <dd class="mono">{current().revision}</dd>
-                <dt>Lingkungan</dt>
-                <dd>{current().environment ?? 'Belum dipilih'}</dd>
-                <Show when={current().candidate_configuration_id}>
-                  {(candidate) => (
-                    <>
-                      <dt>Kandidat kredensial</dt>
-                      <dd class="mono">{candidate()}</dd>
-                    </>
-                  )}
-                </Show>
-                <Show when={current().current_configuration_id}>
-                  {(configured) => (
-                    <>
-                      <dt>Kredensial aktif</dt>
-                      <dd class="mono">{configured()}</dd>
-                    </>
-                  )}
-                </Show>
-              </dl>
-              <Show when={current().blockers.length > 0}>
-                <div class="notice" aria-label="Persiapan yang masih diperlukan">
-                  <h3>Yang masih diperlukan</h3>
-                  <ul>
-                    <For each={current().blockers}>{(code) => <li>{blockerLabel(code)}</li>}</For>
-                  </ul>
-                </div>
-              </Show>
-              <Show when={current().checks.length > 0}>
-                <div>
-                  <h3>Pemeriksaan</h3>
-                  <ul>
-                    <For each={current().checks}>
-                      {(check) => (
-                        <li>
-                          {checkLabel(check.code)}: {outcomeLabel(check.outcome)}
-                        </li>
-                      )}
-                    </For>
-                  </ul>
-                </div>
-              </Show>
-            </section>
-
-            <div class="settings-grid">
-              <section class="surface stack" aria-labelledby="enrollment-heading">
-                <h2 id="enrollment-heading">Profil pendaftaran</h2>
-                <Show when={current().enrollment_profile_id}>
-                  {(id) => (
-                    <p class="help-text">
-                      Profil tersimpan:{' '}
-                      <strong>
-                        {profiles().find((profile) => profile.id === id())?.name ?? id()}
-                      </strong>
-                      .
-                    </p>
-                  )}
-                </Show>
-                <p class="help-text">
-                  Pilih profil aplikasi dan ID paket atau bundle yang akan digunakan perangkat.
-                </p>
-                <Show when={profileError()}>
-                  <p class="notice notice-error" role="alert">
-                    {profileError()}
-                  </p>
-                </Show>
-                <Show
-                  when={!current().enrollment_profile_id || editingProfile()}
-                  fallback={
-                    <button
-                      class="button secondary admin-submit"
-                      type="button"
-                      onClick={() => {
-                        selectProfile(current().enrollment_profile_id ?? '');
-                        setEditingProfile(true);
-                      }}
-                      disabled={busy() || conflict() || !!pendingMutation()}
-                    >
-                      Ubah profil pendaftaran
-                    </button>
-                  }
+          isDisabled={refreshing || busy}
+        />
+      }
+      contentWidth={1120}
+    >
+      {loadError && (
+        <Banner
+          status="error"
+          title="Unable to load setup"
+          description={loadError}
+          endContent={<Button label="Retry loading" onClick={() => void refreshAll()} />}
+        />
+      )}
+      {applicationError && (
+        <Banner
+          status="error"
+          title="Application context unavailable"
+          description={applicationError}
+        />
+      )}
+      {loading && <Loading label="Loading setup status…" />}
+      {readiness && (
+        <>
+          <Section padding={6} dividers={['bottom']}>
+            <VStack gap={4}>
+              <VStack gap={2}>
+                <Heading level={2}>Application status</Heading>
+                {application && (
+                  <Text weight="semibold" wordBreak="break-word">
+                    {application.name} · {application.key}
+                  </Text>
+                )}
+              </VStack>
+              <MetadataList>
+                <MetadataListItem label="Application ID">
+                  <Text wordBreak="break-word">{props.applicationID}</Text>
+                </MetadataListItem>
+                <MetadataListItem label="Status">
+                  <Status value={readiness.application_status} />
+                </MetadataListItem>
+                <MetadataListItem label="Dispatch">
+                  <Token
+                    label={dispatchLabel(readiness.dispatch_mode)}
+                    color={readiness.dispatch_mode === 'HELD' ? 'gray' : 'blue'}
+                    size="sm"
+                  />
+                </MetadataListItem>
+                <MetadataListItem label="Setup revision">{readiness.revision}</MetadataListItem>
+                <MetadataListItem label="Environment">
+                  {readiness.environment ?? 'Not selected'}
+                </MetadataListItem>
+                {readiness.candidate_configuration_id && (
+                  <MetadataListItem label="Credential candidate">
+                    <Text wordBreak="break-word">{readiness.candidate_configuration_id}</Text>
+                  </MetadataListItem>
+                )}
+                {readiness.current_configuration_id && (
+                  <MetadataListItem label="Active credential">
+                    <Text wordBreak="break-word">{readiness.current_configuration_id}</Text>
+                  </MetadataListItem>
+                )}
+              </MetadataList>
+              {!!readiness.blockers.length && (
+                <VStack gap={2}>
+                  <Heading level={3}>Remaining requirements</Heading>
+                  {readiness.blockers.map((code) => (
+                    <Text key={code}>{blockerLabel(code)}</Text>
+                  ))}
+                </VStack>
+              )}
+              {!!readiness.checks.length && (
+                <VStack gap={2}>
+                  <Heading level={3}>Checks</Heading>
+                  {readiness.checks.map((check) => (
+                    <Text key={check.code}>
+                      {checkLabel(check.code)}: {outcomeLabel(check.outcome)}
+                    </Text>
+                  ))}
+                </VStack>
+              )}
+            </VStack>
+          </Section>
+          <Section padding={6} dividers={['bottom']}>
+            <VStack gap={4}>
+              <Heading level={2}>Enrollment profile</Heading>
+              {readiness.enrollment_profile_id && (
+                <Text>
+                  Saved profile:{' '}
+                  {profiles.find((profile) => profile.id === readiness.enrollment_profile_id)
+                    ?.name ?? readiness.enrollment_profile_id}
+                </Text>
+              )}
+              <Text color="secondary">
+                Choose the application's enrollment profile and device package or bundle
+                identifiers.
+              </Text>
+              {profileError && (
+                <Banner status="error" title="Profiles unavailable" description={profileError} />
+              )}
+              {!readiness.enrollment_profile_id || editingProfile ? (
+                <VStack
+                  as="form"
+                  gap={4}
+                  maxWidth={720}
+                  width="100%"
+                  onSubmit={(event) => void saveEnrollment(event)}
                 >
-                  <p class="help-text">
-                    Pilih platform dan isi ID aplikasi untuk konfigurasi yang akan disimpan.
-                  </p>
-                  <form class="stack" onSubmit={(event) => void saveEnrollment(event)}>
-                    <fieldset
-                      class="stack"
-                      disabled={
-                        busy() ||
-                        conflict() ||
-                        !!pendingMutation() ||
-                        !application() ||
-                        profiles().length === 0
-                      }
-                    >
-                      <label>
-                        Profil pendaftaran
-                        <select
-                          value={profileID()}
-                          onChange={(event) => selectProfile(event.currentTarget.value)}
-                        >
-                          <option value="">Pilih profil</option>
-                          <For each={profiles()}>
-                            {(profile) => <option value={profile.id}>{profile.name}</option>}
-                          </For>
-                        </select>
-                      </label>
-                      <Show when={selectedProfile()}>
-                        {(profile) => (
-                          <fieldset class="stack">
-                            <legend>Platform</legend>
-                            <For each={profile().platforms}>
-                              {(platform) => (
-                                <label class="check-label">
-                                  <input
-                                    type="checkbox"
-                                    checked={selectedPlatforms().includes(platform)}
-                                    onChange={(event) =>
-                                      togglePlatform(platform, event.currentTarget.checked)
-                                    }
-                                  />
-                                  {platform === 'ANDROID' ? 'Android' : 'iOS'}
-                                </label>
-                              )}
-                            </For>
-                            <For each={selectedPlatforms()}>
-                              {(platform) => (
-                                <label>
-                                  {platform === 'ANDROID' ? 'ID aplikasi Android' : 'ID bundle iOS'}
-                                  <input
-                                    value={identifiers()[platform]}
-                                    maxlength={255}
-                                    autocomplete="off"
-                                    onInput={(event) =>
-                                      editIdentifier(platform, event.currentTarget.value)
-                                    }
-                                    aria-label={
-                                      platform === 'ANDROID'
-                                        ? 'ID aplikasi Android'
-                                        : 'ID bundle iOS'
-                                    }
-                                  />
-                                </label>
-                              )}
-                            </For>
-                          </fieldset>
-                        )}
-                      </Show>
-                      <button class="button primary admin-submit" type="submit" disabled={!etag()}>
-                        Simpan profil
-                      </button>
-                      <Show when={current().enrollment_profile_id}>
-                        <button
-                          class="button secondary"
-                          type="button"
+                  <FormLayout>
+                    <Selector
+                      label="Enrollment profile"
+                      value={profileID}
+                      options={profiles.map((profile) => ({
+                        value: profile.id,
+                        label: profile.name,
+                      }))}
+                      onChange={(value) => {
+                        if (typeof value === 'string') selectProfile(value);
+                      }}
+                      isDisabled={locked || !profiles.length}
+                    />
+                    {selectedProfile() && (
+                      <VStack gap={3}>
+                        <Heading level={3}>Platforms</Heading>
+                        {selectedProfile()!.platforms.map((platform) => (
+                          <CheckboxInput
+                            key={platform}
+                            label={platform === 'ANDROID' ? 'Android' : 'iOS'}
+                            value={selectedPlatforms.includes(platform)}
+                            onChange={(checked) => togglePlatform(platform, checked)}
+                            isDisabled={locked}
+                          />
+                        ))}
+                      </VStack>
+                    )}
+                    {selectedPlatforms.map((platform) => (
+                      <TextInput
+                        key={platform}
+                        label={platform === 'ANDROID' ? 'Android application ID' : 'iOS bundle ID'}
+                        value={identifiers[platform]}
+                        onChange={(value) => editIdentifier(platform, value)}
+                        autoComplete="off"
+                        isDisabled={locked}
+                      />
+                    ))}
+                    <HStack gap={2} wrap="wrap" justify="end">
+                      <Button
+                        label="Save profile"
+                        type="submit"
+                        variant="primary"
+                        isDisabled={locked || !etag}
+                      />
+                      {readiness.enrollment_profile_id && (
+                        <Button
+                          label="Cancel profile changes"
                           onClick={() => {
                             setEditingProfile(false);
                             setProfileDirty(false);
                           }}
-                        >
-                          Batal ubah profil
-                        </button>
-                      </Show>
-                    </fieldset>
-                  </form>
-                </Show>
-              </section>
-
-              <section class="surface stack" aria-labelledby="credential-heading">
-                <h2 id="credential-heading">Kredensial Firebase</h2>
-                <p class="help-text">
-                  Berkas dipakai untuk permintaan ini. Kunci pribadi tidak ditampilkan atau disimpan
-                  ke penyimpanan browser.
-                </p>
-                <form class="stack" onSubmit={(event) => void storeCredential(event)}>
-                  <fieldset
-                    class="stack"
-                    disabled={busy() || conflict() || !!pendingMutation() || !application()}
-                  >
-                    <label>
-                      Lingkungan
-                      <select
-                        value={environment()}
-                        disabled={!!current().environment}
-                        onChange={(event) =>
-                          setEnvironment(event.currentTarget.value as Environment | '')
-                        }
-                      >
-                        <option value="">Pilih lingkungan</option>
-                        <option value="staging">Staging</option>
-                        <option value="production">Produksi</option>
-                      </select>
-                    </label>
-                    <label>
-                      Berkas kredensial FCM (service account JSON)
-                      <input
-                        ref={fileInput}
-                        type="file"
-                        accept="application/json,.json"
-                        onChange={(event) => void chooseCredential(event)}
-                        aria-describedby="credential-file-help"
-                      />
-                    </label>
-                    <p id="credential-file-help" class="help-text">
-                      Maksimal 64 KiB. Pastikan berkas berasal dari project Firebase yang dipilih.
-                    </p>
-                    <Show when={fileError()}>
-                      <p class="field-error" role="alert">
-                        {fileError()}
-                      </p>
-                    </Show>
-                    <Show when={account()}>
-                      {(value) => (
-                        <p class="help-text">
-                          Project terdeteksi: <span class="mono">{value().project_id}</span>
-                        </p>
+                          isDisabled={busy}
+                        />
                       )}
-                    </Show>
-                    <button
-                      class="button primary admin-submit"
+                    </HStack>
+                  </FormLayout>
+                </VStack>
+              ) : (
+                <Button
+                  label="Change enrollment profile"
+                  onClick={() => {
+                    selectProfile(readiness.enrollment_profile_id ?? '');
+                    setEditingProfile(true);
+                  }}
+                  isDisabled={locked}
+                />
+              )}
+            </VStack>
+          </Section>
+          <Section padding={6} dividers={['bottom']}>
+            <VStack gap={4}>
+              <Heading level={2}>Firebase credentials</Heading>
+              <Text color="secondary">
+                The file is used only for this request. Private keys are never displayed or saved in
+                browser storage.
+              </Text>
+              <VStack
+                as="form"
+                gap={4}
+                maxWidth={720}
+                width="100%"
+                onSubmit={(event) => void storeCredential(event)}
+              >
+                <FormLayout>
+                  <Selector
+                    label="Environment"
+                    value={environment}
+                    options={[
+                      { value: 'staging', label: 'Staging' },
+                      { value: 'production', label: 'Production' },
+                    ]}
+                    onChange={(value) => {
+                      if (value === 'staging' || value === 'production') setEnvironment(value);
+                    }}
+                    isDisabled={locked || !!readiness.environment}
+                  />
+                  <FileInput
+                    ref={fileInput}
+                    label="FCM credential file (service account JSON)"
+                    value={credentialFile}
+                    onChange={(files) => void chooseCredential(files)}
+                    accept="application/json,.json"
+                    description="Maximum 64 KiB. Use a service account from the selected Firebase project."
+                    isDisabled={locked}
+                  />
+                  {fileError && (
+                    <Banner
+                      status="error"
+                      title="Invalid credential file"
+                      description={fileError}
+                    />
+                  )}
+                  {account && <Text>Detected project: {account.project_id}</Text>}
+                  <HStack gap={2} wrap="wrap" justify="end">
+                    <Button
+                      label="Save credentials"
                       type="submit"
-                      disabled={!credentialReady()}
-                    >
-                      Simpan kredensial
-                    </button>
-                  </fieldset>
-                </form>
-              </section>
-            </div>
-
-            <section class="surface stack" aria-labelledby="verification-heading">
-              <h2 id="verification-heading">Pemeriksaan OAuth</h2>
-              <p class="help-text">
-                Pemeriksaan ini meminta token OAuth untuk memvalidasi kredensial. Ini tidak mengirim
-                notifikasi dan tidak memastikan izin pengiriman atau penerimaan perangkat.
-              </p>
-              <Show
-                when={current().candidate_configuration_id}
-                fallback={
-                  <p class="help-text">
-                    Simpan kandidat kredensial sebelum menjalankan pemeriksaan.
-                  </p>
-                }
-              >
-                <button
-                  class="button primary admin-submit"
-                  type="button"
-                  disabled={
-                    busy() ||
-                    conflict() ||
-                    !!pendingMutation() ||
-                    !application() ||
-                    !etag() ||
-                    !verifierReady() ||
-                    (!!operation() && ['PENDING', 'RUNNING'].includes(operation()!.state))
-                  }
+                      variant="primary"
+                      isDisabled={locked || !credentialReady()}
+                    />
+                  </HStack>
+                </FormLayout>
+              </VStack>
+            </VStack>
+          </Section>
+          <Section padding={6} dividers={['bottom']}>
+            <VStack gap={4}>
+              <Heading level={2}>OAuth verification</Heading>
+              <Text color="secondary">
+                This check requests an OAuth token. It does not send notifications or verify
+                delivery permissions or device receipt.
+              </Text>
+              {readiness.candidate_configuration_id ? (
+                <Button
+                  label="Verify FCM"
+                  variant="primary"
                   onClick={() => void verifyCredential()}
+                  isDisabled={
+                    locked ||
+                    !etag ||
+                    !verifierReady() ||
+                    (!!operation && ['PENDING', 'RUNNING'].includes(operation.state))
+                  }
+                />
+              ) : (
+                <Text>Save a credential candidate before running this check.</Text>
+              )}
+              {!verifierReady() && (
+                <Text role="status">
+                  The verifier is unavailable. Status will be checked again automatically.
+                </Text>
+              )}
+              {operation && (
+                <Banner
+                  status="info"
+                  title={operationMessage(operation)}
+                  description={`Status: ${operationState(operation.state)}. Updated while the check is running.`}
+                />
+              )}
+              {operationError && (
+                <Banner
+                  status="error"
+                  title="Verification status unavailable"
+                  description={operationError}
+                />
+              )}
+              {writeError && (
+                <Banner status="error" title="Request not completed" description={writeError} />
+              )}
+              {retryAfter && <Text>Wait {retryAfter} seconds before trying again.</Text>}
+              {pendingMutation && (
+                <Button
+                  label="Retry the same request"
+                  onClick={() => void runMutation(pendingMutation)}
+                  isDisabled={busy}
+                />
+              )}
+              {conflict && (
+                <Banner
+                  status="warning"
+                  title="Setup revision changed"
+                  description="Review the latest status before submitting new changes."
+                  endContent={
+                    <Button
+                      label="Reload and review"
+                      onClick={() => void refreshReadinessForReview()}
+                      isDisabled={refreshing}
+                    />
+                  }
+                />
+              )}
+              {writeNotice && <Banner status="success" title={writeNotice} />}
+            </VStack>
+          </Section>
+          {readiness.dispatch_mode !== 'HELD' && (
+            <Section padding={6} dividers={['bottom']}>
+              <VStack gap={4}>
+                <Heading level={2}>Hold dispatch</Heading>
+                <Text>
+                  This holds dispatch for the application. Releasing dispatch is not available here.
+                </Text>
+                <VStack
+                  as="form"
+                  gap={3}
+                  maxWidth={720}
+                  width="100%"
+                  onSubmit={(event) => void holdDispatch(event)}
                 >
-                  Verifikasi FCM
-                </button>
-              </Show>
-              <Show when={!verifierReady()}>
-                <p class="help-text" role="status">
-                  Pemeriksa belum tersedia. Status akan diperiksa kembali otomatis.
-                </p>
-              </Show>
-              <Show when={operation()}>
-                {(value) => (
-                  <div class="notice" role="status" aria-live="polite">
-                    <p>{operationMessage(value())}</p>
-                    <p class="help-text">
-                      Status: {operationState(value().state)}. Diperbarui saat pemeriksaan berjalan.
-                    </p>
-                    <Show when={operationError()}>
-                      <p class="field-error">{operationError()}</p>
-                    </Show>
-                  </div>
-                )}
-              </Show>
-              <Show when={writeError()}>
-                <p class="notice notice-error" role="alert">
-                  {writeError()}
-                </p>
-              </Show>
-              <Show when={retryAfter()}>
-                <p class="help-text">Tunggu {retryAfter()} detik sebelum mencoba kembali.</p>
-              </Show>
-              <Show when={pendingMutation()}>
-                {(retry) => (
-                  <button
-                    class="button secondary"
-                    type="button"
-                    onClick={() => void runMutation(retry())}
-                    disabled={busy()}
-                  >
-                    Coba lagi dengan permintaan yang sama
-                  </button>
-                )}
-              </Show>
-              <Show when={conflict()}>
-                <div class="notice notice-error" role="alert">
-                  <p>Revisi berubah. Tinjau status terbaru sebelum mengirim perubahan baru.</p>
-                  <button
-                    class="button secondary"
-                    type="button"
-                    onClick={() => void refreshReadinessForReview()}
-                    disabled={refreshing()}
-                  >
-                    Muat ulang dan tinjau
-                  </button>
-                </div>
-              </Show>
-              <Show when={writeNotice()}>
-                <p class="notice notice-success" role="status">
-                  {writeNotice()}
-                </p>
-              </Show>
-            </section>
-
-            <Show when={current().dispatch_mode !== 'HELD'}>
-              <section class="surface stack" aria-labelledby="hold-heading">
-                <h2 id="hold-heading">Tahan distribusi</h2>
-                <p class="help-text">
-                  Tindakan ini menahan distribusi aplikasi. Persetujuan untuk membuka distribusi
-                  belum tersedia di sini.
-                </p>
-                <form class="stack" onSubmit={(event) => void holdDispatch(event)}>
-                  <fieldset
-                    class="stack"
-                    disabled={busy() || conflict() || !!pendingMutation() || !application()}
-                  >
-                    <label>
-                      Alasan penahanan
-                      <input
-                        value={holdReason()}
-                        maxlength={256}
-                        onInput={(event) => setHoldReason(event.currentTarget.value)}
-                      />
-                    </label>
-                    <button class="button secondary admin-submit" type="submit" disabled={!etag()}>
-                      Tahan distribusi
-                    </button>
-                  </fieldset>
-                </form>
-              </section>
-            </Show>
-            <section class="surface stack" aria-labelledby="device-heading">
-              <h2 id="device-heading">Penerimaan perangkat</h2>
-              <p class="help-text">
-                Pendaftaran perangkat belum tersedia. Pemeriksaan OAuth tidak memastikan notifikasi
-                diterima perangkat.
-              </p>
-            </section>
-
-            <section class="surface stack" aria-labelledby="approvals-heading">
-              <h2 id="approvals-heading">Persetujuan</h2>
-              <Show
-                when={approvalError()}
-                fallback={
-                  <Show
-                    when={approvals().length > 0}
-                    fallback={<p class="help-text">Belum ada persetujuan untuk aplikasi ini.</p>}
-                  >
-                    <ul>
-                      <For each={approvals()}>
-                        {(approval) => (
-                          <li>
-                            {approvalKind(approval.kind)} · {approvalStatus(approval.status)} ·
-                            berakhir {formatDate(approval.expires_at)}
-                          </li>
-                        )}
-                      </For>
-                    </ul>
-                  </Show>
-                }
-              >
-                <p class="help-text" role="status">
-                  {approvalError()}
-                </p>
-              </Show>
-            </section>
-          </div>
-        )}
-      </Show>
-    </>
+                  <FormLayout>
+                    <TextInput
+                      label="Hold reason"
+                      value={holdReason}
+                      onChange={setHoldReason}
+                      isDisabled={locked}
+                    />
+                    <HStack gap={2} wrap="wrap" justify="end">
+                      <Button label="Hold dispatch" type="submit" isDisabled={locked || !etag} />
+                    </HStack>
+                  </FormLayout>
+                </VStack>
+              </VStack>
+            </Section>
+          )}
+          <Section padding={6} dividers={['bottom']}>
+            <VStack gap={3}>
+              <Heading level={2}>Device receipt</Heading>
+              <Text>
+                Device enrollment is not available yet. An OAuth check does not establish that a
+                notification was received by a device.
+              </Text>
+            </VStack>
+          </Section>
+          <Section padding={6}>
+            <VStack gap={3}>
+              <Heading level={2}>Approvals</Heading>
+              {approvalError ? (
+                <Text role="status">{approvalError}</Text>
+              ) : approvals.length ? (
+                approvals.map((approval) => (
+                  <Text key={approval.id}>
+                    {approvalKind(approval.kind)} · {approvalStatus(approval.status)} · expires{' '}
+                    {formatDate(approval.expires_at)}
+                  </Text>
+                ))
+              ) : (
+                <Text color="secondary">No approvals for this application.</Text>
+              )}
+            </VStack>
+          </Section>
+        </>
+      )}
+    </PageFrame>
   );
 }
 
-function statusLabel(value: Readiness['application_status']) {
-  const labels: Record<Readiness['application_status'], string> = {
-    PROVISIONING: 'Disiapkan',
-    ACTIVE: 'Aktif',
-    HELD: 'Ditahan',
-    RETIRED: 'Dinonaktifkan',
-  };
-  return labels[value];
-}
-
 function dispatchLabel(value: Readiness['dispatch_mode']) {
-  const labels: Record<Readiness['dispatch_mode'], string> = {
-    HELD: 'Ditahan',
-    PILOT: 'Uji terbatas',
-    FULL: 'Penuh',
-  };
-  return labels[value];
+  return (
+    ({ HELD: 'Held', MANUAL: 'Manual', AUTOMATIC: 'Automatic' } as Record<string, string>)[value] ??
+    value
+  );
 }
-
 function operationState(value: Operation['state']) {
-  const labels: Record<Operation['state'], string> = {
-    PENDING: 'menunggu',
-    RUNNING: 'berjalan',
-    SUCCEEDED: 'selesai',
-    FAILED: 'gagal',
-    SUPERSEDED: 'tidak berlaku',
-  };
-  return labels[value];
+  return (
+    (
+      {
+        PENDING: 'Pending',
+        RUNNING: 'Running',
+        SUCCEEDED: 'Succeeded',
+        FAILED: 'Failed',
+        EXPIRED: 'Expired',
+      } as Record<string, string>
+    )[value] ?? value
+  );
 }
-
 function approvalKind(value: Approval['kind']) {
-  const labels: Record<Approval['kind'], string> = {
-    TEST_COHORT: 'Perangkat uji',
-    PILOT: 'Uji terbatas',
-    FULL: 'Distribusi penuh',
-  };
-  return labels[value];
+  return (
+    ({ DISPATCH: 'Dispatch', ENROLLMENT: 'Enrollment' } as Record<string, string>)[value] ?? value
+  );
 }
-
 function approvalStatus(value: Approval['status']) {
-  const labels: Record<Approval['status'], string> = {
-    VALID: 'Berlaku',
-    EXPIRED: 'Kedaluwarsa',
-    REVOKED: 'Dicabut',
-  };
-  return labels[value];
+  return (
+    (
+      {
+        APPROVED: 'Approved',
+        REJECTED: 'Rejected',
+        EXPIRED: 'Expired',
+        PENDING: 'Pending',
+      } as Record<string, string>
+    )[value] ?? value
+  );
 }

@@ -29,7 +29,7 @@ requires network access and can change over time.
 
 ## Complete local application stack
 
-`./dev up` needs Bash, Go, Python 3, Node 22.12 or newer, pnpm 11.25.0, and a
+`./dev up` needs Bash, Go, Python 3, Node 22.13 or newer, pnpm 11.25.0, and a
 running Docker Desktop/Engine with Compose 2.24.4 or newer. See the official
 [Docker installation](https://docs.docker.com/get-docker/) and [Compose
 installation](https://docs.docker.com/compose/install/), [Python downloads](https://www.python.org/downloads/),

@@ -5,22 +5,22 @@ const campaign = `/apps/${app}/campaigns/9007199254740993`;
 
 async function login(page: Page) {
   await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill('staff@example.invalid');
-  await page.getByLabel('Kata sandi', { exact: true }).fill('fixture-only');
-  await page.getByRole('button', { name: 'Masuk ke dashboard' }).click();
-  await expect(page.getByRole('heading', { name: 'Pilih aplikasi' })).toBeVisible();
+  await page.getByLabel('Email').fill('staff@example.invalid');
+  await page.getByRole('textbox', { name: 'Password' }).fill('fixture-only');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Choose application' })).toBeVisible();
 }
 
 for (const [route, field] of [
-  ['campaigns/new', 'Judul notifikasi'],
-  ['templates/new', 'Nama template'],
-  ['segments/new', 'Nama segment'],
-  ['settings', 'Nama'],
+  ['campaigns/new', 'Notification title'],
+  ['templates/new', 'Template name'],
+  ['segments/new', 'Segment name'],
+  ['settings', 'Name'],
 ]) {
   test(`cancelling logout preserves the session and unsaved ${route}`, async ({ page }) => {
     await login(page);
     await page.goto(`/apps/${app}/${route}`);
-    await page.getByLabel(field, { exact: true }).fill('Unsaved audit value');
+    await page.getByLabel(field).fill('Unsaved audit value');
     let logouts = 0;
     page.on('request', (request) => {
       if (request.url().endsWith('/bff/logout')) logouts++;
@@ -29,12 +29,12 @@ for (const [route, field] of [
       expect(dialog.type()).toBe('confirm');
       await dialog.dismiss();
     });
-    const logout = page.getByRole('button', { name: 'Keluar', exact: true });
+    const logout = page.getByRole('button', { name: 'Sign out', exact: true });
     await logout.click();
     await expect(logout).toBeEnabled();
     expect(logouts).toBe(0);
     expect((await (await page.request.get('/bff/session')).json()).authenticated).toBe(true);
-    await expect(page.getByLabel(field, { exact: true })).toHaveValue('Unsaved audit value');
+    await expect(page.getByLabel(field)).toHaveValue('Unsaved audit value');
     const dialogs: string[] = [];
     page.on('dialog', async (dialog) => {
       dialogs.push(dialog.type());
@@ -42,7 +42,7 @@ for (const [route, field] of [
     });
     await logout.click();
     await expect(page).toHaveURL(/\/login$/);
-    await expect(page.getByRole('heading', { name: 'Selamat datang kembali.' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
     expect(logouts).toBe(1);
     expect(dialogs).toEqual(['confirm']);
   });
@@ -51,17 +51,17 @@ for (const [route, field] of [
 test('failed logout retains unsaved navigation protection', async ({ page }) => {
   await login(page);
   await page.goto(`/apps/${app}/campaigns/new`);
-  await page.getByLabel('Judul notifikasi', { exact: true }).fill('Keep this draft');
+  await page.getByLabel('Notification title').fill('Keep this draft');
   await page.route('**/bff/logout', (route) =>
     route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
   );
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Keluar', exact: true }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
+  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  await expect(page.getByText('Sign-out failed')).toBeVisible();
   page.once('dialog', (dialog) => dialog.dismiss());
-  await page.getByRole('link', { name: 'Semua campaign', exact: true }).click();
+  await page.getByRole('link', { name: 'All campaigns', exact: true }).click();
   await expect(page).toHaveURL(/\/campaigns\/new$/);
-  await expect(page.getByLabel('Judul notifikasi', { exact: true })).toHaveValue('Keep this draft');
+  await expect(page.getByLabel('Notification title')).toHaveValue('Keep this draft');
   expect((await (await page.request.get('/bff/session')).json()).authenticated).toBe(true);
 });
 
@@ -70,11 +70,14 @@ test('schedule remains locked while pending and unlocks after held acceptance', 
 }) => {
   await login(page);
   await page.goto(campaign);
-  await page.getByRole('button', { name: 'Jadwalkan pengiriman', exact: true }).click();
-  const date = page.getByLabel('Waktu pengiriman');
+  await page.getByRole('button', { name: 'Schedule delivery', exact: true }).click();
+  const date = page.getByRole('textbox', { name: 'Delivery time Required' });
+  const time = page.getByRole('textbox', { name: 'Delivery time time' });
   const future = new Date();
-  const value = `${future.getFullYear() + 1}-01-15T10:30`;
-  await date.fill(value);
+  const dateValue = `${future.getFullYear() + 1}-01-15`;
+  const timeValue = '10:30';
+  await date.fill(dateValue);
+  await time.fill(timeValue);
   let release: () => void = () => {};
   const gate = new Promise<void>((resolve) => {
     release = resolve;
@@ -84,21 +87,31 @@ test('schedule remains locked while pending and unlocks after held acceptance', 
     await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
   });
   const request = page.waitForRequest((item) => item.url().endsWith('/schedule'));
-  await page.getByRole('button', { name: 'Konfirmasi jadwal' }).click();
+  await page.getByRole('button', { name: 'Confirm schedule' }).click();
   const submitted = await request;
   try {
     await expect(date).toBeDisabled();
-    await expect(date).toHaveValue(value);
+    await expect(time).toBeDisabled();
+    await expect(date).toHaveValue(dateValue);
+    await expect(time).toHaveValue(timeValue);
     expect(submitted.postDataJSON().scheduled_at).toBe(
-      await date.evaluate((input: HTMLInputElement) => new Date(input.value).toISOString()),
+      await date.evaluate(
+        (input: HTMLInputElement, timeInput) =>
+          new Date(`${input.value}T${timeInput}`).toISOString(),
+        timeValue,
+      ),
     );
-    await expect(page.getByRole('button', { name: 'Memproses…' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Processing…' })).toBeDisabled();
   } finally {
     release();
   }
-  await expect(page.getByRole('alert')).toContainText('Pengiriman sedang ditahan');
+  await expect(page.getByRole('alert').filter({ hasText: 'Dispatch is held' })).toContainText(
+    'Dispatch is held',
+  );
   await expect(date).toBeEnabled();
-  await expect(date).toHaveValue(value);
+  await expect(time).toBeEnabled();
+  await expect(date).toHaveValue(dateValue);
+  await expect(time).toHaveValue(timeValue);
 });
 
 test('draft results skip delivery requests and refresh into real result states', async ({
@@ -117,20 +130,22 @@ test('draft results skip delivery requests and refresh into real result states',
     if (/\/(statistics|deliveries|reads)(\?|$)/.test(request.url())) resultRequests++;
   });
   await page.goto(`${campaign}/results`);
-  await expect(page.getByRole('heading', { name: 'Campaign belum dikirim' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Campaign has not been sent' })).toBeVisible();
   expect(resultRequests).toBe(0);
-  await expect(page.getByRole('link', { name: 'Tinjau campaign' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'Review campaign' })).toHaveAttribute(
     'href',
     campaign,
   );
-  await expect(page.getByText('Pesan sampai, tetapi receipt belum muncul?')).toHaveCount(0);
+  await expect(page.getByText('A message arrived, but no receipt is shown?')).toHaveCount(0);
   status = 'QUEUED';
-  await page.getByRole('button', { name: 'Perbarui' }).click();
-  await expect(page.getByRole('heading', { name: 'Statistik belum lengkap' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Belum ada catatan pengiriman.' })).toBeVisible();
+  await page.getByRole('button', { name: 'Refresh' }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'Statistics are incomplete' }),
+  ).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No delivery records yet' })).toBeVisible();
   expect(resultRequests).toBeGreaterThanOrEqual(2);
-  await page.getByRole('button', { name: 'Pembukaan', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Belum ada catatan pembukaan.' })).toBeVisible();
+  await page.getByRole('radio', { name: 'Opens', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'No open records yet' })).toBeVisible();
 });
 
 test('campaign lookup errors stay retryable without requesting delivery data', async ({ page }) => {
@@ -146,11 +161,11 @@ test('campaign lookup errors stay retryable without requesting delivery data', a
     if (/\/(statistics|deliveries|reads)(\?|$)/.test(request.url())) results++;
   });
   await page.goto(`${campaign}/results`);
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(page.getByText('Unable to complete this request')).toBeVisible();
   expect(results).toBe(0);
   unavailable = false;
-  await page.getByRole('button', { name: 'Muat ulang' }).click();
-  await expect(page.getByRole('heading', { name: 'Campaign belum dikirim' })).toBeVisible();
+  await page.getByRole('button', { name: 'Retry' }).click();
+  await expect(page.getByRole('heading', { name: 'Campaign has not been sent' })).toBeVisible();
 });
 
 for (const theme of ['light', 'dark']) {
@@ -160,8 +175,8 @@ for (const theme of ['light', 'dark']) {
       await page.addInitScript((value) => localStorage.setItem('hello.theme', value), theme);
       await login(page);
       await page.goto(`/apps/${app}/campaigns/new`);
-      await expect(page.getByLabel('Judul notifikasi', { exact: true })).toBeVisible();
-      const save = page.getByRole('button', { name: 'Simpan draft', exact: true });
+      await expect(page.getByLabel('Notification title')).toBeVisible();
+      const save = page.getByRole('button', { name: 'Save draft', exact: true });
       await expect(save).toBeInViewport({ ratio: 1 });
       await page.getByRole('button', { name: 'Penerima Uji #42', exact: true }).click();
       await expect(save).toBeInViewport({ ratio: 1 });
@@ -170,10 +185,10 @@ for (const theme of ['light', 'dark']) {
       );
       await page.screenshot({ path: `test-results/polish-editor-${width}-${theme}.png` });
       page.once('dialog', (dialog) => dialog.accept());
-      await page.getByRole('link', { name: 'Kembali', exact: true }).click();
+      await page.getByRole('link', { name: 'All campaigns', exact: true }).click();
       await page.goto(campaign);
       await expect(
-        page.getByRole('button', { name: 'Jadwalkan pengiriman', exact: true }),
+        page.getByRole('button', { name: 'Schedule delivery', exact: true }),
       ).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
         true,

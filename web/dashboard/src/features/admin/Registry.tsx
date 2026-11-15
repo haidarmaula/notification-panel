@@ -1,16 +1,31 @@
-import { For, Show, createEffect, createSignal } from 'solid-js';
-import { A, useNavigate, useParams } from '@solidjs/router';
-import { createQuery, useQueryClient } from '@tanstack/solid-query';
+import { useEffect, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Banner } from '@astryxdesign/core/Banner';
+import { Button } from '@astryxdesign/core/Button';
+import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { FormLayout } from '@astryxdesign/core/FormLayout';
+import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList';
+import { HStack, VStack } from '@astryxdesign/core/Stack';
+import { Heading } from '@astryxdesign/core/Heading';
+import { Link } from '@astryxdesign/core/Link';
+import { Section } from '@astryxdesign/core/Section';
+import { Table, proportional } from '@astryxdesign/core/Table';
+import { Text } from '@astryxdesign/core/Text';
+import { TextInput } from '@astryxdesign/core/TextInput';
 import { ApiError, data, versionedData } from '../../lib/api/client';
 import type { components } from '../../lib/api/generated/applications';
-import { QueryState, useWrite, WriteFeedback } from '../management/shared';
+import { useWrite } from '../management/data-hooks';
+import { QueryState, WriteFeedback } from '../management/shared';
 import { useUnsaved } from '../../app/unsaved';
 import { Failure, Status } from '../../components/ui/Feedback';
+import { PageFrame } from '../../components/ui/PageFrame';
 
 type Application = components['schemas']['Application'];
 type Grant = components['schemas']['StaffGrant'];
 type AppList = components['schemas']['ApplicationListResponse']['data'];
 type GrantList = components['schemas']['StaffGrantListResponse']['data'];
+type Versioned<T> = { data: T; etag: string };
 
 const pageSize = 20;
 const maxInt64 = 9223372036854775807n;
@@ -27,6 +42,7 @@ function validStaffID(value: string) {
 function byteLength(value: string) {
   return new TextEncoder().encode(value).length;
 }
+
 function hasControlCharacters(value: string) {
   return Array.from(value).some(
     (character) => character.codePointAt(0)! < 32 || character.codePointAt(0) === 127,
@@ -38,41 +54,37 @@ export default function Registry() {
   const navigate = useNavigate();
   const operation = useWrite();
   const setDirty = useUnsaved();
-  const [page, setPage] = createSignal(1);
-  const [keyFilter, setKeyFilter] = createSignal('');
-  const [filterInput, setFilterInput] = createSignal('');
-  const [key, setKey] = createSignal('');
-  const [name, setName] = createSignal('');
-  const [created, setCreated] = createSignal(false);
-  const [formError, setFormError] = createSignal('');
-  const list = createQuery(() => {
-    const staticPage = page();
-    const staticKey = keyFilter();
-    return {
-      queryKey: ['managed-applications', staticPage, staticKey],
-      queryFn: ({ signal }) => {
-        const query = new URLSearchParams({ page: String(staticPage), limit: String(pageSize) });
-        if (staticKey) query.set('key', staticKey);
-        return data<AppList>(`/admin/apps?${query.toString()}`, signal);
-      },
-    };
+  const [page, setPage] = useState(1);
+  const [keyFilter, setKeyFilter] = useState('');
+  const [filterInput, setFilterInput] = useState('');
+  const [key, setKey] = useState('');
+  const [name, setName] = useState('');
+  const [created, setCreated] = useState(false);
+  const [formError, setFormError] = useState('');
+  const list = useQuery({
+    queryKey: ['managed-applications', page, keyFilter],
+    queryFn: ({ signal }) => {
+      const query = new URLSearchParams({ page: String(page), limit: String(pageSize) });
+      if (keyFilter) query.set('key', keyFilter);
+      return data<AppList>(`/admin/apps?${query.toString()}`, signal);
+    },
   });
 
-  async function createApp(event: SubmitEvent) {
+  async function createApp(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError('');
     setCreated(false);
-    const cleanKey = key();
-    const cleanName = name().trim();
+    const cleanKey = key;
+    const cleanName = name.trim();
     if (!/^[a-z][a-z0-9-]{1,61}[a-z0-9]$/.test(cleanKey)) {
       setFormError(
-        'Gunakan kunci 3–63 karakter: huruf kecil di awal, lalu huruf, angka, atau tanda hubung.',
+        'Use a key with 3–63 characters: lowercase letter first, followed by lowercase letters, numbers, or hyphens.',
       );
       return;
     }
     if (!cleanName || byteLength(cleanName) > 128 || hasControlCharacters(cleanName)) {
       setFormError(
-        'Nama wajib diisi, maksimal 128 byte UTF-8, dan tidak boleh memuat karakter kontrol.',
+        'Name is required, must be at most 128 UTF-8 bytes, and cannot contain control characters.',
       );
       return;
     }
@@ -90,160 +102,162 @@ export default function Registry() {
   }
 
   return (
-    <>
-      <header class="page-heading">
-        <div>
-          <h1>Registry aplikasi</h1>
-          <p class="muted">
-            Kelola identitas aplikasi dan akses staf yang diberikan secara eksplisit.
-          </p>
-        </div>
-      </header>
-      <section class="surface stack">
-        <h2>Aplikasi terdaftar</h2>
-        <form
-          class="inline-form"
-          onSubmit={(event) => {
-            event.preventDefault();
-            setKeyFilter(filterInput().trim());
-            setPage(1);
-          }}
-        >
-          <label>
-            Filter kunci aplikasi
-            <input
-              value={filterInput()}
-              onInput={(event) => setFilterInput(event.currentTarget.value)}
-            />
-          </label>
-          <button class="button secondary" type="submit">
-            Terapkan
-          </button>
-          <Show when={keyFilter()}>
-            <button
-              class="button secondary"
-              type="button"
-              onClick={() => {
-                setKeyFilter('');
-                setFilterInput('');
-                setPage(1);
-              }}
-            >
-              Hapus filter
-            </button>
-          </Show>
-        </form>
-        <QueryState query={list}>
-          <Show
-            when={list.data?.items.length}
-            fallback={
-              <div class="empty-state">
-                <h3>Belum ada aplikasi.</h3>
-                <p>Buat registry aplikasi di bawah untuk memulai pengelolaan.</p>
-              </div>
-            }
+    <PageFrame
+      title="Application registry"
+      description="Manage application identities and explicitly granted staff access."
+    >
+      <Section padding={6}>
+        <VStack gap={3}>
+          <Heading level={2}>Registered applications</Heading>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              setKeyFilter(filterInput.trim());
+              setPage(1);
+            }}
           >
-            <div class="table-wrap">
-              <table class="directory-table">
-                <thead>
-                  <tr>
-                    <th>Aplikasi</th>
-                    <th>Kunci</th>
-                    <th>Status</th>
-                    <th>ID</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <For each={list.data?.items}>
-                    {(app) => (
-                      <tr>
-                        <td>
-                          <A href={`/apps/admin/applications/${app.id}`}>{app.name}</A>
-                        </td>
-                        <td class="mono">{app.key}</td>
-                        <td>
-                          <Status value={app.status} />
-                        </td>
-                        <td class="mono">{app.id}</td>
-                      </tr>
-                    )}
-                  </For>
-                </tbody>
-              </table>
-            </div>
-          </Show>
-          <div class="pagination">
-            <span>
-              Halaman {page()} · {list.data?.total ?? 0} aplikasi
-            </span>
-            <div>
-              <button
-                class="button secondary small"
-                disabled={page() <= 1 || list.isFetching}
-                onClick={() => setPage(page() - 1)}
-              >
-                Sebelumnya
-              </button>
-              <button
-                class="button secondary small"
-                disabled={page() * pageSize >= (list.data?.total ?? 0) || list.isFetching}
-                onClick={() => setPage(page() + 1)}
-              >
-                Berikutnya
-              </button>
-            </div>
-          </div>
-        </QueryState>
-      </section>
-      <section class="surface stack">
-        <h2>Daftarkan aplikasi</h2>
-        <p class="help-text">
-          Aplikasi baru berstatus Disiapkan. Pendaftaran tidak mengaktifkan aplikasi atau memberi
-          akses bisnis kepada siapa pun.
-        </p>
-        <form
-          class="stack"
-          onInput={() => setDirty(true)}
-          onSubmit={(event) => void createApp(event)}
-        >
-          <fieldset class="stack" disabled={operation.blocked()}>
-            <label>
-              Kunci aplikasi
-              <input
-                required
-                value={key()}
-                onInput={(event) => setKey(event.currentTarget.value)}
-                autocomplete="off"
+            <HStack gap={2} wrap="wrap" align="end">
+              <TextInput
+                label="Filter by application key"
+                value={filterInput}
+                onChange={setFilterInput}
               />
-            </label>
-            <p class="help-text">3–63 karakter ASCII; huruf kecil di awal, tanpa spasi.</p>
-            <label>
-              Nama aplikasi
-              <input
-                required
-                value={name()}
-                onInput={(event) => setName(event.currentTarget.value)}
-                maxlength={128}
+              <Button label="Apply filter" type="submit" />
+              {keyFilter && (
+                <Button
+                  label="Clear filter"
+                  variant="ghost"
+                  onClick={() => {
+                    setKeyFilter('');
+                    setFilterInput('');
+                    setPage(1);
+                  }}
+                />
+              )}
+            </HStack>
+          </form>
+          <QueryState query={list}>
+            {list.data?.items.length ? (
+              <Table
+                data={
+                  list.data.items as ((typeof list.data.items)[number] & Record<string, unknown>)[]
+                }
+                columns={[
+                  {
+                    key: 'name',
+                    header: 'Application',
+                    width: proportional(2, { minWidth: 200 }),
+                    renderCell: (app) => (
+                      <Link href={`/apps/admin/applications/${app.id}`}>{app.name}</Link>
+                    ),
+                  },
+                  {
+                    key: 'key',
+                    header: 'Key',
+                    width: proportional(1, { minWidth: 160 }),
+                    renderCell: (app) => <Text>{app.key}</Text>,
+                  },
+                  {
+                    key: 'status',
+                    header: 'Status',
+                    width: proportional(1, { minWidth: 120 }),
+                    renderCell: (app) => <Status value={app.status} />,
+                  },
+                  {
+                    key: 'id',
+                    header: 'ID',
+                    width: proportional(1, { minWidth: 240 }),
+                    renderCell: (app) => <Text>{app.id}</Text>,
+                  },
+                ]}
+                density="compact"
+                hasHover
               />
-            </label>
-            <Show when={formError()}>
-              <p class="notice notice-error" role="alert">
-                {formError()}
-              </p>
-            </Show>
-            <WriteFeedback operation={operation} />
-            <Show when={created()}>
-              <p class="notice notice-success" role="status">
-                Registry aplikasi dibuat.
-              </p>
-            </Show>
-            <button class="button primary" type="submit">
-              {operation.pending() ? 'Mendaftarkan…' : 'Daftarkan aplikasi'}
-            </button>
-          </fieldset>
-        </form>
-      </section>
-    </>
+            ) : (
+              <EmptyState
+                title="No applications registered"
+                description="Create an application registry below to begin managing it."
+              />
+            )}
+          </QueryState>
+          <HStack gap={2} wrap="wrap" align="center" justify="between">
+            <Text>
+              Page {page} · {list.data?.total ?? 0} applications
+            </Text>
+            <HStack gap={2}>
+              <Button
+                label="Previous"
+                size="sm"
+                isDisabled={page <= 1 || list.isFetching}
+                onClick={() => setPage((current) => current - 1)}
+              />
+              <Button
+                label="Next"
+                size="sm"
+                isDisabled={page * pageSize >= (list.data?.total ?? 0) || list.isFetching}
+                onClick={() => setPage((current) => current + 1)}
+              />
+            </HStack>
+          </HStack>
+        </VStack>
+      </Section>
+      <Section padding={6}>
+        <VStack gap={3}>
+          <Heading level={2}>Register an application</Heading>
+          <Text color="secondary">
+            New applications begin in Prepared status. Registration does not activate an application
+            or grant anyone business access.
+          </Text>
+          <form onInput={() => setDirty(true)} onSubmit={(event) => void createApp(event)}>
+            <VStack gap={3} maxWidth={720} width="100%">
+              <FormLayout>
+                <TextInput
+                  label="Application key"
+                  value={key}
+                  onChange={setKey}
+                  autoComplete="off"
+                  isRequired
+                  isDisabled={operation.blocked()}
+                  description="3–63 ASCII characters; lowercase letter first, no spaces."
+                />
+                <TextInput
+                  label="Application name"
+                  value={name}
+                  onChange={setName}
+                  isRequired
+                  isDisabled={operation.blocked()}
+                />
+                {formError && (
+                  <Banner
+                    status="error"
+                    title="Application was not registered"
+                    description={formError}
+                    role="alert"
+                  />
+                )}
+                <WriteFeedback operation={operation} />
+                {created && (
+                  <Banner
+                    status="success"
+                    title="Application registry created"
+                    description="The application is ready for setup."
+                    role="status"
+                  />
+                )}
+                <HStack gap={2} wrap="wrap" justify="end">
+                  <Button
+                    label={operation.pending() ? 'Registering…' : 'Register application'}
+                    type="submit"
+                    variant="primary"
+                    isDisabled={operation.blocked()}
+                  />
+                </HStack>
+              </FormLayout>
+            </VStack>
+          </form>
+        </VStack>
+      </Section>
+    </PageFrame>
   );
 }
 
@@ -251,55 +265,58 @@ export function RegistryDetail() {
   const params = useParams();
   const client = useQueryClient();
   const operation = useWrite();
-  const [writeTarget, setWriteTarget] = createSignal<'name' | 'grant'>('name');
-  const [renameError, setRenameError] = createSignal('');
+  const [writeTarget, setWriteTarget] = useState<'name' | 'grant'>('name');
+  const [renameError, setRenameError] = useState('');
   const setDirty = useUnsaved();
-  const [name, setName] = createSignal('');
-  const [nameDirty, setNameDirty] = createSignal(false);
-  const [saved, setSaved] = createSignal(false);
-  const [conflict, setConflict] = createSignal(false);
-  const [staffID, setStaffID] = createSignal('');
-  const [lookupID, setLookupID] = createSignal('');
-  const [grantNotice, setGrantNotice] = createSignal('');
-  const [grantError, setGrantError] = createSignal('');
-  const [grantConflict, setGrantConflict] = createSignal(false);
-  const [grantPage, setGrantPage] = createSignal(1);
-  const app = createQuery(() => ({
+  const [name, setName] = useState('');
+  const [nameDirty, setNameDirty] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [conflict, setConflict] = useState(false);
+  const [staffID, setStaffID] = useState('');
+  const [lookupID, setLookupID] = useState('');
+  const [grantNotice, setGrantNotice] = useState('');
+  const [grantError, setGrantError] = useState('');
+  const [grantConflict, setGrantConflict] = useState(false);
+  const [grantPage, setGrantPage] = useState(1);
+  const app = useQuery({
     queryKey: ['managed-application', params.managedAppId],
     queryFn: ({ signal }) =>
       versionedData<Application>(`/admin/apps/${params.managedAppId}`, signal),
     enabled: !!params.managedAppId,
-  }));
-  const grants = createQuery(() => ({
-    queryKey: ['application-staff-grants', params.managedAppId, grantPage()],
+  });
+  const grants = useQuery({
+    queryKey: ['application-staff-grants', params.managedAppId, grantPage],
     queryFn: ({ signal }) =>
       data<GrantList>(
-        `/admin/apps/${params.managedAppId}/staff-grants?page=${grantPage()}&limit=${pageSize}`,
+        `/admin/apps/${params.managedAppId}/staff-grants?page=${grantPage}&limit=${pageSize}`,
         signal,
       ),
     enabled: !!params.managedAppId,
-  }));
-  const grantLookup = createQuery(() => ({
-    queryKey: ['application-staff-grant', params.managedAppId, lookupID()],
+  });
+  const grantLookup = useQuery({
+    queryKey: ['application-staff-grant', params.managedAppId, lookupID],
     queryFn: ({ signal }) =>
-      versionedData<Grant>(`/admin/apps/${params.managedAppId}/staff-grants/${lookupID()}`, signal),
-    enabled: !!lookupID(),
+      versionedData<Grant>(`/admin/apps/${params.managedAppId}/staff-grants/${lookupID}`, signal),
+    enabled: !!lookupID,
     retry: false,
-  }));
-  createEffect(() => {
-    const current = app.data?.data;
-    if (current && !nameDirty()) setName(current.name);
   });
 
-  async function rename(event: SubmitEvent) {
+  useEffect(() => {
+    const current = app.data?.data;
+    if (current && !nameDirty) setName(current.name);
+  }, [app.data, nameDirty]);
+
+  async function rename(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (operation.blocked() || conflict() || !app.data?.etag) return;
+    if (operation.blocked() || conflict || !app.data?.etag) return;
     setSaved(false);
     setConflict(false);
     setRenameError('');
-    const cleanName = name().trim();
+    const cleanName = name.trim();
     if (!cleanName || byteLength(cleanName) > 128 || hasControlCharacters(cleanName)) {
-      setRenameError('Nama wajib diisi, maksimal 128 byte UTF-8, tanpa karakter kontrol.');
+      setRenameError(
+        'Name is required, must be at most 128 UTF-8 bytes, and cannot contain control characters.',
+      );
       return;
     }
     setWriteTarget('name');
@@ -307,7 +324,7 @@ export function RegistryDetail() {
       `/admin/apps/${params.managedAppId}`,
       'PATCH',
       { name: cleanName },
-      { ifMatch: app.data?.etag },
+      { ifMatch: app.data.etag },
     );
     if (!result) {
       if (operation.status() === 412) setConflict(true);
@@ -325,8 +342,7 @@ export function RegistryDetail() {
   }
 
   async function refreshApp() {
-    if (nameDirty() && !window.confirm('Muat ulang dan ganti perubahan nama yang belum disimpan?'))
-      return;
+    if (nameDirty && !window.confirm('Reload and replace the unsaved application name?')) return;
     const result = await app.refetch();
     if (result.data) {
       setName(result.data.data.name);
@@ -336,14 +352,14 @@ export function RegistryDetail() {
     }
   }
 
-  async function inspectGrant(event: SubmitEvent) {
+  async function inspectGrant(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setGrantError('');
     setGrantNotice('');
     setGrantConflict(false);
-    const id = staffID();
+    const id = staffID;
     if (!validStaffID(id)) {
-      setGrantError('Masukkan ID staf berupa bilangan bulat positif int64 tanpa nol di depan.');
+      setGrantError('Enter a positive int64 staff ID without leading zeroes.');
       return;
     }
     setLookupID(id);
@@ -358,17 +374,19 @@ export function RegistryDetail() {
       setGrantConflict(false);
   }
 
+  const lookupIsMissing = grantLookup.error instanceof ApiError && grantLookup.error.status === 404;
+
   async function enableGrant() {
     if (
       operation.blocked() ||
-      grantConflict() ||
+      grantConflict ||
       grantLookup.isFetching ||
-      (!grantLookup.isSuccess && !lookupIsMissing())
+      (!grantLookup.isSuccess && !lookupIsMissing)
     )
       return;
     const existing = grantLookup.data;
-    const id = lookupID();
-    if (!id || !window.confirm(`Berikan akses aplikasi kepada staf #${id}?`)) return;
+    const id = lookupID;
+    if (!id || !window.confirm(`Grant application access to staff #${id}?`)) return;
     setGrantError('');
     setGrantNotice('');
     setGrantConflict(false);
@@ -385,7 +403,7 @@ export function RegistryDetail() {
       setGrantError(operation.error());
       return;
     }
-    setGrantNotice(`Akses staf #${id} aktif.`);
+    setGrantNotice(`Access for staff #${id} is active.`);
     await Promise.all([
       client.invalidateQueries({ queryKey: ['application-staff-grants', params.managedAppId] }),
       client.invalidateQueries({ queryKey: ['application-staff-grant', params.managedAppId, id] }),
@@ -393,10 +411,10 @@ export function RegistryDetail() {
     await grantLookup.refetch();
   }
 
-  async function revokeGrant(grant: { data: Grant; etag: string }) {
-    if (operation.blocked() || grantConflict() || grantLookup.isFetching) return;
+  async function revokeGrant(grant: Versioned<Grant>) {
+    if (operation.blocked() || grantConflict || grantLookup.isFetching) return;
     const id = grant.data.staff_id;
-    if (!window.confirm(`Cabut akses aplikasi dari staf #${id}?`)) return;
+    if (!window.confirm(`Revoke application access from staff #${id}?`)) return;
     setGrantError('');
     setGrantNotice('');
     setGrantConflict(false);
@@ -412,55 +430,51 @@ export function RegistryDetail() {
       setGrantError(operation.error());
       return;
     }
-    setGrantNotice(`Akses staf #${id} dicabut.`);
+    setGrantNotice(`Access for staff #${id} was revoked.`);
     await Promise.all([
       client.invalidateQueries({ queryKey: ['application-staff-grants', params.managedAppId] }),
       client.invalidateQueries({ queryKey: ['application-staff-grant', params.managedAppId, id] }),
     ]);
-    if (lookupID() === id) await grantLookup.refetch();
+    if (lookupID === id) await grantLookup.refetch();
   }
 
-  const lookupIsMissing = () =>
-    grantLookup.error instanceof ApiError && grantLookup.error.status === 404;
   return (
-    <>
-      <A class="back-link" href="/apps/admin/applications">
-        ← Registry aplikasi
-      </A>
+    <PageFrame
+      title={app.data?.data.name ?? 'Application'}
+      description="Application identity and staff access grants."
+      back={{ label: 'Application registry', href: '/apps/admin/applications' }}
+      contentWidth={1120}
+    >
       <QueryState query={app}>
-        <>
-          <header class="page-heading">
-            <div>
-              <h1>{app.data?.data.name}</h1>
-              <p class="muted">Identitas aplikasi dan daftar pemberian akses staf.</p>
-            </div>
-          </header>
-          <div class="settings-grid">
-            <section class="surface stack">
-              <h2>Identitas</h2>
-              <dl class="settings-details">
-                <dt>Kunci aplikasi</dt>
-                <dd class="mono">{app.data?.data.key}</dd>
-                <dt>ID aplikasi</dt>
-                <dd class="mono">{app.data?.data.id}</dd>
-                <dt>Status</dt>
-                <dd>
-                  <Status value={app.data!.data.status} />
-                </dd>
-                <dt>Revisi</dt>
-                <dd class="mono">{app.data?.data.revision}</dd>
-              </dl>
-              <p class="help-text">
-                Siapkan kredensial dan verifikasi layanan sebelum pengujian perangkat.
-              </p>
-              <A
-                class="button secondary"
+        <VStack gap={4}>
+          <Section padding={6}>
+            <VStack gap={3}>
+              <Heading level={2}>Identity</Heading>
+              {app.data && (
+                <MetadataList>
+                  <MetadataListItem label="Application key">{app.data.data.key}</MetadataListItem>
+                  <MetadataListItem label="Application ID">{app.data.data.id}</MetadataListItem>
+                  <MetadataListItem label="Status">
+                    <Status value={app.data.data.status} />
+                  </MetadataListItem>
+                  <MetadataListItem label="Revision">{app.data.data.revision}</MetadataListItem>
+                </MetadataList>
+              )}
+              <Text color="secondary">
+                Prepare credentials and verify the service before device testing.
+              </Text>
+              <Link
                 href={`/apps/admin/applications/${params.managedAppId}/onboarding`}
+                isStandalone
               >
-                Konfigurasi notifikasi
-              </A>
+                Notification setup
+              </Link>
+            </VStack>
+          </Section>
+          <Section padding={6}>
+            <VStack gap={3}>
+              <Heading level={2}>Rename application</Heading>
               <form
-                class="stack"
                 onInput={() => {
                   setDirty(true);
                   setNameDirty(true);
@@ -468,227 +482,229 @@ export function RegistryDetail() {
                 }}
                 onSubmit={(event) => void rename(event)}
               >
-                <fieldset class="stack" disabled={operation.blocked()}>
-                  <label>
-                    Nama aplikasi
-                    <input
-                      required
-                      value={name()}
-                      maxlength={128}
-                      onInput={(event) => setName(event.currentTarget.value)}
+                <VStack gap={3} maxWidth={720} width="100%">
+                  <FormLayout>
+                    <TextInput
+                      label="Application name"
+                      value={name}
+                      onChange={setName}
+                      isRequired
+                      isDisabled={operation.blocked()}
                     />
-                  </label>
-                  <p class="help-text">
-                    Maksimal 128 byte UTF-8. Perubahan nama memakai revisi yang dibaca terakhir.
-                  </p>
-                  <Show when={renameError()}>
-                    <p class="notice notice-error" role="alert">
-                      {renameError()}
-                    </p>
-                  </Show>
-                  <Show when={writeTarget() === 'name'}>
-                    <WriteFeedback operation={operation} />
-                  </Show>
-                  <Show when={saved()}>
-                    <p class="notice notice-success" role="status">
-                      Nama aplikasi diperbarui.
-                    </p>
-                  </Show>
-                  <Show when={conflict()}>
-                    <div class="notice notice-error" role="alert">
-                      <p>
-                        Aplikasi berubah sejak dibaca. Muat ulang untuk meninjau nama terbaru
-                        sebelum mencoba kembali.
-                      </p>
-                      <button
-                        class="button secondary"
-                        type="button"
-                        onClick={() => void refreshApp()}
-                      >
-                        Muat ulang aplikasi
-                      </button>
-                    </div>
-                  </Show>
-                  <button
-                    class="button primary admin-submit"
-                    type="submit"
-                    disabled={conflict() || !app.data?.etag}
-                  >
-                    Simpan nama
-                  </button>
-                </fieldset>
+                    <Text color="secondary">
+                      Maximum 128 UTF-8 bytes. Renaming uses the revision most recently read.
+                    </Text>
+                    {renameError && (
+                      <Banner
+                        status="error"
+                        title="Name not saved"
+                        description={renameError}
+                        role="alert"
+                      />
+                    )}
+                    {writeTarget === 'name' && <WriteFeedback operation={operation} />}
+                    {saved && (
+                      <Banner
+                        status="success"
+                        title="Name updated"
+                        description="The application name was updated."
+                        role="status"
+                      />
+                    )}
+                    {conflict && (
+                      <VStack gap={2}>
+                        <Banner
+                          status="error"
+                          title="Application changed"
+                          description="Reload and review the latest name before trying again."
+                          role="alert"
+                        />
+                        <Button label="Reload application" onClick={() => void refreshApp()} />
+                      </VStack>
+                    )}
+                    <HStack gap={2} wrap="wrap" justify="end">
+                      <Button
+                        label="Save name"
+                        type="submit"
+                        variant="primary"
+                        isDisabled={conflict || !app.data?.etag || operation.blocked()}
+                      />
+                    </HStack>
+                  </FormLayout>
+                </VStack>
               </form>
-            </section>
-            <section class="surface stack">
-              <h2>Akses staf</h2>
-              <p class="help-text">
-                Cari staf berdasarkan ID, lalu berikan atau cabut akses setelah meninjau
-                identitasnya.
-              </p>
-              <form class="inline-form" onSubmit={(event) => void inspectGrant(event)}>
-                <label>
-                  ID staf
-                  <input
-                    inputmode="numeric"
-                    value={staffID()}
-                    onInput={(event) => setStaffID(event.currentTarget.value)}
+            </VStack>
+          </Section>
+          <Section padding={6}>
+            <VStack gap={3}>
+              <Heading level={2}>Staff access</Heading>
+              <Text color="secondary">
+                Look up staff by ID, then grant or revoke access after reviewing their identity.
+              </Text>
+              <form onSubmit={(event) => void inspectGrant(event)}>
+                <HStack gap={2} wrap="wrap" align="end">
+                  <TextInput
+                    label="Staff ID"
+                    inputMode="numeric"
+                    value={staffID}
+                    onChange={setStaffID}
                   />
-                </label>
-                <button class="button secondary" type="submit">
-                  Periksa akses
-                </button>
+                  <Button label="Inspect access" type="submit" />
+                </HStack>
               </form>
-              <Show when={grantError()}>
-                <p class="notice notice-error" role="alert">
-                  {grantError()}
-                </p>
-              </Show>
-              <Show when={grantNotice()}>
-                <p class="notice notice-success" role="status">
-                  {grantNotice()}
-                </p>
-              </Show>
-              <Show when={lookupID()}>
-                <div class="grant-review">
-                  <h3>Staf #{lookupID()}</h3>
-                  <A class="quiet-link" href={`/apps/admin/staff/${lookupID()}`}>
-                    Lihat akun staf
-                  </A>
-                  <Show when={grantLookup.isPending}>
-                    <p role="status">Memeriksa akses…</p>
-                  </Show>
-                  <Show when={grantLookup.isError && !lookupIsMissing()}>
-                    <Failure error={grantLookup.error} retry={() => void refreshGrant()} />
-                  </Show>
-                  <Show when={grantLookup.isSuccess}>
-                    <p>
-                      Status akses:{' '}
-                      <Status value={grantLookup.data!.data.is_active ? 'ACTIVE' : 'INACTIVE'} /> ·
-                      revisi <span class="mono">{grantLookup.data!.data.revision}</span>
-                    </p>
-                  </Show>
-                  <Show when={lookupIsMissing()}>
-                    <p>
-                      Belum ada baris akses untuk ID ini. Akses baru akan dibuat jika staf masih
-                      aktif.
-                    </p>
-                  </Show>
-                  <Show when={grantConflict()}>
-                    <div class="notice notice-error" role="alert">
-                      <p>
-                        Baris akses berubah sejak diperiksa. Muat ulang untuk meninjau status
-                        terbaru, lalu konfirmasikan lagi.
-                      </p>
-                      <button
-                        class="button secondary"
-                        type="button"
-                        onClick={() => void refreshGrant()}
-                      >
-                        Muat ulang akses
-                      </button>
-                    </div>
-                  </Show>
-                  <div class="button-row">
-                    <button
-                      class="button primary"
-                      disabled={
-                        (!lookupIsMissing() && !grantLookup.isSuccess) ||
-                        operation.blocked() ||
-                        grantConflict() ||
-                        grantLookup.isFetching
-                      }
-                      onClick={() => void enableGrant()}
-                    >
-                      Berikan atau pulihkan akses
-                    </button>
-                    <Show when={grantLookup.data?.data.is_active}>
-                      <button
-                        class="button secondary"
-                        disabled={operation.blocked() || grantConflict() || grantLookup.isFetching}
-                        onClick={() => void revokeGrant(grantLookup.data!)}
-                      >
-                        Cabut akses
-                      </button>
-                    </Show>
-                  </div>
-                </div>
-              </Show>
-              <Show when={writeTarget() === 'grant'}>
-                <WriteFeedback operation={operation} />
-              </Show>
-              <h3>Semua pemberian akses</h3>
+              {grantError && (
+                <Banner
+                  status="error"
+                  title="Access change needs review"
+                  description={grantError}
+                  role="alert"
+                />
+              )}
+              {grantNotice && (
+                <Banner
+                  status="success"
+                  title="Access updated"
+                  description={grantNotice}
+                  role="status"
+                />
+              )}
+              {lookupID && (
+                <Section variant="muted" padding={6}>
+                  <VStack gap={2}>
+                    <Heading level={3}>Staff #{lookupID}</Heading>
+                    <Link href={`/apps/admin/staff/${lookupID}`}>View staff account</Link>
+                    {grantLookup.isPending && <Text role="status">Checking access…</Text>}
+                    {grantLookup.isError && !lookupIsMissing && (
+                      <Failure error={grantLookup.error} retry={() => void refreshGrant()} />
+                    )}
+                    {grantLookup.isSuccess && (
+                      <Text>
+                        Status:{' '}
+                        <Status value={grantLookup.data.data.is_active ? 'ACTIVE' : 'INACTIVE'} /> ·
+                        revision {grantLookup.data.data.revision}
+                      </Text>
+                    )}
+                    {lookupIsMissing && (
+                      <Text>
+                        No access row exists for this ID. Access can be created only if the staff
+                        account remains active.
+                      </Text>
+                    )}
+                    {grantConflict && (
+                      <VStack gap={2}>
+                        <Banner
+                          status="error"
+                          title="Access changed"
+                          description="Reload to review the current status, then confirm again."
+                          role="alert"
+                        />
+                        <Button label="Reload access" onClick={() => void refreshGrant()} />
+                      </VStack>
+                    )}
+                    <HStack gap={2} wrap="wrap">
+                      <Button
+                        label="Grant or restore access"
+                        variant="primary"
+                        isDisabled={
+                          (!lookupIsMissing && !grantLookup.isSuccess) ||
+                          operation.blocked() ||
+                          grantConflict ||
+                          grantLookup.isFetching
+                        }
+                        onClick={() => void enableGrant()}
+                      />
+                      {grantLookup.data?.data.is_active && (
+                        <Button
+                          label="Revoke access"
+                          isDisabled={
+                            operation.blocked() || grantConflict || grantLookup.isFetching
+                          }
+                          onClick={() => void revokeGrant(grantLookup.data!)}
+                        />
+                      )}
+                    </HStack>
+                  </VStack>
+                </Section>
+              )}
+              {writeTarget === 'grant' && <WriteFeedback operation={operation} />}
+              <Heading level={3}>All access grants</Heading>
               <QueryState query={grants}>
-                <Show
-                  when={grants.data?.items.length}
-                  fallback={<p class="muted">Belum ada pemberian akses.</p>}
-                >
-                  <div class="table-wrap">
-                    <table class="directory-table">
-                      <thead>
-                        <tr>
-                          <th>ID staf</th>
-                          <th>Status akses</th>
-                          <th>Revisi</th>
-                          <th>
-                            <span class="sr-only">Tindakan</span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        <For each={grants.data?.items}>
-                          {(grant) => (
-                            <tr>
-                              <td class="mono">{grant.staff_id}</td>
-                              <td>
-                                <Status value={grant.is_active ? 'ACTIVE' : 'INACTIVE'} />
-                              </td>
-                              <td class="mono">{grant.revision}</td>
-                              <td>
-                                <button
-                                  class="button secondary small"
-                                  onClick={() => {
-                                    setStaffID(grant.staff_id);
-                                    setLookupID(grant.staff_id);
-                                  }}
-                                >
-                                  Periksa
-                                </button>
-                              </td>
-                            </tr>
-                          )}
-                        </For>
-                      </tbody>
-                    </table>
-                  </div>
-                </Show>
-                <div class="pagination">
-                  <span>
-                    Halaman {grantPage()} · {grants.data?.total ?? 0} baris
-                  </span>
-                  <div>
-                    <button
-                      class="button secondary small"
-                      disabled={grantPage() <= 1 || grants.isFetching}
-                      onClick={() => setGrantPage(grantPage() - 1)}
-                    >
-                      Sebelumnya
-                    </button>
-                    <button
-                      class="button secondary small"
-                      disabled={
-                        grantPage() * pageSize >= (grants.data?.total ?? 0) || grants.isFetching
-                      }
-                      onClick={() => setGrantPage(grantPage() + 1)}
-                    >
-                      Berikutnya
-                    </button>
-                  </div>
-                </div>
+                {grants.data?.items.length ? (
+                  <Table
+                    data={
+                      grants.data.items as ((typeof grants.data.items)[number] &
+                        Record<string, unknown>)[]
+                    }
+                    columns={[
+                      {
+                        key: 'staff_id',
+                        header: 'Staff ID',
+                        width: proportional(1, { minWidth: 120 }),
+                      },
+                      {
+                        key: 'is_active',
+                        header: 'Access status',
+                        width: proportional(1, { minWidth: 160 }),
+                        renderCell: (grant) => (
+                          <Status value={grant.is_active ? 'ACTIVE' : 'INACTIVE'} />
+                        ),
+                      },
+                      {
+                        key: 'revision',
+                        header: 'Revision',
+                        width: proportional(1, { minWidth: 120 }),
+                      },
+                      {
+                        key: 'action',
+                        header: 'Action',
+                        width: proportional(1, { minWidth: 120 }),
+                        renderCell: (grant) => (
+                          <Button
+                            label="Inspect"
+                            size="sm"
+                            onClick={() => {
+                              setStaffID(grant.staff_id);
+                              setLookupID(grant.staff_id);
+                            }}
+                          />
+                        ),
+                      },
+                    ]}
+                    density="compact"
+                    hasHover
+                  />
+                ) : (
+                  <EmptyState
+                    title="No access grants"
+                    description="There are no staff access grants yet."
+                  />
+                )}
               </QueryState>
-            </section>
-          </div>
-        </>
+              <HStack gap={2} wrap="wrap" align="center" justify="between">
+                <Text>
+                  Page {grantPage} · {grants.data?.total ?? 0} rows
+                </Text>
+                <HStack gap={2}>
+                  <Button
+                    label="Previous"
+                    size="sm"
+                    isDisabled={grantPage <= 1 || grants.isFetching}
+                    onClick={() => setGrantPage((current) => current - 1)}
+                  />
+                  <Button
+                    label="Next"
+                    size="sm"
+                    isDisabled={
+                      grantPage * pageSize >= (grants.data?.total ?? 0) || grants.isFetching
+                    }
+                    onClick={() => setGrantPage((current) => current + 1)}
+                  />
+                </HStack>
+              </HStack>
+            </VStack>
+          </Section>
+        </VStack>
       </QueryState>
-    </>
+    </PageFrame>
   );
 }

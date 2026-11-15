@@ -1,48 +1,66 @@
 # Hello dashboard design contract
 
-Audience: staff preparing and reviewing push campaigns. The main action is
-creating a draft, followed by explicit review before sending. Operational data
-must be accurate, including empty and unavailable states.
+The dashboard is an operational workspace for staff preparing, reviewing, and
+monitoring push campaigns. The primary flow is to create a draft, review it, and
+explicitly request delivery. Display actual API data and preserve empty, loading,
+unavailable, and error states; never invent operational metrics.
 
-Use a warm off-white workspace, dark forest navigation, restrained green actions,
-tabular numerals and compact editorial headings. Campaigns belong in readable
-rows; do not add decorative statistic cards, gradients, promotional heroes or
-fabricated charts. Icons support labels. Strong focus rings, named form controls,
-inline errors and reduced-motion support are mandatory.
+## Astryx visual system
 
-Desktop: hideable 232px navigation, application context in the header and a
-content column with a useful line length. Narrow screens: collapse navigation
-into a labeled menu, stack the editor and preview, and retain campaign title,
-status and detail access. Restrict overflow to actual data tables.
+Use Astryx components, layout primitives, token spacing, semantic typography,
+icons, and interaction patterns throughout. Stone is the initial design theme.
+Users may select Stone, Y2K, or Matcha through
+account settings. Appearance (Light/Dark/System) is independent
+of the design theme. Import the generated theme registry once at the app provider.
+Use `defineTheme({ extends: importedTheme, ... })` for future customization. Do not
+eject a theme unless the user asks for an independent source fork.
 
-Appearance supports Light/Dark/System with semantic surface/text/status colors.
-Persist only user-selected appearance and sidebar preferences. The header shows
-the actual host outside loopback; do not infer production/staging from an IP.
-Operational navigation includes templates, manual segments, audience/device
-inspection, campaign-scoped logs, settings and a recent-campaign overview. Add
-metrics or filters only when the API supplies their real scope and values.
+AppShell owns global navigation. TopNav holds product identity, the real host,
+appearance, and the account shortcut. Theme selection belongs in account settings. SideNav groups application work,
+management, administration, and account destinations. Header controls hug their
+content and align to the end; do not reserve a fixed-width spacer for them.
+Each route owns region padding and scroll containment through Layout or the shared PageFrame; the shell adds no second inset. Headers, content, and footers share one padding token. Tables fill their region;
+forms and reading content have bounded widths. Form fields use FormLayout, and save actions hug their content. Preview regions use explicit responsive Grid or Layout budgets. Use rows for record collections,
+Token for status, and EmptyState for empty content. Center whole-page empty states
+within the available content region; keep filtered-table empty states in the table
+region. Use official Icon surfaces rather than unwrapped library icons.
 
-Consulted references: https://github.com/miqdadbadjuber/anti-slop and
-https://impeccable.style/docs/. Project-local copies are installed under
-`../../.agents/skills/`; dashboard routing is documented in `AGENTS.md`.
+Preserve readable dark-mode surfaces, visible focus, named controls, keyboard
+navigation, reduced-motion behavior, and mobile navigation. Confine horizontal
+scrolling to actual data tables. Verify narrow viewports at 320px and 390px.
+Fonts are self-hosted from Fontsource with Vite aliases for the packaged theme
+font stylesheets, retaining the existing BFF Content Security Policy.
 
-Refinement direction: ENERGY 1 / RHYTHM 2 / MOTION 1. Use compact record rows
-with semibold names and monospace identifiers, keeping status and actions aligned.
-Identifiers are technical metadata; ordinary body copy stays in the system sans.
-Use distinct canvas, panel, and header surfaces in both themes. Content panels
-separate heading and body; preparation links form a compact navigation list with
-semantic destination icons rather than three oversized cards. Keep action targets
-at least 40px on desktop and 44px on mobile. Campaign loading and empty states
-reserve stable space, while populated lists fit their actual content. Do not add
-per-row requests or invent metadata beyond the list API's title, ID, and status.
+## React and data behavior
 
-Administration stays separate from the granted application workspace: registry
-access does not imply business access. Keep credential actions in dedicated forms,
-show destructive targets before confirmation, and require explicit review after
-a stale resource version. Large staff directories may scroll inside their table;
-the page itself must fit a 320px viewport, including screen-reader-only labels.
+Use React 19, TypeScript strict mode, React Router, and React Query. Keep local
+form state in hooks, effects for external synchronization, cleanup for timers and
+requests, stable list keys, and explicit typed component boundaries. Comments,
+maintained documentation, and interface copy are English. Comments explain
+non-obvious constraints rather than narrating the implementation.
 
-Performance: route-split detail/editor/results; no chart runtime on campaign list.
-Initial production JS budget: 160 KiB gzip, measured from emitted files and
-reported with test conditions. This is a proposed engineering budget, not a
-claim about measured real-user performance. Do not cache private data on disk.
+Persist only explicitly selected theme, appearance, and sidebar preferences.
+Never persist account data, credentials, private keys, or campaign content in
+browser storage. Keep same-origin BFF requests, CSRF, 401 handling, query scope,
+ETag conditions, idempotency, uncertain-outcome blocking, unsaved-change prompts,
+and protected operational actions intact.
+
+Administration remains separate from granted application workspaces. Registry
+access does not imply business access. Confirm destructive targets explicitly,
+show stale revisions for review, and clear credential inputs after success or
+unmount. Only drafts may be edited or deleted. Provider acceptance does not prove
+device delivery. A held send must retain the saved draft.
+
+Route-split large feature pages and avoid chart runtimes on the campaign list.
+The proposed initial production JavaScript budget remains 160 KiB gzip, measured
+from emitted assets. Report any regression honestly; do not raise the limit or
+claim real-user performance from a unit or fixture test.
+
+Production theme choices are limited to Stone (default), Y2K, and Matcha.
+The separate preview retains all seven themes in `preview/astryx-themes.ts`.
+
+The login page follows the bundled Astryx Login Split composition: a responsive
+Card with horizontal `hello.` branding, a vertically centered form on the left,
+and the official template photograph on the right. Below 768px, the photograph
+is omitted so credentials remain the focus. Preserve the real BFF login flow
+and the joined InputGroup password visibility control.

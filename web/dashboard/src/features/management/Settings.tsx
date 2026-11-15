@@ -1,44 +1,55 @@
-import { Show, createEffect, createSignal } from 'solid-js';
-import { useParams } from '@solidjs/router';
-import { createQuery, useQueryClient } from '@tanstack/solid-query';
+import { Button } from '@astryxdesign/core/Button';
+import { FormLayout } from '@astryxdesign/core/FormLayout';
+import { Heading, Text } from '@astryxdesign/core/Text';
+import { Section } from '@astryxdesign/core/Section';
+import { Selector } from '@astryxdesign/core/Selector';
+import { Stack } from '@astryxdesign/core/Stack';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useParams } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { data } from '../../lib/api/client';
 import type { Application } from '../../lib/api/types';
-import { preferences, setTheme } from '../../app/preferences';
-import { QueryState, useWrite, WriteFeedback } from './shared';
+import { useAppearance, themeLabels } from '../../app/appearance-context';
+import { useWrite } from './data-hooks';
+import { QueryState, WriteFeedback } from './shared';
 import { useUnsaved } from '../../app/unsaved';
+import { PageFrame } from '../../components/ui/PageFrame';
 import { Status } from '../../components/ui/Feedback';
 import PasswordForm from './PasswordForm';
 export default function Settings() {
-  const params = useParams();
+  const { appId } = useParams();
   const client = useQueryClient();
   const operation = useWrite();
   const setDirty = useUnsaved();
-  const [name, setName] = createSignal('');
-  const [email, setEmail] = createSignal('');
-  const [saved, setSaved] = createSignal(false);
-  const profile = createQuery(() => ({
+  const preferences = useAppearance();
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [saved, setSaved] = useState(false);
+  const loaded = useRef(false);
+  const profile = useQuery({
     queryKey: ['profile'],
     queryFn: ({ signal }) => data<{ name: string; email: string }>('/profile', signal),
-  }));
-  const app = createQuery(() => ({
-    queryKey: ['application', params.appId],
-    queryFn: ({ signal }) => data<Application>(`/apps/${params.appId}`, signal),
-    enabled: !!params.appId,
-  }));
-  let loaded = false;
-  createEffect(() => {
-    if (profile.data && !loaded) {
-      loaded = true;
+  });
+  const app = useQuery({
+    queryKey: ['application', appId],
+    queryFn: ({ signal }) => data<Application>(`/apps/${appId}`, signal),
+    enabled: !!appId,
+  });
+  useEffect(() => {
+    if (profile.data && !loaded.current) {
+      loaded.current = true;
       setName(profile.data.name);
       setEmail(profile.data.email);
     }
-  });
-  async function save(event: SubmitEvent) {
+  }, [profile.data]);
+  async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSaved(false);
     const result = await operation.write('/profile', 'PATCH', {
-      name: name().trim(),
-      email: email().trim(),
+      name: name.trim(),
+      email: email.trim(),
     });
     if (result) {
       setDirty(false);
@@ -47,108 +58,104 @@ export default function Settings() {
     }
   }
   return (
-    <>
-      <header class="page-heading">
-        <div>
-          <h1>Pengaturan</h1>
-          <p class="muted">Preferensi tampilan, profil, dan keamanan akun Anda.</p>
-        </div>
-      </header>
-      <div class="settings-grid">
-        <section class="surface stack">
-          <h2>Tampilan</h2>
-          <label>
-            Tema
-            <select
-              aria-label="Tema"
-              value={preferences.theme}
-              onChange={(event) =>
-                setTheme(event.currentTarget.value as 'light' | 'dark' | 'system')
-              }
-            >
-              <option value="system">Ikuti sistem</option>
-              <option value="light">Terang</option>
-              <option value="dark">Gelap</option>
-            </select>
-          </label>
-          <p class="help-text">
-            Preferensi tema dan sidebar disimpan di browser ini. Data akun dan campaign tidak
-            disimpan di sana.
-          </p>
-        </section>
-        <Show when={params.appId}>
-          <section class="surface stack">
-            <h2>Aplikasi &amp; lingkungan</h2>
+    <PageFrame
+      title="Settings"
+      description="Manage display preferences, your profile, and account security."
+      contentWidth={720}
+    >
+      <Section padding={6}>
+        <Stack gap={3}>
+          <Heading level={2}>Appearance</Heading>
+          <Selector
+            label="Appearance"
+            options={['system', 'light', 'dark']}
+            value={preferences.appearance}
+            onChange={(value) =>
+              value && preferences.setAppearance(value as 'system' | 'light' | 'dark')
+            }
+          />
+          <Selector
+            label="Design theme"
+            options={Object.entries(themeLabels).map(([value, label]) => ({ value, label }))}
+            value={preferences.theme}
+            onChange={(value) => value && preferences.setTheme(value as keyof typeof themeLabels)}
+          />
+          <Text>
+            Appearance, theme, and sidebar preferences are stored in this browser. Account and
+            campaign data are not stored there.
+          </Text>
+        </Stack>
+      </Section>
+      {appId && (
+        <Section padding={6}>
+          <Stack gap={3}>
+            <Heading level={2}>Application and environment</Heading>
             <QueryState query={app}>
-              <dl class="settings-details">
-                <dt>Nama</dt>
-                <dd>{app.data?.name}</dd>
-                <dt>Kunci aplikasi</dt>
-                <dd>{app.data?.key}</dd>
-                <dt>ID aplikasi</dt>
-                <dd class="mono">{app.data?.id}</dd>
-                <dt>Status</dt>
-                <dd>
-                  <Show when={app.data?.status}>{(status) => <Status value={status()} />}</Show>
-                </dd>
-                <dt>Alamat dashboard</dt>
-                <dd class="mono">{window.location.origin}</dd>
-              </dl>
+              {app.data && (
+                <MetadataList label={{ position: 'start' }}>
+                  <MetadataListItem label="Name">{app.data.name}</MetadataListItem>
+                  <MetadataListItem label="Application key">{app.data.key}</MetadataListItem>
+                  <MetadataListItem label="Application ID">{app.data.id}</MetadataListItem>
+                  <MetadataListItem label="Status">
+                    <Status value={app.data.status} />
+                  </MetadataListItem>
+                  <MetadataListItem label="Dashboard address">
+                    {window.location.origin}
+                  </MetadataListItem>
+                </MetadataList>
+              )}
             </QueryState>
-            <p class="help-text">
-              Konfigurasi provider dan kebijakan pengiriman dikelola melalui prosedur operasional
-              yang terlindungi.
-            </p>
-          </section>
-        </Show>
-        <section class="surface stack">
-          <h2>Profil saya</h2>
-          <QueryState query={profile}>
-            <form
-              onInput={() => setDirty(true)}
-              class="stack"
-              onSubmit={(event) => void save(event)}
-            >
-              <fieldset class="stack" disabled={operation.blocked()}>
-                <label>
-                  Nama
-                  <input
-                    required
-                    maxLength={255}
-                    value={name()}
-                    onInput={(event) => {
-                      setName(event.currentTarget.value);
-                      setSaved(false);
-                    }}
-                  />
-                </label>
-                <label>
-                  Email
-                  <input
-                    required
-                    type="email"
-                    value={email()}
-                    onInput={(event) => {
-                      setEmail(event.currentTarget.value);
-                      setSaved(false);
-                    }}
-                  />
-                </label>
+            <Text>
+              Provider configuration and delivery policies are managed through protected operational
+              procedures.
+            </Text>
+          </Stack>
+        </Section>
+      )}
+      <Section padding={6}>
+        <Stack gap={3}>
+          <Heading level={2}>My profile</Heading>
+          <QueryState query={profile} loadingVariant="form">
+            <form onInput={() => setDirty(true)} onSubmit={(event) => void save(event)}>
+              <FormLayout>
+                <TextInput
+                  label="Name"
+                  isRequired
+                  value={name}
+                  onChange={(value) => {
+                    setName(value.slice(0, 255));
+                    setSaved(false);
+                  }}
+                  isDisabled={operation.blocked()}
+                />
+                <TextInput
+                  label="Email"
+                  type="email"
+                  isRequired
+                  value={email}
+                  onChange={(value) => {
+                    setEmail(value);
+                    setSaved(false);
+                  }}
+                  isDisabled={operation.blocked()}
+                />
                 <WriteFeedback operation={operation} />
-                <Show when={saved()}>
-                  <p role="status" class="notice notice-success">
-                    Profil berhasil diperbarui.
-                  </p>
-                </Show>
-                <button class="button primary" type="submit">
-                  {operation.pending() ? 'Menyimpan…' : 'Simpan profil'}
-                </button>
-              </fieldset>
+                {saved && <Text role="status">Profile updated successfully.</Text>}
+                <Stack direction="horizontal">
+                  <Button
+                    label={operation.pending() ? 'Saving…' : 'Save profile'}
+                    type="submit"
+                    variant="primary"
+                    isLoading={operation.pending()}
+                    isDisabled={operation.blocked()}
+                  />
+                </Stack>
+              </FormLayout>
             </form>
           </QueryState>
-        </section>
-        <PasswordForm />
-      </div>
-    </>
+        </Stack>
+      </Section>
+      <PasswordForm />
+    </PageFrame>
   );
 }

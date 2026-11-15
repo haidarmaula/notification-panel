@@ -49,7 +49,7 @@ export async function request<T>(
     if (error instanceof DOMException && error.name === 'AbortError') throw error;
     throw new ApiError(
       0,
-      'Hasil permintaan belum diketahui. Periksa koneksi dan status data sebelum mencoba lagi.',
+      'The outcome is unknown. Check your connection and the latest data before trying again.',
     );
   }
   options.onHeaders?.(response.headers);
@@ -71,14 +71,14 @@ export async function request<T>(
       },
     );
   } catch {
-    if (response.ok) throw new ApiError(502, 'Respons layanan tidak dapat dibaca dengan aman.');
+    if (response.ok) throw new ApiError(502, 'The service response could not be read safely.');
     raw = null;
   }
   if (!response.ok) {
     const error = z.object({ message: z.string() }).safeParse(raw);
     throw new ApiError(
       response.status,
-      error.success ? error.data.message : 'Layanan belum dapat memproses permintaan.',
+      error.success ? error.data.message : 'The service could not process this request.',
     );
   }
   return raw as T;
@@ -96,7 +96,7 @@ export async function versionedData<T>(path: string, signal?: AbortSignal) {
     },
   });
   if (!etag || !/^"[^"\r\n]+"$/.test(etag)) {
-    throw new ApiError(502, 'Versi data tidak tersedia. Muat ulang sebelum mengubah data.');
+    throw new ApiError(502, 'The resource version is unavailable. Reload before making changes.');
   }
   return { data: response.data, etag };
 }
@@ -106,14 +106,15 @@ export function errorMessage(error: unknown): string {
       (error.status === 403 || error.status === 422) &&
       error.message === 'current password is incorrect'
     )
-      return 'Kata sandi saat ini tidak sesuai.';
-    if (error.status === 401) return 'Sesi berakhir. Silakan masuk kembali.';
-    if (error.status === 403) return 'Anda tidak memiliki izin untuk tindakan ini.';
-    if (error.status === 404) return 'Data tidak ditemukan atau akses aplikasi sudah berubah.';
-    if (error.status === 503) return 'Pengiriman sedang ditahan. Draft Anda tetap tersimpan.';
+      return 'The current password is incorrect.';
+    if (error.status === 401) return 'Your session has expired. Sign in again.';
+    if (error.status === 403) return 'You do not have permission for this action.';
+    if (error.status === 404)
+      return 'The resource was not found or application access has changed.';
+    if (error.status === 503) return 'Dispatch is held. Your draft is still saved.';
     if (error.status >= 500)
-      return 'Layanan sedang bermasalah. Untuk tindakan simpan atau kirim, periksa hasilnya sebelum mengulang.';
+      return 'The service is unavailable. Check the outcome of save or send operations before retrying.';
     return error.message;
   }
-  return 'Terjadi masalah saat memuat data.';
+  return 'Unable to load data.';
 }

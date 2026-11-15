@@ -5,10 +5,10 @@ const largeStaffID = '9007199254740993';
 
 async function login(page: Page) {
   await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill('staff@example.invalid');
-  await page.getByLabel('Kata sandi', { exact: true }).fill('fixture-only');
-  await page.getByRole('button', { name: 'Masuk ke dashboard' }).click();
-  await expect(page.getByRole('heading', { name: 'Pilih aplikasi' })).toBeVisible();
+  await page.getByRole('textbox', { name: /^Email/ }).fill('staff@example.invalid');
+  await page.getByRole('textbox', { name: /^Password/ }).fill('fixture-only');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Choose application' })).toBeVisible();
 }
 
 test('staff admin creates, edits, changes access, resets a password, and deletes an account', async ({
@@ -22,35 +22,39 @@ test('staff admin creates, edits, changes access, resets a password, and deletes
     `#${largeStaffID}`,
   );
 
-  await page.getByRole('link', { name: 'Tambah staf', exact: true }).click();
-  await page.getByLabel('Nama', { exact: true }).fill('Operator Uji');
-  await page.getByLabel('Email masuk', { exact: true }).fill('operator-test@example.invalid');
-  await page.getByLabel('Peran', { exact: true }).selectOption('OPERATOR');
-  await page.getByLabel('Kata sandi awal', { exact: true }).fill('initial-pass-8');
-  await page.getByRole('button', { name: 'Buat akun staf', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Edit staf', exact: true })).toBeVisible();
+  await page.getByRole('link', { name: 'Add staff', exact: true }).click();
+  await page.getByLabel('Name', { exact: false }).fill('Operator Uji');
+  await page.getByLabel('Sign-in email', { exact: false }).fill('operator-test@example.invalid');
+  await page.getByRole('combobox', { name: 'Role' }).click();
+  await page.getByRole('option', { name: 'OPERATOR', exact: true }).click();
+  await page.getByLabel('Initial password', { exact: false }).fill('initial-pass-8');
+  await page.getByRole('button', { name: 'Create staff account', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Edit staff account', exact: true }),
+  ).toBeVisible();
 
-  await page.getByLabel('Nama', { exact: true }).fill('Operator Diperbarui');
-  await page.getByLabel('Email masuk', { exact: true }).fill('operator-updated@example.invalid');
-  await page.getByLabel('Peran', { exact: true }).selectOption('ADMIN');
-  await page.getByRole('button', { name: 'Simpan perubahan', exact: true }).click();
-  await expect(page.getByLabel('Nama', { exact: true })).toHaveValue('Operator Diperbarui');
+  await page.getByLabel('Name', { exact: false }).fill('Operator Diperbarui');
+  await page.getByLabel('Sign-in email', { exact: false }).fill('operator-updated@example.invalid');
+  await page.getByRole('combobox', { name: 'Role' }).click();
+  await page.getByRole('option', { name: 'ADMIN', exact: true }).click();
+  await page.getByRole('button', { name: 'Save changes', exact: true }).click();
+  await expect(page.getByLabel('Name', { exact: false })).toHaveValue('Operator Diperbarui');
 
-  await page.getByRole('button', { name: 'Nonaktifkan akun', exact: true }).click();
-  await expect(page.getByText('Nonaktif', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'Aktifkan akun', exact: true }).click();
-  await expect(page.getByText('Aktif', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Deactivate account', exact: true }).click();
+  await expect(page.getByText('Inactive', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Activate account', exact: true }).click();
+  await expect(page.getByText('Active', { exact: true }).first()).toBeVisible();
 
-  await page
-    .getByLabel('Kata sandi Anda saat ini', { exact: true })
-    .fill('incorrect-actor-password');
-  await page.getByLabel('Kata sandi baru staf', { exact: true }).fill('replacement-pass-8');
-  await page.getByRole('button', { name: 'Atur kata sandi', exact: true }).click();
-  await expect(page.getByRole('alert')).toBeVisible();
+  await page.getByLabel('Your current password', { exact: false }).fill('incorrect-actor-password');
+  await page.getByLabel('Staff member’s new password', { exact: false }).fill('replacement-pass-8');
+  await page.getByRole('button', { name: 'Set password', exact: true }).click();
+  await expect(page.getByText('The current password is incorrect.', { exact: true })).toBeVisible();
   expect((await (await page.request.get('/bff/session')).json()).authenticated).toBe(true);
-  await page.getByLabel('Kata sandi Anda saat ini', { exact: true }).fill('fixture-only');
-  await page.getByRole('button', { name: 'Atur kata sandi', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Kata sandi staf berhasil diperbarui.');
+  await page.getByLabel('Your current password', { exact: false }).fill('fixture-only');
+  await page.getByRole('button', { name: 'Set password', exact: true }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: 'The staff password was updated.' }),
+  ).toBeVisible();
 
   page.once('dialog', async (dialog) => {
     expect(dialog.type()).toBe('confirm');
@@ -58,8 +62,8 @@ test('staff admin creates, edits, changes access, resets a password, and deletes
     expect(dialog.message()).toContain('operator-updated@example.invalid');
     await dialog.accept();
   });
-  await page.getByRole('button', { name: 'Hapus akun staf', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Kelola staf', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Delete staff account', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Staff management', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Operator Diperbarui', exact: true })).toHaveCount(0);
 });
 
@@ -68,17 +72,19 @@ test('registry uses strong ETags and requires explicit review after a stale rena
 }) => {
   await login(page);
   await page.goto('/apps/admin/applications');
-  await expect(page.getByRole('heading', { name: 'Registry aplikasi', exact: true })).toBeVisible();
-  await page.getByLabel('Kunci aplikasi', { exact: true }).fill('e2e-registry');
-  await page.getByLabel('Nama aplikasi', { exact: true }).fill('Aplikasi E2E');
-  await page.getByRole('button', { name: 'Daftarkan aplikasi', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Application registry', exact: true }),
+  ).toBeVisible();
+  await page.getByRole('textbox', { name: /^Application key/ }).fill('e2e-registry');
+  await page.getByLabel('Application name', { exact: false }).fill('Aplikasi E2E');
+  await page.getByRole('button', { name: 'Register application', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Aplikasi E2E', exact: true })).toBeVisible();
-  await expect(page.getByText('Disiapkan', { exact: true })).toBeVisible();
-  await expect(page.getByText('Belum ada pemberian akses.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Provisioning', { exact: true })).toBeVisible();
+  await expect(page.getByText('No access grants', { exact: true })).toBeVisible();
 
   const id = new URL(page.url()).pathname.split('/').at(-1)!;
   const session = await (await page.request.get('/bff/session')).json();
-  const origin = 'http://127.0.0.1:4173';
+  const origin = new URL(page.url()).origin;
   const missingPrecondition = await page.request.patch(`/bff/api/admin/apps/${id}`, {
     headers: { Origin: origin, 'X-CSRF-Token': session.csrfToken },
     data: { name: 'Seharusnya ditolak' },
@@ -93,8 +99,8 @@ test('registry uses strong ETags and requires explicit review after a stale rena
     data: { name: 'Seharusnya ditolak' },
   });
   expect(stalePrecondition.status()).toBe(412);
-  await page.getByLabel('Nama aplikasi', { exact: true }).fill('Aplikasi E2E diperbarui');
-  await page.getByRole('button', { name: 'Simpan nama', exact: true }).click();
+  await page.getByLabel('Application name', { exact: false }).fill('Aplikasi E2E diperbarui');
+  await page.getByRole('button', { name: 'Save name', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Aplikasi E2E diperbarui', exact: true }),
   ).toBeVisible();
@@ -112,27 +118,30 @@ test('registry uses strong ETags and requires explicit review after a stale rena
       await route.continue();
     }
   });
-  await page.getByLabel('Nama aplikasi', { exact: true }).fill('Nama yang perlu ditinjau');
-  await page.getByRole('button', { name: 'Simpan nama', exact: true }).click();
-  await expect(page.getByText(/Aplikasi berubah sejak dibaca/)).toBeVisible();
+  await page.getByLabel('Application name', { exact: false }).fill('Nama yang perlu ditinjau');
+  await page.getByRole('button', { name: 'Save name', exact: true }).click();
+  await expect(page.getByRole('alert').filter({ hasText: 'Application changed' })).toBeVisible();
+  await expect(
+    page.getByText('Reload and review the latest name before trying again.'),
+  ).toBeVisible();
   expect(staleAttempts).toBe(1);
-  const saveName = page.getByRole('button', { name: 'Simpan nama', exact: true });
+  const saveName = page.getByRole('button', { name: 'Save name', exact: true });
   await expect(saveName).toBeDisabled();
   expect(staleAttempts).toBe(1);
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Muat ulang aplikasi', exact: true }).click();
-  await expect(page.getByLabel('Nama aplikasi', { exact: true })).toHaveValue(
+  await page.getByRole('button', { name: 'Reload application', exact: true }).click();
+  await expect(page.getByLabel('Application name', { exact: false })).toHaveValue(
     'Aplikasi E2E diperbarui',
   );
   await page.unroute(`**/bff/api/admin/apps/${id}`);
 
-  await page.getByLabel('ID staf', { exact: true }).fill('1');
-  await page.getByRole('button', { name: 'Periksa akses', exact: true }).click();
-  await expect(page.getByText(/Belum ada baris akses/)).toBeVisible();
+  await page.getByLabel('Staff ID', { exact: false }).fill('1');
+  await page.getByRole('button', { name: 'Inspect access', exact: true }).click();
+  await expect(page.getByText(/No access row exists/)).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Berikan atau pulihkan akses', exact: true }).click();
-  await expect(page.getByText('Status akses:')).toBeVisible();
-  await expect(page.locator('.grant-review').getByText('Aktif', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Grant or restore access', exact: true }).click();
+  await expect(page.getByText('Status:')).toBeVisible();
+  await expect(page.getByText('Active', { exact: true }).first()).toBeVisible();
   const missingGrantPrecondition = await page.request.delete(
     `/bff/api/admin/apps/${id}/staff-grants/1`,
     { headers: { Origin: origin, 'X-CSRF-Token': session.csrfToken } },
@@ -151,11 +160,11 @@ test('registry uses strong ETags and requires explicit review after a stale rena
   expect(staleGrantPrecondition.status()).toBe(412);
 
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Cabut akses', exact: true }).click();
-  await expect(page.locator('.grant-review').getByText('Nonaktif', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Revoke access', exact: true }).click();
+  await expect(page.getByText('Inactive', { exact: true }).first()).toBeVisible();
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Berikan atau pulihkan akses', exact: true }).click();
-  await expect(page.locator('.grant-review').getByText('Aktif', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Grant or restore access', exact: true }).click();
+  await expect(page.getByText('Active', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('cell', { name: '1', exact: true })).toBeVisible();
 });
 
@@ -164,28 +173,28 @@ test('self-password rejects an incorrect current password without clearing the s
 }) => {
   await login(page);
   await page.goto('/apps/settings');
-  await page.getByLabel('Kata sandi saat ini', { exact: true }).fill('incorrect-current');
-  await page.getByLabel('Kata sandi baru', { exact: true }).fill('replacement-pass-8');
-  await page.getByLabel('Konfirmasi kata sandi baru', { exact: true }).fill('replacement-pass-8');
+  await page.getByRole('textbox', { name: /^Current password/ }).fill('incorrect-current');
+  await page.getByRole('textbox', { name: /^New password/ }).fill('replacement-pass-8');
+  await page.getByRole('textbox', { name: /^Confirm new password/ }).fill('replacement-pass-8');
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Ganti kata sandi', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('Kata sandi saat ini tidak sesuai.');
+  await page.getByRole('button', { name: 'Change password', exact: true }).click();
+  await expect(page.getByText('The current password is incorrect.', { exact: true })).toBeVisible();
   expect((await (await page.request.get('/bff/session')).json()).authenticated).toBe(true);
 
-  await page.getByLabel('Kata sandi saat ini', { exact: true }).fill('fixture-only');
+  await page.getByRole('textbox', { name: /^Current password/ }).fill('fixture-only');
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Ganti kata sandi', exact: true }).click();
+  await page.getByRole('button', { name: 'Change password', exact: true }).click();
   await expect(page).toHaveURL(/\/login$/);
-  await expect(page.getByRole('heading', { name: 'Selamat datang kembali.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Welcome back', exact: true })).toBeVisible();
   expect((await (await page.request.get('/bff/session')).json()).authenticated).toBe(false);
 });
 
 test('an unknown grant write result blocks resubmission instead of retrying', async ({ page }) => {
   await login(page);
   await page.goto(`/apps/admin/applications/${app}`);
-  await page.getByLabel('ID staf', { exact: true }).fill('1');
-  await page.getByRole('button', { name: 'Periksa akses', exact: true }).click();
-  await expect(page.getByText(/Belum ada baris akses/)).toBeVisible();
+  await page.getByLabel('Staff ID', { exact: false }).fill('1');
+  await page.getByRole('button', { name: 'Inspect access', exact: true }).click();
+  await expect(page.getByText(/No access row exists/)).toBeVisible();
   let submissions = 0;
   await page.route(`**/bff/api/admin/apps/${app}/staff-grants/1`, async (route) => {
     if (route.request().method() === 'PUT') {
@@ -196,10 +205,10 @@ test('an unknown grant write result blocks resubmission instead of retrying', as
     }
   });
   page.once('dialog', (dialog) => dialog.accept());
-  const enable = page.getByRole('button', { name: 'Berikan atau pulihkan akses', exact: true });
+  const enable = page.getByRole('button', { name: 'Grant or restore access', exact: true });
   await enable.click();
   await expect(enable).toBeDisabled();
-  await expect(page.getByText(/Hasil perubahan belum dapat dipastikan/).first()).toBeVisible();
+  await expect(page.getByText(/outcome is uncertain/i).first()).toBeVisible();
   await page.keyboard.press('Enter');
   expect(submissions).toBe(1);
 });
@@ -207,14 +216,16 @@ test('an unknown grant write result blocks resubmission instead of retrying', as
 test('staff self controls stay guarded for the active profile', async ({ page }) => {
   await login(page);
   await page.goto('/apps/admin/staff/1');
-  await expect(page.getByRole('heading', { name: 'Edit staf', exact: true })).toBeVisible();
-  await expect(page.getByLabel('Peran', { exact: true })).toBeDisabled();
-  await expect(page.getByRole('button', { name: /Nonaktifkan akun/ })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Hapus akun staf', exact: true })).toBeDisabled();
   await expect(
-    page.getByText('Peran akun Anda tidak dapat diubah dari halaman ini.'),
+    page.getByRole('heading', { name: 'Edit staff account', exact: true }),
   ).toBeVisible();
-  await expect(page.getByText('Untuk mengubah kata sandi sendiri', { exact: false })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Role', exact: false })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /Deactivate account/ })).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Delete staff account', exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByText('Your account role cannot be changed here.')).toBeVisible();
+  await expect(page.getByText('To change your own password', { exact: false })).toBeVisible();
 });
 
 test('scoped audit and upload views show only supplied fields and preserve 64-bit row IDs', async ({
@@ -229,8 +240,8 @@ test('scoped audit and upload views show only supplied fields and preserve 64-bi
   await page.getByRole('link', { name: 'Batch #17', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Batch #17', exact: true })).toBeVisible();
   await expect(page.getByText(`#${largeStaffID}`, { exact: true })).toBeVisible();
-  await expect(page.getByText('Tidak valid', { exact: true })).toBeVisible();
-  await expect(page.getByText('alasan penolakan', { exact: false })).toBeVisible();
+  await expect(page.getByText('Invalid', { exact: true })).toBeVisible();
+  await expect(page.getByText('rejection reason', { exact: false })).toBeVisible();
 
   const unsupported = await page.request.get(`/bff/api/apps/${app}/uploads/17`);
   expect(unsupported.status()).toBe(404);
@@ -248,14 +259,16 @@ test('forbidden admin data remains visible and admin screens fit a 320px viewpor
     }),
   );
   await page.goto('/apps/admin/applications');
-  await expect(page.getByRole('alert')).toContainText('tidak memiliki izin');
+  await expect(page.getByText('You do not have permission for this action.')).toBeVisible();
   await page.unroute('**/bff/api/admin/apps*');
 
   await page.setViewportSize({ width: 1440, height: 900 });
   for (const theme of ['light', 'dark']) {
     await page.evaluate((value) => localStorage.setItem('hello.theme', value), theme);
     await page.goto('/apps/admin/staff');
-    await expect(page.getByRole('heading', { name: 'Kelola staf', exact: true })).toBeVisible();
+    await expect(
+      page.getByRole('heading', { name: 'Staff management', exact: true }),
+    ).toBeVisible();
     await page.screenshot({ path: `/tmp/hello-admin-ui/${theme}-staff.png`, fullPage: true });
     await page.goto(`/apps/admin/applications/${app}`);
     await expect(page.getByRole('heading', { name: 'Aplikasi Uji', exact: true })).toBeVisible();

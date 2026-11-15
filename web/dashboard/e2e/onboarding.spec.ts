@@ -155,26 +155,26 @@ async function mockSetup(page: Page, options: { stale?: boolean; lostUpload?: bo
     throw new Error('Unexpected onboarding fixture request');
   });
   await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill('staff@example.invalid');
-  await page.getByLabel('Kata sandi', { exact: true }).fill('fixture-only');
-  await page.getByRole('button', { name: 'Masuk ke dashboard' }).click();
-  await expect(page.getByRole('heading', { name: 'Pilih aplikasi' })).toBeVisible();
+  await page.getByLabel('Email', { exact: false }).fill('staff@example.invalid');
+  await page.locator('input[name="password"]').fill('fixture-only');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Choose application' })).toBeVisible();
   await page.goto(`/apps/admin/applications/${app}/onboarding`);
-  await expect(page.getByRole('heading', { name: 'Konfigurasi notifikasi' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Notification setup' })).toBeVisible();
   return { attempts: () => attempts };
 }
 
 async function selectProfile(page: Page) {
-  await page
-    .getByRole('combobox', { name: 'Profil pendaftaran', exact: true })
-    .selectOption(profile);
+  await page.getByRole('combobox', { name: 'Enrollment profile', exact: true }).click();
+  await page.getByRole('option', { name: 'Profil Android uji', exact: true }).click();
   await page.getByLabel('Android', { exact: true }).check();
-  await page.getByLabel('ID aplikasi Android', { exact: true }).fill('com.example.test');
+  await page.getByLabel('Android application ID', { exact: true }).fill('com.example.test');
 }
 
 async function selectCredential(page: Page) {
-  await page.getByRole('combobox', { name: 'Lingkungan', exact: true }).selectOption('staging');
-  await page.getByLabel('Berkas kredensial FCM', { exact: false }).setInputFiles({
+  await page.getByRole('combobox', { name: 'Environment', exact: true }).click();
+  await page.getByRole('option', { name: 'Staging', exact: true }).click();
+  await page.locator('input[type="file"]').setInputFiles({
     name: 'fixture-account.json',
     mimeType: 'application/json',
     buffer: Buffer.from(JSON.stringify(account)),
@@ -186,23 +186,21 @@ test('setup keeps credentials out of storage and leaves enrollment and dispatch 
 }) => {
   await mockSetup(page);
   await selectProfile(page);
-  await page.getByRole('button', { name: 'Simpan profil', exact: true }).click();
-  await expect(page.getByText('Profil pendaftaran disimpan.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Save profile', exact: true }).click();
+  await expect(page.getByText('Enrollment profile saved.', { exact: true })).toBeVisible();
   await selectCredential(page);
-  await page.getByRole('button', { name: 'Simpan kredensial', exact: true }).click();
-  await expect(
-    page.getByText('Kredensial tersimpan sebagai kandidat.', { exact: true }),
-  ).toBeVisible();
-  await expect(page.getByLabel('Berkas kredensial FCM', { exact: false })).toHaveValue('');
-  await page.getByRole('button', { name: 'Verifikasi FCM', exact: true }).click();
+  await page.getByRole('button', { name: 'Save credentials', exact: true }).click();
+  await expect(page.getByText('Credentials saved as a candidate.', { exact: true })).toBeVisible();
+  await expect(page.locator('input[type="file"]')).toHaveValue('');
+  await page.getByRole('button', { name: 'Verify FCM', exact: true }).click();
   await expect(
     page.getByText(
-      'OAuth berhasil. Izin mengirim notifikasi dan penerimaan di perangkat belum diperiksa.',
+      'OAuth succeeded. Delivery permissions and device receipt have not been checked.',
       { exact: true },
     ),
   ).toBeVisible();
   await expect(
-    page.getByText('Pendaftaran perangkat belum tersedia.', { exact: false }),
+    page.getByText('Device enrollment is not available yet.', { exact: false }),
   ).toBeVisible();
   expect(await page.locator('body').innerText()).not.toContain(secret);
   const storage = await page.evaluate(() =>
@@ -219,34 +217,32 @@ test('setup keeps credentials out of storage and leaves enrollment and dispatch 
 test('stale setup requires explicit review before another write', async ({ page }) => {
   await mockSetup(page, { stale: true });
   await selectProfile(page);
-  const save = page.getByRole('button', { name: 'Simpan profil', exact: true });
+  const save = page.getByRole('button', { name: 'Save profile', exact: true });
   await save.click();
-  await expect(
-    page.getByRole('button', { name: 'Muat ulang dan tinjau', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Reload and review', exact: true })).toBeVisible();
   await expect(save).toBeDisabled();
-  await page.getByRole('button', { name: 'Muat ulang status', exact: true }).click();
+  await page.getByRole('button', { name: 'Refresh status', exact: true }).click();
   await expect(save).toBeDisabled();
-  await page.getByRole('button', { name: 'Muat ulang dan tinjau', exact: true }).click();
+  await page.getByRole('button', { name: 'Reload and review', exact: true }).click();
   await expect(save).toBeEnabled();
   await save.click();
-  await expect(page.getByText('Profil pendaftaran disimpan.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Enrollment profile saved.', { exact: true })).toBeVisible();
 });
 
 test('unknown upload outcome retries the same key and original ETag', async ({ page }) => {
   const state = await mockSetup(page, { lostUpload: true });
   await selectCredential(page);
-  await page.getByRole('button', { name: 'Simpan kredensial', exact: true }).click();
+  await page.getByRole('button', { name: 'Save credentials', exact: true }).click();
   const retry = page.getByRole('button', {
-    name: 'Coba lagi dengan permintaan yang sama',
+    name: 'Retry the same request',
     exact: true,
   });
   await expect(retry).toBeVisible();
-  await expect(page.getByLabel('Berkas kredensial FCM', { exact: false })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /FCM credential file/ })).toBeDisabled();
   await retry.click();
   await expect(
-    page.getByText('Permintaan sebelumnya sudah diterapkan.', { exact: true }),
+    page.getByText('The previous request has already been applied.', { exact: true }),
   ).toBeVisible();
   expect(state.attempts()).toBe(2);
-  await expect(page.getByLabel('Berkas kredensial FCM', { exact: false })).toHaveValue('');
+  await expect(page.locator('input[type="file"]')).toHaveValue('');
 });

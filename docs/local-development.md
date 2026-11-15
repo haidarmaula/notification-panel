@@ -1,7 +1,7 @@
 # Full local development environment
 
 This runs the actual API, BFF, PostgreSQL, Kafka, admission worker, delivery
-worker and scheduler, plus the Solid/Vite frontend. Only external OAuth/FCM is
+worker and scheduler, plus the React/Astryx/Vite frontend. Only external OAuth/FCM is
 simulated. It is independent of office Wi-Fi, VPN and staging. The repository
 `.env` and staging credentials are never loaded by this runner.
 
@@ -9,7 +9,7 @@ simulated. It is independent of office Wi-Fi, VPN and staging. The repository
 
 For a fresh machine, use the canonical [machine setup guide](setup.md) to install
 the required runtime tools. This `./dev` launcher requires Bash. Have Docker Desktop/Engine running
-with Compose 2.24.4+, the Go toolchain in `go.mod`, Python 3, Node 22.12+ (the
+with Compose 2.24.4+, the Go toolchain in `go.mod`, Python 3, Node 22.13+ (the
 project-tested release is 22.23.4), and pnpm 11.25.0 on `PATH`. The runner can
 select an already-installed nvm Node 22 when the active Node is too old, but
 nvm is optional: it does not install or change toolchains. Initial dependency
@@ -31,7 +31,7 @@ docker info
 ```
 
 If one is missing or has the wrong version, follow [machine setup](setup.md).
-The runner needs Node 22.12 or newer; repository dashboard checks use the exact
+The runner needs Node 22.13 or newer; repository dashboard checks use the exact
 CI-pinned Node and pnpm versions documented in the [tool guide](tooling/development-tools.md).
 
 From the repository root:
@@ -203,7 +203,7 @@ For an automated real-browser check, run:
 node scripts/local-dev/onboarding_browser.mjs
 ```
 
-Use Node 22.12+ (for example `nvm use 22.23.4`). The check creates or reuses one
+Use Node 22.13+ (for example `nvm use 22.23.4`). The check creates or reuses one
 test app, performs setup through the actual dashboard/BFF/provisioner/verifier,
 checks that credential material is absent from browser storage and rendered text,
 and captures light desktop/mobile and dark mobile screens under

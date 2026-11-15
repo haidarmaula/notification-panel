@@ -1,186 +1,183 @@
-import { For, Show } from 'solid-js';
-import { A, useParams } from '@solidjs/router';
+import { Text } from '@astryxdesign/core/Text';
+import { Link } from '@astryxdesign/core/Link';
+import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { Token } from '@astryxdesign/core/Token';
+import { Section } from '@astryxdesign/core/Section';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
+} from '@astryxdesign/core/Table';
+import { useParams } from 'react-router-dom';
 import type { components } from '../../lib/api/generated/staff';
-import { createPage, Pager, QueryState, date } from './shared';
-
+import { date, usePage } from './data-hooks';
+import { Pager, QueryState } from './shared';
+import { PageFrame } from '../../components/ui/PageFrame';
 type Upload = components['schemas']['Upload'];
 type UploadRow = components['schemas']['UploadRow'];
 type Audit = components['schemas']['Audit'];
 
+function enumLabel(value: string) {
+  const label = value.replaceAll('_', ' ').toLowerCase();
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 export default function Uploads() {
-  const params = useParams();
-  const page = createPage<Upload>(() => `/apps/${params.appId}/uploads`);
+  const { appId = '' } = useParams();
+  const page = usePage<Upload>(`/apps/${appId}/uploads`);
   return (
-    <>
-      <header class="page-heading">
-        <div>
-          <h1>Riwayat upload</h1>
-          <p class="muted">Periksa batch yang tercatat melalui integrasi aplikasi.</p>
-        </div>
-      </header>
+    <PageFrame
+      title="Upload history"
+      description="Review batches recorded through the application integration."
+    >
       <QueryState query={page.query}>
-        <Show
-          when={page.query.data?.items.length}
-          fallback={
-            <div class="empty-state">
-              <h2>Belum ada riwayat upload.</h2>
-              <p>Batch akan muncul setelah tercatat melalui integrasi backend.</p>
-            </div>
-          }
-        >
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Batch</th>
-                  <th>Total baris</th>
-                  <th>Valid</th>
-                  <th>Tidak valid</th>
-                  <th>Dicatat</th>
-                </tr>
-              </thead>
-              <tbody>
-                <For each={page.query.data?.items}>
-                  {(item) => (
-                    <tr>
-                      <td>
-                        <A class="campaign-title" href={`/apps/${params.appId}/uploads/${item.id}`}>
-                          Batch #{item.id}
-                        </A>
-                      </td>
-                      <td>{item.total_rows}</td>
-                      <td>{item.valid_rows}</td>
-                      <td>{item.invalid_rows}</td>
-                      <td>{date(item.created_at)}</td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
-          </div>
-        </Show>
+        {page.query.data?.items.length ? (
+          <Section padding={6}>
+            <Table aria-label="Upload history">
+              <TableHeader>
+                <TableRow isHeaderRow>
+                  <TableHeaderCell>Batch</TableHeaderCell>
+                  <TableHeaderCell>Total rows</TableHeaderCell>
+                  <TableHeaderCell>Valid</TableHeaderCell>
+                  <TableHeaderCell>Invalid</TableHeaderCell>
+                  <TableHeaderCell>Recorded</TableHeaderCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {page.query.data.items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <Link href={`/apps/${appId}/uploads/${item.id}`}>Batch #{item.id}</Link>
+                    </TableCell>
+                    <TableCell>{item.total_rows}</TableCell>
+                    <TableCell>{item.valid_rows}</TableCell>
+                    <TableCell>{item.invalid_rows}</TableCell>
+                    <TableCell>{date(item.created_at)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Section>
+        ) : (
+          <EmptyState
+            title="No upload history"
+            description="Upload batches will appear here after they are recorded through the application integration."
+          />
+        )}
         <Pager page={page} />
       </QueryState>
-    </>
+    </PageFrame>
   );
 }
-
 export function UploadRows() {
-  const params = useParams();
-  const page = createPage<UploadRow>(() => `/apps/${params.appId}/uploads/${params.batchId}/rows`);
+  const { appId = '', batchId = '' } = useParams();
+  const page = usePage<UploadRow>(`/apps/${appId}/uploads/${batchId}/rows`);
   return (
-    <>
-      <A class="back-link" href={`/apps/${params.appId}/uploads`}>
-        Kembali ke riwayat upload
-      </A>
-      <header class="page-heading">
-        <div>
-          <h1>Batch #{params.batchId}</h1>
-          <p class="muted">Status validasi baris yang dicatat backend.</p>
-        </div>
-      </header>
+    <PageFrame
+      title={`Batch #${batchId}`}
+      description="Validation status recorded by the backend."
+      back={{ label: 'Back to upload history', href: `/apps/${appId}/uploads` }}
+    >
       <QueryState query={page.query}>
-        <Show
-          when={page.query.data?.items.length}
-          fallback={
-            <div class="empty-state">
-              <h2>Belum ada baris tercatat.</h2>
-            </div>
-          }
-        >
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>ID baris</th>
-                  <th>Validasi</th>
-                  <th>Dicatat</th>
-                </tr>
-              </thead>
-              <tbody>
-                <For each={page.query.data?.items}>
-                  {(item) => (
-                    <tr>
-                      <td>
-                        <span class="row-meta">#{item.id}</span>
-                      </td>
-                      <td>
-                        <span class={`status ${item.is_valid ? 'status-active' : 'status-failed'}`}>
-                          {item.is_valid ? 'Valid' : 'Tidak valid'}
-                        </span>
-                      </td>
-                      <td>{date(item.created_at)}</td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
-          </div>
-        </Show>
+        {page.query.data?.items.length ? (
+          <Section padding={6}>
+            <Table aria-label={`Rows in batch ${batchId}`}>
+              <TableHeader>
+                <TableRow isHeaderRow>
+                  <TableHeaderCell>Row ID</TableHeaderCell>
+                  <TableHeaderCell>Validation</TableHeaderCell>
+                  <TableHeaderCell>Recorded</TableHeaderCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {page.query.data.items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>#{item.id}</TableCell>
+                    <TableCell>
+                      <Token
+                        label={item.is_valid ? 'Valid' : 'Invalid'}
+                        color={item.is_valid ? 'green' : 'red'}
+                        size="sm"
+                      />
+                    </TableCell>
+                    <TableCell>{date(item.created_at)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Section>
+        ) : (
+          <EmptyState
+            title="No rows recorded"
+            description="This batch has no recorded rows."
+            isCompact
+          />
+        )}
         <Pager page={page} />
       </QueryState>
-      <p class="page-footnote">API saat ini tidak menyediakan isi baris atau alasan penolakan.</p>
-    </>
+      <Text>The API does not provide row contents or rejection reasons.</Text>
+    </PageFrame>
   );
 }
-
 export function AuditLog() {
-  const params = useParams();
-  const page = createPage<Audit>(() => `/apps/${params.appId}/audit-logs`);
+  const { appId = '' } = useParams();
+  const page = usePage<Audit>(`/apps/${appId}/audit-logs`);
   return (
-    <>
-      <header class="page-heading">
-        <div>
-          <h1>Audit aktivitas</h1>
-          <p class="muted">
-            Jejak tindakan pada aplikasi ini, diurutkan berdasarkan ID pencatatan.
-          </p>
-        </div>
-      </header>
+    <PageFrame
+      title="Activity audit"
+      description="Actions recorded for this application, ordered by record ID."
+    >
       <QueryState query={page.query}>
-        <Show
-          when={page.query.data?.items.length}
-          fallback={
-            <div class="empty-state">
-              <h2>Belum ada aktivitas tercatat.</h2>
-            </div>
-          }
-        >
-          <div class="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Aktivitas</th>
-                  <th>Pelaku</th>
-                  <th>Objek</th>
-                  <th>Dicatat</th>
-                </tr>
-              </thead>
-              <tbody>
-                <For each={page.query.data?.items}>
-                  {(item) => (
-                    <tr>
-                      <td>
-                        <strong>{item.action}</strong>
-                        <span class="row-meta">#{item.id}</span>
-                      </td>
-                      <td>Staff #{item.actor_id}</td>
-                      <td>
+        {page.query.data?.items.length ? (
+          <Section padding={6}>
+            <Table aria-label="Application audit activity">
+              <TableHeader>
+                <TableRow isHeaderRow>
+                  <TableHeaderCell>Activity</TableHeaderCell>
+                  <TableHeaderCell>Actor</TableHeaderCell>
+                  <TableHeaderCell>Object</TableHeaderCell>
+                  <TableHeaderCell>Recorded</TableHeaderCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {page.query.data.items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <Text display="block">{enumLabel(item.action)}</Text>
+                      <Text display="block" type="supporting" color="secondary">
+                        {item.action} · #{item.id}
+                      </Text>
+                    </TableCell>
+                    <TableCell>Staff #{item.actor_id}</TableCell>
+                    <TableCell>
+                      <Text display="block">{enumLabel(item.entity_type)}</Text>
+                      <Text
+                        display="block"
+                        type="supporting"
+                        color="secondary"
+                        wordBreak="break-all"
+                      >
                         {item.entity_type}
-                        <Show when={item.entity_id}>
-                          <span class="row-meta">#{item.entity_id}</span>
-                        </Show>
-                      </td>
-                      <td>{date(item.created_at)}</td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
-          </div>
-        </Show>
+                        {item.entity_id && ` · #${item.entity_id}`}
+                      </Text>
+                    </TableCell>
+                    <TableCell>{date(item.created_at)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Section>
+        ) : (
+          <EmptyState
+            title="No activity recorded"
+            description="Application actions will appear here when the backend records them."
+          />
+        )}
         <Pager page={page} />
       </QueryState>
-    </>
+    </PageFrame>
   );
 }

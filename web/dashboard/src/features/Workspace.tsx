@@ -1,75 +1,67 @@
-import { For, Show, createSignal, createEffect, onCleanup, type ParentProps } from 'solid-js';
-import { A, Navigate, useParams } from '@solidjs/router';
-import { createQuery } from '@tanstack/solid-query';
+import { useState } from 'react';
+import { Navigate, Outlet, useLocation, useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { useMediaQuery } from '@astryxdesign/core/hooks';
+import { AppShell } from '@astryxdesign/core/AppShell';
+import { TopNav, TopNavHeading } from '@astryxdesign/core/TopNav';
+import { SideNav, SideNavHeading, SideNavItem, SideNavSection } from '@astryxdesign/core/SideNav';
+import { VStack, HStack } from '@astryxdesign/core/Stack';
+import { Text } from '@astryxdesign/core/Text';
+import { Button } from '@astryxdesign/core/Button';
+import { IconButton } from '@astryxdesign/core/IconButton';
+import { Icon } from '@astryxdesign/core/Icon';
+import { Avatar } from '@astryxdesign/core/Avatar';
+import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { Banner } from '@astryxdesign/core/Banner';
+import { Table, proportional, type TableColumn } from '@astryxdesign/core/Table';
 import {
-  ArrowLeft,
-  ArrowRight,
-  Boxes,
-  ChevronDown,
-  FileText,
-  LogOut,
-  Megaphone,
-  Menu,
-  X,
-  LayoutDashboard,
-  Users,
-  Layers,
-  ListChecks,
-  Settings,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from 'lucide-solid';
-import { preferences, setSidebarHidden } from '../app/preferences';
-import { useAuth } from '../app/auth';
+  BellIcon,
+  Squares2X2Icon,
+  PaperAirplaneIcon,
+  ChartBarIcon,
+  UsersIcon,
+  UserGroupIcon,
+  DocumentDuplicateIcon,
+  QueueListIcon,
+  Cog6ToothIcon,
+  ArrowRightOnRectangleIcon,
+  MoonIcon,
+  SunIcon,
+  Bars3Icon,
+} from '@heroicons/react/24/outline';
+import { useAppearance } from '../app/appearance-context';
+import { useAuth } from '../app/auth-context';
 import { data, errorMessage } from '../lib/api/client';
 import type { Application } from '../lib/api/types';
 import { Failure, Loading, Status } from '../components/ui/Feedback';
+import { PageFrame } from '../components/ui/PageFrame';
+import { Link } from '@astryxdesign/core/Link';
 
-export function Workspace(props: ParentProps) {
+export function Workspace() {
   const auth = useAuth();
   const params = useParams();
-  const [menu, setMenu] = createSignal(false);
-  let navigation: HTMLElement | undefined;
-  let menuButton: HTMLButtonElement | undefined;
-  createEffect(() => {
-    if (menu()) navigation?.querySelector<HTMLButtonElement>('button')?.focus();
-  });
-  const closeMenu = () => {
-    if (!menu()) return;
-    setMenu(false);
-    menuButton?.focus();
-  };
-  const escape = (event: KeyboardEvent) => {
-    if (event.key === 'Escape' && menu()) closeMenu();
-  };
-  const narrow = window.matchMedia('(max-width: 760px)');
-  const resize = () => {
-    if (!narrow.matches) setMenu(false);
-  };
-  narrow.addEventListener('change', resize);
-  window.addEventListener('keydown', escape);
-  onCleanup(() => {
-    window.removeEventListener('keydown', escape);
-    narrow.removeEventListener('change', resize);
-  });
-  const [logoutError, setLogoutError] = createSignal('');
-  const [leaving, setLeaving] = createSignal(false);
-  const profile = createQuery(() => ({
+  const location = useLocation();
+  const appearance = useAppearance();
+  const isMobile = useMediaQuery('(width < 768px)');
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [logoutError, setLogoutError] = useState('');
+  const [leaving, setLeaving] = useState(false);
+  const profile = useQuery({
     queryKey: ['profile'],
     queryFn: ({ signal }) =>
       data<{ name: string; email: string; role_name: string; is_active: boolean }>(
         '/profile',
         signal,
       ),
-    enabled: !!auth.authenticated(),
-  }));
-  const application = createQuery(() => ({
+    enabled: auth.authenticated(),
+  });
+  const application = useQuery({
     queryKey: ['application', params.appId],
     queryFn: ({ signal }) => data<Application>(`/apps/${params.appId}`, signal),
-    enabled: !!auth.authenticated() && !!params.appId,
-  }));
+    enabled: auth.authenticated() && !!params.appId,
+  });
   async function logout() {
-    if (leaving()) return;
+    if (leaving) return;
     setLeaving(true);
     setLogoutError('');
     try {
@@ -79,381 +71,254 @@ export function Workspace(props: ParentProps) {
       setLeaving(false);
     }
   }
+  if (auth.session.isPending) return <Loading />;
+  if (auth.session.isError)
+    return <Failure error={auth.session.error} retry={() => void auth.session.refetch()} />;
+  if (!auth.authenticated()) return <Navigate to="/login" replace />;
+  const appBase = `/apps/${params.appId}`;
+  const routes = [
+    { label: 'Overview', path: `${appBase}/overview`, icon: ChartBarIcon },
+    { label: 'Campaigns', path: `${appBase}/campaigns`, icon: PaperAirplaneIcon },
+    { label: 'Templates', path: `${appBase}/templates`, icon: DocumentDuplicateIcon },
+    { label: 'Delivery logs', path: `${appBase}/logs`, icon: QueueListIcon },
+    { label: 'Audience & devices', path: `${appBase}/audience`, icon: UsersIcon },
+    { label: 'Segments', path: `${appBase}/segments`, icon: UserGroupIcon },
+    { label: 'Upload history', path: `${appBase}/uploads`, icon: DocumentDuplicateIcon },
+    { label: 'Application settings', path: `${appBase}/settings`, icon: Cog6ToothIcon },
+  ];
+  const nav = (
+    <SideNav
+      header={
+        <SideNavHeading
+          heading={application.data?.name ?? 'Your applications'}
+          subheading={application.data?.key ?? 'Notification workspace'}
+          icon={<Icon icon={Squares2X2Icon} size="sm" />}
+        />
+      }
+      footer={
+        <VStack gap={3} padding={3}>
+          <Text>{profile.data?.name ?? 'Staff account'}</Text>
+          <Button
+            label={leaving ? 'Signing out…' : 'Sign out'}
+            icon={<Icon icon={ArrowRightOnRectangleIcon} size="sm" />}
+            variant="ghost"
+            onClick={() => void logout()}
+            isDisabled={leaving}
+          />
+          {logoutError && (
+            <Banner status="error" title="Sign-out failed" description={logoutError} />
+          )}
+        </VStack>
+      }
+    >
+      <SideNavSection title="Workspace" isHeaderHidden>
+        <SideNavItem
+          label="Applications"
+          icon={Squares2X2Icon}
+          isSelected={location.pathname === '/apps'}
+          href={'/apps'}
+          onClick={() => setMobileOpen(false)}
+        />
+        {params.appId &&
+          routes.map((item) => (
+            <SideNavItem
+              key={item.path}
+              label={item.label}
+              icon={item.icon}
+              isSelected={location.pathname.startsWith(item.path)}
+              href={item.path}
+              onClick={() => setMobileOpen(false)}
+            />
+          ))}
+        {params.appId &&
+          profile.data?.is_active &&
+          ['SUPER_ADMIN', 'ADMIN'].includes(profile.data.role_name) && (
+            <SideNavItem
+              label="Activity audit"
+              icon={QueueListIcon}
+              isSelected={location.pathname === `${appBase}/audit`}
+              href={`${appBase}/audit`}
+              onClick={() => setMobileOpen(false)}
+            />
+          )}
+      </SideNavSection>
+      {profile.data?.is_active && profile.data.role_name === 'SUPER_ADMIN' && (
+        <SideNavSection title="Administration">
+          <SideNavItem
+            label="Manage staff"
+            icon={UsersIcon}
+            isSelected={location.pathname.startsWith('/apps/admin/staff')}
+            href={'/apps/admin/staff'}
+            onClick={() => setMobileOpen(false)}
+          />
+          <SideNavItem
+            label="Application registry"
+            icon={Squares2X2Icon}
+            isSelected={location.pathname.startsWith('/apps/admin/applications')}
+            href={'/apps/admin/applications'}
+            onClick={() => setMobileOpen(false)}
+          />
+        </SideNavSection>
+      )}
+      <SideNavSection title="Account">
+        <SideNavItem
+          label="My account"
+          icon={Cog6ToothIcon}
+          isSelected={location.pathname === '/apps/settings'}
+          href={'/apps/settings'}
+          onClick={() => setMobileOpen(false)}
+        />
+        <SideNavItem label="API reference" icon={DocumentDuplicateIcon} href="/docs/" />
+      </SideNavSection>
+    </SideNav>
+  );
   return (
-    <Show when={!auth.session.isPending} fallback={<Loading />}>
-      <Show
-        when={auth.authenticated()}
-        fallback={
-          <Show when={auth.session.isError} fallback={<Navigate href="/login" />}>
-            <Failure error={auth.session.error} retry={() => void auth.session.refetch()} />
-          </Show>
-        }
-      >
-        <a href="#workspace-main" class="skip-link">
-          Lewati ke konten
-        </a>
-        <div class={`workspace ${preferences.sidebarHidden ? 'sidebar-hidden' : ''}`}>
-          <Show when={menu()}>
-            <button class="nav-scrim" aria-label="Tutup navigasi" onClick={closeMenu} />
-          </Show>
-          <aside
-            ref={navigation}
-            onKeyDown={(event) => {
-              if (!menu() || event.key !== 'Tab') return;
-              const items = Array.from(
-                navigation?.querySelectorAll<HTMLElement>('a[href], button:not([disabled])') ?? [],
-              ).filter((node) => node.getClientRects().length);
-              const first = items[0],
-                last = items.at(-1);
-              if (event.shiftKey && document.activeElement === first) {
-                event.preventDefault();
-                last?.focus();
-              } else if (!event.shiftKey && document.activeElement === last) {
-                event.preventDefault();
-                first?.focus();
-              }
-            }}
-            class={`sidebar ${menu() ? 'is-open' : ''}`}
-          >
-            <div class="sidebar-brand">
-              <A href="/apps" class="wordmark">
-                hello<span>.</span>
-              </A>
-              <button
-                class="icon-button mobile-only"
-                aria-label="Tutup navigasi"
-                onClick={closeMenu}
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <span class="sidebar-caption">RUANG KERJA</span>
-            <A
-              href="/apps"
-              class="workspace-switch"
-              onClick={() => {
-                if (menu()) closeMenu();
-              }}
-            >
-              <span class="app-monogram">{(application.data?.name ?? 'H').slice(0, 1)}</span>
-              <span>
-                {application.data?.name ?? 'Pilih aplikasi'}
-                <small>{application.data?.key ?? 'Aplikasi Anda'}</small>
-              </span>
-              <ChevronDown size={15} />
-            </A>
-            <nav aria-label="Navigasi utama">
-              <Show when={params.appId}>
-                <A
-                  href={`/apps/${params.appId}/overview`}
-                  activeClass="nav-active"
-                  onClick={() => {
-                    if (menu()) closeMenu();
-                  }}
-                >
-                  <LayoutDashboard size={18} />
-                  Ringkasan
-                </A>
-              </Show>
-              <A
-                href="/apps"
-                end
-                activeClass="nav-active"
-                onClick={() => {
-                  if (menu()) closeMenu();
-                }}
-              >
-                <Boxes size={18} />
-                Aplikasi
-              </A>
-              <Show when={params.appId}>
-                <A
-                  href={`/apps/${params.appId}/campaigns`}
-                  activeClass="nav-active"
-                  onClick={() => {
-                    if (menu()) closeMenu();
-                  }}
-                >
-                  <Megaphone size={18} />
-                  Campaign
-                </A>
-              </Show>
-              <Show when={params.appId}>
-                <A
-                  href={`/apps/${params.appId}/templates`}
-                  activeClass="nav-active"
-                  onClick={() => {
-                    if (menu()) closeMenu();
-                  }}
-                >
-                  <FileText size={18} />
-                  Template
-                </A>
-                <A
-                  href={`/apps/${params.appId}/logs`}
-                  activeClass="nav-active"
-                  onClick={() => {
-                    if (menu()) closeMenu();
-                  }}
-                >
-                  <ListChecks size={18} />
-                  Log pengiriman
-                </A>
-                <span class="sidebar-caption nav-group">AUDIENCE</span>
-                <A
-                  href={`/apps/${params.appId}/audience`}
-                  activeClass="nav-active"
-                  onClick={() => {
-                    if (menu()) closeMenu();
-                  }}
-                >
-                  <Users size={18} />
-                  Pengguna &amp; perangkat
-                </A>
-                <A
-                  href={`/apps/${params.appId}/segments`}
-                  activeClass="nav-active"
-                  onClick={() => {
-                    if (menu()) closeMenu();
-                  }}
-                >
-                  <Layers size={18} />
-                  Segment
-                </A>
-                <A
-                  href={`/apps/${params.appId}/settings`}
-                  activeClass="nav-active"
-                  onClick={() => {
-                    if (menu()) closeMenu();
-                  }}
-                >
-                  <Settings size={18} />
-                  Pengaturan
-                </A>
-                <A
-                  href={`/apps/${params.appId}/uploads`}
-                  activeClass="nav-active"
-                  onClick={() => {
-                    if (menu()) closeMenu();
-                  }}
-                >
-                  <FileText size={18} />
-                  Riwayat upload
-                </A>
-                <Show
-                  when={
-                    profile.data?.is_active &&
-                    ['SUPER_ADMIN', 'ADMIN'].includes(profile.data.role_name)
-                  }
-                >
-                  <A
-                    href={`/apps/${params.appId}/audit`}
-                    activeClass="nav-active"
-                    onClick={() => {
-                      if (menu()) closeMenu();
-                    }}
-                  >
-                    <ListChecks size={18} />
-                    Audit aktivitas
-                  </A>
-                </Show>
-              </Show>
-              <Show when={profile.data?.is_active && profile.data.role_name === 'SUPER_ADMIN'}>
-                <span class="sidebar-caption nav-group">ADMINISTRASI</span>
-                <A
-                  href="/apps/admin/staff"
-                  activeClass="nav-active"
-                  onClick={() => {
-                    if (menu()) closeMenu();
-                  }}
-                >
-                  <Users size={18} />
-                  Kelola staff
-                </A>
-                <A
-                  href="/apps/admin/applications"
-                  activeClass="nav-active"
-                  onClick={() => {
-                    if (menu()) closeMenu();
-                  }}
-                >
-                  <Boxes size={18} />
-                  Registry aplikasi
-                </A>
-              </Show>
-              <A
+    <AppShell
+      contentPadding={0}
+      mobileNav={{ isOpen: mobileOpen, onOpenChange: setMobileOpen }}
+      topNav={
+        <TopNav
+          heading={
+            <TopNavHeading
+              heading="hello."
+              headingHref="/apps"
+              logo={<Icon icon={BellIcon} size="lg" />}
+            />
+          }
+          startContent={
+            !isMobile && (
+              <HStack gap={3} vAlign="center">
+                <IconButton
+                  label={appearance.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
+                  icon={<Icon icon={Bars3Icon} size="sm" />}
+                  variant="ghost"
+                  onClick={() => appearance.setSidebarCollapsed(!appearance.sidebarCollapsed)}
+                />
+                <Text type="supporting" color="secondary">
+                  {['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+                    ? 'Local workspace'
+                    : window.location.host}
+                </Text>
+              </HStack>
+            )
+          }
+          endContent={
+            <HStack gap={3} vAlign="center" hAlign="end">
+              <IconButton
+                label={appearance.appearance === 'dark' ? 'Use light mode' : 'Use dark mode'}
+                variant="ghost"
+                icon={
+                  <Icon icon={appearance.appearance === 'dark' ? SunIcon : MoonIcon} size="sm" />
+                }
+                onClick={() =>
+                  appearance.setAppearance(appearance.appearance === 'dark' ? 'light' : 'dark')
+                }
+              />
+              <IconButton
+                label="Profile and preferences"
                 href="/apps/settings"
-                activeClass="nav-active"
-                onClick={() => {
-                  if (menu()) closeMenu();
-                }}
-              >
-                <Settings size={18} />
-                Akun saya
-              </A>
-              <a href="/docs/" target="_blank" rel="noreferrer">
-                <FileText size={18} />
-                Referensi API
-                <ArrowRight size={14} class="nav-external" />
-              </a>
-            </nav>
-            <div class="sidebar-bottom">
-              <div class="profile">
-                <span class="avatar">{(profile.data?.name ?? 'S').slice(0, 1)}</span>
-                <div>
-                  <strong>{profile.data?.name ?? 'Akun staf'}</strong>
-                  <small>{profile.data?.email ?? 'Terautentikasi'}</small>
-                </div>
-              </div>
-              <button class="logout-button" onClick={() => void logout()} disabled={leaving()}>
-                <LogOut size={17} />
-                {leaving() ? 'Keluar…' : 'Keluar'}
-              </button>
-              <Show when={logoutError()}>
-                <p class="sidebar-error" role="alert">
-                  {logoutError()}
-                </p>
-              </Show>
-            </div>
-          </aside>
-          <div class="workspace-body" inert={menu()}>
-            <header class="topbar">
-              <button
-                ref={menuButton}
-                class="icon-button mobile-only"
-                aria-label="Buka navigasi"
-                aria-expanded={menu()}
-                onClick={() => setMenu(true)}
-              >
-                <Menu size={21} />
-              </button>
-              <button
-                class="icon-button desktop-only"
-                aria-label={preferences.sidebarHidden ? 'Tampilkan sidebar' : 'Sembunyikan sidebar'}
-                aria-expanded={!preferences.sidebarHidden}
-                onClick={() => setSidebarHidden(!preferences.sidebarHidden)}
-              >
-                <Show when={preferences.sidebarHidden} fallback={<PanelLeftClose size={20} />}>
-                  <PanelLeftOpen size={20} />
-                </Show>
-              </button>
-              <span class="environment-badge">
-                {['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
-                  ? 'LOKAL'
-                  : window.location.host}
-              </span>
-              <span>
-                Ruang kerja <span class="breadcrumb-separator">/</span>{' '}
-                {application.data?.name ?? 'Aplikasi'}
-              </span>
-              <span class="context-label">Dashboard notifikasi</span>
-            </header>
-            <main id="workspace-main" class="main-content">
-              <Show when={!params.appId || !application.isPending} fallback={<Loading />}>
-                <Show
-                  when={!application.isError}
-                  fallback={
-                    <Failure error={application.error} retry={() => void application.refetch()} />
-                  }
-                >
-                  <Show
-                    when={!params.appId || application.data?.status === 'ACTIVE'}
-                    fallback={
-                      <div class="empty-state">
-                        <h1>Aplikasi belum tersedia</h1>
-                        <p>Campaign dapat dibuka setelah aplikasi berstatus aktif.</p>
-                        <Show when={application.data}>
-                          <Status value={application.data!.status} />
-                        </Show>
-                        <A class="button secondary" href="/apps">
-                          Kembali ke aplikasi
-                        </A>
-                      </div>
-                    }
-                  >
-                    {props.children}
-                  </Show>
-                </Show>
-              </Show>
-            </main>
-          </div>
-        </div>
-      </Show>
-    </Show>
+                variant="ghost"
+                icon={<Avatar name={profile.data?.name ?? 'Staff'} size="sm" />}
+              />
+            </HStack>
+          }
+        />
+      }
+      sideNav={appearance.sidebarCollapsed && !isMobile ? undefined : nav}
+    >
+      {params.appId && application.isPending ? (
+        <PageFrame title="Loading application">
+          <Loading />
+        </PageFrame>
+      ) : application.isError ? (
+        <PageFrame title="Application unavailable">
+          <Failure error={application.error} retry={() => void application.refetch()} />
+        </PageFrame>
+      ) : params.appId && application.data?.status !== 'ACTIVE' ? (
+        <PageFrame title="Application unavailable">
+          <EmptyState
+            title="Application unavailable"
+            description="Campaigns are available when the application is active."
+            actions={
+              <Button
+                label="Back to applications"
+                href="/apps"
+                onClick={() => setMobileOpen(false)}
+              />
+            }
+          />
+        </PageFrame>
+      ) : (
+        <Outlet key={location.pathname} />
+      )}
+    </AppShell>
   );
 }
 export default function Applications() {
-  const [page, setPage] = createSignal(1);
-  const applications = createQuery(() => ({
-    queryKey: ['applications', page()],
+  const [page, setPage] = useState(1);
+  const query = useQuery({
+    queryKey: ['applications', page],
     queryFn: ({ signal }) =>
-      data<{ items: Application[]; total: number }>(`/apps?page=${page()}&limit=20`, signal),
-  }));
+      data<{ items: Application[]; total: number }>(`/apps?page=${page}&limit=20`, signal),
+  });
+  const columns: TableColumn<Application>[] = [
+    {
+      key: 'name',
+      header: 'Application',
+      width: proportional(2, { minWidth: 200 }),
+      renderCell: (app) => (
+        <Link href={`/apps/${app.id}/campaigns`} weight="semibold">
+          {app.name}
+        </Link>
+      ),
+    },
+    {
+      key: 'key',
+      header: 'Key',
+      width: proportional(1, { minWidth: 160 }),
+      renderCell: (app) => <Text>{app.key}</Text>,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      width: proportional(1, { minWidth: 120 }),
+      renderCell: (app) => <Status value={app.status} />,
+    },
+  ];
   return (
-    <>
-      <header class="page-heading">
-        <div>
-          <span class="eyebrow">RUANG KERJA ANDA</span>
-          <h1>Pilih aplikasi</h1>
-          <p class="muted">Setiap aplikasi memiliki campaign dan penerimanya sendiri.</p>
-        </div>
-      </header>
-      <Show when={!applications.isPending} fallback={<Loading />}>
-        <Show
-          when={!applications.isError}
-          fallback={
-            <Failure error={applications.error} retry={() => void applications.refetch()} />
-          }
-        >
-          <Show
-            when={applications.data?.items.length}
-            fallback={
-              <div class="empty-state">
-                <Boxes size={30} />
-                <h2>Belum ada aplikasi</h2>
-                <p>Minta administrator memberikan akses aplikasi ke akun Anda.</p>
-              </div>
-            }
-          >
-            <div class="application-list">
-              <For each={applications.data?.items}>
-                {(app) => (
-                  <A href={`/apps/${app.id}/campaigns`} class="application-row">
-                    <span class="application-icon">{app.name.slice(0, 1)}</span>
-                    <div>
-                      <h2>{app.name}</h2>
-                      <p>{app.key}</p>
-                    </div>
-                    <Status value={app.status} />
-                    <ArrowRight size={19} />
-                  </A>
-                )}
-              </For>
-            </div>
-          </Show>
-          <div class="pagination">
-            <span>Halaman {page()}</span>
-            <div>
-              <button
-                class="button secondary small"
-                disabled={page() === 1}
-                onClick={() => setPage(page() - 1)}
-              >
-                <ArrowLeft size={15} />
-                Sebelumnya
-              </button>
-              <button
-                class="button secondary small"
-                disabled={page() * 20 >= (applications.data?.total ?? 0)}
-                onClick={() => setPage(page() + 1)}
-              >
-                Berikutnya
-                <ArrowRight size={15} />
-              </button>
-            </div>
-          </div>
-        </Show>
-      </Show>
-    </>
+    <PageFrame
+      title="Choose application"
+      description="Each application has its own campaigns and recipients."
+    >
+      {query.isPending ? (
+        <Loading />
+      ) : query.isError ? (
+        <Failure error={query.error} retry={() => void query.refetch()} />
+      ) : !query.data?.items.length ? (
+        <EmptyState
+          title="No applications yet"
+          description="Ask your administrator to grant application access."
+        />
+      ) : (
+        <Table data={query.data.items} columns={columns} idKey="id" density="balanced" hasHover />
+      )}
+      <HStack gap={3} wrap="wrap" hAlign="between" vAlign="center">
+        <Text>Page {page}</Text>
+        <HStack gap={2}>
+          <Button
+            label="Previous"
+            size="sm"
+            isDisabled={page === 1 || query.isFetching}
+            onClick={() => setPage((value) => value - 1)}
+          />
+          <Button
+            label="Next"
+            size="sm"
+            isDisabled={!query.data || page * 20 >= query.data.total || query.isFetching}
+            onClick={() => setPage((value) => value + 1)}
+          />
+        </HStack>
+      </HStack>
+    </PageFrame>
   );
 }

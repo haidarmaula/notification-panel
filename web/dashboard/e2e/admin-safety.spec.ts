@@ -4,11 +4,11 @@ const app = '11111111-1111-4111-8111-111111111111';
 
 async function login(page: Page, waitForWorkspace = true) {
   await page.goto('/login');
-  await page.getByLabel('Email', { exact: true }).fill('staff@example.invalid');
-  await page.getByLabel('Kata sandi', { exact: true }).fill('fixture-only');
-  await page.getByRole('button', { name: 'Masuk ke dashboard' }).click();
+  await page.getByRole('textbox', { name: /^Email/ }).fill('staff@example.invalid');
+  await page.getByRole('textbox', { name: /^Password/ }).fill('fixture-only');
+  await page.getByRole('button', { name: 'Sign in' }).click();
   if (waitForWorkspace) {
-    await expect(page.getByRole('heading', { name: 'Pilih aplikasi' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Choose application' })).toBeVisible();
   } else {
     await expect
       .poll(async () => (await (await page.request.get('/bff/session')).json()).authenticated)
@@ -49,7 +49,7 @@ test('self controls stay disabled until current profile identity is verified', a
   await profileRequest;
   await page.goto('/apps/admin/staff/1');
   const enabledSensitiveControls = await page
-    .locator('button, select, input[type="password"]')
+    .locator('button, [role="combobox"], input[type="password"]')
     .evaluateAll((elements) =>
       elements
         .filter((element) => {
@@ -57,9 +57,10 @@ test('self controls stay disabled until current profile identity is verified', a
             ' ',
           );
           return (
-            /staff-role|Nonaktifkan akun|Aktifkan akun|Hapus akun staf|Kata sandi|Atur kata sandi/i.test(
-              label,
-            ) && !element.matches(':disabled')
+            (/Role|Deactivate|Activate|Delete staff account|password|Set password/i.test(label) ||
+              element.getAttribute('role') === 'combobox') &&
+            !element.matches(':disabled') &&
+            element.getAttribute('aria-disabled') !== 'true'
           );
         })
         .map((element) => element.id || element.getAttribute('aria-label') || element.textContent),
@@ -68,28 +69,34 @@ test('self controls stay disabled until current profile identity is verified', a
   expect(sensitiveWrites).toBe(0);
 
   releaseProfile();
-  await expect(page.getByRole('heading', { name: 'Edit staf', exact: true })).toBeVisible();
+  await expect(
+    page.getByRole('heading', { name: 'Edit staff account', exact: true }),
+  ).toBeVisible();
 
   await page.goto('/apps/admin/staff');
   await expect(
-    page.getByRole('button', { name: /Nonaktifkan akun Staf Pengujian, akun Anda/ }),
+    page.getByRole('button', { name: /Deactivate Staf Pengujian, your account/ }),
   ).toBeDisabled();
 
   await page.goto('/apps/admin/staff/1');
-  await expect(page.getByLabel('Peran', { exact: true })).toBeDisabled();
-  await expect(page.getByLabel('Nama', { exact: true })).toBeEnabled();
-  await expect(page.getByLabel('Email masuk', { exact: true })).toBeEnabled();
-  await expect(page.getByRole('button', { name: 'Nonaktifkan akun', exact: true })).toBeDisabled();
-  await expect(page.getByRole('button', { name: 'Hapus akun staf', exact: true })).toBeDisabled();
-  await expect(page.getByLabel('Kata sandi Anda saat ini', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('combobox', { name: 'Role', exact: false })).toBeDisabled();
+  await expect(page.getByLabel('Name', { exact: false })).toBeEnabled();
+  await expect(page.getByLabel('Sign-in email', { exact: false })).toBeEnabled();
   await expect(
-    page.getByText('Peran akun Anda tidak dapat diubah dari halaman ini.', { exact: true }),
+    page.getByRole('button', { name: 'Deactivate account', exact: true }),
+  ).toBeDisabled();
+  await expect(
+    page.getByRole('button', { name: 'Delete staff account', exact: true }),
+  ).toBeDisabled();
+  await expect(page.getByLabel('Your current password', { exact: false })).toHaveCount(0);
+  await expect(
+    page.getByText('Your account role cannot be changed here.', { exact: true }),
   ).toBeVisible();
-  await expect(page.getByRole('link', { name: 'pengaturan akun' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'account settings' })).toHaveAttribute(
     'href',
     '/apps/settings',
   );
-  await expect(page.getByLabel('Kata sandi Anda saat ini', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('Your current password', { exact: false })).toHaveCount(0);
 });
 
 test('uncertain staff create outcome keeps inputs and blocks duplicate submission', async ({
@@ -97,9 +104,9 @@ test('uncertain staff create outcome keeps inputs and blocks duplicate submissio
 }) => {
   await login(page);
   await page.goto('/apps/admin/staff/new');
-  await page.getByLabel('Nama', { exact: true }).fill('Operator Tertahan');
-  await page.getByLabel('Email masuk', { exact: true }).fill('pending@example.invalid');
-  await page.getByLabel('Kata sandi awal', { exact: true }).fill('initial-pass-8');
+  await page.getByLabel('Name', { exact: false }).fill('Operator Tertahan');
+  await page.getByLabel('Sign-in email', { exact: false }).fill('pending@example.invalid');
+  await page.getByLabel('Initial password', { exact: false }).fill('initial-pass-8');
 
   let submissions = 0;
   await page.route('**/bff/api/staff', async (route) => {
@@ -115,15 +122,15 @@ test('uncertain staff create outcome keeps inputs and blocks duplicate submissio
     await route.continue();
   });
 
-  const submit = page.getByRole('button', { name: 'Buat akun staf', exact: true });
+  const submit = page.getByRole('button', { name: 'Create staff account', exact: true });
   await submit.click();
-  await expect(page.getByText(/Hasil perubahan belum dapat dipastikan/)).toBeVisible();
+  await expect(page.getByText(/outcome is uncertain/i)).toBeVisible();
   await expect(submit).toBeDisabled();
-  await expect(page.getByLabel('Nama', { exact: true })).toHaveValue('Operator Tertahan');
-  await expect(page.getByLabel('Email masuk', { exact: true })).toHaveValue(
+  await expect(page.getByLabel('Name', { exact: false })).toHaveValue('Operator Tertahan');
+  await expect(page.getByLabel('Sign-in email', { exact: false })).toHaveValue(
     'pending@example.invalid',
   );
-  await expect(page.getByLabel('Kata sandi awal', { exact: true })).toHaveValue('initial-pass-8');
+  await expect(page.getByLabel('Initial password', { exact: false })).toHaveValue('initial-pass-8');
 
   await page.locator('form').first().dispatchEvent('submit', { bubbles: true, cancelable: true });
   await page.waitForTimeout(100);
@@ -147,14 +154,14 @@ test('forbidden grant lookup does not enable a new grant', async ({ page }) => {
     await route.continue();
   });
 
-  await page.getByLabel('ID staf', { exact: true }).fill('1');
-  await page.getByRole('button', { name: 'Periksa akses', exact: true }).click();
-  await expect(page.getByRole('alert')).toContainText('tidak memiliki izin');
+  await page.getByLabel('Staff ID', { exact: false }).fill('1');
+  await page.getByRole('button', { name: 'Inspect access', exact: true }).click();
+  await expect(page.getByText('You do not have permission for this action.')).toBeVisible();
   const enableGrant = page.getByRole('button', {
-    name: 'Berikan atau pulihkan akses',
+    name: 'Grant or restore access',
     exact: true,
   });
   await expect(enableGrant).toBeDisabled();
-  await expect(page.getByText('Belum ada baris akses untuk ID ini.')).toHaveCount(0);
+  await expect(page.getByText('No access row exists for this ID.')).toHaveCount(0);
   expect(grantRequests).toBe(0);
 });

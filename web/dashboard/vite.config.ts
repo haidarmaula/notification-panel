@@ -1,6 +1,6 @@
 import { defineConfig } from 'vitest/config';
-import solid from 'vite-plugin-solid';
-import tailwind from '@tailwindcss/vite';
+import react from '@vitejs/plugin-react';
+import { themeFontAliases } from './theme-fonts.config.ts';
 import { readFileSync } from 'node:fs';
 import { Agent } from 'node:https';
 import { join } from 'node:path';
@@ -72,7 +72,8 @@ if (
 }
 
 export default defineConfig({
-  plugins: [solid(), tailwind(), localDocs],
+  plugins: [react(), localDocs],
+  resolve: { alias: themeFontAliases },
   server: {
     proxy: {
       '/bff': proxy,

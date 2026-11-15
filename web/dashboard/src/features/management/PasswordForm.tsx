@@ -1,43 +1,44 @@
-import { createSignal, onCleanup, Show } from 'solid-js';
-import { useQueryClient } from '@tanstack/solid-query';
+import { Button } from '@astryxdesign/core/Button';
+import { FormLayout } from '@astryxdesign/core/FormLayout';
+import { Heading, Text } from '@astryxdesign/core/Text';
+import { Section } from '@astryxdesign/core/Section';
+import { Stack } from '@astryxdesign/core/Stack';
+import { TextInput } from '@astryxdesign/core/TextInput';
+import { useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { discardUnsavedChanges, useUnsaved } from '../../app/unsaved';
-import { useWrite, WriteFeedback } from './shared';
-
+import { useWrite } from './data-hooks';
+import { WriteFeedback } from './shared';
 export default function PasswordForm() {
   const operation = useWrite();
   const client = useQueryClient();
   const setDirty = useUnsaved();
-  const [current, setCurrent] = createSignal('');
-  const [password, setPassword] = createSignal('');
-  const [confirmation, setConfirmation] = createSignal('');
-  const [error, setError] = createSignal('');
-  let replacement: HTMLInputElement | undefined;
-  onCleanup(() => {
-    setCurrent('');
-    setPassword('');
-    setConfirmation('');
-  });
-  async function save(event: SubmitEvent) {
+  const [current, setCurrent] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [error, setError] = useState('');
+  const replacement = useRef<HTMLInputElement>(null);
+  async function save(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError('');
-    if (new TextEncoder().encode(password()).length > 72 || password() !== confirmation()) {
+    if (new TextEncoder().encode(password).length > 72 || password !== confirmation) {
       setError(
-        password() !== confirmation()
-          ? 'Konfirmasi kata sandi belum sama.'
-          : 'Kata sandi baru maksimal 72 byte.',
+        password !== confirmation
+          ? 'The password confirmation does not match.'
+          : 'The new password can be at most 72 bytes.',
       );
-      replacement?.focus();
+      replacement.current?.focus();
       return;
     }
     if (
       !window.confirm(
-        'Ganti kata sandi dan keluar dari seluruh sesi akun? Perubahan lain yang belum disimpan akan hilang.',
+        'Change the password and sign out all account sessions? Any unsaved changes will be lost.',
       )
     )
       return;
     const result = await operation.write('/profile/password', 'PATCH', {
-      current_password: current(),
-      new_password: password(),
+      current_password: current,
+      new_password: password,
     });
     if (result) {
       setCurrent('');
@@ -49,57 +50,56 @@ export default function PasswordForm() {
     }
   }
   return (
-    <section class="surface stack">
-      <h2>Ganti kata sandi</h2>
-      <p class="muted">
-        Setelah berhasil, seluruh sesi akun dibatalkan dan Anda perlu masuk kembali.
-      </p>
-      <form class="stack" onInput={() => setDirty(true)} onSubmit={(event) => void save(event)}>
-        <fieldset class="stack" disabled={operation.blocked()}>
-          <label>
-            Kata sandi saat ini
-            <input
+    <Section padding={6}>
+      <Stack gap={3}>
+        <Heading level={2}>Change password</Heading>
+        <Text>
+          After a successful change, all account sessions are revoked and you must sign in again.
+        </Text>
+        <form onInput={() => setDirty(true)} onSubmit={(event) => void save(event)}>
+          <FormLayout>
+            <TextInput
+              label="Current password"
               type="password"
-              required
-              autocomplete="current-password"
-              value={current()}
-              onInput={(event) => setCurrent(event.currentTarget.value)}
+              autoComplete="current-password"
+              isRequired
+              value={current}
+              onChange={setCurrent}
+              isDisabled={operation.blocked()}
             />
-          </label>
-          <label>
-            Kata sandi baru
-            <input
+            <TextInput
               ref={replacement}
+              label="New password"
               type="password"
-              required
-              autocomplete="new-password"
-              value={password()}
-              onInput={(event) => setPassword(event.currentTarget.value)}
-              aria-invalid={!!error()}
-              aria-describedby={error() ? 'password-error' : undefined}
+              autoComplete="new-password"
+              isRequired
+              value={password}
+              onChange={setPassword}
+              isDisabled={operation.blocked()}
+              status={error ? { type: 'error', message: error } : undefined}
             />
-          </label>
-          <label>
-            Konfirmasi kata sandi baru
-            <input
+            <TextInput
+              label="Confirm new password"
               type="password"
-              required
-              autocomplete="new-password"
-              value={confirmation()}
-              onInput={(event) => setConfirmation(event.currentTarget.value)}
+              autoComplete="new-password"
+              isRequired
+              value={confirmation}
+              onChange={setConfirmation}
+              isDisabled={operation.blocked()}
             />
-          </label>
-          <Show when={error()}>
-            <p id="password-error" class="notice notice-error" role="alert">
-              {error()}
-            </p>
-          </Show>
-          <button class="button primary" type="submit">
-            {operation.pending() ? 'Mengganti…' : 'Ganti kata sandi'}
-          </button>
-        </fieldset>
-        <WriteFeedback operation={operation} />
-      </form>
-    </section>
+            <WriteFeedback operation={operation} />
+            <Stack direction="horizontal">
+              <Button
+                label={operation.pending() ? 'Changing…' : 'Change password'}
+                type="submit"
+                variant="primary"
+                isLoading={operation.pending()}
+                isDisabled={operation.blocked()}
+              />
+            </Stack>
+          </FormLayout>
+        </form>
+      </Stack>
+    </Section>
   );
 }

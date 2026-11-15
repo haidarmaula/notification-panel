@@ -1,11 +1,31 @@
 # Hello staff dashboard
 
-SolidJS/Vite browser application with a separate Go session BFF. See
+React 19/Vite browser application using Astryx components and themes with a separate Go session BFF. See
 `../../DASHBOARD-CAPABILITIES.md` for scope and `DESIGN.md` for the visual contract.
 Staff administration, registry/grant management, scoped upload/audit reads, and
 self-service password changes are described in the
 [dashboard administration expansion](../../docs/specs/dashboard-administration.md).
-Local frontend and browser verification of that expansion is pending.
+The UI migration preserves the separate BFF and scoped backend contracts.
+
+## UI architecture
+
+All production pages use React hooks, React Router, React Query, and Astryx
+components. Stone is the default design theme. The header theme segmented control and account
+settings allow users to choose Stone, Y2K, or Matcha, independently
+of Light/Dark/System appearance. Only explicit display preferences are persisted;
+account data, tokens, private keys, and campaign content stay out of browser storage.
+
+`src/astryx-themes.ts` is CLI-generated; use Astryx theme commands to update it.
+Do not hand-edit it or eject a package theme unless an independent fork is needed.
+The app root owns the Theme and LinkProvider integration. Route modules are loaded
+on demand, and unsaved forms use the router blocker plus browser unload protection.
+
+Theme fonts are self-hosted from Fontsource through `theme-fonts.config.ts` aliases.
+This retains the packaged theme typography without external font requests or a
+weaker Content Security Policy. No custom component CSS is used.
+
+The separate `preview/` app remains available through `pnpm preview:astryx`.
+It uses synthetic records; production routes always read the BFF.
 
 ## Local verification
 
@@ -115,3 +135,28 @@ sessions require a separate design.
 Production also requires real-browser TLS trust, UAT, accessibility/performance
 validation on target devices, operational monitoring and the existing backend
 production gates. Real notification sends need explicit recipient/count approval.
+
+## Astryx migration validation (2026-11-15)
+
+The React/Stone migration passed strict TypeScript, ESLint without warnings,
+Prettier, 11 unit tests, and the production build. All 50 browser cases were
+verified against the isolated BFF fixture: the last full run passed 47 cases,
+then the three corrected Astryx-specific assertions passed a focused rerun.
+The final mobile table-width refinement also passed the two affected browser
+cases. Browser coverage includes session/CSRF handling, draft editing, held and
+uncertain acceptance, unsaved changes, scheduling, admin version conflicts,
+credential handling, keyboard focus, mobile layout, and theme persistence.
+
+Initial emitted JavaScript is 145.5 KiB gzip against the unchanged 160 KiB budget
+(entry plus module-preload assets; feature routes load separately). The separate
+preview app also builds. Astryx doctor reports zero failures and no source purity
+findings. Its two font warnings inspect the original package stylesheets rather
+than Vite aliases; browser tests verify local font loading without Google Fonts
+requests. These checks do not establish real-provider delivery or deployment
+readiness.
+
+Production theme choices are limited to Stone (default), Y2K, and Matcha.
+The separate preview retains all seven themes in `preview/astryx-themes.ts`.
+
+The login photograph is bundled locally from `src/assets/login-team.jpg` and
+comes from the [official Astryx Login Split template asset](https://astryx.atmeta.com/template-assets/light-working-vertical-1.png).

@@ -1,138 +1,145 @@
-import { For, Show } from 'solid-js';
-import { A, useParams } from '@solidjs/router';
-import { createQuery } from '@tanstack/solid-query';
+import { Heading, Text } from '@astryxdesign/core/Text';
+import { Link } from '@astryxdesign/core/Link';
+import { EmptyState } from '@astryxdesign/core/EmptyState';
+import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList';
+import { Section } from '@astryxdesign/core/Section';
+import { Stack } from '@astryxdesign/core/Stack';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHeader,
+  TableHeaderCell,
+  TableRow,
+} from '@astryxdesign/core/Table';
+import { useParams } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { data } from '../../lib/api/client';
 import type { components } from '../../lib/api/generated/staff';
-import { createPage, Pager, QueryState, date } from './shared';
+import { PageFrame } from '../../components/ui/PageFrame';
 import { Status } from '../../components/ui/Feedback';
+import { date, usePage } from './data-hooks';
+import { Pager, QueryState } from './shared';
 type User = components['schemas']['User'];
 type Device = components['schemas']['Device'];
 export default function Audience() {
-  const params = useParams();
-  const page = createPage<User>(() => `/apps/${params.appId}/users`);
+  const { appId = '' } = useParams();
+  const page = usePage<User>(`/apps/${appId}/users`);
   return (
-    <>
-      <header class="page-heading">
-        <div>
-          <span class="eyebrow">AUDIENCE</span>
-          <h1>Pengguna &amp; perangkat</h1>
-          <p class="muted">Periksa pengguna dan perangkat di aplikasi yang dipilih.</p>
-        </div>
-        <A class="button secondary" href={`/apps/${params.appId}/segments`}>
-          Kelola segment
-        </A>
-      </header>
+    <PageFrame
+      title="Users and devices"
+      description="Review users and devices in the selected application."
+      actions={
+        <Link href={`/apps/${appId}/segments`} isStandalone>
+          Manage segments
+        </Link>
+      }
+    >
       <QueryState query={page.query}>
-        <Show
-          when={page.query.data?.items.length}
-          fallback={
-            <div class="empty-state">
-              <h2>Belum ada pengguna.</h2>
-              <p>Pengguna muncul setelah tersinkronisasi melalui integrasi aplikasi.</p>
-            </div>
-          }
-        >
-          <div class="table-wrap">
-            <table class="directory-table">
-              <thead>
-                <tr>
-                  <th>Pengguna</th>
-                  <th>ID eksternal</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                <For each={page.query.data?.items}>
-                  {(item) => (
-                    <tr>
-                      <td>
-                        <A href={`/apps/${params.appId}/audience/${item.id}`}>
-                          {item.name || `Pengguna #${item.id}`}
-                        </A>
-                        <span class="row-meta">#{item.id}</span>
-                      </td>
-                      <td>{item.external_id}</td>
-                      <td>
-                        <Status value={item.status} />
-                      </td>
-                    </tr>
-                  )}
-                </For>
-              </tbody>
-            </table>
-          </div>
-        </Show>
+        {page.query.data?.items.length ? (
+          <Section padding={6}>
+            <Table aria-label="Application users">
+              <TableHeader>
+                <TableRow isHeaderRow>
+                  <TableHeaderCell>User</TableHeaderCell>
+                  <TableHeaderCell>External ID</TableHeaderCell>
+                  <TableHeaderCell>Status</TableHeaderCell>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {page.query.data.items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <Link href={`/apps/${appId}/audience/${item.id}`}>
+                        {item.name || `User #${item.id}`}
+                      </Link>{' '}
+                      <Text size="sm">#{item.id}</Text>
+                    </TableCell>
+                    <TableCell>{item.external_id}</TableCell>
+                    <TableCell>
+                      <Status value={item.status} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Section>
+        ) : (
+          <EmptyState
+            title="No users available"
+            description="Users appear after syncing through the application integration."
+          />
+        )}
         <Pager page={page} />
       </QueryState>
-    </>
+    </PageFrame>
   );
 }
 export function UserDetail() {
-  const params = useParams();
-  const base = () => `/apps/${params.appId}/users/${params.userId}`;
-  const user = createQuery(() => ({
-    queryKey: ['user', params.appId, params.userId],
-    queryFn: ({ signal }) => data<User>(base(), signal),
-  }));
-  const devices = createPage<Device>(() => `${base()}/devices`);
+  const { appId = '', userId = '' } = useParams();
+  const user = useQuery({
+    queryKey: ['user', appId, userId],
+    queryFn: ({ signal }) => data<User>(`/apps/${appId}/users/${userId}`, signal),
+  });
+  const devices = usePage<Device>(`/apps/${appId}/users/${userId}/devices`);
   return (
-    <>
-      <A class="back-link" href={`/apps/${params.appId}/audience`}>
-        ← Pengguna
-      </A>
+    <PageFrame
+      title={user.data?.name || user.data?.external_id || 'User details'}
+      back={{ label: 'Back to users', href: `/apps/${appId}/audience` }}
+    >
       <QueryState query={user}>
-        <header class="page-heading">
-          <div>
-            <span class="eyebrow">PENGGUNA #{params.userId}</span>
-            <h1>{user.data?.name || user.data?.external_id}</h1>
-            <p class="muted">{user.data?.email || 'Email tidak tersedia'}</p>
-            <p>
-              <Show when={user.data?.status}>{(status) => <Status value={status()} />}</Show>
-            </p>
-          </div>
-        </header>
-        <section class="surface stack">
-          <h2>Perangkat terdaftar</h2>
-          <p class="help-text">
-            Status aktif adalah status registrasi. Ini bukan bukti perangkat sedang online atau
-            pasti menerima pesan.
-          </p>
-          <QueryState query={devices.query}>
-            <Show
-              when={devices.query.data?.items.length}
-              fallback={<p>Belum ada perangkat terdaftar.</p>}
-            >
-              <div class="table-wrap">
-                <table class="device-table">
-                  <thead>
-                    <tr>
-                      <th>Perangkat</th>
-                      <th>Platform</th>
-                      <th>Registrasi</th>
-                      <th>Terakhir terlihat</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <For each={devices.query.data?.items}>
-                      {(item) => (
-                        <tr>
-                          <td>#{item.id}</td>
-                          <td>{item.platform}</td>
-                          <td>
-                            <Status value={item.is_active ? 'ACTIVE' : 'INACTIVE'} />
-                          </td>
-                          <td>{date(item.last_seen_at)}</td>
-                        </tr>
-                      )}
-                    </For>
-                  </tbody>
-                </table>
-              </div>
-            </Show>
-            <Pager page={devices} />
-          </QueryState>
-        </section>
+        <Section padding={6}>
+          <Stack gap={3}>
+            <MetadataList label={{ position: 'start' }}>
+              <MetadataListItem label="Email">
+                {user.data?.email || 'Email unavailable'}
+              </MetadataListItem>
+              <MetadataListItem label="External ID">{user.data?.external_id}</MetadataListItem>
+              <MetadataListItem label="Status">
+                <Status value={user.data?.status ?? 'UNKNOWN'} />
+              </MetadataListItem>
+            </MetadataList>
+            <Heading level={2}>Registered devices</Heading>
+            <Text>
+              An active status indicates an active registration. It does not mean the device is
+              online or will receive a message.
+            </Text>
+            <QueryState query={devices.query}>
+              {devices.query.data?.items.length ? (
+                <Table aria-label="Registered devices">
+                  <TableHeader>
+                    <TableRow isHeaderRow>
+                      <TableHeaderCell>Device</TableHeaderCell>
+                      <TableHeaderCell>Platform</TableHeaderCell>
+                      <TableHeaderCell>Registration</TableHeaderCell>
+                      <TableHeaderCell>Last seen</TableHeaderCell>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {devices.query.data.items.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>#{item.id}</TableCell>
+                        <TableCell>{item.platform}</TableCell>
+                        <TableCell>
+                          <Status value={item.is_active ? 'ACTIVE' : 'INACTIVE'} />
+                        </TableCell>
+                        <TableCell>{date(item.last_seen_at)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              ) : (
+                <EmptyState
+                  title="No devices registered"
+                  description="This user has no registered devices."
+                  isCompact
+                />
+              )}
+              <Pager page={devices} />
+            </QueryState>
+          </Stack>
+        </Section>
       </QueryState>
-    </>
+    </PageFrame>
   );
 }

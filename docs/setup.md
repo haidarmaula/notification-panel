@@ -28,7 +28,7 @@ Install these tools using their official instructions:
 | Docker Compose | Version 2.24.4 or later. | [Compose installation](https://docs.docker.com/compose/install/) |
 | Go | Exactly the version declared in [`go.mod`](../go.mod): Go `1.26.11`. | [Go 1.26.11 downloads](https://go.dev/dl/#go1.26.11) · [Install Go instructions](https://go.dev/doc/install) |
 | Python | The runner calls `python3`. The project does not pin its minimum Python release; Python 3.11+ is recommended. The runner was checked with Python 3.14.7. | [Python downloads](https://www.python.org/downloads/) |
-| Node.js | The dashboard declares `>=22.12.0`; the full local workflow was checked with 22.23.4. Use Node 22.23.4 for the verified setup; other Node major versions have not been verified here. | [Node.js downloads](https://nodejs.org/en/download) · [Node 22.23.4 archive](https://nodejs.org/dist/v22.23.4/) |
+| Node.js | The dashboard declares `>=22.13.0`; the full local workflow was checked with 22.23.4. Use Node 22.23.4 for the verified setup; other Node major versions have not been verified here. | [Node.js downloads](https://nodejs.org/en/download) · [Node 22.23.4 archive](https://nodejs.org/dist/v22.23.4/) |
 | pnpm | Exactly `11.25.0`, matching the dashboard's `packageManager` pin. | [pnpm installation](https://pnpm.io/installation) |
 
 ### Install Node and pnpm
@@ -103,7 +103,7 @@ docker info
 
 Confirm Go reports `go1.26.11`, pnpm reports `11.25.0`, Node reports `v22.23.4`
 for the verified setup, and Compose is at least `v2.24.4`. The dashboard declares
-Node `>=22.12.0`, but other major versions have not been verified here. The
+Node `>=22.13.0`, but other major versions have not been verified here. The
 Docker context host must begin with `unix://`; `docker info` must succeed. If
 using nvm, run `nvm use 22.23.4` before these checks and keep that terminal active
 so its PATH is used by `./dev`. The runner inherits PATH from the shell where it
