@@ -921,3 +921,43 @@ are delivery UUIDs. `sent_at`, `delivered_at` and `opened_at` expose only provid
 acceptance and observed delivery/open timestamps, respectively. The separate read
 history endpoint retains its decimal cursor. See the
 [campaign history contract](api/scoped-campaign-history-api.md).
+
+
+### Application onboarding setup and OAuth verification (000042–000043)
+
+The optional [setup API](api/application-onboarding-api.md) uses independent setup
+revisions rather than overloading registry metadata revisions. `application_onboarding`
+is backfilled as non-greenfield and initialized transactionally for future app
+inserts. Environment becomes immutable once set. Candidate/current references use
+composite app/environment foreign keys. Config identity and file references are
+immutable; only trusted verification completion changes verification state.
+
+Ingestions retain scoped reservation metadata and keyed fingerprints, not uploaded
+JSON/private keys. Synchronous replay snapshots contain allowlisted response DTOs.
+Typed operation rows preserve actor/session/generation, config and epoch attribution;
+non-owner mutation rights only permit the one-way held/superseded path. No runtime
+role receives current-pointer, lifecycle or dispatch-release rights through these
+migrations. Audit action values are registered in `internal/audit/constants.go`.
+
+`application_onboarding_verifier_scopes` binds a restricted LOGIN role OID to one
+application. Owner-installed functions claim bounded OAuth work and commit safe
+checks/audit only with a current owner/token/lease and authority/revision/epoch
+fences. OID mappings must be reconciled after a cluster restore. Approved role
+profiles are in `deploy/postgres/onboarding-grants.sql`; the existing server
+profile grants metadata columns only. File material remains on protected Linux
+storage; it is never a database blob.
+
+Corrective migration `000044` keeps the applied `000043` source unchanged and
+replaces the verifier functions in place. Claim/recovery takes lineage, runtime,
+application and setup locks before changing operations. Exhausted verification
+leases advance the setup revision and persist the resulting revision alongside
+the terminal check/audit. Function signatures and restricted grants are unchanged.
+Stop verifiers before an explicit function rollback; do not rewrite applied
+migration checksums or reset local data to accept a modified migration.
+
+Down migrations refuse retained credentials, requests, operations, verification
+facts or scope assignments. Rollback is an explicit recovery decision, not a way
+to discard security history or automatically reenable earlier dispatch policy.
+See the [implementation design](design/application-onboarding.md) and
+[checkpoint](analysis/application-onboarding-implementation.md) for remaining
+runtime provisioning, first activation and production release gates.

@@ -23,6 +23,8 @@ import (
 	"hello/internal/installation"
 	"hello/internal/middleware"
 	"hello/internal/observability"
+	"hello/internal/onboarding"
+	"hello/internal/provisioning"
 	"hello/internal/runloop"
 )
 
@@ -69,7 +71,32 @@ func runServer(ctx context.Context, cfg *config.ServerConfig) (err error) {
 	}()
 
 	queries := sqlc.New(db)
-	mux := serverRoutes(queries, db, cfg)
+	var onboardingService *applications.OnboardingService
+	if cfg.Onboarding != nil {
+		tlsConfig, policyErr := cfg.Onboarding.TLSConfig()
+		if policyErr != nil {
+			return errors.New("invalid onboarding configuration")
+		}
+		stager, clientErr := provisioning.NewClient(cfg.Onboarding.ProvisionerURL, tlsConfig)
+		if clientErr != nil {
+			return errors.New("invalid onboarding provisioner configuration")
+		}
+		defer stager.Close()
+		profiles := make([]applications.OnboardingProfile, 0, len(cfg.Onboarding.Profiles))
+		for _, profile := range cfg.Onboarding.Profiles {
+			mapped := applications.OnboardingProfile{Profile: onboarding.Profile{ID: profile.ID, Name: profile.Name, Platforms: []onboarding.Platform{}}, ApplicationIdentifiers: map[onboarding.Platform][]string{}}
+			for _, platform := range profile.Platforms {
+				mapped.Profile.Platforms = append(mapped.Profile.Platforms, platform.Platform)
+				mapped.ApplicationIdentifiers[platform.Platform] = append([]string(nil), platform.ApplicationIdentifiers...)
+			}
+			profiles = append(profiles, mapped)
+		}
+		onboardingService, err = applications.NewOnboardingService(queries, db, applications.OnboardingSettings{FingerprintKey: cfg.Onboarding.FingerprintKey, FingerprintKeyVersion: cfg.Onboarding.FingerprintKeyVersion, Profiles: profiles, Stager: stager})
+		if err != nil {
+			return errors.New("invalid onboarding setup configuration")
+		}
+	}
+	mux := serverRoutes(queries, db, cfg, onboardingService)
 	file, err := cfg.MobilePolicy()
 	if err != nil {
 		return errors.New("cannot open mobile policy file")
@@ -108,7 +135,7 @@ func runServer(ctx context.Context, cfg *config.ServerConfig) (err error) {
 	})
 }
 
-func serverRoutes(queries *sqlc.Queries, db applications.Transactor, cfg *config.ServerConfig) *http.ServeMux {
+func serverRoutes(queries *sqlc.Queries, db applications.Transactor, cfg *config.ServerConfig, onboardingServices ...*applications.OnboardingService) *http.ServeMux {
 	tokenManager := cfg.StaffTokens()
 	apiKeyMW := middleware.NewAPIKeyMiddleware(cfg.APIKey)
 	jwtMW := middleware.NewJWTMiddleware(tokenManager, repository.NewStaffUserRepository(queries))
@@ -122,5 +149,8 @@ func serverRoutes(queries *sqlc.Queries, db applications.Transactor, cfg *config
 	applications.NewModule(queries, db, apiKeyMW.Use, jwtMW.Use, auditMW.Use).RegisterRoutes(mux)
 	staff.NewStaffModule(queries, db, apiKeyMW.Use, jwtMW.Use, auditMW.Use).RegisterRoutes(mux)
 	profile.NewProfileModule(queries, db, apiKeyMW.Use, jwtMW.Use).RegisterRoutes(mux)
+	if len(onboardingServices) > 0 {
+		applications.RegisterOnboardingSetup(mux, queries, onboardingServices[0], apiKeyMW.Use, jwtMW.Use, auditMW.Use)
+	}
 	return mux
 }

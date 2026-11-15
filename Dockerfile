@@ -26,6 +26,10 @@ FROM runtime AS worker
 COPY --from=build /out/worker /worker
 ENTRYPOINT ["/worker"]
 
+FROM runtime AS controlplane
+COPY --from=build /out/controlplane /controlplane
+ENTRYPOINT ["/controlplane"]
+
 FROM runtime AS scheduler
 COPY --from=build /out/scheduler /scheduler
 ENTRYPOINT ["/scheduler"]

@@ -10,13 +10,16 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -32,6 +35,10 @@ const sendTopic = "notification.send.requested"
 const cluster = "MkU3OEVBNTcwNTJENDM2Qk"
 const namespace = "load-fixture"
 const concurrency = 4
+const onboardingApplicationID = "10000000-0000-4000-8000-000000000002"
+const verifierPoolLock int64 = 728194021
+
+const localVerifierSlots = 3
 
 func check(err error) {
 	if err != nil {
@@ -154,7 +161,7 @@ func (e *experiment) seed(password string, beforeCommit func()) {
 	check(err)
 	defer tx.Rollback(e.ctx)
 	check(tx.QueryRow(e.ctx, "SELECT id,public_id::text FROM applications WHERE key='load-fixture' AND status='ACTIVE'").Scan(&e.app, &e.public))
-	check(tx.QueryRow(e.ctx, "INSERT INTO staff_users(role_id,name,email,password_hash) SELECT id,'Local Developer','developer@hello.local',$1 FROM roles WHERE name='ADMIN' RETURNING id", string(hash)).Scan(&e.staff))
+	check(tx.QueryRow(e.ctx, "INSERT INTO staff_users(role_id,name,email,password_hash) SELECT id,'Local Developer','developer@hello.local',$1 FROM roles WHERE name='SUPER_ADMIN' RETURNING id", string(hash)).Scan(&e.staff))
 	execute := func(query string, args ...any) { _, err := tx.Exec(e.ctx, query, args...); check(err) }
 	execute("INSERT INTO application_staff_grants(application_id,staff_id) VALUES($1,$2)", e.app, e.staff)
 	execute("INSERT INTO users(application_id,external_id,name) SELECT $1,'load-'||n,'Local device '||n FROM generate_series(1,$2::int) n", e.app, e.devices)
@@ -182,6 +189,155 @@ func (e *experiment) seed(password string, beforeCommit func()) {
 		beforeCommit()
 	}
 	check(tx.Commit(e.ctx))
+}
+
+func (e *experiment) seedOnboardingDemo() {
+	e.exec(`INSERT INTO applications(public_id,key,name)
+        VALUES($1::uuid,'local-onboarding','Hello Local Onboarding') ON CONFLICT(public_id) DO NOTHING`, onboardingApplicationID)
+	e.exec(`INSERT INTO application_dispatch_policy(application_id,push_ttl_seconds,key_ttl_seconds)
+        SELECT id,3600,86400 FROM applications WHERE public_id=$1::uuid
+        ON CONFLICT(application_id) DO NOTHING`, onboardingApplicationID)
+	e.exec(`INSERT INTO application_onboarding_verifier_scopes(role_id,application_id)
+        SELECT 'local_onboarding_verifier'::regrole::oid,id FROM applications WHERE public_id=$1::uuid
+        ON CONFLICT(role_id) DO UPDATE SET application_id=EXCLUDED.application_id`, onboardingApplicationID)
+	var status string
+	var revision int64
+	var greenfield bool
+	var scopeMatches bool
+	var dispatchHeld bool
+	err := e.db.QueryRow(e.ctx, `SELECT a.status,a.revision,o.greenfield,
+        EXISTS(SELECT FROM application_onboarding_verifier_scopes s
+          WHERE s.role_id='local_onboarding_verifier'::regrole::oid AND s.application_id=a.id),
+        EXISTS(SELECT FROM application_dispatch_policy p WHERE p.application_id=a.id
+          AND p.dispatch_mode='HELD' AND p.hold_new AND NOT p.coverage_approved)
+        FROM applications a JOIN application_onboarding o ON o.application_id=a.id
+        WHERE a.public_id=$1::uuid`, onboardingApplicationID).Scan(&status, &revision, &greenfield, &scopeMatches, &dispatchHeld)
+	check(err)
+	verify(status == "PROVISIONING" && revision >= 1 && greenfield && scopeMatches && dispatchHeld,
+		"local onboarding demo is not a scoped provisioning application with held dispatch")
+}
+
+func runVerifierPool(ctx context.Context, db *pgxpool.Pool) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		reconcileCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		err := reconcileVerifierPool(reconcileCtx, db)
+		cancel()
+		if err != nil && ctx.Err() == nil {
+			log.Printf("local verifier pool reconciliation failed: %v", err)
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+		}
+	}
+}
+
+func reconcileVerifierPool(ctx context.Context, db *pgxpool.Pool) error {
+	for slot := 1; slot <= localVerifierSlots; slot++ {
+		roleName := fmt.Sprintf("local_onboarding_verifier_%d", slot)
+		tx, err := db.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("begin verifier slot reconciliation: %w", err)
+		}
+		appID, err := verifierSlotApplication(ctx, tx, roleName)
+		if err == pgx.ErrNoRows {
+			appID, err = allocateVerifierSlot(ctx, tx, roleName)
+		}
+		if err != nil {
+			_ = tx.Rollback(ctx)
+			return fmt.Errorf("resolve verifier slot %d: %w", slot, err)
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return fmt.Errorf("commit verifier slot %d: %w", slot, err)
+		}
+		if appID != "" {
+			if err := writeVerifierPolicy(slot, appID); err != nil {
+				return fmt.Errorf("write verifier slot %d policy: %w", slot, err)
+			}
+		}
+	}
+	return nil
+}
+
+func verifierSlotApplication(ctx context.Context, tx pgx.Tx, roleName string) (string, error) {
+	var appID string
+	err := tx.QueryRow(ctx, `SELECT a.public_id::text
+        FROM application_onboarding_verifier_scopes s
+        JOIN applications a ON a.id=s.application_id
+        WHERE s.role_id=$1::regrole::oid`, roleName).Scan(&appID)
+	return appID, err
+}
+
+func allocateVerifierSlot(ctx context.Context, tx pgx.Tx, roleName string) (string, error) {
+	if _, err := tx.Exec(ctx, "SELECT pg_advisory_xact_lock($1)", verifierPoolLock); err != nil {
+		return "", err
+	}
+	// Recheck after acquiring the allocator lock in case another local pool won.
+	if appID, err := verifierSlotApplication(ctx, tx, roleName); err == nil {
+		return appID, nil
+	} else if err != pgx.ErrNoRows {
+		return "", err
+	}
+	var applicationID int64
+	var publicID string
+	err := tx.QueryRow(ctx, `SELECT a.id,a.public_id::text
+        FROM applications a
+        JOIN application_onboarding o ON o.application_id=a.id
+        LEFT JOIN application_dispatch_policy p ON p.application_id=a.id
+        WHERE a.status='PROVISIONING' AND o.greenfield AND o.environment='staging'
+          AND o.candidate_configuration_id IS NOT NULL AND o.current_configuration_id IS NULL
+          AND (p.application_id IS NULL OR (p.dispatch_mode='HELD' AND p.hold_new AND NOT p.coverage_approved))
+          AND NOT EXISTS (SELECT FROM application_onboarding_verifier_scopes s WHERE s.application_id=a.id)
+          AND NOT EXISTS (SELECT FROM application_onboarding_verifier_scopes s WHERE s.role_id=$1::regrole::oid)
+        ORDER BY a.id
+        FOR UPDATE OF a,o SKIP LOCKED LIMIT 1`, roleName).Scan(&applicationID, &publicID)
+	if err == pgx.ErrNoRows {
+		return "", nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO application_onboarding_verifier_scopes(role_id,application_id)
+        VALUES($1::regrole::oid,$2)`, roleName, applicationID); err != nil {
+		return "", err
+	}
+	return publicID, nil
+}
+
+func writeVerifierPolicy(slot int, applicationID string) error {
+	roleName := fmt.Sprintf("local_onboarding_verifier_%d", slot)
+	policy := map[string]any{
+		"application_id":   applicationID,
+		"environment":      "staging",
+		"credential_root":  "/var/lib/hello/credentials/" + applicationID + "/staging",
+		"database_url":     fmt.Sprintf("postgresql://%s:fixture-only@postgres:5432/notification_integration?sslmode=verify-full&sslrootcert=/etc/hello/postgres-ca.crt&connect_timeout=3", roleName),
+		"poll_interval_ms": 1000,
+	}
+	contents, err := json.MarshalIndent(policy, "", "  ")
+	if err != nil {
+		return err
+	}
+	contents = append(contents, '\n')
+	path := fmt.Sprintf("/local-config/generated/controlplane-slot-%d.json", slot)
+	if previous, err := os.ReadFile(path); err == nil && bytes.Equal(previous, contents) {
+		return nil
+	}
+	temporary := path + ".new"
+	if err := os.WriteFile(temporary, contents, 0600); err != nil {
+		return err
+	}
+	if err := os.Chmod(temporary, 0600); err != nil {
+		_ = os.Remove(temporary)
+		return err
+	}
+	if err := os.Rename(temporary, path); err != nil {
+		_ = os.Remove(temporary)
+		return err
+	}
+	return nil
 }
 
 func readFile(path string) string {
@@ -230,8 +386,18 @@ func main() {
 		return
 	}
 	testSeed := len(os.Args) == 2 && os.Args[1] == "--test-seed-recovery"
-	if len(os.Args) != 1 && !testSeed {
+	verifierPool := len(os.Args) == 2 && os.Args[1] == "verifier-pool"
+	if len(os.Args) != 1 && !testSeed && !verifierPool {
 		log.Fatal("invalid local setup command")
+	}
+	if verifierPool {
+		ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer cancel()
+		db, err := pgxpool.New(ctx, dsn)
+		check(err)
+		defer db.Close()
+		runVerifierPool(ctx, db)
+		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -283,6 +449,9 @@ func main() {
 	} else {
 		check(db.QueryRow(ctx, "SELECT id,public_id::text FROM applications WHERE key='load-fixture' AND status='ACTIVE'").Scan(&e.app, &e.public))
 	}
+	e.exec(`UPDATE staff_users SET role_id=(SELECT id FROM roles WHERE name='SUPER_ADMIN')
+        WHERE email='developer@hello.local' AND role_id<>(SELECT id FROM roles WHERE name='SUPER_ADMIN')`)
+	e.seedOnboardingDemo()
 	e.exec("UPDATE notification_runtime SET sealed=false,migration_hold=false")
 	e.approveBindings()
 	e.releaseDispatch()
@@ -311,7 +480,7 @@ func main() {
 	delivery["poll_interval_ms"] = 1000
 	delivery["page_size"] = 100
 	writeJSON("scheduler.json", delivery)
-	writeJSON("application.json", map[string]any{"id": e.public})
+	writeJSON("application.json", map[string]any{"id": e.public, "onboarding_id": onboardingApplicationID})
 	log.Print("local application and daemon policies ready; no notification sent")
 }
 func gateway() {

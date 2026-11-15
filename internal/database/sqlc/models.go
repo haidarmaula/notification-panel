@@ -75,6 +75,156 @@ type ApplicationLifecycleGrant struct {
 	AppliedAt           pgtype.Timestamptz `db:"applied_at"`
 }
 
+type ApplicationOnboarding struct {
+	ApplicationID            int64              `db:"application_id"`
+	Revision                 int64              `db:"revision"`
+	Greenfield               bool               `db:"greenfield"`
+	Environment              pgtype.Text        `db:"environment"`
+	EnrollmentProfileID      pgtype.UUID        `db:"enrollment_profile_id"`
+	EnrollmentPlatforms      []byte             `db:"enrollment_platforms"`
+	CandidateConfigurationID pgtype.UUID        `db:"candidate_configuration_id"`
+	CurrentConfigurationID   pgtype.UUID        `db:"current_configuration_id"`
+	CohortID                 pgtype.UUID        `db:"cohort_id"`
+	RuntimeGeneration        int64              `db:"runtime_generation"`
+	CreatedAt                pgtype.Timestamptz `db:"created_at"`
+	UpdatedAt                pgtype.Timestamptz `db:"updated_at"`
+}
+
+type ApplicationOnboardingApproval struct {
+	ID                  pgtype.UUID        `db:"id"`
+	ApplicationID       int64              `db:"application_id"`
+	Kind                string             `db:"kind"`
+	ConfigurationID     pgtype.UUID        `db:"configuration_id"`
+	ProfileRevision     int64              `db:"profile_revision"`
+	OriginEpoch         pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch         pgtype.UUID        `db:"source_epoch"`
+	ApplicationRevision int64              `db:"application_revision"`
+	DispatchRevision    int64              `db:"dispatch_revision"`
+	CohortID            pgtype.UUID        `db:"cohort_id"`
+	IssuerKeyID         string             `db:"issuer_key_id"`
+	EvidenceSha256      []byte             `db:"evidence_sha256"`
+	IssuedAt            pgtype.Timestamptz `db:"issued_at"`
+	ExpiresAt           pgtype.Timestamptz `db:"expires_at"`
+	RevokedAt           pgtype.Timestamptz `db:"revoked_at"`
+	ConsumedAt          pgtype.Timestamptz `db:"consumed_at"`
+}
+
+type ApplicationOnboardingIngestion struct {
+	ID                    pgtype.UUID        `db:"id"`
+	ApplicationID         int64              `db:"application_id"`
+	ActorID               int64              `db:"actor_id"`
+	SessionID             pgtype.UUID        `db:"session_id"`
+	SessionEpoch          pgtype.UUID        `db:"session_epoch"`
+	AuthEpoch             int64              `db:"auth_epoch"`
+	ExpectedRevision      int64              `db:"expected_revision"`
+	IdempotencyKey        pgtype.UUID        `db:"idempotency_key"`
+	RequestFingerprint    []byte             `db:"request_fingerprint"`
+	FingerprintKeyVersion int32              `db:"fingerprint_key_version"`
+	ConfigurationID       pgtype.UUID        `db:"configuration_id"`
+	Environment           string             `db:"environment"`
+	TargetProjectID       string             `db:"target_project_id"`
+	ServiceAccountEmail   string             `db:"service_account_email"`
+	State                 string             `db:"state"`
+	ExpiresAt             pgtype.Timestamptz `db:"expires_at"`
+	CreatedAt             pgtype.Timestamptz `db:"created_at"`
+}
+
+type ApplicationOnboardingOperation struct {
+	ID                          pgtype.UUID        `db:"id"`
+	ApplicationID               int64              `db:"application_id"`
+	Kind                        string             `db:"kind"`
+	State                       string             `db:"state"`
+	ActorID                     int64              `db:"actor_id"`
+	SessionID                   pgtype.UUID        `db:"session_id"`
+	SessionEpoch                pgtype.UUID        `db:"session_epoch"`
+	AuthEpoch                   int64              `db:"auth_epoch"`
+	IdempotencyKey              pgtype.UUID        `db:"idempotency_key"`
+	RequestFingerprint          []byte             `db:"request_fingerprint"`
+	FingerprintKeyVersion       int32              `db:"fingerprint_key_version"`
+	ConfigurationID             pgtype.UUID        `db:"configuration_id"`
+	ApprovalID                  pgtype.UUID        `db:"approval_id"`
+	CohortID                    pgtype.UUID        `db:"cohort_id"`
+	TestInstallationID          pgtype.UUID        `db:"test_installation_id"`
+	InstallationIds             []pgtype.UUID      `db:"installation_ids"`
+	Reason                      string             `db:"reason"`
+	ExpectedSetupRevision       int64              `db:"expected_setup_revision"`
+	ExpectedApplicationRevision int64              `db:"expected_application_revision"`
+	ExpectedDispatchRevision    int64              `db:"expected_dispatch_revision"`
+	OriginEpoch                 pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch                 pgtype.UUID        `db:"source_epoch"`
+	LeaseOwner                  pgtype.UUID        `db:"lease_owner"`
+	LeaseToken                  int64              `db:"lease_token"`
+	LeaseExpiresAt              pgtype.Timestamptz `db:"lease_expires_at"`
+	Attempts                    int32              `db:"attempts"`
+	NotBefore                   pgtype.Timestamptz `db:"not_before"`
+	CreatedAt                   pgtype.Timestamptz `db:"created_at"`
+	CompletedAt                 pgtype.Timestamptz `db:"completed_at"`
+	CompletedBy                 pgtype.UUID        `db:"completed_by"`
+	ResultingRevision           pgtype.Int8        `db:"resulting_revision"`
+	FailureCode                 pgtype.Text        `db:"failure_code"`
+}
+
+type ApplicationOnboardingRequest struct {
+	ApplicationID         int64              `db:"application_id"`
+	ActorID               int64              `db:"actor_id"`
+	Kind                  string             `db:"kind"`
+	IdempotencyKey        pgtype.UUID        `db:"idempotency_key"`
+	RequestFingerprint    []byte             `db:"request_fingerprint"`
+	FingerprintKeyVersion int32              `db:"fingerprint_key_version"`
+	ResponseData          []byte             `db:"response_data"`
+	CreatedAt             pgtype.Timestamptz `db:"created_at"`
+	ExpiresAt             pgtype.Timestamptz `db:"expires_at"`
+}
+
+type ApplicationOnboardingVerifierScope struct {
+	RoleID        pgtype.Uint32 `db:"role_id"`
+	ApplicationID int64         `db:"application_id"`
+}
+
+type ApplicationProviderCheck struct {
+	ID              pgtype.UUID        `db:"id"`
+	ApplicationID   int64              `db:"application_id"`
+	ConfigurationID pgtype.UUID        `db:"configuration_id"`
+	OperationID     pgtype.UUID        `db:"operation_id"`
+	Kind            string             `db:"kind"`
+	Outcome         string             `db:"outcome"`
+	OriginEpoch     pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch     pgtype.UUID        `db:"source_epoch"`
+	BindingID       pgtype.Int8        `db:"binding_id"`
+	BindingEpoch    pgtype.Int8        `db:"binding_epoch"`
+	RouteRevision   pgtype.Int8        `db:"route_revision"`
+	CheckedAt       pgtype.Timestamptz `db:"checked_at"`
+	ExpiresAt       pgtype.Timestamptz `db:"expires_at"`
+	FailureCode     pgtype.Text        `db:"failure_code"`
+}
+
+type ApplicationProviderConfiguration struct {
+	ID                  pgtype.UUID        `db:"id"`
+	ApplicationID       int64              `db:"application_id"`
+	Version             int64              `db:"version"`
+	Environment         string             `db:"environment"`
+	TargetProjectID     string             `db:"target_project_id"`
+	ServiceAccountEmail string             `db:"service_account_email"`
+	FileReference       pgtype.UUID        `db:"file_reference"`
+	State               string             `db:"state"`
+	CreatedBy           int64              `db:"created_by"`
+	CreatedAt           pgtype.Timestamptz `db:"created_at"`
+}
+
+type ApplicationRuntimeAcknowledgement struct {
+	ApplicationID   int64              `db:"application_id"`
+	Component       string             `db:"component"`
+	Generation      int64              `db:"generation"`
+	ConfigurationID pgtype.UUID        `db:"configuration_id"`
+	ProfileRevision int64              `db:"profile_revision"`
+	PolicySha256    []byte             `db:"policy_sha256"`
+	OriginEpoch     pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch     pgtype.UUID        `db:"source_epoch"`
+	ExecutorID      pgtype.UUID        `db:"executor_id"`
+	LeaseExpiresAt  pgtype.Timestamptz `db:"lease_expires_at"`
+	AcknowledgedAt  pgtype.Timestamptz `db:"acknowledged_at"`
+}
+
 type ApplicationStaffGrant struct {
 	ApplicationID int64              `db:"application_id"`
 	StaffID       int64              `db:"staff_id"`

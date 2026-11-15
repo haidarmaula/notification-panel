@@ -39,6 +39,8 @@ The diagram shows logical handoffs, not mandatory machines or a single sequentia
 | `cmd/scheduler` | Due schedules, send-outbox drain, queued recovery, expired replay-claim cleanup | Provider submission |
 | `cmd/worker`, `admission_only` | Verify send source, persist audience/intents or quarantine evidence, then acknowledge consumption | Provider submission |
 | `cmd/worker`, `delivery_only` | Poll one configured application's durable delivery work, call FCM, recover/finalize work, drain delivery updates | Consume the send topic as admission |
+| `cmd/provisioner` | Optional root-owned credential staging over reserved, verified mTLS | Lifecycle changes, Docker deployment or dispatch release |
+| `cmd/controlplane` | Optional app-scoped OAuth verification with fenced DB completion | FCM sends, automatic activation or pilot/full release |
 | `cmd/bootstrap` | First super-admin account using the migration-seeded SUPER_ADMIN role | Seed roles or activate mobile delivery |
 | `cmd/requeue` | Restricted operator reprocessing | Ordinary staff HTTP send workflow |
 | `cmd/retention` | Policy-controlled maintenance | Unrestricted deletion or an automatic part of API startup |

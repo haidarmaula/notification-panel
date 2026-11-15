@@ -25,14 +25,139 @@ services:
       HELLO_PROVIDER_LOCAL: synthetic
   worker-fixture:
     volumes:
-      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}:/local-tls:ro'
-      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}:/local-config'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/ca.crt:/local-tls/ca.crt:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/client.crt:/local-tls/client.crt:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/client.key:/local-tls/client.key:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/seed-settings.json:/local-config/settings.json:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/generated:/local-config/generated'
   server:
     image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
-    entrypoint: [/fixture-bin/server]
+    user: '0:0'
+    entrypoint: [bash, -ec]
+    command:
+      - |
+        install -d -o root -g root -m 0750 /etc/hello
+        install -o root -g root -m 0640 /policy-input/onboarding.json /etc/hello/onboarding.json
+        exec /fixture-bin/server --local-onboarding
     env_file: ['${HELLO_LOCAL_CONFIG_DIR:?local config required}/server.env']
     volumes:
       - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/onboarding-policy.json:/policy-input/onboarding.json:ro'
+    networks: [delivery]
+  provisioner:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    user: '0:0'
+    entrypoint: [bash, -ec]
+    command:
+      - |
+        install -d -o root -g root -m 0750 /etc/hello
+        install -o root -g root -m 0644 /local-tls/postgres-ca.crt /etc/hello/postgres-ca.crt
+        install -o root -g root -m 0640 /policy-input/provisioner.json /etc/hello/provisioner.json
+        install -d -o root -g 65532 -m 0750 /var/lib/hello/credentials
+        exec env -i PATH=/usr/bin:/bin /fixture-bin/provisioner
+    network_mode: service:server
+    depends_on:
+      server:
+        condition: service_started
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/provisioner-policy.json:/policy-input/provisioner.json:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/ca.crt:/local-tls/postgres-ca.crt:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/provisioner.crt:/local-tls/server.crt:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/provisioner.key:/local-tls/server.key:ro'
+      - onboarding-credentials:/var/lib/hello/credentials
+  controlplane:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    user: '0:0'
+    entrypoint: [bash, -ec]
+    command:
+      - |
+        install -d -o root -g root -m 0750 /etc/hello
+        install -o root -g root -m 0644 /local-tls/postgres-ca.crt /etc/hello/postgres-ca.crt
+        install -o root -g root -m 0644 /local-tls/postgres-ca.crt /etc/ssl/certs/ca-certificates.crt
+        install -o root -g root -m 0640 /policy-input/controlplane.json /etc/hello/controlplane.json
+        exec env -i PATH=/usr/bin:/bin /fixture-bin/controlplane
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/controlplane-policy.json:/policy-input/controlplane.json:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/ca.crt:/local-tls/postgres-ca.crt:ro'
+      - onboarding-credentials:/var/lib/hello/credentials:ro
+    networks: [delivery]
+  verifier-pool:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    entrypoint: [bash, -ec]
+    command:
+      - |
+        install -d -o root -g root -m 0750 /etc/hello
+        install -o root -g root -m 0644 /local-tls/postgres-ca.crt /etc/hello/ca.crt
+        exec env -i PATH=/usr/bin:/bin /fixture-bin/setup verifier-pool
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/generated:/local-config/generated'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/ca.crt:/local-tls/postgres-ca.crt:ro'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks: [delivery]
+  controlplane-slot-1:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    entrypoint: [bash, -ec]
+    command:
+      - |
+        while [ ! -s /policy-input/controlplane-slot-1.json ]; do sleep 4; done
+        install -d -o root -g root -m 0750 /etc/hello
+        install -o root -g root -m 0644 /local-tls/postgres-ca.crt /etc/hello/postgres-ca.crt
+        install -o root -g root -m 0644 /local-tls/postgres-ca.crt /etc/ssl/certs/ca-certificates.crt
+        install -o root -g root -m 0640 /policy-input/controlplane-slot-1.json /etc/hello/controlplane.json
+        exec env -i PATH=/usr/bin:/bin /fixture-bin/controlplane
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/generated:/policy-input:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/ca.crt:/local-tls/postgres-ca.crt:ro'
+      - onboarding-credentials:/var/lib/hello/credentials:ro
+    depends_on:
+      verifier-pool:
+        condition: service_started
+    networks: [delivery]
+  controlplane-slot-2:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    entrypoint: [bash, -ec]
+    command:
+      - |
+        while [ ! -s /policy-input/controlplane-slot-2.json ]; do sleep 4; done
+        install -d -o root -g root -m 0750 /etc/hello
+        install -o root -g root -m 0644 /local-tls/postgres-ca.crt /etc/hello/postgres-ca.crt
+        install -o root -g root -m 0644 /local-tls/postgres-ca.crt /etc/ssl/certs/ca-certificates.crt
+        install -o root -g root -m 0640 /policy-input/controlplane-slot-2.json /etc/hello/controlplane.json
+        exec env -i PATH=/usr/bin:/bin /fixture-bin/controlplane
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/generated:/policy-input:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/ca.crt:/local-tls/postgres-ca.crt:ro'
+      - onboarding-credentials:/var/lib/hello/credentials:ro
+    depends_on:
+      verifier-pool:
+        condition: service_started
+    networks: [delivery]
+  controlplane-slot-3:
+    image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
+    entrypoint: [bash, -ec]
+    command:
+      - |
+        while [ ! -s /policy-input/controlplane-slot-3.json ]; do sleep 4; done
+        install -d -o root -g root -m 0750 /etc/hello
+        install -o root -g root -m 0644 /local-tls/postgres-ca.crt /etc/hello/postgres-ca.crt
+        install -o root -g root -m 0644 /local-tls/postgres-ca.crt /etc/ssl/certs/ca-certificates.crt
+        install -o root -g root -m 0640 /policy-input/controlplane-slot-3.json /etc/hello/controlplane.json
+        exec env -i PATH=/usr/bin:/bin /fixture-bin/controlplane
+    volumes:
+      - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/generated:/policy-input:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/ca.crt:/local-tls/postgres-ca.crt:ro'
+      - onboarding-credentials:/var/lib/hello/credentials:ro
+    depends_on:
+      verifier-pool:
+        condition: service_started
     networks: [delivery]
   api-tls:
     image: postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d
@@ -69,6 +194,7 @@ services:
 volumes:
   local-postgres:
   local-kafka:
+  onboarding-credentials:
 
 networks:
   ingress:

@@ -15,7 +15,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 SEED = "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d"
-ROLES = ("server", "bootstrap", "worker", "scheduler", "requeue", "retention", "dashboard")
+ROLES = ("server", "bootstrap", "worker", "scheduler", "requeue", "retention", "dashboard", "controlplane")
 OFFLINE = ["--rm", "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"]
 
 
@@ -44,6 +44,8 @@ def policies(directory):
     return {"server.json": {"database_url": closed_db, "api_key": fixture_key(), "mobile_policy_file": "",
                             "staff_tokens": staff, "ingress": {"endpoint": endpoint, "gateway_ips": ["127.0.0.1"],
                             "ip_per_minute": 120, "auth_ip_per_minute": 8, "auth_total_per_minute": 60, "concurrent_requests": 4}},
+            "controlplane.json": {"application_id":"11111111-1111-4111-8111-111111111111", "environment":"staging",
+                "credential_root":"/etc/hello/credentials", "database_url":closed_db},
             "bootstrap.json": {"database_url": closed_db, "admin_name": "Fixture", "admin_email": "fixture@example.invalid",
                                "admin_password": fixture_key()},
             "dashboard.json": {"origin": "https://dashboard.example.invalid", "upstream": "https://127.0.0.1:1", "api_key": fixture_key(),
@@ -93,6 +95,8 @@ def main():
             for role, image in images.items():
                 if role in ("server", "bootstrap"):
                     expect_denial(flags, image, role + " database startup failed")
+                elif role == "controlplane":
+                    expect_denial(flags,image,"control-plane database unavailable")
                 elif role == "dashboard":
                     container = docker("run", "-d", *[f for f in flags if f != "--rm"], image, capture_output=True, text=True).stdout.strip()
                     try:
@@ -107,11 +111,11 @@ def main():
                     docker("run", *OFFLINE, image, "--help", timeout=30)
                 print(f"{role} {image} passed offline startup", flush=True)
             mount_policies(volume, bundle, 0o660)
-            for role in ("server", "bootstrap", "dashboard"):
-                expect_denial(flags, images[role], "invalid protected dashboard configuration" if role == "dashboard" else "invalid " + role + " configuration")
+            for role in ("server", "bootstrap", "dashboard", "controlplane"):
+                expect_denial(flags, images[role], "invalid protected dashboard configuration" if role == "dashboard" else "invalid control-plane configuration" if role == "controlplane" else "invalid " + role + " configuration")
     finally:
         docker("volume", "rm", volume)
-    print("All seven images passed. Group-writable deployed policies were rejected.")
+    print(f"All {len(ROLES)} images passed. Group-writable deployed policies were rejected.")
 
 
 if __name__ == "__main__":

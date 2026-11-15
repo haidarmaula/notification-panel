@@ -8,10 +8,13 @@ import (
 	"strings"
 	"testing"
 
+	"context"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/require"
 	"hello/internal/config"
 	"hello/internal/database/sqlc"
+	"hello/internal/features/applications"
+	"hello/internal/provisioning"
 )
 
 func TestServerRouteRetirement(t *testing.T) {
@@ -58,12 +61,34 @@ func TestServerRouteRetirement(t *testing.T) {
 		require.True(t, ok, route.Pattern)
 		request := httptest.NewRequest(method, placeholder.ReplaceAllString(path, "123"), nil)
 		_, pattern := mux.Handler(request)
-		if route.Disposition == "configured-mobile" {
+		if route.Disposition == "configured-mobile" || route.Disposition == "configured-onboarding" {
 			require.Empty(t, pattern, route.Pattern)
 		} else {
 			require.Equal(t, route.Pattern, pattern)
 		}
 	}
+	key := make([]byte, 32)
+	for i := range key {
+		key[i] = byte(i + 1)
+	}
+	service, err := applications.NewOnboardingService(sqlc.New(pool), pool, applications.OnboardingSettings{FingerprintKey: key, FingerprintKeyVersion: 1, Stager: routeOnlyStager{}})
+	require.NoError(t, err)
+	enabled := serverRoutes(sqlc.New(pool), pool, &config.ServerConfig{APIKey: "fixture-key"}, service)
+	for _, route := range inventory.Routes {
+		if route.Disposition != "configured-onboarding" {
+			continue
+		}
+		method, path, ok := strings.Cut(route.Pattern, " ")
+		require.True(t, ok)
+		request := httptest.NewRequest(method, placeholder.ReplaceAllString(path, "123"), nil)
+		_, pattern := enabled.Handler(request)
+		require.Equal(t, route.Pattern, pattern)
+		denied := httptest.NewRecorder()
+		enabled.ServeHTTP(denied, request)
+		require.Equal(t, 401, denied.Code, route.Pattern)
+		require.Equal(t, "no-store", denied.Header().Get("Cache-Control"), route.Pattern)
+	}
+
 	for _, route := range retiredRoutes {
 		method, path, ok := strings.Cut(route, " ")
 		require.True(t, ok, route)
@@ -72,4 +97,11 @@ func TestServerRouteRetirement(t *testing.T) {
 		mux.ServeHTTP(response, request)
 		require.Equal(t, 404, response.Code, route)
 	}
+}
+
+// Route matching/auth rejection must never publish a credential or reach a DB.
+type routeOnlyStager struct{}
+
+func (routeOnlyStager) Stage(context.Context, provisioning.StageRequest) (provisioning.StageResult, error) {
+	panic("route test reached credential publication")
 }

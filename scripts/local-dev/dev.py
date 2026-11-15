@@ -2,6 +2,7 @@
 """Persistent, isolated development stack. Never reads the repository .env."""
 
 import argparse
+import base64
 import contextlib
 from datetime import datetime, timedelta, timezone
 import fcntl
@@ -27,7 +28,13 @@ TLS = STATE / "tls"
 BIN = STATE / "bin"
 LOGS = STATE / "logs"
 PROJECT = "hello-local"
-SERVICES = ["server", "api-tls", "admission", "delivery-worker", "scheduler"]
+SERVICES = ["server", "api-tls", "admission", "delivery-worker", "scheduler", "provisioner", "controlplane",
+            "verifier-pool", "controlplane-slot-1", "controlplane-slot-2", "controlplane-slot-3"]
+ONBOARDING_APP_ID = "10000000-0000-4000-8000-000000000002"
+ONBOARDING_PROFILE_ID = "80000000-0000-4000-8000-000000000001"
+ONBOARDING_IDENTIFIER = "com.hello.local.onboarding"
+ONBOARDING_CLIENT_IDENTITY = "spiffe://hello/local/server"
+CREDENTIAL_ROOT = "/var/lib/hello/credentials"
 TOPICS = ["notification.send.requested", "notification.delivery.updated"]
 
 
@@ -97,22 +104,46 @@ def docker_ready():
 def validate_compose():
     config = json.loads(compose("config", "--format", "json", capture=True))
     for name, service in config["services"].items():
+        ports = service.get("ports", [])
+        if name == "provisioner":
+            if service.get("network_mode") != "service:server" or service.get("networks") or ports:
+                raise RuntimeError("Provisioner must remain private to the local API network namespace")
+            continue
         if set(service["networks"]) != ({"delivery", "ingress"} if name == "api-tls" else {"delivery"}):
             raise RuntimeError(f"Unexpected external network on {name}")
-        ports = service.get("ports", [])
         if name != "api-tls" and ports:
             raise RuntimeError(f"Unexpected published port on {name}")
         if any(port.get("host_ip") != "127.0.0.1" for port in ports):
             raise RuntimeError("Development listeners must remain on loopback")
     if not config["networks"]["delivery"].get("internal"):
         raise RuntimeError("Provider isolation is required")
+    pool = config["services"].get("verifier-pool")
+    if not pool:
+        raise RuntimeError("Local onboarding verifier pool is required")
+    mounts = {mount["target"]: mount for mount in pool.get("volumes", [])}
+    if set(mounts) != {"/fixture-bin", "/local-config/generated", "/local-tls/postgres-ca.crt"}:
+        raise RuntimeError("Verifier pool must see only its binary, generated policy directory and database CA")
+    if mounts["/fixture-bin"].get("read_only") is not True or mounts["/local-tls/postgres-ca.crt"].get("read_only") is not True:
+        raise RuntimeError("Verifier pool binaries and database CA must be read-only")
+    if mounts["/local-config/generated"].get("read_only") is True:
+        raise RuntimeError("Verifier pool needs its generated policy directory writable")
+    for slot in range(1, 4):
+        service = config["services"].get(f"controlplane-slot-{slot}")
+        if not service:
+            raise RuntimeError(f"Local onboarding verifier slot {slot} is required")
+        mounts = {mount["target"]: mount for mount in service.get("volumes", [])}
+        if set(mounts) != {"/fixture-bin", "/policy-input", "/local-tls/postgres-ca.crt", "/var/lib/hello/credentials"}:
+            raise RuntimeError("Scoped verifier may see only its binary, generated policies, CA and credential volume")
+        if any(mount.get("read_only") is not True for mount in mounts.values()):
+            raise RuntimeError("Scoped verifier mounts must be read-only")
 
 
 def build(architecture):
     env = os.environ.copy()
     env.update(GOOS="linux", GOARCH=architecture, CGO_ENABLED="0", GOWORK="off")
     for name, target in (("server", "./cmd/server"), ("worker", "./cmd/worker"),
-                         ("scheduler", "./cmd/scheduler"), ("provider", "./scripts/integration-provider.go"),
+                         ("scheduler", "./cmd/scheduler"), ("provisioner", "./cmd/provisioner"),
+                         ("controlplane", "./cmd/controlplane"), ("provider", "./scripts/integration-provider.go"),
                          ("setup", "./scripts/local-dev/setup.go")):
         print(f"Building {name}…", flush=True)
         temporary = BIN / (name + ".new")
@@ -132,6 +163,7 @@ def configure():
                                 "api_key": secrets.token_hex(32), "access": secrets.token_hex(32),
                                 "refresh": secrets.token_hex(32)})
     values = json.loads(settings.read_text())
+    private_json(CONFIG / "seed-settings.json", {"password": values["password"]})
     env = {"DB_HOST": "postgres", "DB_PORT": "5432", "DB_USER": "integration", "DB_PASSWORD": "integration_only",
            "DB_NAME": "notification_integration", "DB_SSLMODE": "disable", "API_KEY": values["api_key"],
            "ACCESS_SECRET": values["access"], "REFRESH_SECRET": values["refresh"],
@@ -144,6 +176,79 @@ def configure():
                  "api_key_file": str(CONFIG / "api-key"), "upstream_ca_file": str(TLS / "ca.crt"),
                  "upstream_cert_file": str(TLS / "client.crt"), "upstream_key_file": str(TLS / "client.key"),
                  "listen_address": "127.0.0.1:18090", "assets_directory": "", "development": True, "max_sessions": 100})
+
+
+def configure_onboarding():
+    fingerprint_path = CONFIG / "onboarding-fingerprint-key"
+    if not fingerprint_path.exists():
+        fingerprint_path.write_bytes(secrets.token_bytes(32))
+        fingerprint_path.chmod(0o600)
+    fingerprint_key = fingerprint_path.read_bytes()
+    if len(fingerprint_key) != 32:
+        raise RuntimeError("Local onboarding fingerprint key is invalid")
+    ca = (TLS / "ca.crt").read_text()
+    provisioner_certificate = (TLS / "provisioner.crt").read_text()
+    provisioner_private_key = (TLS / "provisioner.key").read_text()
+    client_certificate = (TLS / "onboarding-client.crt").read_text()
+    client_private_key = (TLS / "onboarding-client.key").read_text()
+    database_root = "/etc/hello/postgres-ca.crt"
+    provisioner_database = (
+        "postgresql://local_onboarding_provisioner:fixture-only@postgres:5432/notification_integration"
+        f"?sslmode=verify-full&sslrootcert={database_root}&connect_timeout=3"
+    )
+    verifier_database = (
+        "postgresql://local_onboarding_verifier:fixture-only@postgres:5432/notification_integration"
+        f"?sslmode=verify-full&sslrootcert={database_root}&connect_timeout=3"
+    )
+    private_json(CONFIG / "onboarding-policy.json", {
+        "fingerprint_key": base64.b64encode(fingerprint_key).decode("ascii"),
+        "fingerprint_key_version": 1,
+        "provisioner_url": "https://localhost:8443",
+        "ca_pem": ca,
+        "client_certificate_pem": client_certificate,
+        "client_private_key_pem": client_private_key,
+        "profiles": [{
+            "id": ONBOARDING_PROFILE_ID,
+            "name": "Hello Local synthetic Android",
+            "platforms": [{"platform": "ANDROID", "application_identifiers": [ONBOARDING_IDENTIFIER]}],
+        }],
+    })
+    private_json(CONFIG / "provisioner-policy.json", {
+        "listen_address": "127.0.0.1:8443",
+        "credential_root": CREDENTIAL_ROOT,
+        "database_url": provisioner_database,
+        "ingress_identity": ONBOARDING_CLIENT_IDENTITY,
+        "ca_pem": ca,
+        "server_certificate_pem": provisioner_certificate,
+        "server_private_key_pem": provisioner_private_key,
+    })
+    private_json(CONFIG / "controlplane-policy.json", {
+        "application_id": ONBOARDING_APP_ID,
+        "environment": "staging",
+        "credential_root": f"{CREDENTIAL_ROOT}/{ONBOARDING_APP_ID}/staging",
+        "database_url": verifier_database,
+        "poll_interval_ms": 1000,
+    })
+    private_json(CONFIG / "generated/onboarding.json", {
+        "id": ONBOARDING_APP_ID,
+        "profile_id": ONBOARDING_PROFILE_ID,
+        "application_identifier": ONBOARDING_IDENTIFIER,
+    })
+
+
+def clear_verifier_slot_policies():
+    for slot in range(1, 4):
+        (CONFIG / "generated" / f"controlplane-slot-{slot}.json").unlink(missing_ok=True)
+
+
+def preserve_synthetic_account(previous_tls, next_tls):
+    previous_account = previous_tls / "service-account.json"
+    previous_public = previous_tls / "oauth-public.pem"
+    if previous_account.exists() != previous_public.exists():
+        raise RuntimeError("Local synthetic OAuth key pair is incomplete; refusing to rotate retained credentials")
+    if previous_account.exists():
+        shutil.copy2(previous_account, next_tls / "service-account.json")
+        shutil.copy2(previous_public, next_tls / "oauth-public.pem")
 
 
 def migrate(execute=None):
@@ -164,7 +269,8 @@ def prepare_application(execute=None):
     execute = execute or sql
     execute((ROOT / "scripts/local-dev/bootstrap.sql").read_text())
     for name in ("scripts/sql/finalize-application-ownership.sql", "scripts/sql/install-application-lifecycle.sql",
-                 "deploy/postgres/application-lifecycle-grants.sql", "deploy/postgres/dispatch-policy-grants.sql"):
+                 "deploy/postgres/application-lifecycle-grants.sql", "deploy/postgres/dispatch-policy-grants.sql",
+                 "scripts/local-dev/onboarding-bootstrap.sql", "deploy/postgres/onboarding-grants.sql"):
         execute((ROOT / name).read_text())
     if execute("SELECT status FROM applications WHERE key='load-fixture';") == "PROVISIONING":
         grant = execute("SELECT id FROM application_lifecycle_grants WHERE project_id='10000000-0000-4000-8000-000000000001' AND applied_at IS NULL AND revoked_at IS NULL AND expires_at>clock_timestamp()+interval '1 minute' AND destination='ACTIVE' ORDER BY issued_at DESC LIMIT 1;")
@@ -401,17 +507,20 @@ def up():
     if fresh_tls.exists():
         shutil.rmtree(fresh_tls)
     run(["go", "run", "./scripts/integration-certs.go", str(fresh_tls), "--local-dev"])
+    preserve_synthetic_account(TLS, fresh_tls)
     shutil.rmtree(TLS)
     fresh_tls.replace(TLS)
     # The private parent is owner-only; protect the BFF client key explicitly too.
     for path in TLS.glob("*.key"):
         path.chmod(0o600)
+    configure_onboarding()
     compose("up", "-d", "--wait", "--wait-timeout", "120", "postgres", "kafka", "provider-fixture", "worker-fixture")
     migrate()
     for topic in TOPICS:
         compose("exec", "-T", "kafka", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:9094",
                 "--create", "--if-not-exists", "--topic", topic, "--partitions", "1", "--replication-factor", "1")
     seed_application()
+    clear_verifier_slot_policies()
     if not (STATE / "offset-initialized").exists():
         compose("exec", "-T", "kafka", "/opt/kafka/bin/kafka-consumer-groups.sh", "--bootstrap-server", "kafka:9094",
                 "--group", "hello-local-admission-v1", "--topic", TOPICS[0], "--reset-offsets", "--to-earliest", "--execute")
@@ -426,7 +535,7 @@ def up():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["up", "down", "status", "logs", "watch", "check", "smoke", "test-seed", "credentials", "_serve"])
+    parser.add_argument("command", choices=["up", "down", "status", "logs", "watch", "check", "check-onboarding", "smoke", "test-seed", "credentials", "_serve"])
     args = parser.parse_args()
     if args.command == "credentials":
         require_owner()
@@ -455,6 +564,8 @@ def main():
     elif args.command == "logs":
         compose("logs", "--tail", "80", *SERVICES)
         print(f"Frontend/BFF logs: {LOGS}")
+    elif args.command == "check-onboarding":
+        run(["python3", str(ROOT / "scripts/local-dev/onboarding_check.py")], timeout=180)
     else:
         architecture = docker_ready()
         watcher = (STATE / "watcher.lock").open("a")

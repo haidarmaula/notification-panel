@@ -266,7 +266,12 @@ func readBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 			return nil, false
 		}
 	}
-	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, 65536))
+	limit := int64(65536)
+	path := strings.TrimPrefix(r.URL.Path, "/bff/api")
+	if r.Method == http.MethodPut && onboardingRoute(r.Method, path) && strings.HasSuffix(path, "/onboarding/fcm") {
+		limit = 96 * 1024
+	}
+	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, limit))
 	if err != nil {
 		fail(w, 413, "request body too large")
 		return nil, false
@@ -357,7 +362,14 @@ func (s *Server) callWithHeaders(r *http.Request, method, path, query string, bo
 	if token != "" {
 		request.Header.Set("Authorization", "Bearer "+token)
 	}
-	if conditionalRoute(method, strings.TrimPrefix(path, "/api/v1")) {
+	suffix := strings.TrimPrefix(path, "/api/v1")
+	if onboardingRoute(method, suffix) && (method == http.MethodPut || method == http.MethodPost) {
+		for _, name := range []string{"If-Match", "Idempotency-Key"} {
+			if value := r.Header.Get(name); value != "" {
+				request.Header.Set(name, value)
+			}
+		}
+	} else if conditionalRoute(method, suffix) {
 		for _, name := range []string{"If-Match", "If-None-Match"} {
 			if value := r.Header.Get(name); value != "" {
 				request.Header.Set(name, value)
@@ -379,6 +391,12 @@ func (s *Server) callWithHeaders(r *http.Request, method, path, query string, bo
 	return response.StatusCode, raw, response.Header.Clone(), err
 }
 func (s *Server) forward(w http.ResponseWriter, r *http.Request, id string, value *session, path string) {
+	if onboardingRoute(r.Method, path) {
+		if r.URL.RawQuery != "" || r.URL.ForceQuery || len(r.Header.Values("If-Match")) > 1 || len(r.Header.Values("Idempotency-Key")) > 1 {
+			fail(w, http.StatusBadRequest, "invalid onboarding request")
+			return
+		}
+	}
 	body, ok := readBody(w, r)
 	if !ok {
 		return
@@ -424,12 +442,29 @@ func (s *Server) forward(w http.ResponseWriter, r *http.Request, id string, valu
 		fail(w, http.StatusServiceUnavailable, "campaign acceptance is held")
 		return
 	}
+	if onboardingRoute(r.Method, path) && (status == http.StatusTooManyRequests || status == http.StatusServiceUnavailable) {
+		if seconds, err := strconv.ParseUint(headers.Get("Retry-After"), 10, 16); err == nil && seconds > 0 && seconds <= 3600 {
+			w.Header().Set("Retry-After", strconv.FormatUint(seconds, 10))
+		}
+	}
+	if status == http.StatusServiceUnavailable && onboardingRoute(r.Method, path) {
+		fail(w, http.StatusServiceUnavailable, "application onboarding unavailable")
+		return
+	}
 	if status >= 500 || status < 200 || status >= 300 && status < 400 {
 		fail(w, 502, "upstream service unavailable")
 		return
 	}
-	if etag := headers.Get("ETag"); etag != "" && isRegistryPath(path) {
+	if etag := headers.Get("ETag"); etag != "" && (isRegistryPath(path) || onboardingRoute(r.Method, path)) {
 		w.Header().Set("ETag", etag)
+	}
+	if onboardingRoute(r.Method, path) {
+		if replayed := headers.Get("Idempotency-Replayed"); replayed == "true" || replayed == "false" {
+			w.Header().Set("Idempotency-Replayed", replayed)
+		}
+	}
+	if location := onboardingOperationLocation(path, headers.Get("Location")); status == http.StatusAccepted && location != "" {
+		w.Header().Set("Location", location)
 	}
 	if path == "/profile/password" && r.Method == http.MethodPatch && status >= 200 && status < 300 {
 		s.discard(id, value)
@@ -496,6 +531,9 @@ func campaignAcceptancePath(path string) bool {
 }
 
 func allowed(method, path string) bool {
+	if onboardingRoute(method, path) {
+		return true
+	}
 	if path == "/profile/password" {
 		return method == http.MethodPatch
 	}

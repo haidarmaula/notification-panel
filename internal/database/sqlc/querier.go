@@ -13,6 +13,7 @@ import (
 type Querier interface {
 	AbandonExpiredReplayAttempt(ctx context.Context, arg AbandonExpiredReplayAttemptParams) (int64, error)
 	AcquireExecutionLease(ctx context.Context, arg AcquireExecutionLeaseParams) (AcquireExecutionLeaseRow, error)
+	AdvanceApplicationOnboardingRevision(ctx context.Context, arg AdvanceApplicationOnboardingRevisionParams) (int64, error)
 	// The worker has no authority to transfer installation ownership.
 	AdvanceInvalidatedInstallation(ctx context.Context, arg AdvanceInvalidatedInstallationParams) (int64, error)
 	AdvanceMobileInstallation(ctx context.Context, arg AdvanceMobileInstallationParams) (MobileInstallation, error)
@@ -20,10 +21,13 @@ type Querier interface {
 	CampaignAcceptanceReady(ctx context.Context, arg CampaignAcceptanceReadyParams) (bool, error)
 	CampaignHasProtectedChildren(ctx context.Context, arg CampaignHasProtectedChildrenParams) (bool, error)
 	CheckScopedObservedRead(ctx context.Context, arg CheckScopedObservedReadParams) (bool, error)
+	ClaimApplicationOnboardingVerification(ctx context.Context, arg ClaimApplicationOnboardingVerificationParams) (pgtype.UUID, error)
 	ClaimReplayControl(ctx context.Context, arg ClaimReplayControlParams) (int64, error)
 	ClearFinishedReplayClaim(ctx context.Context, arg ClearFinishedReplayClaimParams) (int64, error)
 	ClearScopedCampaignTargets(ctx context.Context, arg ClearScopedCampaignTargetsParams) error
+	CompleteApplicationFCMIngestion(ctx context.Context, arg CompleteApplicationFCMIngestionParams) (int64, error)
 	CompleteCampaignPreparation(ctx context.Context, arg CompleteCampaignPreparationParams) (NotificationPreparation, error)
+	ConfigureApplicationEnrollment(ctx context.Context, arg ConfigureApplicationEnrollmentParams) (ApplicationOnboarding, error)
 	ConsumeMobileOrigin(ctx context.Context, arg ConsumeMobileOriginParams) (int64, error)
 	// ==========================================
 	// COUNT
@@ -52,6 +56,7 @@ type Querier interface {
 	// ==========================================
 	CountNotifications(ctx context.Context) (int64, error)
 	CountNotificationsWithFilters(ctx context.Context, arg CountNotificationsWithFiltersParams) (int64, error)
+	CountRecentApplicationFCMVerifications(ctx context.Context, applicationID int64) (int64, error)
 	// ==========================================
 	// COUNT
 	// ==========================================
@@ -96,6 +101,8 @@ type Querier interface {
 	CountUsersWithFilters(ctx context.Context, arg CountUsersWithFiltersParams) (int64, error)
 	// Registry metadata only. No application activation/deletion/identity reassignment.
 	CreateApplication(ctx context.Context, arg CreateApplicationParams) (Application, error)
+	CreateApplicationOnboardingOperation(ctx context.Context, arg CreateApplicationOnboardingOperationParams) (ApplicationOnboardingOperation, error)
+	CreateApplicationProviderConfiguration(ctx context.Context, arg CreateApplicationProviderConfigurationParams) (ApplicationProviderConfiguration, error)
 	CreateApplicationStaffGrant(ctx context.Context, arg CreateApplicationStaffGrantParams) (ApplicationStaffGrant, error)
 	// ==========================================
 	// CREATE
@@ -246,6 +253,11 @@ type Querier interface {
 	ExpireUnpreparedCampaign(ctx context.Context, arg ExpireUnpreparedCampaignParams) error
 	FailRecoveredDelivery(ctx context.Context, arg FailRecoveredDeliveryParams) (NotificationDeliveryIntent, error)
 	FinalizeExecutionCampaign(ctx context.Context, arg FinalizeExecutionCampaignParams) (int64, error)
+	FindApplicationFCMIngestion(ctx context.Context, arg FindApplicationFCMIngestionParams) (ApplicationOnboardingIngestion, error)
+	FindApplicationOnboardingOperation(ctx context.Context, arg FindApplicationOnboardingOperationParams) (ApplicationOnboardingOperation, error)
+	FindApplicationOnboardingRequest(ctx context.Context, arg FindApplicationOnboardingRequestParams) (ApplicationOnboardingRequest, error)
+	FindOnboardingTestInstallation(ctx context.Context, arg FindOnboardingTestInstallationParams) (int64, error)
+	FinishApplicationOnboardingVerification(ctx context.Context, arg FinishApplicationOnboardingVerificationParams) (bool, error)
 	FinishReplayAttempt(ctx context.Context, arg FinishReplayAttemptParams) (int64, error)
 	FreezeReceiptMetadata(ctx context.Context, arg FreezeReceiptMetadataParams) error
 	// Keep staff row when app/grant is absent, for correct 401/404 distinctions.
@@ -254,6 +266,11 @@ type Querier interface {
 	GetApplicationByPublicID(ctx context.Context, publicID pgtype.UUID) (Application, error)
 	// The M38-managed path treats seed/legacy flags as insufficient for release.
 	GetApplicationDispatchPolicy(ctx context.Context, applicationID int64) (GetApplicationDispatchPolicyRow, error)
+	GetApplicationFCMIngestion(ctx context.Context, arg GetApplicationFCMIngestionParams) (ApplicationOnboardingIngestion, error)
+	GetApplicationOnboarding(ctx context.Context, publicID pgtype.UUID) (GetApplicationOnboardingRow, error)
+	GetApplicationOnboardingApproval(ctx context.Context, arg GetApplicationOnboardingApprovalParams) (ApplicationOnboardingApproval, error)
+	GetApplicationOnboardingOperation(ctx context.Context, arg GetApplicationOnboardingOperationParams) (ApplicationOnboardingOperation, error)
+	GetApplicationProviderConfiguration(ctx context.Context, arg GetApplicationProviderConfigurationParams) (ApplicationProviderConfiguration, error)
 	GetApplicationStaffGrant(ctx context.Context, arg GetApplicationStaffGrantParams) (ApplicationStaffGrant, error)
 	// ==========================================
 	// GET
@@ -269,6 +286,7 @@ type Querier interface {
 	GetExecutionIntentIdentity(ctx context.Context, arg GetExecutionIntentIdentityParams) (GetExecutionIntentIdentityRow, error)
 	GetExecutionProviderRoute(ctx context.Context, arg GetExecutionProviderRouteParams) (GetExecutionProviderRouteRow, error)
 	GetFrozenReceiptMetadata(ctx context.Context, arg GetFrozenReceiptMetadataParams) (GetFrozenReceiptMetadataRow, error)
+	GetLastApplicationOnboardingOperation(ctx context.Context, applicationID int64) (ApplicationOnboardingOperation, error)
 	// ==========================================
 	// GET
 	// ==========================================
@@ -278,6 +296,7 @@ type Querier interface {
 	// ==========================================
 	GetNotificationDeliveryByID(ctx context.Context, id int64) (GetNotificationDeliveryByIDRow, error)
 	GetNotificationStatistics(ctx context.Context, notificationID int64) (GetNotificationStatisticsRow, error)
+	GetOnboardingActorEpoch(ctx context.Context, id int64) (int64, error)
 	GetReceiptFingerprint(ctx context.Context, arg GetReceiptFingerprintParams) ([]byte, error)
 	GetReplayAttempt(ctx context.Context, arg GetReplayAttemptParams) (NotificationReplayAttempt, error)
 	// ==========================================
@@ -324,7 +343,10 @@ type Querier interface {
 	// ==========================================
 	GetUserByID(ctx context.Context, id int64) (User, error)
 	HasActiveSuperAdmin(ctx context.Context) (bool, error)
+	HasApplicationOnboardingMutation(ctx context.Context, applicationID int64) (bool, error)
+	HasApplicationOnboardingVerifier(ctx context.Context, applicationID int64) (bool, error)
 	HasLineageBlockedDeliveryUpdate(ctx context.Context, arg HasLineageBlockedDeliveryUpdateParams) (bool, error)
+	HoldApplicationOnboardingDispatch(ctx context.Context, applicationID int64) (int64, error)
 	HoldCampaignPreparation(ctx context.Context, arg HoldCampaignPreparationParams) error
 	HoldResultDispatch(ctx context.Context, applicationID int64) error
 	InsertDeliveryUpdate(ctx context.Context, arg InsertDeliveryUpdateParams) error
@@ -337,6 +359,8 @@ type Querier interface {
 	InsertReplayRequest(ctx context.Context, arg InsertReplayRequestParams) (int64, error)
 	InsertSendOutbox(ctx context.Context, arg InsertSendOutboxParams) error
 	InsertSendQuarantine(ctx context.Context, arg InsertSendQuarantineParams) (int64, error)
+	ListApplicationOnboardingApprovals(ctx context.Context, applicationID int64) ([]ApplicationOnboardingApproval, error)
+	ListApplicationProviderChecks(ctx context.Context, arg ListApplicationProviderChecksParams) ([]ApplicationProviderCheck, error)
 	// Includes revoked grants; application identity validated by owning service.
 	ListApplicationStaffGrants(ctx context.Context, arg ListApplicationStaffGrantsParams) (ListApplicationStaffGrantsRow, error)
 	// ==========================================
@@ -439,6 +463,7 @@ type Querier interface {
 	LockAcceptanceStaff(ctx context.Context, staffID int64) (int64, error)
 	LockActiveInstallationBinding(ctx context.Context, arg LockActiveInstallationBindingParams) (InstallationBinding, error)
 	LockApplicationByPublicID(ctx context.Context, publicID pgtype.UUID) (Application, error)
+	LockApplicationOnboarding(ctx context.Context, applicationID int64) (ApplicationOnboarding, error)
 	LockCampaignAcceptance(ctx context.Context, arg LockCampaignAcceptanceParams) (LockCampaignAcceptanceRow, error)
 	// Per-device operations read campaign state. Hold it stable against updates
 	// while allowing other deliveries in that campaign to perform their checks.
@@ -507,6 +532,7 @@ type Querier interface {
 	ReplayCleanupContext(ctx context.Context, arg ReplayCleanupContextParams) (ReplayCleanupContextRow, error)
 	ReplayPreparationRetryDue(ctx context.Context, arg ReplayPreparationRetryDueParams) (bool, error)
 	ReplayTargetsSupported(ctx context.Context, arg ReplayTargetsSupportedParams) (bool, error)
+	ReserveApplicationFCMIngestion(ctx context.Context, arg ReserveApplicationFCMIngestionParams) (ApplicationOnboardingIngestion, error)
 	ReserveExecutionAttempt(ctx context.Context, arg ReserveExecutionAttemptParams) (ReserveExecutionAttemptRow, error)
 	ReserveInstallationBindingID(ctx context.Context) (int64, error)
 	ResolveMobileIdentity(ctx context.Context, arg ResolveMobileIdentityParams) (int64, error)
@@ -515,6 +541,7 @@ type Querier interface {
 	RevokeStaffSession(ctx context.Context, arg RevokeStaffSessionParams) (int64, error)
 	RotateStaffSession(ctx context.Context, arg RotateStaffSessionParams) (bool, error)
 	RunRetentionBatch(ctx context.Context, arg RunRetentionBatchParams) (RunRetentionBatchRow, error)
+	SaveApplicationOnboardingRequest(ctx context.Context, arg SaveApplicationOnboardingRequestParams) error
 	ScheduleScopedCampaign(ctx context.Context, arg ScheduleScopedCampaignParams) (ScheduleScopedCampaignRow, error)
 	ScopedSegmentHasReferences(ctx context.Context, segmentID int64) (bool, error)
 	ScopedSegmentNameTaken(ctx context.Context, arg ScopedSegmentNameTakenParams) (bool, error)
@@ -538,10 +565,12 @@ type Querier interface {
 	// SEARCH
 	// ==========================================
 	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]User, error)
+	SetApplicationOnboardingCandidate(ctx context.Context, arg SetApplicationOnboardingCandidateParams) (ApplicationOnboarding, error)
 	// Caller holds app lock; no-op and conditional semantics belong to service.
 	SetApplicationStaffGrantActive(ctx context.Context, arg SetApplicationStaffGrantActiveParams) (ApplicationStaffGrant, error)
 	StaffSessionActive(ctx context.Context, arg StaffSessionActiveParams) (bool, error)
 	StoreSendKey(ctx context.Context, arg StoreSendKeyParams) error
+	SupersedeApplicationOnboardingMutations(ctx context.Context, applicationID int64) error
 	TouchMobileInstallation(ctx context.Context, arg TouchMobileInstallationParams) error
 	// ==========================================
 	// UPDATE
@@ -582,6 +611,7 @@ type Querier interface {
 	// ==========================================
 	UpdateUser(ctx context.Context, arg UpdateUserParams) error
 	UpdateUserStatus(ctx context.Context, arg UpdateUserStatusParams) error
+	VerifyApplicationFCMReservation(ctx context.Context, arg VerifyApplicationFCMReservationParams) (bool, error)
 	WriteDeliveryResult(ctx context.Context, arg WriteDeliveryResultParams) (NotificationDeliveryIntent, error)
 }
 

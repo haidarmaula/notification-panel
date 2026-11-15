@@ -1,6 +1,6 @@
 import { render } from 'solid-js/web';
 import { lazy, ErrorBoundary, Suspense, Show, type Component } from 'solid-js';
-import { Router, Route, Navigate, useLocation } from '@solidjs/router';
+import { Router, Route, Navigate, useLocation, useParams } from '@solidjs/router';
 import { QueryClientProvider } from '@tanstack/solid-query';
 import { AuthProvider, makeQueryClient } from './app/auth';
 import Login from './features/Login';
@@ -34,6 +34,7 @@ const Registry = lazy(() => import('./features/admin/Registry'));
 const RegistryDetail = lazy(() =>
   import('./features/admin/Registry').then((module) => ({ default: module.RegistryDetail })),
 );
+const Onboarding = lazy(() => import('./features/admin/Onboarding'));
 const Uploads = lazy(() => import('./features/management/Activity'));
 const UploadRows = lazy(() =>
   import('./features/management/Activity').then((module) => ({ default: module.UploadRows })),
@@ -69,6 +70,14 @@ const StaffRoute = keyed(Staff);
 const StaffEditorRoute = keyed(StaffEditor);
 const RegistryRoute = keyed(Registry);
 const RegistryDetailRoute = keyed(RegistryDetail);
+const OnboardingRoute = keyed(() => {
+  const params = useParams();
+  return (
+    <Show when={params.managedAppId} keyed>
+      {(id) => <Onboarding applicationID={id} />}
+    </Show>
+  );
+});
 const UploadsRoute = keyed(Uploads);
 const UploadRowsRoute = keyed(UploadRows);
 const AuditRoute = keyed(AuditLog);
@@ -102,6 +111,10 @@ render(() => {
               <Route path="/admin/staff/:staffId" component={StaffEditorRoute} />
               <Route path="/admin/applications" component={RegistryRoute} />
               <Route path="/admin/applications/:managedAppId" component={RegistryDetailRoute} />
+              <Route
+                path="/admin/applications/:managedAppId/onboarding"
+                component={OnboardingRoute}
+              />
               <Route path="/:appId/audit" component={AuditRoute} />
               <Route path="/:appId/uploads" component={UploadsRoute} />
               <Route path="/:appId/uploads/:batchId" component={UploadRowsRoute} />

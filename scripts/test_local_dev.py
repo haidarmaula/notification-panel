@@ -13,8 +13,24 @@ spec.loader.exec_module(dev)
 
 
 def configuration():
-    services = {name: {"networks": {"delivery": {}}} for name in ["postgres", "kafka", "provider-fixture", "delivery-worker"]}
+    services = {name: {"networks": {"delivery": {}}} for name in [
+        "postgres", "kafka", "provider-fixture", "delivery-worker", "server", "controlplane", "verifier-pool",
+        "controlplane-slot-1", "controlplane-slot-2", "controlplane-slot-3",
+    ]}
     services["api-tls"] = {"networks": {"delivery": {}, "ingress": {}}, "ports": [{"host_ip": "127.0.0.1"}]}
+    services["provisioner"] = {"network_mode": "service:server"}
+    services["verifier-pool"]["volumes"] = [
+        {"target": "/fixture-bin", "read_only": True},
+        {"target": "/local-config/generated", "read_only": False},
+        {"target": "/local-tls/postgres-ca.crt", "read_only": True},
+    ]
+    for slot in range(1, 4):
+        services[f"controlplane-slot-{slot}"]["volumes"] = [
+            {"target": "/fixture-bin", "read_only": True},
+            {"target": "/policy-input", "read_only": True},
+            {"target": "/local-tls/postgres-ca.crt", "read_only": True},
+            {"target": "/var/lib/hello/credentials", "read_only": True},
+        ]
     return {"services": services, "networks": {"delivery": {"internal": True}}}
 
 
@@ -41,7 +57,8 @@ class LocalDevelopmentTests(unittest.TestCase):
 
     def test_only_tls_gateway_can_publish_loopback_port(self):
         self.validate(configuration())
-        for service in ("postgres", "provider-fixture", "delivery-worker"):
+        for service in ("postgres", "provider-fixture", "delivery-worker", "controlplane", "verifier-pool",
+                        "controlplane-slot-1", "controlplane-slot-2", "controlplane-slot-3"):
             value = configuration()
             value["services"][service]["ports"] = [{"host_ip": "127.0.0.1"}]
             with self.assertRaises(RuntimeError):
@@ -52,7 +69,8 @@ class LocalDevelopmentTests(unittest.TestCase):
             self.validate(value)
 
     def test_provider_and_delivery_cannot_join_external_network(self):
-        for service in ("provider-fixture", "delivery-worker", "postgres", "kafka"):
+        for service in ("provider-fixture", "delivery-worker", "postgres", "kafka", "controlplane", "verifier-pool",
+                        "controlplane-slot-1", "controlplane-slot-2", "controlplane-slot-3"):
             value = configuration()
             value["services"][service]["networks"]["ingress"] = {}
             with self.assertRaises(RuntimeError):
@@ -61,6 +79,96 @@ class LocalDevelopmentTests(unittest.TestCase):
         value["networks"]["delivery"]["internal"] = False
         with self.assertRaises(RuntimeError):
             self.validate(value)
+
+    def test_verifier_pool_and_scoped_workers_have_minimal_mounts(self):
+        self.validate(configuration())
+        value = configuration()
+        value["services"]["verifier-pool"]["volumes"].append(
+            {"target": "/local-config/settings.json", "read_only": True})
+        with self.assertRaises(RuntimeError):
+            self.validate(value)
+        value = configuration()
+        value["services"]["controlplane-slot-1"]["volumes"][3]["read_only"] = False
+        with self.assertRaises(RuntimeError):
+            self.validate(value)
+
+    def test_up_cleanup_removes_only_regenerable_slot_policies(self):
+        with tempfile.TemporaryDirectory() as directory:
+            generated = Path(directory) / "generated"
+            generated.mkdir()
+            for name in ("controlplane-slot-1.json", "controlplane-slot-2.json", "controlplane-slot-3.json",
+                         "application.json", "onboarding.json"):
+                (generated / name).write_text("synthetic")
+            with patch.object(dev, "CONFIG", Path(directory)):
+                dev.clear_verifier_slot_policies()
+            self.assertEqual(sorted(path.name for path in generated.iterdir()), ["application.json", "onboarding.json"])
+
+    def test_provisioner_is_private_to_server_namespace(self):
+        for change in (
+            {"network_mode": "host"},
+            {"network_mode": "service:server", "networks": {"delivery": {}}},
+            {"network_mode": "service:server", "ports": [{"host_ip": "127.0.0.1"}]},
+        ):
+            value = configuration()
+            value["services"]["provisioner"].update(change)
+            with self.assertRaises(RuntimeError):
+                self.validate(value)
+
+    def test_onboarding_policies_use_synthetic_scoped_credentials(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            config, tls = state / "config", state / "tls"
+            config.mkdir()
+            tls.mkdir()
+            for name, value in {
+                "ca.crt": "fixture-ca", "provisioner.crt": "fixture-provisioner-cert",
+                "provisioner.key": "fixture-provisioner-key", "onboarding-client.crt": "fixture-client-cert",
+                "onboarding-client.key": "fixture-client-key",
+            }.items():
+                (tls / name).write_text(value)
+            with patch.object(dev, "CONFIG", config), patch.object(dev, "TLS", tls):
+                dev.configure_onboarding()
+            server = json.loads((config / "onboarding-policy.json").read_text())
+            provisioner = json.loads((config / "provisioner-policy.json").read_text())
+            controlplane = json.loads((config / "controlplane-policy.json").read_text())
+            metadata = json.loads((config / "generated/onboarding.json").read_text())
+            self.assertEqual(server["provisioner_url"], "https://localhost:8443")
+            self.assertEqual(server["client_certificate_pem"], "fixture-client-cert")
+            self.assertEqual(provisioner["listen_address"], "127.0.0.1:8443")
+            self.assertEqual(provisioner["ingress_identity"], "spiffe://hello/local/server")
+            self.assertEqual(provisioner["credential_root"], dev.CREDENTIAL_ROOT)
+            self.assertEqual(controlplane["application_id"], dev.ONBOARDING_APP_ID)
+            self.assertEqual(controlplane["environment"], "staging")
+            self.assertEqual(controlplane["credential_root"], f"{dev.CREDENTIAL_ROOT}/{dev.ONBOARDING_APP_ID}/staging")
+            self.assertEqual(metadata, {
+                "id": dev.ONBOARDING_APP_ID,
+                "profile_id": dev.ONBOARDING_PROFILE_ID,
+                "application_identifier": dev.ONBOARDING_IDENTIFIER,
+            })
+            for path in (config / "onboarding-policy.json", config / "provisioner-policy.json",
+                         config / "controlplane-policy.json", config / "onboarding-fingerprint-key"):
+                self.assertEqual(path.stat().st_mode & 0o777, 0o600)
+            first_key = (config / "onboarding-fingerprint-key").read_bytes()
+            with patch.object(dev, "CONFIG", config), patch.object(dev, "TLS", tls):
+                dev.configure_onboarding()
+            self.assertEqual((config / "onboarding-fingerprint-key").read_bytes(), first_key)
+
+    def test_local_oauth_key_pair_survives_tls_rotation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            previous, next_tls = root / "previous", root / "next"
+            previous.mkdir()
+            next_tls.mkdir()
+            account = previous / "service-account.json"
+            public_key = previous / "oauth-public.pem"
+            account.write_text("synthetic account")
+            public_key.write_text("synthetic public key")
+            dev.preserve_synthetic_account(previous, next_tls)
+            self.assertEqual((next_tls / account.name).read_text(), "synthetic account")
+            self.assertEqual((next_tls / public_key.name).read_text(), "synthetic public key")
+            public_key.unlink()
+            with self.assertRaises(RuntimeError):
+                dev.preserve_synthetic_account(previous, next_tls)
 
     def test_applied_migrations_are_not_replayed_and_changes_fail_closed(self):
         with tempfile.TemporaryDirectory() as directory:

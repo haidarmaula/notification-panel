@@ -1,4 +1,4 @@
--- Requires migrations through 000041. Apply as the trusted object owner after
+-- Requires migrations through 000044. Apply as the trusted object owner after
 -- the DBA provisions hello_server as a dedicated NOLOGIN role. Create a separate non-superuser LOGIN and grant it
 -- membership in hello_server outside this template; credentials stay with the DBA.
 \set ON_ERROR_STOP on
@@ -91,6 +91,24 @@ INSERT INTO server_grant_spec VALUES
 ('notification_receipt_metadata','UPDATE','delivery_id'),
 ('current_binding_routes','SELECT','application_id,binding_id,revision,destination,origin_epoch,source_epoch,resume_from,cohort_id'),
 ('notification_update_outbox','INSERT','event_id,application_id,notification_id,delivery_id,delivery_version,origin_epoch,source_epoch,payload,occurred_at');
+-- Optional setup endpoints need metadata rights only, never current-config,
+-- lifecycle, verifier evidence or dispatch-release authority.
+INSERT INTO server_grant_spec VALUES
+('application_onboarding','SELECT',NULL),
+('application_onboarding','UPDATE','revision,environment,enrollment_profile_id,enrollment_platforms,candidate_configuration_id,updated_at'),
+('application_provider_configurations','SELECT',NULL),
+('application_provider_configurations','INSERT','id,application_id,version,environment,target_project_id,service_account_email,file_reference,created_by'),
+('application_onboarding_ingestions','SELECT',NULL),
+('application_onboarding_ingestions','INSERT','id,application_id,actor_id,session_id,session_epoch,auth_epoch,expected_revision,idempotency_key,request_fingerprint,fingerprint_key_version,configuration_id,environment,target_project_id,service_account_email,expires_at'),
+('application_onboarding_ingestions','UPDATE','state'),
+('application_onboarding_operations','SELECT',NULL),
+('application_onboarding_operations','INSERT','id,application_id,kind,actor_id,session_id,session_epoch,auth_epoch,idempotency_key,request_fingerprint,fingerprint_key_version,configuration_id,approval_id,cohort_id,test_installation_id,installation_ids,reason,expected_setup_revision,expected_application_revision,expected_dispatch_revision,origin_epoch,source_epoch'),
+('application_onboarding_operations','UPDATE','state,completed_at,failure_code,lease_owner,lease_expires_at'),
+('application_provider_checks','SELECT',NULL),
+('application_onboarding_verifier_scopes','SELECT',NULL),
+('application_onboarding_approvals','SELECT',NULL),
+('application_onboarding_requests','SELECT',NULL),
+('application_onboarding_requests','INSERT','application_id,actor_id,kind,idempotency_key,request_fingerprint,fingerprint_key_version,response_data');
 CREATE TEMP TABLE server_sequence_spec(sequence_name name PRIMARY KEY) ON COMMIT DROP;
 INSERT INTO server_sequence_spec VALUES
 ('staff_users_id_seq'),

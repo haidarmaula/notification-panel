@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"math/big"
 	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"time"
@@ -53,7 +54,7 @@ func generate(directory string, lifetime time.Duration) error {
 	if err := os.WriteFile(filepath.Join(directory, "ca.crt"), pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: rootDER}), 0644); err != nil {
 		return err
 	}
-	for i, name := range []string{"server", "client", "provider"} {
+	for i, name := range []string{"server", "client", "provider", "provisioner", "onboarding-client"} {
 		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 		if err != nil {
 			return err
@@ -67,6 +68,18 @@ func generate(directory string, lifetime time.Duration) error {
 		if name == "provider" {
 			cert.DNSNames = []string{"oauth2.googleapis.com", "fcm.googleapis.com"}
 			cert.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+		}
+		if name == "provisioner" {
+			cert.DNSNames = []string{"localhost"}
+			cert.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}
+		}
+		if name == "onboarding-client" {
+			identity, err := url.Parse("spiffe://hello/local/server")
+			if err != nil {
+				return err
+			}
+			cert.URIs = []*url.URL{identity}
+			cert.ExtKeyUsage = []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}
 		}
 		der, err := x509.CreateCertificate(rand.Reader, cert, root, &key.PublicKey, rootKey)
 		if err != nil {

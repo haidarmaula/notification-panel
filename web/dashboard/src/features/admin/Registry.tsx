@@ -450,7 +450,15 @@ export function RegistryDetail() {
                 <dt>Revisi</dt>
                 <dd class="mono">{app.data?.data.revision}</dd>
               </dl>
-              <p class="help-text">Registry tidak menyediakan aktivasi atau perubahan status.</p>
+              <p class="help-text">
+                Siapkan kredensial dan verifikasi layanan sebelum pengujian perangkat.
+              </p>
+              <A
+                class="button secondary"
+                href={`/apps/admin/applications/${params.managedAppId}/onboarding`}
+              >
+                Konfigurasi notifikasi
+              </A>
               <form
                 class="stack"
                 onInput={() => {

@@ -10,17 +10,25 @@ import (
 	"hello/internal/ingress"
 	"hello/internal/jsonobject"
 	"hello/internal/observability"
+	"hello/internal/onboarding"
 	"hello/internal/token"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+const localOnboardingPolicyPath = "/etc/hello/onboarding.json"
+
 // ServerForCommand loads the local environment when invoked without arguments.
+// --local-onboarding additionally requires a fixed protected onboarding policy;
+// it does not enable production deployment or accept an alternate policy path.
 // The production entrypoint passes --deployment and reads only its protected
 // role file. A missing or invalid policy never falls back to the environment.
 func ServerForCommand(args []string) (*ServerConfig, error) {
 	if len(args) == 0 {
 		return LoadServerConfig(), nil
+	}
+	if len(args) == 1 && args[0] == "--local-onboarding" {
+		return localServerOnboarding(LoadServerConfig(), deployment.ReadSecret)
 	}
 	if len(args) != 1 || args[0] != "--deployment" {
 		return nil, deployment.ErrConfiguration
@@ -32,17 +40,36 @@ func ServerForCommand(args []string) (*ServerConfig, error) {
 	return parseServerDeployment(data)
 }
 
+func localServerOnboarding(c *ServerConfig, readSecret func(string) ([]byte, error)) (*ServerConfig, error) {
+	data, err := readSecret(localOnboardingPolicyPath)
+	if err != nil {
+		return nil, deployment.ErrConfiguration
+	}
+	policy, err := onboarding.ParseServerPolicy(data)
+	if err != nil {
+		return nil, deployment.ErrConfiguration
+	}
+	c.Onboarding = policy
+	return c, nil
+}
+
 func parseServerDeployment(data []byte) (*ServerConfig, error) {
 	var c ServerConfig
-	var admin, gateway, staffTokens json.RawMessage
+	var admin, gateway, staffTokens, onboardingPolicy json.RawMessage
 	var dsn string
 	var browserOrigins []string
 	err := jsonobject.DecodeOptional(data, map[string]any{
 		"ingress": &gateway, "database_url": &dsn, "api_key": &c.APIKey, "staff_tokens": &staffTokens,
 		"mobile_policy_file": &c.mobilePolicyFile,
-	}, map[string]any{"monitoring": &admin, "browser_origins": &browserOrigins})
+	}, map[string]any{"monitoring": &admin, "browser_origins": &browserOrigins, "onboarding": &onboardingPolicy})
 	if err != nil || len(c.APIKey) < 32 {
 		return nil, deployment.ErrConfiguration
+	}
+	if len(onboardingPolicy) > 0 {
+		c.Onboarding, err = onboarding.ParseServerPolicy(onboardingPolicy)
+		if err != nil {
+			return nil, deployment.ErrConfiguration
+		}
 	}
 	c.CORSAllowedOrigins, err = canonicalCORSOrigins(browserOrigins)
 	if err != nil {

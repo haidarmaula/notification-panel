@@ -173,13 +173,20 @@ type fileTokenSource struct {
 }
 
 func fileSource(config Config, policy FileCredentialPolicy, data []byte, testTransport http.RoundTripper) (*fileTokenSource, func(), error) {
-	key, err := parseServiceAccount(data, config.ProjectID, policy)
-	if config.Validate() != nil || err != nil {
+	if config.Validate() != nil {
+		return nil, nil, ErrConfiguration
+	}
+	return accountSource(config.ProjectID, policy, data, config.RequestTimeout, testTransport)
+}
+
+func accountSource(targetProject string, policy FileCredentialPolicy, data []byte, timeout time.Duration, testTransport http.RoundTripper) (*fileTokenSource, func(), error) {
+	key, err := parseServiceAccount(data, targetProject, policy)
+	if err != nil || timeout <= 0 || timeout > 30*time.Second {
 		return nil, nil, ErrConfiguration
 	}
 	var closeHTTP func()
 	if testTransport == nil {
-		base, err := verifiedHTTP(config)
+		base, err := verifiedHTTP(Config{RequestTimeout: timeout, Concurrency: 1})
 		if err != nil {
 			return nil, nil, err
 		}
@@ -189,7 +196,7 @@ func fileSource(config Config, policy FileCredentialPolicy, data []byte, testTra
 	}
 	client := &http.Client{
 		Transport:     oauthTransport{base: testTransport},
-		Timeout:       config.RequestTimeout,
+		Timeout:       timeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error { return ErrCredentials },
 	}
 	provider, err := auth.New2LOTokenProvider(&auth.Options2LO{
@@ -205,7 +212,7 @@ func fileSource(config Config, policy FileCredentialPolicy, data []byte, testTra
 		closeHTTP()
 		return nil, nil, ErrConfiguration
 	}
-	return &fileTokenSource{gate: make(chan struct{}, 1), provider: provider, timeout: config.RequestTimeout}, closeHTTP, nil
+	return &fileTokenSource{gate: make(chan struct{}, 1), provider: provider, timeout: timeout}, closeHTTP, nil
 }
 
 func (s *fileTokenSource) Token(parent context.Context) (*auth.Token, error) {

@@ -150,6 +150,7 @@ for optional tools used by other workflows.
 
 ```bash
 ./dev smoke
+./dev check-onboarding
 ./dev test-seed
 pnpm --dir web/dashboard exec playwright install chromium
 node scripts/local-dev/browser.mjs
@@ -161,6 +162,52 @@ pipeline; it leaves those synthetic campaigns available for inspection. It never
 sends to a real phone. `test-seed` uses a separate temporary database inside this
 private PostgreSQL instance, injects an initial seed failure, verifies rollback,
 then retries without duplicate data; it removes only that test database.
+
+`check-onboarding` exercises the setup API through the real BFF using a dedicated
+synthetic PROVISIONING application. It selects the local enrollment profile,
+uploads the generated service account, checks immutable upload replay, waits for
+the scoped OAuth verifier, and rejects cross-app operation lookup. The app stays
+PROVISIONING with dispatch HELD; the command does not send a notification. Each
+run retains a candidate version and verification evidence. The local developer
+account is SUPER_ADMIN so it can exercise the same DB-backed management guard.
+The demo keeps its verifier scope. A separate local fixture allocator also
+assigns up to three new staging applications to fixed, separate verifier LOGINs.
+Allocation starts after a candidate is stored; each scoped worker uses the real
+control-plane executable. Scope assignments persist and are never reassigned to
+another app automatically. This is a bounded synthetic development facility,
+not the production runtime allocator. This check does not establish real Google
+IAM, device delivery or production readiness.
+
+### Try onboarding in the dashboard
+
+1. Run `./dev up`, open `http://127.0.0.1:5173/login`, and use `./dev credentials`
+   to find the local login.
+2. Open **Registry aplikasi**, create an application, then select
+   **Konfigurasi notifikasi** on its detail page.
+3. Choose **Hello Local synthetic Android**, enable Android, and enter
+   `com.hello.local.onboarding` as its application ID. Save the profile.
+4. Select **Staging** and upload the generated synthetic file
+   `tmp/local-dev/tls/service-account.json`. Save the credentials.
+5. Wait briefly for the verifier and select **Verifikasi FCM**. The result should
+   report OAuth success; the app remains **Disiapkan** and distribution **Ditahan**.
+
+The local provider is a simulator; this flow uses the generated synthetic service
+account. Device enrollment, activation and general delivery release are not yet
+available from this setup screen. The `Uji onboarding dashboard` app created by
+the browser check can be reused instead of consuming another verifier slot.
+Select **Ubah profil pendaftaran** when editing a previously saved profile.
+
+For an automated real-browser check, run:
+
+```bash
+node scripts/local-dev/onboarding_browser.mjs
+```
+
+Use Node 22.12+ (for example `nvm use 22.23.4`). The check creates or reuses one
+test app, performs setup through the actual dashboard/BFF/provisioner/verifier,
+checks that credential material is absent from browser storage and rendered text,
+and captures light desktop/mobile and dark mobile screens under
+`tmp/local-dev/screenshots/`. It enables no request tracing and sends no message.
 The browser check signs in, visits seven actual local screens, signs out and
 writes screenshots under `tmp/local-dev/screenshots/` without tracing credentials.
 

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "as_of": "2026-11-09",
+  "as_of": "2026-11-14",
   "status": "source-inventory-not-runtime-isolation",
   "spec": "../specs/m03b-application-data-isolation.md",
   "tables": [
@@ -147,7 +147,16 @@
     {
       "name": "staff_sessions",
       "scope": "global-control"
-    }
+    },
+    {"name": "application_onboarding", "scope": "registry-control"},
+    {"name": "application_onboarding_approvals", "scope": "registry-control"},
+    {"name": "application_onboarding_ingestions", "scope": "registry-control"},
+    {"name": "application_onboarding_operations", "scope": "registry-control"},
+    {"name": "application_onboarding_requests", "scope": "registry-control"},
+    {"name": "application_onboarding_verifier_scopes", "scope": "registry-control"},
+    {"name": "application_provider_checks", "scope": "registry-control"},
+    {"name": "application_provider_configurations", "scope": "registry-control"},
+    {"name": "application_runtime_acknowledgements", "scope": "registry-control"}
   ],
   "query_files": [
     {"path": "db/queries/preparation_recovery.sql", "scope": "application-scoped", "names": ["ListRecoverableQueuedCampaigns"]},
@@ -557,6 +566,42 @@
         "HasLineageBlockedDeliveryUpdate",
         "LockNextDeliveryUpdate"
       ]
+    },
+    {
+      "path": "db/queries/application_onboarding.sql",
+      "scope": "registry-control",
+      "names": [
+        "AdvanceApplicationOnboardingRevision",
+        "ClaimApplicationOnboardingVerification",
+        "CompleteApplicationFCMIngestion",
+        "ConfigureApplicationEnrollment",
+        "CountRecentApplicationFCMVerifications",
+        "CreateApplicationOnboardingOperation",
+        "CreateApplicationProviderConfiguration",
+        "FindApplicationFCMIngestion",
+        "FindApplicationOnboardingOperation",
+        "FindApplicationOnboardingRequest",
+        "FindOnboardingTestInstallation",
+        "FinishApplicationOnboardingVerification",
+        "GetApplicationFCMIngestion",
+        "GetApplicationOnboarding",
+        "GetApplicationOnboardingApproval",
+        "GetApplicationOnboardingOperation",
+        "GetApplicationProviderConfiguration",
+        "GetLastApplicationOnboardingOperation",
+        "GetOnboardingActorEpoch",
+        "HasApplicationOnboardingMutation",
+        "HasApplicationOnboardingVerifier",
+        "HoldApplicationOnboardingDispatch",
+        "ListApplicationOnboardingApprovals",
+        "ListApplicationProviderChecks",
+        "LockApplicationOnboarding",
+        "ReserveApplicationFCMIngestion",
+        "SaveApplicationOnboardingRequest",
+        "SetApplicationOnboardingCandidate",
+        "SupersedeApplicationOnboardingMutations",
+        "VerifyApplicationFCMReservation"
+      ]
     }
   ],
   "routes": [
@@ -741,7 +786,15 @@
       "source": "internal/features/auth/routes.go",
       "scope": "global-control",
       "disposition": "retain-global"
-    }
+    },
+    {"pattern": "GET /api/v1/admin/apps/{app_id}/onboarding", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
+    {"pattern": "GET /api/v1/admin/apps/{app_id}/onboarding/enrollment-profiles", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
+    {"pattern": "PUT /api/v1/admin/apps/{app_id}/onboarding/enrollment", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
+    {"pattern": "PUT /api/v1/admin/apps/{app_id}/onboarding/fcm", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
+    {"pattern": "POST /api/v1/admin/apps/{app_id}/onboarding/fcm/verify", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
+    {"pattern": "GET /api/v1/admin/apps/{app_id}/onboarding/operations/{operation_id}", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
+    {"pattern": "GET /api/v1/admin/apps/{app_id}/onboarding/approvals", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
+    {"pattern": "POST /api/v1/admin/apps/{app_id}/onboarding/dispatch/hold", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"}
   ],
   "commands": [
     {
@@ -771,6 +824,8 @@
     {
       "path": "cmd/retention/main.go",
       "disposition": "Requires application-scoped operational grant; bounded retention batches with holds and preview controls."
-    }
+    },
+    {"path": "cmd/controlplane/main.go", "disposition": "App-scoped OAuth verifier; no lifecycle/dispatch execution or FCM sends."},
+    {"path": "cmd/provisioner/main.go", "disposition": "Protected host credential ingestion over reserved, verified mTLS; no lifecycle/dispatch authority."}
   ]
 }

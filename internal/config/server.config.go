@@ -6,6 +6,7 @@ import (
 
 	"hello/internal/ingress"
 	"hello/internal/observability"
+	"hello/internal/onboarding"
 	"hello/internal/token"
 )
 
@@ -15,6 +16,7 @@ import (
 // It covers the HTTP listener, staff JWT secrets, the shared API key, browser
 // CORS origins, and mobile installation policy used by current server routes.
 type ServerConfig struct {
+	Onboarding         *onboarding.ServerPolicy
 	Gateway            *ingress.Gateway
 	Monitoring         *observability.Admin
 	ListenAddress      string

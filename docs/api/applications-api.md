@@ -5,6 +5,12 @@ An independent offline operation may move a project to `ACTIVE`, `HELD` or
 `RETIRED`. Metadata reads expose its current status and revision.
 [Registry contract](../contracts/application-registry.openapi.json) · [Offline activation](../runbooks/application-lifecycle.md).
 
+Optional protected FCM setup and OAuth verification use the separate
+[onboarding setup API](application-onboarding-api.md). It does not activate apps
+or release dispatch. The [full onboarding spec](../specs/application-onboarding.md)
+and [implementation checkpoint](../analysis/application-onboarding-implementation.md)
+distinguish those implemented setup routes from planned lifecycle automation.
+
 Every operation requires `X-API-Key` and a staff `Authorization: Bearer ...` token.
 Current active staff and DB role are checked at the route and service. Token role
 claims confer no authority. Every registered operation returns `Cache-Control: no-store`,
