@@ -1,7 +1,13 @@
 # Hello staff dashboard
 
-React 19/Vite browser application using Astryx components and themes with a separate Go session BFF. See
-`../../DASHBOARD-CAPABILITIES.md` for scope and `DESIGN.md` for the visual contract.
+This is the canonical technical guide for the React 19/Vite browser application
+using Astryx components and themes with a separate Go session BFF. See the
+[capability map](../../DASHBOARD-CAPABILITIES.md) for product scope,
+[foundation spec](../../docs/specs/dashboard-foundation.md) for decisions and
+boundaries, and [design contract](DESIGN.md) for the visual contract. The original
+SolidJS/Kobalte/Solid Query stack and green/neutral design direction are superseded,
+not parallel implementation options. Use the installed Astryx guidance only for
+UI work.
 Staff administration, registry/grant management, scoped upload/audit reads, and
 self-service password changes are described in the
 [dashboard administration expansion](../../docs/specs/dashboard-administration.md).
@@ -43,7 +49,13 @@ pnpm build
 pnpm budget
 pnpm exec playwright install --with-deps chromium
 pnpm test:e2e
+pnpm exec astryx doctor --built src
 ```
+
+`pnpm build` includes the strict TypeScript check. For BFF changes, also run
+`go test -race ./internal/dashboard/...` from the repository root. The dated
+[migration evidence](#astryx-migration-validation-2026-11-15) below is not a claim
+that these checks have been rerun against the current tree.
 
 The Playwright browser and its system dependencies are needed only for `test:e2e`.
 See the [tool capability guide](../../docs/tooling/development-tools.md) for
@@ -118,8 +130,43 @@ With the full `./dev` stack, the separate OpenAPI reference is available at
 API proxy and Swagger credentials, independently of BFF sessions; see the
 [local reference guide](../../docs/local-development.md#local-api-reference).
 Charts and advanced table/form packages remain deferred until their concrete
-screens need them. Administrative workflows are implemented locally; see the
-scope and pending verification status in the linked administration spec.
+screens need them. Administrative workflows are implemented locally; the
+[administration spec](../../docs/specs/dashboard-administration.md#verification-status)
+records their dated checks, not a current full-suite or target acceptance result.
+
+## Optional application setup
+
+Registry detail links to **Notification setup** at
+`/apps/admin/applications/{app_id}/onboarding`. The screen reads readiness,
+blockers, setup revision, operation status and safe approval metadata. It lets an
+authorized administrator select a configured enrollment profile and platform
+identifiers, upload an FCM service-account candidate, request OAuth verification,
+poll its result, and hold dispatch. It does not enroll devices.
+
+This is an optional protected capability, not a consequence of creating an app
+or building the dashboard. Default server configuration leaves the routes
+unmounted. It requires protected onboarding policy, a credential provisioner,
+approved profiles and database grants; OAuth verification also needs a
+per-application verifier scope. Current backend `applications.manage` authority
+remains required. Missing verifier scope is an unavailable capability, not a
+successful check. The [onboarding API](../../docs/api/application-onboarding-api.md)
+is authoritative for policy, routes and failure behavior; follow the
+[local walkthrough](../../docs/local-development.md#try-onboarding-in-the-dashboard)
+for synthetic setup rather than using production credentials.
+
+The BFF exposes only the setup allowlist under
+`/bff/api/admin/apps/{app_id}/onboarding`, retaining session/Origin/CSRF protection,
+setup ETags and idempotency keys. Stale versions require reload and review;
+uncertain outcomes allow an explicit retry of the same request, not a new write
+with a fresh key. Uploaded credential material stays in component memory, not
+browser storage or query caches, and is cleared after definitive upload success
+or navigation.
+
+Saving a profile or candidate does not grant business access or activate an app.
+OAuth success does not prove target-project IAM permission, device reachability
+or delivery. Candidate promotion, activation, device enrollment/testing, cohorts
+and full dispatch release are not provided by this setup screen. The full local
+walkthrough uses a simulator; it is not real-provider or production evidence.
 
 ## Release boundaries
 
@@ -135,8 +182,14 @@ sessions require a separate design.
 Production also requires real-browser TLS trust, UAT, accessibility/performance
 validation on target devices, operational monitoring and the existing backend
 production gates. Real notification sends need explicit recipient/count approval.
+Target staging acceptance, UAT and production gates require separate evidence;
+the local records below do not establish them.
 
 ## Astryx migration validation (2026-11-15)
+
+This is historical migration evidence, not a fresh verification of the current
+source tree or subsequent application setup changes. It records a full browser
+run plus focused reruns, not one final full clean run.
 
 The React/Stone migration passed strict TypeScript, ESLint without warnings,
 Prettier, 11 unit tests, and the production build. All 50 browser cases were

@@ -67,7 +67,9 @@ used by host migration commands. `make help` does not start the runtime.
 
 ### Why a new application cannot immediately send
 
-Registry creation produces `PROVISIONING` without a staff grant. Even SUPER_ADMIN needs an explicit grant for project business data. Application activation, identity mappings, approved bindings/routes, runtime policy and coverage, broker source registration/checkpoints, and protected workers are separate setup. Bypassing those gates is not a shorter onboarding path. Follow the [application lifecycle](runbooks/application-lifecycle.md) and [delivery-worker](runbooks/delivery-worker.md) runbooks with the environment owner.
+Registry creation produces `PROVISIONING` without a staff grant. The implemented [setup API](api/application-onboarding-api.md) adds enrollment-profile configuration, FCM candidate staging and OAuth verification; follow the [local dashboard tutorial](local-development.md#try-onboarding-in-the-dashboard) to try that path with simulated credentials. OAuth verification is not device enrollment, target-project IAM proof, activation or dispatch release.
+
+Even SUPER_ADMIN needs an explicit grant for project business data. Application activation, identity mappings, approved bindings/routes, runtime policy and coverage, broker source registration/checkpoints, and protected workers are separate setup. Bypassing those gates is not a shorter onboarding path. Follow the [application lifecycle](runbooks/application-lifecycle.md) and [delivery-worker](runbooks/delivery-worker.md) runbooks with the environment owner.
 
 ## 3. A small first change
 
@@ -85,6 +87,9 @@ This is an optional learning exercise, not a missing product feature. It demonst
 
 | Concern | Start with | Verify/update |
 | --- | --- | --- |
+| Frontend feature or interaction | [dashboard guide](../web/dashboard/README.md), [dashboard instructions](../web/dashboard/AGENTS.md), [design guidance](../web/dashboard/DESIGN.md) | React/Astryx components, query state, unit/browser tests and documented frontend checks; preserve grants and uncertain-write handling |
+| BFF session, login rotation or endpoint forwarding | [BFF session/allowlist implementation](../internal/dashboard/server.go), [BFF tests](../internal/dashboard/server_test.go), [foundation contract](specs/dashboard-foundation.md) | Opaque cookie and CSRF rotation, serialized refresh, allowlist tests and backend authority; never expose API credentials |
+| Application setup, FCM staging or OAuth verification | [setup API](api/application-onboarding-api.md), [provisioner](../cmd/provisioner/main.go), [controlplane](../cmd/controlplane/main.go), [runtime preparation subset](design/application-onboarding-runtime.md) | Setup ETags/idempotency, app-scoped verification and protected credential handling; no activation, device enrollment or dispatch-release shortcut |
 | Which API is actually served | [server wiring](../cmd/server/main.go), [application route registration](../internal/features/applications/module.go) | Corresponding handler, API Markdown and contract in `docs/contracts/` |
 | Scoped campaign draft | [campaign creation](../internal/features/applications/campaign_create.go), [draft mutations](../internal/features/applications/campaign_access.go) | Application package tests and draft contract |
 | Segments and membership | [segment reads](../internal/features/applications/segment_reads.go), [segment writes](../internal/features/applications/segment_writes.go) | Scoped segment/member contracts and application tests, not only legacy segment tests |

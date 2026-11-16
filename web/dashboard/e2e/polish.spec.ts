@@ -29,9 +29,11 @@ for (const [route, field] of [
       expect(dialog.type()).toBe('confirm');
       await dialog.dismiss();
     });
-    const logout = page.getByRole('button', { name: 'Sign out', exact: true });
+    const accountMenu = page.getByRole('button', { name: 'Account menu', exact: true });
+    await accountMenu.click();
+    const logout = page.getByRole('menuitem', { name: 'Sign out', exact: true });
     await logout.click();
-    await expect(logout).toBeEnabled();
+    await expect(accountMenu).toBeEnabled();
     expect(logouts).toBe(0);
     expect((await (await page.request.get('/bff/session')).json()).authenticated).toBe(true);
     await expect(page.getByLabel(field)).toHaveValue('Unsaved audit value');
@@ -40,7 +42,8 @@ for (const [route, field] of [
       dialogs.push(dialog.type());
       await dialog.accept();
     });
-    await logout.click();
+    await accountMenu.click();
+    await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
     expect(logouts).toBe(1);
@@ -52,12 +55,24 @@ test('failed logout retains unsaved navigation protection', async ({ page }) => 
   await login(page);
   await page.goto(`/apps/${app}/campaigns/new`);
   await page.getByLabel('Notification title').fill('Keep this draft');
-  await page.route('**/bff/logout', (route) =>
-    route.fulfill({ status: 503, contentType: 'application/json', body: '{}' }),
-  );
+  let releaseLogout: () => void = () => {};
+  const logoutGate = new Promise<void>((resolve) => {
+    releaseLogout = resolve;
+  });
+  await page.route('**/bff/logout', async (route) => {
+    await logoutGate;
+    await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
+  });
   page.once('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  const accountMenu = page.getByRole('button', { name: 'Account menu', exact: true });
+  await accountMenu.click();
+  const logoutRequest = page.waitForRequest((request) => request.url().endsWith('/bff/logout'));
+  await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
+  await logoutRequest;
+  await expect(accountMenu).toBeDisabled();
+  releaseLogout();
   await expect(page.getByText('Sign-out failed')).toBeVisible();
+  await expect(accountMenu).toBeEnabled();
   page.once('dialog', (dialog) => dialog.dismiss());
   await page.getByRole('link', { name: 'All campaigns', exact: true }).click();
   await expect(page).toHaveURL(/\/campaigns\/new$/);

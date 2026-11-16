@@ -1,10 +1,12 @@
 # Staff dashboard: MVP capability map
 
-Status: MVP journey and Solid/Vite stack approved. Staff administration,
-managed application registry, grants, scoped audit/upload reads, and self-service
-password change are implemented locally; local frontend/browser verification
-is pending. Staging and production deployment remain separate validation
-milestones. See the [dashboard administration expansion](docs/specs/dashboard-administration.md).
+Status: the staff journey, administration, operational workflows, and optional
+application setup entrypoint are implemented locally. Local check results are dated
+evidence, not a current full clean run: see the
+[administration checks](docs/specs/dashboard-administration.md#verification-status)
+and [Astryx migration validation](web/dashboard/README.md#astryx-migration-validation-2026-11-15).
+Target staging acceptance, interactive UAT, and production release remain separate
+validation gates; this map does not assert they have passed.
 
 ## Objective and assumptions
 
@@ -14,28 +16,31 @@ release serves staff with existing accounts and explicit application grants.
 The primary journey is sign in, choose an application, prepare a campaign,
 confirm submission and inspect its results.
 
-The selected stack is SolidJS, Vite and TypeScript, with a same-origin Go BFF.
-Use Tailwind, Kobalte, Solid Signals/Stores and TanStack Solid Query. Add table,
-form and chart dependencies when their concrete workflows require them.
-Keep the backend Go layout and its authorization rules intact.
+This is the product scope map, not the technical implementation manual. The
+canonical [dashboard technical guide](web/dashboard/README.md) covers the current
+React 19/Vite/TypeScript, React Router, React Query, Astryx, and same-origin Go BFF
+implementation. The original SolidJS/Tailwind/Kobalte/Solid Query prescription is
+superseded by that migration, not an alternative active stack. Backend
+authorization rules remain authoritative.
 
-Product copy starts in Indonesian. Source comments and maintained technical
-documentation stay in English. Reuse Hello's existing restrained green/neutral
-visual identity, with compact navigation, readable forms and data tables.
-Mobile layouts must preserve the essential workflows without horizontal page
-overflow. Detailed wireframes and component choices belong to the design phase.
+Maintained interface copy, source comments, and technical documentation are
+English; the original Indonesian-copy direction is superseded. The selected
+[design contract](web/dashboard/DESIGN.md) uses Astryx only, with Stone as default
+and Y2K/Matcha available. It supersedes the original green/neutral visual direction.
+Mobile layouts must preserve essential workflows without horizontal page overflow.
 
 ## Capability map
 
-| Module ID | Responsibility | Depends on |
-| --- | --- | --- |
-| staff-session | BFF login/logout, private credential storage, browser session and safe refresh | Existing staff auth API |
-| application-workspace | Signed-in layout, profile summary, granted application picker and scoped navigation | staff-session |
-| campaign-drafts | Campaign list/detail, draft creation/replacement/deletion, scoped recipient lookup | application-workspace |
-| campaign-acceptance | Explicit immediate-send or schedule confirmation, stable idempotency and conflict handling | campaign-drafts |
-| delivery-results | Per-campaign statistics and paginated delivery/read history | application-workspace |
-| dashboard-administration | Staff account management, managed application registry, explicit grants and scoped operational reads | staff-session, application-workspace |
-| frontend-release | Repeatable builds, CI, private staging deployment, health checks and rollback | staff-session, application-workspace, campaign-drafts, campaign-acceptance, delivery-results |
+| Module ID                | Responsibility                                                                                                                        | Depends on                                                                                   |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| staff-session            | BFF login/logout, private credential storage, browser session and safe refresh                                                        | Existing staff auth API                                                                      |
+| application-workspace    | Signed-in layout, profile summary, granted application picker and scoped navigation                                                   | staff-session                                                                                |
+| campaign-drafts          | Campaign list/detail, draft creation/replacement/deletion, scoped recipient lookup                                                    | application-workspace                                                                        |
+| campaign-acceptance      | Explicit immediate-send or schedule confirmation, stable idempotency and conflict handling                                            | campaign-drafts                                                                              |
+| delivery-results         | Per-campaign statistics and paginated delivery/read history                                                                           | application-workspace                                                                        |
+| dashboard-administration | Staff account management, managed application registry, explicit grants and scoped operational reads                                  | staff-session, application-workspace                                                         |
+| application-setup        | Optional registry-linked profile configuration, FCM candidate staging, OAuth verification and dispatch hold; no activation or release | dashboard-administration, protected onboarding policy and verifier scope                     |
+| frontend-release         | Repeatable builds, CI, private staging deployment, health checks and rollback                                                         | staff-session, application-workspace, campaign-drafts, campaign-acceptance, delivery-results |
 
 Build order: staff-session -> application-workspace -> campaign-drafts ->
 campaign-acceptance -> delivery-results -> frontend-release.
@@ -99,7 +104,17 @@ data visible as if access remains valid.
 ## Original first-release boundary and current scope
 
 - Global cross-application analytics or invented dashboard metrics.
-- Application lifecycle activation and pilot policy controls remain unsupported.
+- Application setup now supports configured enrollment profiles/platform mappings,
+  FCM candidate upload and OAuth verification from registry detail, plus readiness,
+  operation/approval metadata and dispatch hold. This optional protected capability
+  is unmounted by default; it requires server policy, a credential provisioner,
+  approved profiles and per-application verifier scope. See the
+  [onboarding API](docs/api/application-onboarding-api.md) and
+  [local walkthrough](docs/local-development.md#try-onboarding-in-the-dashboard).
+  Saving setup or passing OAuth does not promote credentials, activate an
+  application, enroll a device, prove target-project IAM/delivery, or release
+  dispatch. Activation, device enrollment/testing, cohort creation and full
+  delivery release are not provided by this setup screen.
 - Campaign cancellation remains unsupported because the backend has no
   cancellation API.
 - Bulk imports, user mutation and a rich visual message builder. The subsequent
@@ -109,8 +124,8 @@ data visible as if access remains valid.
   registry, staff grants, read-only upload/audit history, and self-service
   password changes were outside the original first-release boundary. They are
   now implemented locally as described in the [dashboard administration
-  expansion](docs/specs/dashboard-administration.md); local frontend/browser
-  verification is pending.
+  expansion](docs/specs/dashboard-administration.md), which records dated local
+  verification rather than target acceptance.
 - Self-registration, forgotten-password recovery and third-party sign-in. Staff
   administration can reset another account's password, and signed-in users can
   change their own password as described in the administration expansion.
@@ -139,6 +154,7 @@ data visible as if access remains valid.
 
 - [Staff authentication](docs/api/auth-api.md)
 - [Application registry and grants](docs/api/applications-api.md)
+- [Optional application onboarding setup](docs/api/application-onboarding-api.md)
 - [Campaign drafts](docs/api/scoped-campaign-drafts-api.md)
 - [Campaign acceptance and scheduling](docs/api/campaign-acceptance-api.md)
 - [Delivery history and statistics](docs/api/scoped-campaign-history-api.md)
@@ -146,10 +162,11 @@ data visible as if access remains valid.
   `docs/contracts/application-registry.openapi.json`.
 
 Local implementation covers the browser journey, in-memory BFF sessions, draft
-workflows, explicit submission, history and a frontend CI gate. The administration
-expansion adds account, registry, grant, upload/audit-read and self-password
-workflows; its local frontend/browser verification is pending. Advanced
-table/form/chart dependencies and template selection remain deferred.
+workflows, explicit submission, history and a frontend CI gate. Subsequent
+expansions add templates, audience/segment operations, administration and optional
+application setup. See the dated evidence linked above; no fresh full-suite run
+is asserted here. Advanced table/form/chart dependencies remain deferred, not
+active product requirements.
 
 Protected deployment configuration, authenticated gateway transport, container
 and CD integration are implemented and covered by local checks. Staging

@@ -107,7 +107,7 @@ export default function Campaigns({ results = false }: { results?: boolean }) {
     >
       <LayoutContent>
         <VStack gap={4}>
-          <HStack gap={4} wrap="wrap" hAlign="end" vAlign="center">
+          <HStack gap={4} wrap="wrap" hAlign="start" vAlign="center">
             <Collapsible
               trigger={
                 <Text type="supporting" color="secondary">

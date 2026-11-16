@@ -20,9 +20,10 @@ import { TextInput } from '@astryxdesign/core/TextInput';
 import { useUnsaved } from '../../app/unsaved';
 import { useAuth } from '../../app/auth-context';
 import { ApiError, data, errorMessage, request } from '../../lib/api/client';
-import type { Campaign, Page } from '../../lib/api/types';
 import { Failure, Loading, RecipientLabel } from '../../components/ui/Feedback';
+import type { Application, Campaign, Page } from '../../lib/api/types';
 import { draftSchema } from './validation';
+import { AndroidNotificationPreview } from './AndroidNotificationPreview';
 
 type Target = { type: 'BROADCAST' } | { type: 'SEGMENT' | 'INDIVIDUAL'; id: string };
 type DirectoryItem = {
@@ -79,6 +80,11 @@ export default function Editor() {
         is_active: boolean;
       }>(`/apps/${appId}/templates/${selectedTemplate}`, signal),
     enabled: Boolean(selectedTemplate),
+  });
+  const application = useQuery({
+    queryKey: ['application', appId],
+    queryFn: ({ signal }) => data<Application>(`/apps/${appId}`, signal),
+    enabled: Boolean(appId),
   });
   const draft = useQuery({
     queryKey: ['campaign', appId, campaignId],
@@ -259,7 +265,7 @@ export default function Editor() {
       footer={
         editable && !(editing && draft.isPending) ? (
           <LayoutFooter hasDivider>
-            <HStack gap={2} wrap="wrap" hAlign="between">
+            <HStack gap={2} wrap="wrap" hAlign="start">
               <Button
                 label="Back"
                 variant="ghost"
@@ -305,7 +311,7 @@ export default function Editor() {
             </Text>
           ) : (
             <form id="campaign-form" noValidate onSubmit={(event) => void save(event)}>
-              <Grid columns={{ minWidth: 420, max: 2 }} gap={4} align="start">
+              <Grid columns={{ minWidth: 420, max: 2 }} columnGap={8} rowGap={6} align="start">
                 <VStack gap={6}>
                   <Section padding={6}>
                     <VStack gap={4}>
@@ -512,20 +518,11 @@ export default function Editor() {
                   isOpen={previewOpen}
                   onOpenChange={setPreviewOpen}
                 >
-                  <Card role="region" aria-label="Notification preview">
-                    <VStack gap={3}>
-                      <Heading level={2}>Application notification</Heading>
-                      <Heading level={3}>{title || 'Your notification title'}</Heading>
-                      <Text>{body || 'Your message will appear here as you type.'}</Text>
-                      <Text color="secondary">
-                        The final appearance depends on the recipient’s device.
-                      </Text>
-                      <Text>
-                        Saving a draft does not send a notification. You will review it again before
-                        sending.
-                      </Text>
-                    </VStack>
-                  </Card>
+                  <AndroidNotificationPreview
+                    applicationName={application.data?.name ?? 'Application'}
+                    title={title}
+                    body={body}
+                  />
                 </Collapsible>
               </Grid>
             </form>

@@ -16,27 +16,37 @@ async function chooseTheme(page: Page, name: string) {
   await page.goto('/apps');
   await expect(page.getByRole('heading', { name: 'Choose application' })).toBeVisible();
 }
+async function chooseAppearance(page: Page, name: string) {
+  await page
+    .getByRole('button', {
+      name: name === 'Dark' ? 'Use dark mode' : 'Use light mode',
+      exact: true,
+    })
+    .click();
+}
 
 test('Stone is the default and explicit theme and appearance choices persist independently', async ({
   page,
 }) => {
   await login(page);
-  await expect(
-    page.getByRole('link', { name: 'Profile and preferences', exact: true }),
-  ).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Account menu', exact: true })).toBeVisible();
   expect(await page.evaluate(() => localStorage.length)).toBe(0);
   await chooseTheme(page, 'Matcha');
-  await page.getByRole('button', { name: 'Use dark mode', exact: true }).click();
+  await chooseAppearance(page, 'Dark');
   await page.reload();
   await page.goto('/apps/settings');
   await expect(page.getByRole('combobox', { name: 'Design theme' })).toContainText('Matcha');
+  await expect(page.getByRole('radio', { name: 'Matcha', exact: true })).toBeChecked();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await expect(page.getByRole('button', { name: 'Use light mode', exact: true })).toBeVisible();
   expect(await page.evaluate(() => Object.keys(localStorage).sort())).toEqual([
     'hello.design-theme',
     'hello.theme',
   ]);
   await chooseTheme(page, 'Stone');
-  await expect(page.getByRole('button', { name: 'Use light mode', exact: true })).toBeVisible();
+  await chooseAppearance(page, 'Light');
+  await expect(page.getByRole('radio', { name: 'Stone', exact: true })).toBeChecked();
+  await expect(page.getByRole('button', { name: 'Use dark mode', exact: true })).toBeVisible();
 });
 
 test('all three production themes remain usable at 320px and fonts stay same-origin', async ({

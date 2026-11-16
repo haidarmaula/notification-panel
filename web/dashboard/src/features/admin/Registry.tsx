@@ -244,7 +244,7 @@ export default function Registry() {
                     role="status"
                   />
                 )}
-                <HStack gap={2} wrap="wrap" justify="end">
+                <HStack gap={2} wrap="wrap" justify="start">
                   <Button
                     label={operation.pending() ? 'Registering…' : 'Register application'}
                     type="submit"
@@ -519,10 +519,12 @@ export function RegistryDetail() {
                           description="Reload and review the latest name before trying again."
                           role="alert"
                         />
-                        <Button label="Reload application" onClick={() => void refreshApp()} />
+                        <HStack>
+                          <Button label="Reload application" onClick={() => void refreshApp()} />
+                        </HStack>
                       </VStack>
                     )}
-                    <HStack gap={2} wrap="wrap" justify="end">
+                    <HStack gap={2} wrap="wrap" justify="start">
                       <Button
                         label="Save name"
                         type="submit"
@@ -598,7 +600,9 @@ export function RegistryDetail() {
                           description="Reload to review the current status, then confirm again."
                           role="alert"
                         />
-                        <Button label="Reload access" onClick={() => void refreshGrant()} />
+                        <HStack>
+                          <Button label="Reload access" onClick={() => void refreshGrant()} />
+                        </HStack>
                       </VStack>
                     )}
                     <HStack gap={2} wrap="wrap">

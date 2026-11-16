@@ -1,7 +1,11 @@
 # Dashboard administration expansion
 
-Implemented and verified locally on 2026-11-14. This document records the scope,
-API boundaries, and local checks, not a staging or production acceptance result.
+Administration was implemented and locally checked on 2026-11-14. This document
+records scope, API boundaries and dated evidence, not a current full clean run or
+staging/production acceptance. The [dashboard technical guide](../../web/dashboard/README.md)
+is canonical for the current React/Astryx architecture and verification commands.
+The later optional setup entrypoint is described below; the original checks do
+not establish its verification status.
 
 ## Staff accounts
 
@@ -45,6 +49,31 @@ business access. The registry provides no application activation/status-change
 route. Campaign cancellation is also outside this implementation because the
 backend has no cancellation operation.
 
+### Optional application setup extension
+
+Registry detail now links to **Notification setup** at
+`/apps/admin/applications/{app_id}/onboarding`. Authorized administrators can
+configure an allowlisted enrollment profile and platform identifiers, stage an
+FCM credential candidate, request/poll OAuth verification, inspect readiness and
+safe operation/approval metadata, and hold dispatch. These are setup operations,
+not device enrollment or activation.
+
+The routes are optional and unmounted by default. Protected onboarding policy,
+credential provisioner connectivity, approved profiles and database grants are
+required; verification additionally requires per-application verifier scope.
+Backend `applications.manage` checks remain authoritative. Setup writes preserve
+ETags/idempotency, with explicit stale-version review and same-request retry for
+unknown outcomes. Credential material is not persisted in browser storage or
+query caches.
+
+Saving setup does not promote the candidate, grant business access, activate the
+application or release dispatch. OAuth verification does not prove target-project
+IAM permission or device delivery. Device enrollment/testing, cohort creation and
+full release are not available here. See the
+[onboarding API](../api/application-onboarding-api.md),
+[technical guide](../../web/dashboard/README.md#optional-application-setup) and
+[synthetic local walkthrough](../local-development.md#try-onboarding-in-the-dashboard).
+
 ## Scoped operational reads and account security
 
 Within an application workspace, the dashboard offers read-only upload batch
@@ -69,7 +98,14 @@ placed into staff or grant paths.
 
 ## Verification status
 
-Verified with Node 22.23.4 and the repository Go toolchain:
+The following is the 2026-11-14 administration record, before the React/Astryx
+migration and later setup extension. Bundle sizes, captures and styling details
+are historical, not current implementation requirements. See the
+[2026-11-15 migration record](../../web/dashboard/README.md#astryx-migration-validation-2026-11-15)
+for later evidence and its full-run/focused-rerun limits. Neither record is a
+fresh full-suite run for the current tree.
+
+Recorded with Node 22.23.4 and the repository Go toolchain:
 
 - Frontend production build, ESLint, and full dashboard formatting checks passed.
 - Frontend unit tests: 11 passed, including exact int64 identifiers, conditional
@@ -95,22 +131,21 @@ Temporary evidence: `/tmp/hello-admin-full-e2e.log`,
 `/tmp/hello-admin-ci-{format,modules,build,test,vet,vuln}.log`, and captures in
 `/tmp/hello-admin-ui/`. Local socket/network permissions were required for the
 isolated tests and vulnerability database. Fixture servers were stopped after
-verification. These checks do not establish staging integration, production
-readiness, full WCAG conformance, or real-device delivery. Impeccable's automatic
-detector remains unavailable as documented in the prior design audit.
+verification. These temporary paths are historical references, not guaranteed
+retained artifacts. The checks do not establish staging integration, production
+readiness, full WCAG conformance, or real-device delivery. Target staging/UAT and
+production gates require separate acceptance evidence.
 
-## UI delivery gate
+## Superseded UI delivery gate
 
-- PASS, R-03/R-34: both themes and narrow admin layouts inspected; strict page
-  width checks pass at 320px, with table overflow confined to its container.
-- PASS, R-17/R-36/R-38: UI fields follow mounted API contracts; test data is
-  isolated synthetic fixture data, not production metrics or delivery claims.
-- PASS, R-26/R-32/R-39: semantic links, named fields, native confirmation and
-  existing focus styles retained; browser workflows exercise real controls.
-- PASS, R-31/R-37: established design preserved; administration layout decisions
-  are recorded in the dashboard design contract.
-- PASS, R-35/R-40/C-5: production build, browser evidence and bundle measurement
-  recorded with explicit integration and accessibility limits above.
+The original 2026-11-14 review recorded passing desktop/narrow-layout, API-field,
+synthetic-data, interaction, build and bundle checks under its legacy R-/C-
+checklist. Its two-theme styling and external design-detector expectations are
+superseded, not current delivery requirements. Current UI work follows Astryx
+only and the [design contract](../../web/dashboard/DESIGN.md): Stone by default,
+with Y2K and Matcha available. Use the canonical technical guide's checks and
+report blocked checks honestly; the historical PASS record is not current UI or
+accessibility acceptance.
 
 ## Related contracts
 

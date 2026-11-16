@@ -42,8 +42,11 @@ You do not need to read every ADR, migration, or runbook first. Return to the re
 ## The system in one picture
 
 ```text
-Staff -> API -> PostgreSQL: accepted campaign + send outbox
-                         |
+Staff browser (React/Astryx) -> Go BFF -> API
+                                         |
+                                         v
+                    PostgreSQL: accepted campaign + send outbox
+                                         |
                       scheduler -> Kafka -> admission worker
                                                 |
                                                 v
@@ -57,8 +60,11 @@ Staff -> API -> PostgreSQL: accepted campaign + send outbox
                                               Kafka              PostgreSQL
 ```
 
+The BFF owns opaque browser sessions, checks Origin/CSRF on writes, and forwards only allowlisted routes. API keys and staff access/refresh tokens stay server-side; current API authorization and application grants still govern access.
+
 The scheduler also recovers queued work directly from PostgreSQL using the same audience preparer as admission. Kafka consumption need not happen before that recovery path. The [walkthrough](docs/notification-journey.md) explains the state changes hidden by this small diagram.
 
+- **Dashboard/BFF:** React/Astryx staff UI and Go browser session boundary in `cmd/dashboard`.
 - **Server:** auth, application-scoped business, staff, and profile APIs; mobile APIs are policy-enabled separately.
 - **Scheduler:** schedule promotion, send-outbox publication, queued recovery, and replay cleanup.
 - **Admission worker:** validates send events and persists audience/delivery work; never calls FCM.
@@ -87,6 +93,9 @@ and scheduler are real; external FCM is an isolated simulator. See
 | Task | Start here |
 | --- | --- |
 | Change an HTTP endpoint or business rule | [Developer task map](docs/development-guide.md#4-where-to-make-a-change) |
+| Change a frontend feature | [Dashboard guide](web/dashboard/README.md), [dashboard instructions](web/dashboard/AGENTS.md), [developer task map](docs/development-guide.md#4-where-to-make-a-change) |
+| Change BFF sessions, login rotation or route allowlisting | [BFF implementation](internal/dashboard/server.go), [dashboard foundation](docs/specs/dashboard-foundation.md) |
+| Configure application onboarding, FCM staging or verification | [Setup API](docs/api/application-onboarding-api.md), [runtime boundaries](docs/architecture.md#optional-onboarding-runtime), [local dashboard tutorial](docs/local-development.md#try-onboarding-in-the-dashboard) |
 | Understand send/schedule semantics | [Campaign acceptance API](docs/api/campaign-acceptance-api.md) |
 | Understand staff permissions and application grants | [Authorization API](docs/api/authorization-api.md), [application registry](docs/api/applications-api.md) |
 | Integrate mobile installation and receipts | [Installation API](docs/api/mobile-installations-api.md), [receipt API](docs/api/mobile-receipts.md) |

@@ -24,6 +24,18 @@ Creating an application leaves it `PROVISIONING` and grants nobody access. Activ
 
 Sources: [registry service](../internal/features/applications/service.go), [application authorizer](../internal/authz/application.go), [mobile authority](../internal/installation/authority.go), [registry contract](api/applications-api.md), [lifecycle runbook](runbooks/application-lifecycle.md).
 
+### Setup progress is not send authority
+
+The optional [onboarding setup API](api/application-onboarding-api.md) supports this preparation path:
+
+```text
+Registry -> allowlisted enrollment profile -> staged FCM candidate -> OAuth verified
+```
+
+These are setup milestones, not application lifecycle states. A profile configures allowed enrollment identity/platform mappings; it does not enroll a device. A candidate is staged credential metadata, not automatically the current delivery configuration. OAuth verification checks the credential, not target-project IAM permission or device delivery.
+
+`ACTIVE`, explicit staff grants and dispatch permission are separate gates; none follows automatically from OAuth success. Runtime readiness, approved routes/bindings and audience coverage still matter before sending. The implemented provisioner and scoped verifier are not a full runtime allocator; see [runtime boundaries](architecture.md#optional-onboarding-runtime) and the [local setup tutorial](local-development.md#try-onboarding-in-the-dashboard).
+
 ## Campaign and audience
 
 A **campaign** is the staff-authored notification: title, body, payload, target specification, and lifecycle. APIs call it a campaign; database and dispatch code also use **notification** for that same campaign identity. A campaign is not a single device push.

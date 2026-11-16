@@ -14,7 +14,7 @@ import { IconButton } from '@astryxdesign/core/IconButton';
 import { Banner } from '@astryxdesign/core/Banner';
 import { Icon } from '@astryxdesign/core/Icon';
 import { BellIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import loginTeamImage from '../assets/login-team.jpg';
+import loginTeamImage from '../assets/autumn.jpg';
 import { useAuth } from '../app/auth-context';
 import { ApiError } from '../lib/api/client';
 import { Failure, Loading } from '../components/ui/Feedback';

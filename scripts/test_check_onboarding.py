@@ -11,13 +11,21 @@ SPEC.loader.exec_module(checker)
 
 
 class OnboardingChecksTest(unittest.TestCase):
-    def test_canonical_onboarding_guides_and_dashboard_readme_are_checked(self):
+    def test_canonical_learning_dashboard_and_operational_guides_are_checked(self):
         self.assertTrue(
             {
                 "docs/local-development.md",
                 "docs/setup.md",
                 "docs/tooling/development-tools.md",
                 "web/dashboard/README.md",
+                "DASHBOARD-CAPABILITIES.md",
+                "docs/specs/dashboard-foundation.md",
+                "docs/specs/dashboard-administration.md",
+                "docs/specs/dashboard-operations.md",
+                "docs/runbooks/staging-dashboard.md",
+                "docs/runbooks/staging-api-docs.md",
+                "docs/contracts/README.md",
+                "docs/api/application-onboarding-api.md",
             }.issubset(checker.PAGES)
         )
 

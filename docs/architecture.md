@@ -11,7 +11,10 @@ The server registers auth, applications, staff, and profile modules in [serverRo
 ## Runtime map
 
 ```text
-Staff client -> API -> PostgreSQL: campaign + acceptance + send outbox
+Staff browser (React/Astryx) -> Go BFF -> API
+                                        |
+                                        v
+               PostgreSQL: campaign + acceptance + send outbox
                                   |
                          scheduler publishes outbox
                                   v
@@ -35,6 +38,7 @@ The diagram shows logical handoffs, not mandatory machines or a single sequentia
 
 | Executable | Owns | Does not do |
 | --- | --- | --- |
+| `cmd/dashboard` | Built React/Astryx assets and Go BFF; opaque browser sessions, Origin/CSRF checks, explicit upstream route allowlist | Expose API keys or staff tokens to the browser, replace API authorization, or send pushes |
 | `cmd/server` | HTTP contracts, current staff/session/application authority, transactional business writes, optional mobile APIs | Call FCM as part of accepting a send |
 | `cmd/scheduler` | Due schedules, send-outbox drain, queued recovery, expired replay-claim cleanup | Provider submission |
 | `cmd/worker`, `admission_only` | Verify send source, persist audience/intents or quarantine evidence, then acknowledge consumption | Provider submission |
@@ -45,7 +49,17 @@ The diagram shows logical handoffs, not mandatory machines or a single sequentia
 | `cmd/requeue` | Restricted operator reprocessing | Ordinary staff HTTP send workflow |
 | `cmd/retention` | Policy-controlled maintenance | Unrestricted deletion or an automatic part of API startup |
 
-Worker modes are selected by protected policy; they are separate configured instances of the same executable. Each process opens its own PostgreSQL pool; campaign and delivery state are shared through the database, not shared Go memory. Start reading their composition in [daemon runtime](../internal/daemon/runtime.go), scheduler tasks in [scheduler runtime](../internal/scheduler/runtime.go), and delivery tasks in [delivery runtime](../internal/daemon/delivery.go).
+Worker modes are selected by protected policy; they are separate configured instances of the same executable. Each database-using process owns its PostgreSQL pool; the BFF instead calls the API and holds bounded in-memory browser sessions. Campaign and delivery state are shared through the database, not shared Go memory. Start reading their composition in [daemon runtime](../internal/daemon/runtime.go), scheduler tasks in [scheduler runtime](../internal/scheduler/runtime.go), and delivery tasks in [delivery runtime](../internal/daemon/delivery.go).
+
+### Browser session boundary
+
+The React/Astryx UI calls `/bff/session`, `/bff/login` and allowlisted `/bff/api/...` routes, not the staff API with browser-held bearer tokens. The [BFF](../internal/dashboard/server.go) keeps API credentials server-side, rotates the opaque session ID and CSRF token at login, and requires the exact Origin and current CSRF token for writes. Upstream refresh is serialized per session after a definitive `401`; uncertain I/O is not a reason to replay a mutation. Sessions are single-replica, in-memory state; restarting the BFF requires login again. Backend database-backed authority and explicit grants remain mandatory. See the [dashboard foundation](specs/dashboard-foundation.md) for the session contract.
+
+### Optional onboarding runtime
+
+The optional [setup API](api/application-onboarding-api.md) connects registry/enrollment-profile setup to FCM candidate staging and OAuth verification. [`cmd/provisioner`](../cmd/provisioner/main.go) accepts reserved credential stages over private mTLS; [`cmd/controlplane`](../cmd/controlplane/main.go) processes app-scoped verification work with fenced database completion. Neither activates an application, enrolls devices, sends a test push or releases dispatch. OAuth verification does not prove target-project IAM permission or device delivery.
+
+This implemented scoped control-plane runtime is not the proposed full runtime allocator. The [runtime preparation subset](design/application-onboarding-runtime.md) produces constrained plans, not Docker deployment, capacity reservations, policy publication or runtime-readiness acknowledgements. For a safe exercise, use the [existing local dashboard onboarding tutorial](local-development.md#try-onboarding-in-the-dashboard); activation, grants and release remain separate gates.
 
 ## Why these boundaries exist
 
@@ -96,7 +110,7 @@ For acknowledgement mechanics see [admission consumer](../internal/dispatch/cons
 
 Local server/bootstrap commands can load environment configuration. Protected deployment has separate configuration loaders. Worker and scheduler commands require protected per-component policy; copying `.env.example` does not activate them. Their startup verifies database and approved broker/source identity before starting work.
 
-The default Compose stack is a development API plus dependencies, not a production topology. Production access, source registration, credentials, grants, dispatch policy, and acceptance evidence remain separate operator responsibilities. See [development guide](development-guide.md) for the safe starting point and [production readiness](analysis/production-readiness-plan.md) for current gates.
+The canonical [`./dev` environment](local-development.md) runs the React/Astryx frontend, Go BFF, API, PostgreSQL, Kafka, admission and delivery workers, and scheduler, plus local onboarding provisioner/verifier support. External OAuth/FCM is simulated; this isolated full stack is not a production topology or provider-acceptance evidence. Production access, source registration, credentials, grants, dispatch policy, and acceptance evidence remain separate operator responsibilities. See [development guide](development-guide.md) for the safe starting point and [production readiness](analysis/production-readiness-plan.md) for current gates.
 
 ## How to interpret older design material
 

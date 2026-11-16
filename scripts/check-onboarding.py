@@ -22,6 +22,14 @@ PAGES = (
     "docs/setup.md",
     "docs/tooling/development-tools.md",
     "web/dashboard/README.md",
+    "DASHBOARD-CAPABILITIES.md",
+    "docs/specs/dashboard-foundation.md",
+    "docs/specs/dashboard-administration.md",
+    "docs/specs/dashboard-operations.md",
+    "docs/runbooks/staging-dashboard.md",
+    "docs/runbooks/staging-api-docs.md",
+    "docs/contracts/README.md",
+    "docs/api/application-onboarding-api.md",
 )
 EXAMPLES = {
     "README.md": "First safe command",

@@ -1,6 +1,6 @@
 # Staging staff dashboard
 
-The Solid application and Go BFF share the existing private HTTPS gateway at
+The React/Astryx application and Go BFF share the existing private HTTPS gateway at
 `https://10.1.16.109:8443/login`. Office/VPN firewall rules remain authoritative.
 The browser must trust the staging CA. Use existing staging staff credentials;
 never use the isolated local fixture account against staging.
@@ -36,13 +36,29 @@ public dashboard HTML and anonymous secure-cookie boundary.
 
 ## Initial activation and CD
 
+**Stop before activation with the current source.** Schema 41 is the existing
+approved staging baseline, not the schema of current HEAD: the repository now
+contains migration `000044`. The CD receiver accepts only reviewed schema 41,
+and the publisher/receiver checks reject a committed migration maximum that
+differs from it. Preparing HEAD with `--schema 41`, pushing it, or attempting
+bootstrap does not resolve this mismatch or establish a deployable release.
+Follow the [CD trust and schema checks](../../deploy/staging/CD.md#trust-and-flow)
+and [separate schema/CD compatibility review](../../deploy/staging/CD.md#installation-and-custody)
+before proceeding. Do not bump schema settings, weaken the gate or automatically
+migrate staging to make dashboard activation pass. Migration, grants and receiver
+compatibility need separate approval; this runbook authorizes none of them.
+
+The sequence below applies only after source/schema compatibility is reviewed;
+schema 41 in the example means a committed candidate compatible with that
+approved baseline, not current HEAD.
+
 1. Install reviewed operations helpers with
    `python3 deploy/staging/staging.py install`. Until bootstrap commits its marker,
    commands retain the existing four-role inventory.
-2. Optionally build a committed candidate without activation using
-   `python3 deploy/staging/staging.py prepare --ref HEAD --schema 41 --release <id>`.
-   This is a preflight, not a replacement for hosted CI authorization.
-3. Push reviewed main. All hosted gates, including dashboard workflows and seven
+2. Optionally build a reviewed committed candidate without activation using
+   `python3 deploy/staging/staging.py prepare --ref <reviewed-commit> --schema 41 --release <id>`.
+   This is a preflight, not a replacement for hosted CI authorization or schema review.
+3. Push reviewed main only after the prerequisite above is satisfied. All hosted gates, including dashboard workflows and seven
    offline production images, must pass before the signed staging marker exists.
    CD deploys the existing backend roles and records the checked dashboard image.
 4. Run `python3 deploy/staging/staging.py dashboard-bootstrap`. It requires a
@@ -77,9 +93,28 @@ management plane.
 
 ## Acceptance and limitations
 
-Check login page/assets, anonymous secure cookies, real staff login/logout,
-granted applications and read-only campaign access. Verify unauthenticated
-private TLS clients cannot reach the BFF, and `/api/v1/` and `/docs/` still work.
-Record role readiness, clean schema and unchanged dispatch policy. Do not send a
-notification as a smoke test. Interactive UAT, accessibility on target devices,
-production capacity and production configuration remain separate release gates.
+The shared-staging baseline is read-only apart from normal staff login/logout.
+Check login page/assets, anonymous secure cookies and granted applications.
+Verify unauthenticated private TLS clients cannot reach the BFF, and `/api/v1/`
+and `/docs/` still work. Record role readiness, clean reviewed schema and unchanged
+dispatch policy. Use the matrix to cover the expanded UI, not just campaign lists:
+
+| Surface | Read-only staging baseline | Approved isolated-local synthetic checks only |
+| --- | --- | --- |
+| Campaigns | List, detail and status/statistics | Draft creation only; no send or scheduling |
+| Editor | Open existing DRAFT content without saving | Draft validation, save, conflict and unknown-outcome handling |
+| Templates | List and inspect content | Synthetic create/edit/deactivate |
+| Segments | List and inspect manually managed membership | Synthetic create/edit/delete and member add/remove |
+| Audience | Inspect users and available device-registration reads | Verify synthetic users; membership changes belong to Segments |
+| Administration | Inspect registry, staff and grants allowed by current permissions | Synthetic registry, staff and grant edits |
+| Activity | Inspect upload batches, batch rows and audit history | Verify entries from the approved local mutations above |
+| Setup (optional) | Inspect readiness only if separately deployed and authorized; otherwise record unavailable | Follow the [local setup tutorial](../local-development.md#try-onboarding-in-the-dashboard) for synthetic profile/upload/verification |
+
+Local mutation checks require approval for an isolated local fixture; they do not
+authorize shared-staging writes, real credentials or real sends. The optional
+[eight-route setup API](../api/application-onboarding-api.md) being available
+locally does not imply staging availability or authorize enabling it. Do not send
+a notification as a smoke test. Target-environment interactive UAT and
+accessibility checks remain required for these surfaces; local checks do not
+establish them. Production capacity and production configuration remain separate
+release gates.

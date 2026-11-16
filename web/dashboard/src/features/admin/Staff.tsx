@@ -456,7 +456,7 @@ export function StaffEditor() {
                       />
                     )}
                     <WriteFeedback operation={operation} />
-                    <HStack gap={2} wrap="wrap" justify="end">
+                    <HStack gap={2} wrap="wrap" justify="start">
                       <Button
                         label={
                           operation.pending()
@@ -480,12 +480,16 @@ export function StaffEditor() {
                   <VStack gap={3}>
                     <Heading level={2}>Account access</Heading>
                     <Text color="secondary">Sign-in status for {staff.data.email}.</Text>
-                    <Status value={staff.data.is_active ? 'ACTIVE' : 'INACTIVE'} />
-                    <Button
-                      label={staff.data.is_active ? 'Deactivate account' : 'Activate account'}
-                      isDisabled={operation.blocked() || selfSensitiveBlocked}
-                      onClick={() => void toggleStatus()}
-                    />
+                    <HStack>
+                      <Status value={staff.data.is_active ? 'ACTIVE' : 'INACTIVE'} />
+                    </HStack>
+                    <HStack>
+                      <Button
+                        label={staff.data.is_active ? 'Deactivate account' : 'Activate account'}
+                        isDisabled={operation.blocked() || selfSensitiveBlocked}
+                        onClick={() => void toggleStatus()}
+                      />
+                    </HStack>
                     {self && (
                       <Text color="secondary">
                         The account currently in use cannot be deactivated here.
@@ -547,7 +551,7 @@ export function StaffEditor() {
                                 role="status"
                               />
                             )}
-                            <HStack gap={2} wrap="wrap" justify="end">
+                            <HStack gap={2} wrap="wrap" justify="start">
                               <Button
                                 label={passwordOperation.pending() ? 'Saving…' : 'Set password'}
                                 type="submit"
@@ -571,12 +575,14 @@ export function StaffEditor() {
                     <Heading level={2}>Delete account</Heading>
                     <Text color="secondary">Deleted staff accounts cannot be restored.</Text>
                     <WriteFeedback operation={operation} />
-                    <Button
-                      label="Delete staff account"
-                      variant="destructive"
-                      isDisabled={operation.blocked() || selfSensitiveBlocked}
-                      onClick={() => void remove()}
-                    />
+                    <HStack>
+                      <Button
+                        label="Delete staff account"
+                        variant="destructive"
+                        isDisabled={operation.blocked() || selfSensitiveBlocked}
+                        onClick={() => void remove()}
+                      />
+                    </HStack>
                     {self && (
                       <Text color="secondary">The account currently in use cannot be deleted.</Text>
                     )}

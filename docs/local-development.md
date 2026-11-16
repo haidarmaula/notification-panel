@@ -112,6 +112,17 @@ After `./dev up`, open <http://127.0.0.1:5173/docs/>. Choose **Staff & campaigns
 canonical contracts in `docs/contracts/`, with bundled Swagger UI assets and
 no external validator. Reading the reference requires no credentials.
 
+The three-guide reference is intentionally not exhaustive. The optional
+[application onboarding setup API](api/application-onboarding-api.md) and its
+[implemented eight-operation OpenAPI contract](contracts/application-onboarding.openapi.json)
+are linked from the [contracts index](contracts/README.md) but are not bundled
+by `scripts/api_docs.py`. The local runner explicitly enables this protected
+capability; ordinary server defaults and staging deployment policy do not.
+Use the [synthetic setup tutorial below](#try-onboarding-in-the-dashboard), not
+the broader [proposed contract](contracts/proposed/application-onboarding.openapi.json),
+which does not describe the implemented route set. Local setup availability is
+not authorization to enable staging endpoints or mutate shared environments.
+
 **Try it out** sends requests to this local origin's `/api/v1/` paths. Vite
 forwards them to the local TLS gateway using the generated client certificate
 and verified server CA. No API key or bearer token is supplied automatically;

@@ -9,9 +9,20 @@ VPN. The browser must trust the existing staging CA. The documentation uses
 the same private gateway and firewall policy as the API.
 
 Choose one of three guides: Staff & campaigns, Applications & access, or
-Mobile & receipts. The 57 operations come from the canonical OpenAPI contracts
-in `docs/contracts/`. Download OpenAPI exports the selected contract for tools
-such as Postman. Operation counts change with the contracts.
+Mobile & receipts. These guides intentionally bundle only three canonical
+OpenAPI contracts; they are not an exhaustive inventory of implemented optional
+features. Download OpenAPI exports the selected contract for tools such as
+Postman. Operation counts change with the contracts.
+
+The optional [application onboarding setup API](../api/application-onboarding-api.md)
+has a separate [implemented eight-operation contract](../contracts/application-onboarding.openapi.json),
+listed in the [contracts index](../contracts/README.md), but is not bundled by
+`scripts/api_docs.py`. See the [synthetic local setup tutorial](../local-development.md#try-onboarding-in-the-dashboard)
+for local use. Local availability does not imply deployment approval: staging
+mounting and protected onboarding policy require separate review. These links
+do not publish or enable additional staging endpoints. The broader
+[proposed onboarding contract](../contracts/proposed/application-onboarding.openapi.json)
+remains proposed, not an implemented or deployed API.
 
 Use **Authorize** for the security schemes shown by each operation. Staff
 requests use `X-API-Key`; protected operations also require the staff bearer

@@ -13,6 +13,9 @@ import { Icon } from '@astryxdesign/core/Icon';
 import { Avatar } from '@astryxdesign/core/Avatar';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Banner } from '@astryxdesign/core/Banner';
+import { Divider } from '@astryxdesign/core/Divider';
+import { DropdownMenu } from '@astryxdesign/core/DropdownMenu';
+import { SegmentedControl, SegmentedControlItem } from '@astryxdesign/core/SegmentedControl';
 import { Table, proportional, type TableColumn } from '@astryxdesign/core/Table';
 import {
   BellIcon,
@@ -27,9 +30,10 @@ import {
   ArrowRightOnRectangleIcon,
   MoonIcon,
   SunIcon,
-  Bars3Icon,
+  ViewColumnsIcon,
+  ChevronUpDownIcon,
 } from '@heroicons/react/24/outline';
-import { useAppearance } from '../app/appearance-context';
+import { isThemeSlug, themeLabels, useAppearance } from '../app/appearance-context';
 import { useAuth } from '../app/auth-context';
 import { data, errorMessage } from '../lib/api/client';
 import type { Application } from '../lib/api/types';
@@ -43,6 +47,14 @@ export function Workspace() {
   const location = useLocation();
   const appearance = useAppearance();
   const isMobile = useMediaQuery('(width < 768px)');
+  const systemPrefersDark = useMediaQuery('(prefers-color-scheme: dark)');
+  const sidebarCollapsed = appearance.sidebarCollapsed && !isMobile;
+  const selectedAppearance =
+    appearance.appearance === 'system'
+      ? systemPrefersDark
+        ? 'dark'
+        : 'light'
+      : appearance.appearance;
   const [mobileOpen, setMobileOpen] = useState(false);
   const [logoutError, setLogoutError] = useState('');
   const [leaving, setLeaving] = useState(false);
@@ -88,22 +100,70 @@ export function Workspace() {
   ];
   const nav = (
     <SideNav
+      collapsible={{
+        isCollapsed: sidebarCollapsed,
+        onCollapsedChange: appearance.setSidebarCollapsed,
+        hasButton: false,
+      }}
       header={
         <SideNavHeading
           heading={application.data?.name ?? 'Your applications'}
           subheading={application.data?.key ?? 'Notification workspace'}
-          icon={<Icon icon={Squares2X2Icon} size="sm" />}
         />
       }
       footer={
-        <VStack gap={3} padding={3}>
-          <Text>{profile.data?.name ?? 'Staff account'}</Text>
-          <Button
-            label={leaving ? 'Signing out…' : 'Sign out'}
-            icon={<Icon icon={ArrowRightOnRectangleIcon} size="sm" />}
-            variant="ghost"
-            onClick={() => void logout()}
-            isDisabled={leaving}
+        <VStack gap={2} padding={2}>
+          {!isMobile && (
+            <SideNavItem
+              label={sidebarCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
+              icon={ViewColumnsIcon}
+              onClick={() => appearance.setSidebarCollapsed(!appearance.sidebarCollapsed)}
+            />
+          )}
+          {!isMobile && <Divider />}
+          <DropdownMenu
+            placement="above"
+            presentation="adaptive"
+            renderTrigger={(triggerProps) => (
+              <Button
+                {...triggerProps}
+                label="Account menu"
+                tooltip={sidebarCollapsed ? (profile.data?.name ?? 'My account') : undefined}
+                variant="ghost"
+                width="100%"
+                isIconOnly={sidebarCollapsed}
+                isDisabled={leaving}
+                icon={<Avatar name={profile.data?.name ?? 'Staff'} size="sm" />}
+                endContent={
+                  sidebarCollapsed ? undefined : <Icon icon={ChevronUpDownIcon} size="sm" />
+                }
+              >
+                {!sidebarCollapsed && (
+                  <VStack gap={0}>
+                    <Text weight="semibold" maxLines={1}>
+                      {profile.data?.name ?? 'Staff account'}
+                    </Text>
+                    <Text type="supporting" color="secondary" maxLines={1}>
+                      {profile.data?.email ?? 'Account settings'}
+                    </Text>
+                  </VStack>
+                )}
+              </Button>
+            )}
+            items={[
+              {
+                label: 'My account',
+                href: '/apps/settings',
+                icon: Cog6ToothIcon,
+                onClick: () => setMobileOpen(false),
+              },
+              {
+                label: leaving ? 'Signing out…' : 'Sign out',
+                icon: ArrowRightOnRectangleIcon,
+                onClick: () => void logout(),
+                isDisabled: leaving,
+              },
+            ]}
           />
           {logoutError && (
             <Banner status="error" title="Sign-out failed" description={logoutError} />
@@ -111,37 +171,39 @@ export function Workspace() {
         </VStack>
       }
     >
-      <SideNavSection title="Workspace" isHeaderHidden>
-        <SideNavItem
-          label="Applications"
-          icon={Squares2X2Icon}
-          isSelected={location.pathname === '/apps'}
-          href={'/apps'}
-          onClick={() => setMobileOpen(false)}
-        />
-        {params.appId &&
-          routes.map((item) => (
-            <SideNavItem
-              key={item.path}
-              label={item.label}
-              icon={item.icon}
-              isSelected={location.pathname.startsWith(item.path)}
-              href={item.path}
-              onClick={() => setMobileOpen(false)}
-            />
-          ))}
-        {params.appId &&
-          profile.data?.is_active &&
-          ['SUPER_ADMIN', 'ADMIN'].includes(profile.data.role_name) && (
-            <SideNavItem
-              label="Activity audit"
-              icon={QueueListIcon}
-              isSelected={location.pathname === `${appBase}/audit`}
-              href={`${appBase}/audit`}
-              onClick={() => setMobileOpen(false)}
-            />
-          )}
-      </SideNavSection>
+      <SideNavItem
+        label="Applications"
+        icon={Squares2X2Icon}
+        isSelected={location.pathname === '/apps'}
+        href={'/apps'}
+        onClick={() => setMobileOpen(false)}
+      />
+      {params.appId && (
+        <SideNavSection title="Workspace">
+          {params.appId &&
+            routes.map((item) => (
+              <SideNavItem
+                key={item.path}
+                label={item.label}
+                icon={item.icon}
+                isSelected={location.pathname.startsWith(item.path)}
+                href={item.path}
+                onClick={() => setMobileOpen(false)}
+              />
+            ))}
+          {params.appId &&
+            profile.data?.is_active &&
+            ['SUPER_ADMIN', 'ADMIN'].includes(profile.data.role_name) && (
+              <SideNavItem
+                label="Activity audit"
+                icon={QueueListIcon}
+                isSelected={location.pathname === `${appBase}/audit`}
+                href={`${appBase}/audit`}
+                onClick={() => setMobileOpen(false)}
+              />
+            )}
+        </SideNavSection>
+      )}
       {profile.data?.is_active && profile.data.role_name === 'SUPER_ADMIN' && (
         <SideNavSection title="Administration">
           <SideNavItem
@@ -187,44 +249,42 @@ export function Workspace() {
           }
           startContent={
             !isMobile && (
-              <HStack gap={3} vAlign="center">
-                <IconButton
-                  label={appearance.sidebarCollapsed ? 'Show sidebar' : 'Hide sidebar'}
-                  icon={<Icon icon={Bars3Icon} size="sm" />}
-                  variant="ghost"
-                  onClick={() => appearance.setSidebarCollapsed(!appearance.sidebarCollapsed)}
-                />
-                <Text type="supporting" color="secondary">
-                  {['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
-                    ? 'Local workspace'
-                    : window.location.host}
-                </Text>
-              </HStack>
+              <Text type="supporting" color="secondary">
+                {['localhost', '127.0.0.1', '[::1]'].includes(window.location.hostname)
+                  ? 'Local workspace'
+                  : window.location.host}
+              </Text>
             )
           }
           endContent={
-            <HStack gap={3} vAlign="center" hAlign="end">
+            <HStack gap={2}>
+              {!isMobile && (
+                <SegmentedControl
+                  value={appearance.theme}
+                  label="Design theme"
+                  size="sm"
+                  onChange={(value) => {
+                    if (isThemeSlug(value)) appearance.setTheme(value);
+                  }}
+                >
+                  {Object.entries(themeLabels).map(([value, label]) => (
+                    <SegmentedControlItem key={value} value={value} label={label} />
+                  ))}
+                </SegmentedControl>
+              )}
               <IconButton
-                label={appearance.appearance === 'dark' ? 'Use light mode' : 'Use dark mode'}
+                label={selectedAppearance === 'dark' ? 'Use light mode' : 'Use dark mode'}
                 variant="ghost"
-                icon={
-                  <Icon icon={appearance.appearance === 'dark' ? SunIcon : MoonIcon} size="sm" />
-                }
+                icon={<Icon icon={selectedAppearance === 'dark' ? SunIcon : MoonIcon} size="sm" />}
                 onClick={() =>
-                  appearance.setAppearance(appearance.appearance === 'dark' ? 'light' : 'dark')
+                  appearance.setAppearance(selectedAppearance === 'dark' ? 'light' : 'dark')
                 }
-              />
-              <IconButton
-                label="Profile and preferences"
-                href="/apps/settings"
-                variant="ghost"
-                icon={<Avatar name={profile.data?.name ?? 'Staff'} size="sm" />}
               />
             </HStack>
           }
         />
       }
-      sideNav={appearance.sidebarCollapsed && !isMobile ? undefined : nav}
+      sideNav={nav}
     >
       {params.appId && application.isPending ? (
         <PageFrame title="Loading application">

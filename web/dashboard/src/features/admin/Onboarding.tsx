@@ -778,7 +778,7 @@ export default function Onboarding(props: { applicationID: string }) {
                         isDisabled={locked}
                       />
                     ))}
-                    <HStack gap={2} wrap="wrap" justify="end">
+                    <HStack gap={2} wrap="wrap" justify="start">
                       <Button
                         label="Save profile"
                         type="submit"
@@ -854,7 +854,7 @@ export default function Onboarding(props: { applicationID: string }) {
                     />
                   )}
                   {account && <Text>Detected project: {account.project_id}</Text>}
-                  <HStack gap={2} wrap="wrap" justify="end">
+                  <HStack gap={2} wrap="wrap" justify="start">
                     <Button
                       label="Save credentials"
                       type="submit"
@@ -956,7 +956,7 @@ export default function Onboarding(props: { applicationID: string }) {
                       onChange={setHoldReason}
                       isDisabled={locked}
                     />
-                    <HStack gap={2} wrap="wrap" justify="end">
+                    <HStack gap={2} wrap="wrap" justify="start">
                       <Button label="Hold dispatch" type="submit" isDisabled={locked || !etag} />
                     </HStack>
                   </FormLayout>

@@ -17,6 +17,14 @@ Assume the application is active, the staff session and explicit project grant a
 | Campaign finalized | `COMPLETED` in this example | Still `SENT` until observations | No unfinished work remains and the campaign has successful intents. |
 | Devices report receipt/open | Campaign need not change | `DELIVERED` / `OPENED` as applicable | Authenticated client observations were recorded. |
 
+## Before the draft: browser to API
+
+Staff use the React/Astryx dashboard. The browser obtains an opaque session cookie and CSRF token from `GET /bff/session`, then logs in through `POST /bff/login` with the exact Origin and that token. Successful login rotates both the session ID and CSRF token. API keys and staff access/refresh tokens stay in the Go BFF, not browser storage.
+
+Draft and send requests go to allowlisted `/bff/api/apps/...` routes with the session cookie and current CSRF token; the [BFF](../internal/dashboard/server.go) forwards them to `/api/v1/apps/...` using server-held credentials. It does not replace the API's current session, permission and application-grant checks. See the [browser session boundary](architecture.md#browser-session-boundary) for refresh and restart behavior.
+
+The example starts after application setup. Registry creation, enrollment-profile configuration, FCM candidate staging and OAuth verification do not establish the active/granted/dispatch-permitted preconditions above. The [setup API](api/application-onboarding-api.md) and [local dashboard tutorial](local-development.md#try-onboarding-in-the-dashboard) cover that separate path without implying device enrollment or dispatch release.
+
 ## 1. Staff create the draft
 
 The current campaign routes are registered in [applications/module.go](../internal/features/applications/module.go). `POST /api/v1/apps/{app_id}/campaigns` enters the handler and the application service, not the old unscoped notifications module.
@@ -29,7 +37,7 @@ For request fields and validation, use the [draft API](api/scoped-campaign-draft
 
 ## 2. Staff press Send
 
-The HTTP operation is:
+The backend API contract is shown below. These credential headers are supplied by the BFF for dashboard requests, not by browser code:
 
 ```http
 POST /api/v1/apps/{app_id}/campaigns/{campaign_id}/send

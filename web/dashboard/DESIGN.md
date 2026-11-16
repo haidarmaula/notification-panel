@@ -15,15 +15,22 @@ of the design theme. Import the generated theme registry once at the app provide
 Use `defineTheme({ extends: importedTheme, ... })` for future customization. Do not
 eject a theme unless the user asks for an independent source fork.
 
-AppShell owns global navigation. TopNav holds product identity, the real host,
-appearance, and the account shortcut. Theme selection belongs in account settings. SideNav groups application work,
+AppShell owns global navigation. TopNav holds product identity and the real host.
+The TopNav exposes the Stone/Y2K/Matcha design theme selector beside an icon button
+that toggles Light/Dark; system color mode remains available in account settings. The
+SideNav footer owns the desktop collapse toggle and account menu.
+The account trigger shows an avatar, name, and email when expanded, and an avatar
+with a tooltip when collapsed. Account settings and sign-out live in that menu.
+SideNav groups application work,
 management, administration, and account destinations. Header controls hug their
 content and align to the end; do not reserve a fixed-width spacer for them.
 Each route owns region padding and scroll containment through Layout or the shared PageFrame; the shell adds no second inset. Headers, content, and footers share one padding token. Tables fill their region;
-forms and reading content have bounded widths. Form fields use FormLayout, and save actions hug their content. Preview regions use explicit responsive Grid or Layout budgets. Use rows for record collections,
+Page headers use the full available width and align to the left content inset.
+Forms and reading content have bounded widths and start at that same inset.
+Form fields use FormLayout, and page or inline form submit actions align left with their inputs. Dialog confirmations and wizard step navigation keep their contextual alignment. Preview regions use explicit responsive Grid or Layout budgets. Use rows for record collections,
 Token for status, and EmptyState for empty content. Center whole-page empty states
 within the available content region; keep filtered-table empty states in the table
-region. Use official Icon surfaces rather than unwrapped library icons.
+region. Use official Icon surfaces rather than unwrapped library icons. The campaign editor’s Android notification simulation may use a scoped CSS module and fixed neutral OS colors for device chrome only; keep its content in the campaign editor data flow and leave the surrounding dashboard theme untouched.
 
 Preserve readable dark-mode surfaces, visible focus, named controls, keyboard
 navigation, reduced-motion behavior, and mobile navigation. Confine horizontal

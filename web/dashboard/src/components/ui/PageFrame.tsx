@@ -24,7 +24,6 @@ export function PageFrame({
   return (
     <Layout
       padding={6}
-      contentWidth={contentWidth}
       header={
         <LayoutHeader>
           <VStack gap={4}>
@@ -55,7 +54,9 @@ export function PageFrame({
       }
       content={
         <LayoutContent>
-          <VStack gap={6}>{children}</VStack>
+          <VStack gap={6} width="100%" maxWidth={contentWidth}>
+            {children}
+          </VStack>
         </LayoutContent>
       }
     />

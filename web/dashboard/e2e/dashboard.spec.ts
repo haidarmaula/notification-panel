@@ -7,6 +7,10 @@ async function login(page: Page) {
   await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page.getByRole('heading', { name: 'Choose application' })).toBeVisible();
 }
+async function selectSignOut(page: Page) {
+  await page.getByRole('button', { name: 'Account menu', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
+}
 test('logs in through the real BFF, keeps credentials server-side, and logs out', async ({
   page,
 }) => {
@@ -20,7 +24,23 @@ test('logs in through the real BFF, keeps credentials server-side, and logs out'
   expect(text).not.toContain('refresh_token');
   const cookies = await page.context().cookies();
   expect(cookies.find((item) => item.name === 'hello_dev_session')?.httpOnly).toBe(true);
-  await page.getByRole('button', { name: 'Sign out', exact: true }).click();
+  const sidebar = page.getByRole('navigation', { name: 'Side navigation' });
+  await expect(
+    sidebar
+      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByText('Staf Pengujian', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    sidebar
+      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByText('staff@example.invalid', { exact: true }),
+  ).toBeVisible();
+  await expect(sidebar.locator('.astryx-avatar')).toBeVisible();
+  await page.getByRole('button', { name: 'Account menu', exact: true }).click();
+  const account = page.getByRole('menuitem', { name: 'My account', exact: true });
+  await expect(account).toHaveAttribute('href', '/apps/settings');
+  await page.keyboard.press('Escape');
+  await selectSignOut(page);
   await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
 });
 test('shows invalid credentials without creating an authenticated session', async ({ page }) => {
@@ -106,16 +126,53 @@ test('persists appearance and desktop sidebar preference without storing account
 }) => {
   await login(page);
   await page.goto(`/apps/${app}/settings`);
-  await page.getByRole('combobox', { name: 'Appearance' }).click();
-  await page.getByRole('option', { name: 'dark', exact: true }).click();
+  await page.getByRole('button', { name: 'Use dark mode', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await page.getByRole('button', { name: 'Hide sidebar' }).click();
-  await expect(page.getByRole('navigation', { name: 'Side navigation' })).not.toBeVisible();
+  const sidebar = page.getByRole('navigation', { name: 'Side navigation' });
+  await expect(
+    sidebar
+      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByText('Staf Pengujian', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    sidebar
+      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByText('staff@example.invalid', { exact: true }),
+  ).toBeVisible();
+  await expect(sidebar.locator('.astryx-avatar')).toBeVisible();
+  await sidebar.getByRole('button', { name: 'Collapse Sidebar' }).click();
+  await expect(sidebar).toBeVisible();
+  await expect(sidebar.getByRole('link', { name: 'Campaigns', exact: true })).toBeVisible();
+  expect((await sidebar.boundingBox())!.width).toBeLessThan(100);
+  await expect(
+    sidebar
+      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByText('Staf Pengujian', { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    sidebar
+      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByText('staff@example.invalid', { exact: true }),
+  ).toHaveCount(0);
+  await expect(sidebar.locator('.astryx-avatar')).toBeVisible();
   await page.reload();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
-  await expect(page.getByRole('button', { name: 'Show sidebar' })).toBeVisible();
-  await page.getByRole('button', { name: 'Show sidebar' }).click();
+  await expect(sidebar.getByRole('button', { name: 'Expand Sidebar' })).toBeVisible();
+  await expect(sidebar).toBeVisible();
+  expect((await sidebar.boundingBox())!.width).toBeLessThan(100);
+  await sidebar.getByRole('button', { name: 'Expand Sidebar' }).click();
   await expect(page.getByRole('navigation', { name: 'Side navigation' })).toBeVisible();
+  await expect(
+    sidebar
+      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByText('Staf Pengujian', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    sidebar
+      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByText('staff@example.invalid', { exact: true }),
+  ).toBeVisible();
+  await expect(sidebar.locator('.astryx-avatar')).toBeVisible();
   expect(await page.evaluate(() => Object.keys(localStorage).sort())).toEqual([
     'hello.sidebar',
     'hello.theme',
@@ -186,7 +243,7 @@ test('opens scoped device registrations and saves the staff profile', async ({ p
   await expect(page.getByText('Profile updated successfully.', { exact: true })).toBeVisible();
   await expect(
     page
-      .getByRole('navigation', { name: 'Side navigation' })
+      .getByRole('button', { name: 'Account menu', exact: true })
       .getByText('Staf Operasional', { exact: true }),
   ).toBeVisible();
 });
@@ -335,7 +392,7 @@ test('closed mobile navigation is skipped by keyboard and resets on desktop resi
   await page.setViewportSize({ width: 1440, height: 1000 });
   await expect(page.getByRole('main')).not.toHaveAttribute('inert');
   await expect(page.getByRole('heading', { name: 'Templates', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Hide sidebar' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Collapse Sidebar' })).toBeVisible();
 });
 
 test('dark login uses the official card composition and supports password visibility', async ({
