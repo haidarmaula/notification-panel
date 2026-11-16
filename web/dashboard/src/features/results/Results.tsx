@@ -99,7 +99,7 @@ export default function Results() {
           ? campaign.data.title
           : 'Provider acceptance, device reports, and opens are recorded separately.'
       }
-      back={{ label: 'Campaign details', href: path }}
+      back={{ label: 'Back to campaign details', href: path }}
       actions={
         <Button
           label="Refresh"
@@ -137,7 +137,7 @@ export default function Results() {
           }
         />
       ) : (
-        <VStack gap={5}>
+        <VStack gap={6}>
           <Text aria-live="polite">
             Updated:{' '}
             {statistics.dataUpdatedAt
@@ -214,6 +214,8 @@ export default function Results() {
             />
           ) : (
             <Table
+              density="balanced"
+              hasHover
               data={items}
               idKey="id"
               columns={
@@ -271,28 +273,32 @@ export default function Results() {
               }
             />
           )}
-          <HStack gap={3} wrap="wrap" hAlign="between" vAlign="center">
-            <Text>Page {cursors.length + 1}</Text>
-            <HStack gap={2}>
-              <Button
-                label="Previous"
-                variant="secondary"
-                size="sm"
-                isDisabled={!cursors.length || history.isFetching}
-                onClick={() => setCursors((current) => current.slice(0, -1))}
-              />
-              <Button
-                label="Next"
-                variant="secondary"
-                size="sm"
-                isDisabled={!history.data?.next_after_id || history.isFetching}
-                onClick={() => {
-                  const next = history.data?.next_after_id;
-                  if (next) setCursors((current) => [...current, next]);
-                }}
-              />
-            </HStack>
-          </HStack>
+          {!history.isPending &&
+            !history.isError &&
+            (!!history.data?.items.length || cursors.length > 0) && (
+              <HStack gap={3} wrap="wrap" hAlign="between" vAlign="center">
+                <Text>Page {cursors.length + 1}</Text>
+                <HStack gap={2}>
+                  <Button
+                    label="Previous"
+                    variant="secondary"
+                    size="sm"
+                    isDisabled={!cursors.length || history.isFetching}
+                    onClick={() => setCursors((current) => current.slice(0, -1))}
+                  />
+                  <Button
+                    label="Next"
+                    variant="secondary"
+                    size="sm"
+                    isDisabled={!history.data?.next_after_id || history.isFetching}
+                    onClick={() => {
+                      const next = history.data?.next_after_id;
+                      if (next) setCursors((current) => [...current, next]);
+                    }}
+                  />
+                </HStack>
+              </HStack>
+            )}
         </VStack>
       )}
     </PageFrame>

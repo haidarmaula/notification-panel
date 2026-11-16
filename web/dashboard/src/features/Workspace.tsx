@@ -360,7 +360,7 @@ export default function Applications() {
           description="Ask your administrator to grant application access."
         />
       ) : (
-        <Table data={query.data.items} columns={columns} idKey="id" density="balanced" hasHover />
+        <Table density="balanced" hasHover data={query.data.items} columns={columns} idKey="id" />
       )}
       <HStack gap={3} wrap="wrap" hAlign="between" vAlign="center">
         <Text>Page {page}</Text>

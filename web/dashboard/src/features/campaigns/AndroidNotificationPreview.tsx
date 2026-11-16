@@ -14,12 +14,14 @@ type AndroidNotificationPreviewProps = {
   applicationName: string;
   title: string;
   body: string;
+  context?: 'campaign' | 'template' | 'review';
 };
 
 export function AndroidNotificationPreview({
   applicationName,
   title,
   body,
+  context = 'campaign',
 }: AndroidNotificationPreviewProps) {
   return (
     <VStack gap={6} paddingBlockStart={4} width="100%">
@@ -55,8 +57,11 @@ export function AndroidNotificationPreview({
         </Text>
       </HStack>
       <Text color="secondary">
-        The final appearance depends on the recipient’s device. Saving a draft does not send a
-        notification; you will review it again before sending.
+        The final appearance depends on the recipient’s device.
+        {context === 'campaign' &&
+          ' Saving a draft does not send a notification; you will review it again before sending.'}
+        {context === 'template' &&
+          ' This template fills a draft; it does not send a notification. Review the message before sending.'}
       </Text>
     </VStack>
   );

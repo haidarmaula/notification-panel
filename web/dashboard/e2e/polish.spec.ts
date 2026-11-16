@@ -74,7 +74,10 @@ test('failed logout retains unsaved navigation protection', async ({ page }) => 
   await expect(page.getByText('Sign-out failed')).toBeVisible();
   await expect(accountMenu).toBeEnabled();
   page.once('dialog', (dialog) => dialog.dismiss());
-  await page.getByRole('link', { name: 'All campaigns', exact: true }).click();
+  await page
+    .getByRole('region', { name: 'Page header', exact: true })
+    .getByRole('link', { name: 'Back to campaigns', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/campaigns\/new$/);
   await expect(page.getByLabel('Notification title')).toHaveValue('Keep this draft');
   expect((await (await page.request.get('/bff/session')).json()).authenticated).toBe(true);
@@ -200,7 +203,10 @@ for (const theme of ['light', 'dark']) {
       );
       await page.screenshot({ path: `test-results/polish-editor-${width}-${theme}.png` });
       page.once('dialog', (dialog) => dialog.accept());
-      await page.getByRole('link', { name: 'All campaigns', exact: true }).click();
+      await page
+        .getByRole('region', { name: 'Page header', exact: true })
+        .getByRole('link', { name: 'Back to campaigns', exact: true })
+        .click();
       await expect(page).toHaveURL(`/apps/${app}/campaigns`);
       await page.goto(campaign);
       await expect(

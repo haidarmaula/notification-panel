@@ -1,3 +1,4 @@
+import { CreateAction, SubmitAction } from '../../components/ui/Actions';
 import { Button } from '@astryxdesign/core/Button';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { Link } from '@astryxdesign/core/Link';
@@ -34,14 +35,12 @@ export default function Segments() {
     <PageFrame
       title="Segments"
       description="Recipient groups whose members you manage manually."
-      actions={
-        <Button label="Create segment" variant="primary" href={`/apps/${appId}/segments/new`} />
-      }
+      actions={<CreateAction label="Create segment" href={`/apps/${appId}/segments/new`} />}
     >
       <QueryState query={page.query}>
         {page.query.data?.items.length ? (
           <Section padding={6}>
-            <Table aria-label="Recipient segments">
+            <Table density="balanced" hasHover aria-label="Recipient segments">
               <TableHeader>
                 <TableRow isHeaderRow>
                   <TableHeaderCell>Segment</TableHeaderCell>
@@ -54,7 +53,9 @@ export default function Segments() {
                   <TableRow key={item.id}>
                     <TableCell>
                       <Link href={`/apps/${appId}/segments/${item.id}`}>{item.name}</Link>{' '}
-                      <Text size="sm">#{item.id}</Text>
+                      <Text type="supporting" color="secondary">
+                        #{item.id}
+                      </Text>
                     </TableCell>
                     <TableCell>{item.description || '—'}</TableCell>
                     <TableCell>Manual</TableCell>
@@ -157,10 +158,9 @@ export function SegmentEditor() {
               />
               <WriteFeedback operation={operation} />
               <Stack direction="horizontal" gap={2} wrap="wrap">
-                <Button
+                <SubmitAction
                   label={operation.pending() ? 'Saving…' : 'Save segment'}
-                  type="submit"
-                  variant="primary"
+
                   isLoading={operation.pending()}
                   isDisabled={operation.blocked()}
                 />
@@ -216,7 +216,7 @@ function SegmentMembers() {
         <WriteFeedback operation={operation} />
         <QueryState query={members.query}>
           {members.query.data?.items.length ? (
-            <Table aria-label="Segment members">
+            <Table density="balanced" hasHover aria-label="Segment members">
               <TableHeader>
                 <TableRow isHeaderRow>
                   <TableHeaderCell>User</TableHeaderCell>
@@ -271,7 +271,9 @@ function SegmentMembers() {
                       >
                         <Stack direction="horizontal" gap={1} align="center">
                           <Text>{user.name || user.external_id}</Text>
-                          <Text size="sm">#{user.id}</Text>
+                          <Text type="supporting" color="secondary">
+                            #{user.id}
+                          </Text>
                         </Stack>
                         <Button
                           label={`Add ${user.name || user.external_id}`}

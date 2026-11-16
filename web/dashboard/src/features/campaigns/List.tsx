@@ -1,7 +1,8 @@
+import { CreateAction } from '../../components/ui/Actions';
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowRightIcon, MegaphoneIcon, PlusIcon } from '@heroicons/react/24/outline';
+import { ArrowRightIcon, MegaphoneIcon } from '@heroicons/react/24/outline';
 import { Button } from '@astryxdesign/core/Button';
 import { Collapsible } from '@astryxdesign/core/Collapsible';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
@@ -56,7 +57,7 @@ export default function Campaigns({ results = false }: { results?: boolean }) {
       height="fill"
       padding={6}
       header={
-        <LayoutHeader>
+        <LayoutHeader role="region" label="Page header">
           <HStack gap={4} wrap="wrap" hAlign="between" vAlign="center">
             <VStack gap={1}>
               <Heading level={1}>{results ? 'Delivery logs' : 'Campaigns'}</Heading>
@@ -66,12 +67,7 @@ export default function Campaigns({ results = false }: { results?: boolean }) {
                   : 'Manage campaign drafts, schedules, and delivery results.'}
               </Text>
             </VStack>
-            <Button
-              label="Create campaign"
-              variant="primary"
-              icon={<Icon icon={PlusIcon} size="sm" />}
-              href={`/apps/${appId}/campaigns/new`}
-            />
+            <CreateAction label="Create campaign" href={`/apps/${appId}/campaigns/new`} />
           </HStack>
         </LayoutHeader>
       }
@@ -79,28 +75,32 @@ export default function Campaigns({ results = false }: { results?: boolean }) {
         <LayoutFooter hasDivider>
           <HStack gap={4} wrap="wrap" hAlign="between" vAlign="center">
             <Text>Messages are sent only after you review and confirm the campaign.</Text>
-            <HStack gap={3} wrap="wrap" hAlign="between" vAlign="center">
-              <Text>Page {cursors.length + 1}</Text>
-              <HStack gap={2}>
-                <Button
-                  label="Previous"
-                  variant="secondary"
-                  size="sm"
-                  isDisabled={!cursors.length || query.isFetching}
-                  onClick={() => setCursors(cursors.slice(0, -1))}
-                />
-                <Button
-                  label="Next"
-                  variant="secondary"
-                  size="sm"
-                  isDisabled={!query.data?.next_after_id || query.isFetching}
-                  onClick={() => {
-                    const cursor = query.data?.next_after_id;
-                    if (cursor) setCursors([...cursors, cursor]);
-                  }}
-                />
-              </HStack>
-            </HStack>
+            {!query.isPending &&
+              !query.isError &&
+              (!!query.data?.items.length || cursors.length > 0) && (
+                <HStack gap={3} wrap="wrap" hAlign="between" vAlign="center">
+                  <Text>Page {cursors.length + 1}</Text>
+                  <HStack gap={2}>
+                    <Button
+                      label="Previous"
+                      variant="secondary"
+                      size="sm"
+                      isDisabled={!cursors.length || query.isFetching}
+                      onClick={() => setCursors(cursors.slice(0, -1))}
+                    />
+                    <Button
+                      label="Next"
+                      variant="secondary"
+                      size="sm"
+                      isDisabled={!query.data?.next_after_id || query.isFetching}
+                      onClick={() => {
+                        const cursor = query.data?.next_after_id;
+                        if (cursor) setCursors([...cursors, cursor]);
+                      }}
+                    />
+                  </HStack>
+                </HStack>
+              )}
           </HStack>
         </LayoutFooter>
       }
@@ -142,19 +142,19 @@ export default function Campaigns({ results = false }: { results?: boolean }) {
               title="Start with your first message"
               description="Create a draft, choose recipients, then review before sending."
               actions={
-                <Button
+                <CreateAction
                   label="Create your first campaign"
-                  variant="primary"
-                  icon={<Icon icon={PlusIcon} size="sm" />}
                   href={`/apps/${appId}/campaigns/new`}
                 />
               }
             />
           ) : (
             <Table
+              density="balanced"
+              hasHover
               data={rows}
               idKey="id"
-              density="balanced"
+
               columns={[
                 {
                   key: 'title',

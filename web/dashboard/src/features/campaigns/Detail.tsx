@@ -1,3 +1,4 @@
+import { AndroidNotificationPreview } from './AndroidNotificationPreview';
 import { useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -21,7 +22,7 @@ import { Text } from '@astryxdesign/core/Text';
 import { DateTimeInput, type ISODateTimeString } from '@astryxdesign/core/DateTimeInput';
 import { useAuth } from '../../app/auth-context';
 import { ApiError, data, errorMessage, request } from '../../lib/api/client';
-import type { Campaign } from '../../lib/api/types';
+import type { Application, Campaign } from '../../lib/api/types';
 import { Failure, Loading, RecipientLabel, Status } from '../../components/ui/Feedback';
 import { PageFrame } from '../../components/ui/PageFrame';
 
@@ -29,6 +30,11 @@ type Operation = 'send' | 'schedule' | 'delete';
 
 export default function Detail() {
   const { appId = '', campaignId = '' } = useParams();
+  const application = useQuery({
+    queryKey: ['application', appId],
+    queryFn: ({ signal }) => data<Application>(`/apps/${appId}`, signal),
+    enabled: Boolean(appId),
+  });
   const auth = useAuth();
   const client = useQueryClient();
   const navigate = useNavigate();
@@ -131,7 +137,7 @@ export default function Detail() {
           </>
         ) : undefined
       }
-      back={{ label: 'All campaigns', href: `/apps/${appId}/campaigns` }}
+      back={{ label: 'Back to campaigns', href: `/apps/${appId}/campaigns` }}
       actions={
         campaign ? (
           campaign.status === 'DRAFT' && !accepted && !uncertain ? (
@@ -171,7 +177,7 @@ export default function Detail() {
       ) : query.isError ? (
         <Failure error={query.error} retry={() => void query.refetch()} />
       ) : campaign ? (
-        <VStack gap={5}>
+        <VStack gap={6}>
           {uncertain && (
             <Text role="alert">
               The action outcome is uncertain. Check the latest status before trying again.
@@ -181,7 +187,7 @@ export default function Detail() {
             <Text role="status">Request accepted. Waiting for the campaign status to update…</Text>
           )}
           {success && <Text role="status">{success}</Text>}
-          <Grid columns={{ minWidth: 360, max: 2 }} gap={5} align="start">
+          <Grid columns={{ minWidth: 360, max: 2 }} gap={6} align="start">
             <Section padding={6}>
               <VStack gap={4}>
                 <Heading level={2}>Notification content</Heading>
@@ -218,16 +224,17 @@ export default function Detail() {
                 </Text>
               </VStack>
             </Section>
-            <Card>
-              <VStack gap={3}>
+            <Section padding={6}>
+              <VStack gap={4}>
                 <Heading level={2}>Notification preview</Heading>
-                <Heading level={3}>{campaign.title}</Heading>
-                <Text>{campaign.body}</Text>
-                <Text color="secondary">
-                  The actual appearance depends on each recipient’s device settings.
-                </Text>
+                <AndroidNotificationPreview
+                  applicationName={application.data?.name ?? 'Application'}
+                  title={campaign.title}
+                  body={campaign.body}
+                  context="review"
+                />
               </VStack>
-            </Card>
+            </Section>
           </Grid>
           <HStack gap={3} wrap="wrap" hAlign="between">
             <Link href={`${path}/results`}>
@@ -319,6 +326,7 @@ export default function Detail() {
                       : 'Confirm send'
               }
               variant={action === 'delete' ? 'destructive' : 'primary'}
+              isLoading={pending}
               isDisabled={pending || uncertain || accepted}
               onClick={() => void confirm()}
             />

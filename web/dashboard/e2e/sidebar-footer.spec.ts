@@ -13,6 +13,7 @@ for (const width of [1440, 390]) {
     const account = page.getByRole('button', { name: 'Account menu', exact: true });
     await expect(account).toContainText('staff@example.invalid');
     await expect(account.getByRole('img')).toBeVisible();
+    if (width < 768) await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Use dark mode', exact: true }).click();
     await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
     await expect(page.getByRole('button', { name: 'Use light mode', exact: true })).toBeVisible();
@@ -28,6 +29,7 @@ for (const width of [1440, 390]) {
       await expect(page.getByRole('button', { name: 'Use light mode', exact: true })).toBeVisible();
       await sidebar.getByRole('button', { name: 'Expand Sidebar' }).click();
     }
+    if (width < 768) await page.getByRole('button', { name: 'Open navigation' }).click();
     await account.click();
     await expect(page.getByRole('menuitem', { name: 'Sign out', exact: true })).toBeVisible();
     await page.getByRole('menuitem', { name: 'My account', exact: true }).click();

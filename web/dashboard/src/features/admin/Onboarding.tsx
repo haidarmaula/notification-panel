@@ -13,6 +13,7 @@ import { FormLayout } from '@astryxdesign/core/FormLayout';
 import { Token } from '@astryxdesign/core/Token';
 import { Loading, Status } from '../../components/ui/Feedback';
 import { PageFrame } from '../../components/ui/PageFrame';
+import { SubmitAction } from '../../components/ui/Actions';
 import { useAuth } from '../../app/auth-context';
 import { useUnsaved } from '../../app/unsaved';
 import { ApiError, request } from '../../lib/api/client';
@@ -186,6 +187,9 @@ export default function Onboarding(props: { applicationID: string }) {
   const [writeNotice, setWriteNotice] = useState('');
   const [conflict, setConflict] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [activeMutationKind, setActiveMutationKind] = useState<PendingMutation['kind'] | null>(
+    null,
+  );
   const [pendingMutation, setPendingMutation] = useState<PendingMutation>();
   const [retryAfter, setRetryAfter] = useState('');
   const [profileID, setProfileID] = useState('');
@@ -385,6 +389,7 @@ export default function Onboarding(props: { applicationID: string }) {
   async function runMutation(mutation: PendingMutation) {
     if (mutationInFlight.current) return;
     mutationInFlight.current = true;
+    setActiveMutationKind(mutation.kind);
     setBusy(true);
     setWriteError('');
     setWriteNotice('');
@@ -463,7 +468,10 @@ export default function Onboarding(props: { applicationID: string }) {
       }
     } finally {
       mutationInFlight.current = false;
-      if (alive.current) setBusy(false);
+      if (alive.current) {
+        setBusy(false);
+        setActiveMutationKind(null);
+      }
     }
   }
 
@@ -779,10 +787,9 @@ export default function Onboarding(props: { applicationID: string }) {
                       />
                     ))}
                     <HStack gap={2} wrap="wrap" justify="start">
-                      <Button
+                      <SubmitAction
                         label="Save profile"
-                        type="submit"
-                        variant="primary"
+                        isLoading={busy && activeMutationKind === 'enrollment'}
                         isDisabled={locked || !etag}
                       />
                       {readiness.enrollment_profile_id && (
@@ -799,14 +806,16 @@ export default function Onboarding(props: { applicationID: string }) {
                   </FormLayout>
                 </VStack>
               ) : (
-                <Button
-                  label="Change enrollment profile"
-                  onClick={() => {
-                    selectProfile(readiness.enrollment_profile_id ?? '');
-                    setEditingProfile(true);
-                  }}
-                  isDisabled={locked}
-                />
+                <HStack>
+                  <Button
+                    label="Change enrollment profile"
+                    onClick={() => {
+                      selectProfile(readiness.enrollment_profile_id ?? '');
+                      setEditingProfile(true);
+                    }}
+                    isDisabled={locked}
+                  />
+                </HStack>
               )}
             </VStack>
           </Section>
@@ -855,10 +864,9 @@ export default function Onboarding(props: { applicationID: string }) {
                   )}
                   {account && <Text>Detected project: {account.project_id}</Text>}
                   <HStack gap={2} wrap="wrap" justify="start">
-                    <Button
+                    <SubmitAction
                       label="Save credentials"
-                      type="submit"
-                      variant="primary"
+                      isLoading={busy && activeMutationKind === 'credential'}
                       isDisabled={locked || !credentialReady()}
                     />
                   </HStack>
@@ -874,17 +882,20 @@ export default function Onboarding(props: { applicationID: string }) {
                 delivery permissions or device receipt.
               </Text>
               {readiness.candidate_configuration_id ? (
-                <Button
-                  label="Verify FCM"
-                  variant="primary"
-                  onClick={() => void verifyCredential()}
-                  isDisabled={
-                    locked ||
-                    !etag ||
-                    !verifierReady() ||
-                    (!!operation && ['PENDING', 'RUNNING'].includes(operation.state))
-                  }
-                />
+                <HStack>
+                  <Button
+                    label="Verify FCM"
+                    variant="primary"
+                    isLoading={busy && activeMutationKind === 'verify'}
+                    onClick={() => void verifyCredential()}
+                    isDisabled={
+                      locked ||
+                      !etag ||
+                      !verifierReady() ||
+                      (!!operation && ['PENDING', 'RUNNING'].includes(operation.state))
+                    }
+                  />
+                </HStack>
               ) : (
                 <Text>Save a credential candidate before running this check.</Text>
               )}
@@ -912,11 +923,14 @@ export default function Onboarding(props: { applicationID: string }) {
               )}
               {retryAfter && <Text>Wait {retryAfter} seconds before trying again.</Text>}
               {pendingMutation && (
-                <Button
-                  label="Retry the same request"
-                  onClick={() => void runMutation(pendingMutation)}
-                  isDisabled={busy}
-                />
+                <HStack>
+                  <Button
+                    label="Retry the same request"
+                    onClick={() => void runMutation(pendingMutation)}
+                    isLoading={busy && activeMutationKind === pendingMutation.kind}
+                    isDisabled={busy}
+                  />
+                </HStack>
               )}
               {conflict && (
                 <Banner
@@ -957,7 +971,12 @@ export default function Onboarding(props: { applicationID: string }) {
                       isDisabled={locked}
                     />
                     <HStack gap={2} wrap="wrap" justify="start">
-                      <Button label="Hold dispatch" type="submit" isDisabled={locked || !etag} />
+                      <Button
+                        label="Hold dispatch"
+                        type="submit"
+                        isLoading={busy && activeMutationKind === 'hold'}
+                        isDisabled={locked || !etag}
+                      />
                     </HStack>
                   </FormLayout>
                 </VStack>
@@ -965,7 +984,7 @@ export default function Onboarding(props: { applicationID: string }) {
             </Section>
           )}
           <Section padding={6} dividers={['bottom']}>
-            <VStack gap={3}>
+            <VStack gap={4}>
               <Heading level={2}>Device receipt</Heading>
               <Text>
                 Device enrollment is not available yet. An OAuth check does not establish that a
@@ -974,7 +993,7 @@ export default function Onboarding(props: { applicationID: string }) {
             </VStack>
           </Section>
           <Section padding={6}>
-            <VStack gap={3}>
+            <VStack gap={4}>
               <Heading level={2}>Approvals</Heading>
               {approvalError ? (
                 <Text role="status">{approvalError}</Text>

@@ -1,6 +1,6 @@
-import { Button } from '@astryxdesign/core/Button';
+import { AndroidNotificationPreview } from '../campaigns/AndroidNotificationPreview';
+import { CreateAction, SubmitAction } from '../../components/ui/Actions';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
-import { Card } from '@astryxdesign/core/Card';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { FormLayout } from '@astryxdesign/core/FormLayout';
 import { Grid } from '@astryxdesign/core/Grid';
@@ -22,6 +22,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { data } from '../../lib/api/client';
+import type { Application } from '../../lib/api/types';
 import type { components } from '../../lib/api/generated/staff';
 import { usePage, useWrite } from './data-hooks';
 import { Pager, QueryState, WriteFeedback } from './shared';
@@ -36,14 +37,12 @@ export default function Templates() {
     <PageFrame
       title="Templates"
       description="Save frequently used messages for future campaigns."
-      actions={
-        <Button label="Create template" variant="primary" href={`/apps/${appId}/templates/new`} />
-      }
+      actions={<CreateAction label="Create template" href={`/apps/${appId}/templates/new`} />}
     >
       <QueryState query={page.query}>
         {page.query.data?.items.length ? (
           <Section padding={6}>
-            <Table aria-label="Message templates">
+            <Table density="balanced" hasHover aria-label="Message templates">
               <TableHeader>
                 <TableRow isHeaderRow>
                   <TableHeaderCell>Template</TableHeaderCell>
@@ -57,7 +56,9 @@ export default function Templates() {
                   <TableRow key={item.id}>
                     <TableCell>
                       <Link href={`/apps/${appId}/templates/${item.id}`}>{item.name}</Link>{' '}
-                      <Text size="sm">#{item.id}</Text>
+                      <Text type="supporting" color="secondary">
+                        #{item.id}
+                      </Text>
                     </TableCell>
                     <TableCell>{item.title_template}</TableCell>
                     <TableCell>
@@ -90,6 +91,11 @@ export function TemplateEditor() {
   const client = useQueryClient();
   const operation = useWrite();
   const setDirty = useUnsaved();
+  const application = useQuery({
+    queryKey: ['application', appId],
+    queryFn: ({ signal }) => data<Application>(`/apps/${appId}`, signal),
+    enabled: Boolean(appId),
+  });
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
@@ -139,7 +145,7 @@ export function TemplateEditor() {
     >
       <QueryState query={formQuery} loadingVariant="form">
         <form onInput={() => setDirty(true)} onSubmit={(event) => void save(event)}>
-          <Grid columns={{ minWidth: 420, max: 2 }} gap={6} align="start">
+          <Grid columns={{ minWidth: 420, max: 2 }} columnGap={8} rowGap={6} align="start">
             <FormLayout>
               <TextInput
                 label="Template name"
@@ -171,26 +177,23 @@ export function TemplateEditor() {
               />
               <WriteFeedback operation={operation} />
               <Stack direction="horizontal" gap={2} wrap="wrap">
-                <Button
+                <SubmitAction
                   label={operation.pending() ? 'Saving…' : 'Save template'}
-                  type="submit"
-                  variant="primary"
+
                   isLoading={operation.pending()}
                   isDisabled={operation.blocked()}
                 />
               </Stack>
             </FormLayout>
-            <Card>
-              <Stack gap={2}>
-                <Heading level={2}>Message preview</Heading>
-                <Heading level={3}>{title || 'Notification title'}</Heading>
-                <Text>{body || 'Your message content.'}</Text>
-                <Text>
-                  This template fills a draft; it does not send a notification. Review the message
-                  before sending.
-                </Text>
-              </Stack>
-            </Card>
+            <Stack gap={4}>
+              <Heading level={2}>Notification preview</Heading>
+              <AndroidNotificationPreview
+                applicationName={application.data?.name ?? 'Application'}
+                title={title}
+                body={body}
+                context="template"
+              />
+            </Stack>
           </Grid>
         </form>
       </QueryState>

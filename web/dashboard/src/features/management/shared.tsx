@@ -6,6 +6,12 @@ import { Banner } from '@astryxdesign/core/Banner';
 import type { usePage, useWrite } from './data-hooks';
 import { Failure, Loading } from '../../components/ui/Feedback';
 export function Pager<T>({ page }: { page: ReturnType<typeof usePage<T>> }) {
+  if (
+    page.query.isPending ||
+    page.query.isError ||
+    (!page.query.data?.items.length && !page.cursors().length)
+  )
+    return null;
   return (
     <HStack gap={3} wrap="wrap" vAlign="center" hAlign="between">
       <Text>Page {page.cursors().length + 1}</Text>

@@ -1,4 +1,4 @@
-import { Button } from '@astryxdesign/core/Button';
+import { SubmitAction } from '../../components/ui/Actions';
 import { FormLayout } from '@astryxdesign/core/FormLayout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { Section } from '@astryxdesign/core/Section';
@@ -51,7 +51,7 @@ export default function PasswordForm() {
   }
   return (
     <Section padding={6}>
-      <Stack gap={3}>
+      <Stack gap={4}>
         <Heading level={2}>Change password</Heading>
         <Text>
           After a successful change, all account sessions are revoked and you must sign in again.
@@ -89,10 +89,9 @@ export default function PasswordForm() {
             />
             <WriteFeedback operation={operation} />
             <Stack direction="horizontal">
-              <Button
+              <SubmitAction
                 label={operation.pending() ? 'Changing…' : 'Change password'}
-                type="submit"
-                variant="primary"
+
                 isLoading={operation.pending()}
                 isDisabled={operation.blocked()}
               />

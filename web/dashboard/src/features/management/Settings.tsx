@@ -1,4 +1,4 @@
-import { Button } from '@astryxdesign/core/Button';
+import { SubmitAction } from '../../components/ui/Actions';
 import { FormLayout } from '@astryxdesign/core/FormLayout';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { Section } from '@astryxdesign/core/Section';
@@ -59,16 +59,20 @@ export default function Settings() {
   }
   return (
     <PageFrame
-      title="Settings"
+      title="My account"
       description="Manage display preferences, your profile, and account security."
       contentWidth={720}
     >
       <Section padding={6}>
-        <Stack gap={3}>
+        <Stack gap={4}>
           <Heading level={2}>Appearance</Heading>
           <Selector
             label="Appearance"
-            options={['system', 'light', 'dark']}
+            options={[
+              { value: 'system', label: 'System' },
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ]}
             value={preferences.appearance}
             onChange={(value) =>
               value && preferences.setAppearance(value as 'system' | 'light' | 'dark')
@@ -88,7 +92,7 @@ export default function Settings() {
       </Section>
       {appId && (
         <Section padding={6}>
-          <Stack gap={3}>
+          <Stack gap={4}>
             <Heading level={2}>Application and environment</Heading>
             <QueryState query={app}>
               {app.data && (
@@ -113,7 +117,7 @@ export default function Settings() {
         </Section>
       )}
       <Section padding={6}>
-        <Stack gap={3}>
+        <Stack gap={4}>
           <Heading level={2}>My profile</Heading>
           <QueryState query={profile} loadingVariant="form">
             <form onInput={() => setDirty(true)} onSubmit={(event) => void save(event)}>
@@ -142,10 +146,9 @@ export default function Settings() {
                 <WriteFeedback operation={operation} />
                 {saved && <Text role="status">Profile updated successfully.</Text>}
                 <Stack direction="horizontal">
-                  <Button
+                  <SubmitAction
                     label={operation.pending() ? 'Saving…' : 'Save profile'}
-                    type="submit"
-                    variant="primary"
+
                     isLoading={operation.pending()}
                     isDisabled={operation.blocked()}
                   />

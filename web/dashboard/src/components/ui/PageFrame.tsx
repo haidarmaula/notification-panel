@@ -1,7 +1,5 @@
 import type { ReactNode } from 'react';
-import { ArrowLeftIcon } from '@heroicons/react/24/outline';
-import { Button } from '@astryxdesign/core/Button';
-import { Icon } from '@astryxdesign/core/Icon';
+import { BackAction } from './Actions';
 import { Layout, LayoutContent, LayoutHeader } from '@astryxdesign/core/Layout';
 import { HStack, VStack } from '@astryxdesign/core/Stack';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -25,17 +23,11 @@ export function PageFrame({
     <Layout
       padding={6}
       header={
-        <LayoutHeader>
+        <LayoutHeader role="region" label="Page header">
           <VStack gap={4}>
             {back && (
               <HStack>
-                <Button
-                  label={back.label}
-                  href={back.href}
-                  variant="ghost"
-                  size="sm"
-                  icon={<Icon icon={ArrowLeftIcon} size="sm" />}
-                />
+                <BackAction label={back.label} href={back.href} />
               </HStack>
             )}
             <HStack gap={4} wrap="wrap" hAlign="between" vAlign="center">

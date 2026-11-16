@@ -38,7 +38,7 @@ export default function Audience() {
       <QueryState query={page.query}>
         {page.query.data?.items.length ? (
           <Section padding={6}>
-            <Table aria-label="Application users">
+            <Table density="balanced" hasHover aria-label="Application users">
               <TableHeader>
                 <TableRow isHeaderRow>
                   <TableHeaderCell>User</TableHeaderCell>
@@ -53,7 +53,9 @@ export default function Audience() {
                       <Link href={`/apps/${appId}/audience/${item.id}`}>
                         {item.name || `User #${item.id}`}
                       </Link>{' '}
-                      <Text size="sm">#{item.id}</Text>
+                      <Text type="supporting" color="secondary">
+                        #{item.id}
+                      </Text>
                     </TableCell>
                     <TableCell>{item.external_id}</TableCell>
                     <TableCell>
@@ -106,7 +108,7 @@ export function UserDetail() {
             </Text>
             <QueryState query={devices.query}>
               {devices.query.data?.items.length ? (
-                <Table aria-label="Registered devices">
+                <Table density="balanced" hasHover aria-label="Registered devices">
                   <TableHeader>
                     <TableRow isHeaderRow>
                       <TableHeaderCell>Device</TableHeaderCell>

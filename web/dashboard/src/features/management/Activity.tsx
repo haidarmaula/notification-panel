@@ -36,7 +36,7 @@ export default function Uploads() {
       <QueryState query={page.query}>
         {page.query.data?.items.length ? (
           <Section padding={6}>
-            <Table aria-label="Upload history">
+            <Table density="balanced" hasHover aria-label="Upload history">
               <TableHeader>
                 <TableRow isHeaderRow>
                   <TableHeaderCell>Batch</TableHeaderCell>
@@ -84,7 +84,7 @@ export function UploadRows() {
       <QueryState query={page.query}>
         {page.query.data?.items.length ? (
           <Section padding={6}>
-            <Table aria-label={`Rows in batch ${batchId}`}>
+            <Table density="balanced" hasHover aria-label={`Rows in batch ${batchId}`}>
               <TableHeader>
                 <TableRow isHeaderRow>
                   <TableHeaderCell>Row ID</TableHeaderCell>
@@ -133,7 +133,7 @@ export function AuditLog() {
       <QueryState query={page.query}>
         {page.query.data?.items.length ? (
           <Section padding={6}>
-            <Table aria-label="Application audit activity">
+            <Table density="balanced" hasHover aria-label="Application audit activity">
               <TableHeader>
                 <TableRow isHeaderRow>
                   <TableHeaderCell>Activity</TableHeaderCell>

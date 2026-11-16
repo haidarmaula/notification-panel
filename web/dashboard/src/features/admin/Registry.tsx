@@ -20,6 +20,7 @@ import { QueryState, WriteFeedback } from '../management/shared';
 import { useUnsaved } from '../../app/unsaved';
 import { Failure, Status } from '../../components/ui/Feedback';
 import { PageFrame } from '../../components/ui/PageFrame';
+import { SubmitAction } from '../../components/ui/Actions';
 
 type Application = components['schemas']['Application'];
 type Grant = components['schemas']['StaffGrant'];
@@ -107,7 +108,7 @@ export default function Registry() {
       description="Manage application identities and explicitly granted staff access."
     >
       <Section padding={6}>
-        <VStack gap={3}>
+        <VStack gap={4}>
           <Heading level={2}>Registered applications</Heading>
           <form
             onSubmit={(event) => {
@@ -170,7 +171,7 @@ export default function Registry() {
                     renderCell: (app) => <Text>{app.id}</Text>,
                   },
                 ]}
-                density="compact"
+                density="balanced"
                 hasHover
               />
             ) : (
@@ -180,29 +181,31 @@ export default function Registry() {
               />
             )}
           </QueryState>
-          <HStack gap={2} wrap="wrap" align="center" justify="between">
-            <Text>
-              Page {page} · {list.data?.total ?? 0} applications
-            </Text>
-            <HStack gap={2}>
-              <Button
-                label="Previous"
-                size="sm"
-                isDisabled={page <= 1 || list.isFetching}
-                onClick={() => setPage((current) => current - 1)}
-              />
-              <Button
-                label="Next"
-                size="sm"
-                isDisabled={page * pageSize >= (list.data?.total ?? 0) || list.isFetching}
-                onClick={() => setPage((current) => current + 1)}
-              />
+          {!list.isPending && !list.isError && ((list.data?.total ?? 0) > 0 || page > 1) && (
+            <HStack gap={2} wrap="wrap" align="center" justify="between">
+              <Text>
+                Page {page} · {list.data?.total ?? 0} applications
+              </Text>
+              <HStack gap={2}>
+                <Button
+                  label="Previous"
+                  size="sm"
+                  isDisabled={page <= 1 || list.isFetching}
+                  onClick={() => setPage((current) => current - 1)}
+                />
+                <Button
+                  label="Next"
+                  size="sm"
+                  isDisabled={page * pageSize >= (list.data?.total ?? 0) || list.isFetching}
+                  onClick={() => setPage((current) => current + 1)}
+                />
+              </HStack>
             </HStack>
-          </HStack>
+          )}
         </VStack>
       </Section>
       <Section padding={6}>
-        <VStack gap={3}>
+        <VStack gap={4}>
           <Heading level={2}>Register an application</Heading>
           <Text color="secondary">
             New applications begin in Prepared status. Registration does not activate an application
@@ -245,10 +248,9 @@ export default function Registry() {
                   />
                 )}
                 <HStack gap={2} wrap="wrap" justify="start">
-                  <Button
+                  <SubmitAction
                     label={operation.pending() ? 'Registering…' : 'Register application'}
-                    type="submit"
-                    variant="primary"
+                    isLoading={operation.pending()}
                     isDisabled={operation.blocked()}
                   />
                 </HStack>
@@ -266,6 +268,7 @@ export function RegistryDetail() {
   const client = useQueryClient();
   const operation = useWrite();
   const [writeTarget, setWriteTarget] = useState<'name' | 'grant'>('name');
+  const [pendingAction, setPendingAction] = useState<'rename' | 'grant' | 'revoke' | null>(null);
   const [renameError, setRenameError] = useState('');
   const setDirty = useUnsaved();
   const [name, setName] = useState('');
@@ -320,12 +323,18 @@ export function RegistryDetail() {
       return;
     }
     setWriteTarget('name');
-    const result = await operation.write<{ data: Application }>(
-      `/admin/apps/${params.managedAppId}`,
-      'PATCH',
-      { name: cleanName },
-      { ifMatch: app.data.etag },
-    );
+    setPendingAction('rename');
+    let result: { data: Application } | undefined;
+    try {
+      result = await operation.write<{ data: Application }>(
+        `/admin/apps/${params.managedAppId}`,
+        'PATCH',
+        { name: cleanName },
+        { ifMatch: app.data.etag },
+      );
+    } finally {
+      setPendingAction(null);
+    }
     if (!result) {
       if (operation.status() === 412) setConflict(true);
       return;
@@ -391,13 +400,19 @@ export function RegistryDetail() {
     setGrantNotice('');
     setGrantConflict(false);
     setWriteTarget('grant');
+    setPendingAction('grant');
     const conditions = existing ? { ifMatch: existing.etag } : { ifNoneMatch: '*' as const };
-    const result = await operation.write<{ data: Grant }>(
-      `/admin/apps/${params.managedAppId}/staff-grants/${id}`,
-      'PUT',
-      { is_active: true },
-      conditions,
-    );
+    let result: { data: Grant } | undefined;
+    try {
+      result = await operation.write<{ data: Grant }>(
+        `/admin/apps/${params.managedAppId}/staff-grants/${id}`,
+        'PUT',
+        { is_active: true },
+        conditions,
+      );
+    } finally {
+      setPendingAction(null);
+    }
     if (!result) {
       if (operation.status() === 412) setGrantConflict(true);
       setGrantError(operation.error());
@@ -419,12 +434,18 @@ export function RegistryDetail() {
     setGrantNotice('');
     setGrantConflict(false);
     setWriteTarget('grant');
-    const result = await operation.write<void>(
-      `/admin/apps/${params.managedAppId}/staff-grants/${id}`,
-      'DELETE',
-      undefined,
-      { ifMatch: grant.etag },
-    );
+    setPendingAction('revoke');
+    let result: void | undefined;
+    try {
+      result = await operation.write<void>(
+        `/admin/apps/${params.managedAppId}/staff-grants/${id}`,
+        'DELETE',
+        undefined,
+        { ifMatch: grant.etag },
+      );
+    } finally {
+      setPendingAction(null);
+    }
     if (result === undefined && operation.error()) {
       if (operation.status() === 412) setGrantConflict(true);
       setGrantError(operation.error());
@@ -442,13 +463,13 @@ export function RegistryDetail() {
     <PageFrame
       title={app.data?.data.name ?? 'Application'}
       description="Application identity and staff access grants."
-      back={{ label: 'Application registry', href: '/apps/admin/applications' }}
+      back={{ label: 'Back to application registry', href: '/apps/admin/applications' }}
       contentWidth={1120}
     >
       <QueryState query={app}>
         <VStack gap={4}>
           <Section padding={6}>
-            <VStack gap={3}>
+            <VStack gap={4}>
               <Heading level={2}>Identity</Heading>
               {app.data && (
                 <MetadataList>
@@ -472,7 +493,7 @@ export function RegistryDetail() {
             </VStack>
           </Section>
           <Section padding={6}>
-            <VStack gap={3}>
+            <VStack gap={4}>
               <Heading level={2}>Rename application</Heading>
               <form
                 onInput={() => {
@@ -525,10 +546,9 @@ export function RegistryDetail() {
                       </VStack>
                     )}
                     <HStack gap={2} wrap="wrap" justify="start">
-                      <Button
+                      <SubmitAction
                         label="Save name"
-                        type="submit"
-                        variant="primary"
+                        isLoading={pendingAction === 'rename'}
                         isDisabled={conflict || !app.data?.etag || operation.blocked()}
                       />
                     </HStack>
@@ -538,7 +558,7 @@ export function RegistryDetail() {
             </VStack>
           </Section>
           <Section padding={6}>
-            <VStack gap={3}>
+            <VStack gap={4}>
               <Heading level={2}>Staff access</Heading>
               <Text color="secondary">
                 Look up staff by ID, then grant or revoke access after reviewing their identity.
@@ -609,6 +629,7 @@ export function RegistryDetail() {
                       <Button
                         label="Grant or restore access"
                         variant="primary"
+                        isLoading={pendingAction === 'grant'}
                         isDisabled={
                           (!lookupIsMissing && !grantLookup.isSuccess) ||
                           operation.blocked() ||
@@ -620,6 +641,7 @@ export function RegistryDetail() {
                       {grantLookup.data?.data.is_active && (
                         <Button
                           label="Revoke access"
+                          isLoading={pendingAction === 'revoke'}
                           isDisabled={
                             operation.blocked() || grantConflict || grantLookup.isFetching
                           }
@@ -674,7 +696,7 @@ export function RegistryDetail() {
                         ),
                       },
                     ]}
-                    density="compact"
+                    density="balanced"
                     hasHover
                   />
                 ) : (
@@ -684,27 +706,31 @@ export function RegistryDetail() {
                   />
                 )}
               </QueryState>
-              <HStack gap={2} wrap="wrap" align="center" justify="between">
-                <Text>
-                  Page {grantPage} · {grants.data?.total ?? 0} rows
-                </Text>
-                <HStack gap={2}>
-                  <Button
-                    label="Previous"
-                    size="sm"
-                    isDisabled={grantPage <= 1 || grants.isFetching}
-                    onClick={() => setGrantPage((current) => current - 1)}
-                  />
-                  <Button
-                    label="Next"
-                    size="sm"
-                    isDisabled={
-                      grantPage * pageSize >= (grants.data?.total ?? 0) || grants.isFetching
-                    }
-                    onClick={() => setGrantPage((current) => current + 1)}
-                  />
-                </HStack>
-              </HStack>
+              {!grants.isPending &&
+                !grants.isError &&
+                ((grants.data?.total ?? 0) > 0 || grantPage > 1) && (
+                  <HStack gap={2} wrap="wrap" align="center" justify="between">
+                    <Text>
+                      Page {grantPage} · {grants.data?.total ?? 0} rows
+                    </Text>
+                    <HStack gap={2}>
+                      <Button
+                        label="Previous"
+                        size="sm"
+                        isDisabled={grantPage <= 1 || grants.isFetching}
+                        onClick={() => setGrantPage((current) => current - 1)}
+                      />
+                      <Button
+                        label="Next"
+                        size="sm"
+                        isDisabled={
+                          grantPage * pageSize >= (grants.data?.total ?? 0) || grants.isFetching
+                        }
+                        onClick={() => setGrantPage((current) => current + 1)}
+                      />
+                    </HStack>
+                  </HStack>
+                )}
             </VStack>
           </Section>
         </VStack>

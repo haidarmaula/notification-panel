@@ -180,7 +180,7 @@ test('persists appearance and desktop sidebar preference without storing account
   await page.screenshot({ path: 'test-results/dashboard-settings-dark.png', fullPage: true });
   await page.emulateMedia({ colorScheme: 'light' });
   await page.getByRole('combobox', { name: 'Appearance' }).click();
-  await page.getByRole('option', { name: 'system', exact: true }).click();
+  await page.getByRole('option', { name: 'System', exact: true }).click();
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   await page.emulateMedia({ colorScheme: 'dark' });
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
@@ -286,7 +286,10 @@ test('accepted fixture campaign immediately removes draft actions and refreshes 
   await expect(page.getByText('Queued', { exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Edit draft', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Review send', exact: true })).toHaveCount(0);
-  await page.getByRole('link', { name: 'All campaigns', exact: true }).click();
+  await page
+    .getByRole('region', { name: 'Page header', exact: true })
+    .getByRole('link', { name: 'Back to campaigns', exact: true })
+    .click();
   await expect(page.getByRole('row').filter({ hasText: 'Fixture acceptance' })).toContainText(
     'Queued',
   );
@@ -428,7 +431,7 @@ test('dark editor keeps readable enabled recipients and notification content', a
   await login(page);
   await page.goto(`/apps/${app}/settings`);
   await page.getByRole('combobox', { name: 'Appearance' }).click();
-  await page.getByRole('option', { name: 'dark', exact: true }).click();
+  await page.getByRole('option', { name: 'Dark', exact: true }).click();
   await page.goto(`/apps/${app}/campaigns/new`);
   await expect(page.getByRole('button', { name: 'Penerima Uji #42' })).toBeEnabled();
   const contrast = await page.evaluate(() => {
@@ -462,7 +465,7 @@ test('dark editor keeps readable enabled recipients and notification content', a
       {
         selector: 'back link',
         element: Array.from(document.querySelectorAll<HTMLElement>('a')).find((item) =>
-          item.textContent?.includes('All campaigns'),
+          item.textContent?.includes('Back to campaigns'),
         ),
       },
     ];

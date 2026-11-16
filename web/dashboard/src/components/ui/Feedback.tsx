@@ -78,5 +78,17 @@ export function Status({ value }: { value: string }) {
       : ['QUEUED', 'PROCESSING', 'SCHEDULED'].includes(value)
         ? 'blue'
         : 'gray';
-  return <Token label={labels[value] ?? value} color={color} size="sm" />;
+  return (
+    <Token
+      label={
+        labels[value] ??
+        value
+          .replaceAll('_', ' ')
+          .toLowerCase()
+          .replace(/^./, (letter) => letter.toUpperCase())
+      }
+      color={color}
+      size="sm"
+    />
+  );
 }

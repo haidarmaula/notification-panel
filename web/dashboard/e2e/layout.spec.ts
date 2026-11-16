@@ -18,7 +18,7 @@ test('template form and preview retain usable independent regions on desktop', a
   await expect(field).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   const input = await field.boundingBox();
-  const preview = await page.getByRole('heading', { name: 'Message preview' }).boundingBox();
+  const preview = await page.getByRole('heading', { name: 'Notification preview' }).boundingBox();
   expect(input!.width).toBeGreaterThanOrEqual(320);
   expect(input!.width).toBeLessThanOrEqual(720);
   expect(preview!.x).toBeGreaterThan(input!.x + input!.width);
@@ -32,7 +32,7 @@ test('settings sections align with their page heading and keep bounded fields', 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await login(page);
   await page.goto(`${app}/settings`);
-  const title = page.getByRole('heading', { name: 'Settings', exact: true });
+  const title = page.getByRole('heading', { name: 'My account', exact: true });
   await expect(title).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
   const heading = await title.boundingBox();

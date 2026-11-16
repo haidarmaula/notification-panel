@@ -19,6 +19,7 @@ import { useWrite } from '../management/data-hooks';
 import { WriteFeedback } from '../management/shared';
 import { useUnsaved } from '../../app/unsaved';
 import { PageFrame } from '../../components/ui/PageFrame';
+import { CreateAction, SubmitAction } from '../../components/ui/Actions';
 
 type StaffId = number | string;
 type StaffRole = 'SUPER_ADMIN' | 'ADMIN' | 'OPERATOR' | 'VIEWER';
@@ -79,6 +80,7 @@ export default function Staff() {
   });
   const operation = useWrite();
   const client = useQueryClient();
+  const [pendingStaffID, setPendingStaffID] = useState<string | null>(null);
   const profileKnown = profile.isSuccess && profile.data?.id !== undefined;
   const isCurrentStaff = (staff: StaffMember) =>
     profileKnown && String(profile.data!.id) === String(staff.id);
@@ -91,11 +93,16 @@ export default function Staff() {
 
   async function toggleActive(staff: StaffMember) {
     if (!profileKnown || isCurrentStaff(staff) || operation.blocked()) return;
-    const result = await operation.write<Envelope<StaffMember>>(
-      `/staff/${String(staff.id)}/status`,
-      'PATCH',
-      { is_active: !staff.is_active },
-    );
+    const id = String(staff.id);
+    setPendingStaffID(id);
+    let result: Envelope<StaffMember> | undefined;
+    try {
+      result = await operation.write<Envelope<StaffMember>>(`/staff/${id}/status`, 'PATCH', {
+        is_active: !staff.is_active,
+      });
+    } finally {
+      setPendingStaffID(null);
+    }
     if (result) await client.invalidateQueries({ queryKey: ['admin-staff'] });
   }
 
@@ -105,7 +112,7 @@ export default function Staff() {
     <PageFrame
       title="Staff management"
       description="Manage accounts that can access the dashboard."
-      actions={<Button label="Add staff" href="/apps/admin/staff/new" variant="primary" />}
+      actions={<CreateAction label="Add staff" href="/apps/admin/staff/new" />}
     >
       <Section padding={6}>
         <VStack gap={3}>
@@ -173,17 +180,18 @@ export default function Staff() {
                     <Button
                       label={`${staff.is_active ? 'Deactivate' : 'Activate'} ${staff.name}${isCurrentStaff(staff) ? ', your account' : !profileKnown ? ', identity not verified' : ''}`}
                       size="sm"
+                      isLoading={pendingStaffID === String(staff.id)}
                       isDisabled={operation.blocked() || !profileKnown || isCurrentStaff(staff)}
                       onClick={() => void toggleActive(staff)}
                     />
                   ),
                 },
               ]}
-              density="compact"
+              density="balanced"
               hasHover
             />
           )}
-          {!page.isPending && !page.isError && rows.length > 0 && (
+          {!page.isPending && !page.isError && (rows.length > 0 || pageNumber > 1) && (
             <HStack gap={2} wrap="wrap" align="center" justify="between">
               <Text>
                 {page.data?.total ?? 0} accounts · Page {pageNumber} of{' '}
@@ -235,6 +243,7 @@ export function StaffEditor() {
   const [newPassword, setNewPassword] = useState('');
   const [profileError, setProfileError] = useState('');
   const [passwordValidationError, setPasswordValidationError] = useState('');
+  const [pendingAction, setPendingAction] = useState<'profile' | 'status' | 'delete' | null>(null);
   const [resetSuccess, setResetSuccess] = useState(false);
   const loadedId = useRef('');
   const createPasswordRef = useRef<HTMLInputElement>(null);
@@ -304,11 +313,17 @@ export function StaffEditor() {
         return;
       }
     }
-    const result = await operation.write<Envelope<StaffMember>>(
-      editing ? `/staff/${params.staffId}` : '/staff',
-      editing ? 'PATCH' : 'POST',
-      body,
-    );
+    setPendingAction('profile');
+    let result: Envelope<StaffMember> | undefined;
+    try {
+      result = await operation.write<Envelope<StaffMember>>(
+        editing ? `/staff/${params.staffId}` : '/staff',
+        editing ? 'PATCH' : 'POST',
+        body,
+      );
+    } finally {
+      setPendingAction(null);
+    }
     if (result) {
       setDirty(false);
       setPassword('');
@@ -357,7 +372,13 @@ export function StaffEditor() {
       )
     )
       return;
-    const result = await operation.write<Envelope<null>>(`/staff/${params.staffId}`, 'DELETE');
+    setPendingAction('delete');
+    let result: Envelope<null> | undefined;
+    try {
+      result = await operation.write<Envelope<null>>(`/staff/${params.staffId}`, 'DELETE');
+    } finally {
+      setPendingAction(null);
+    }
     if (result) {
       setDirty(false);
       await client.invalidateQueries({ queryKey: ['admin-staff'] });
@@ -367,11 +388,17 @@ export function StaffEditor() {
 
   async function toggleStatus() {
     if (!staff.data || !profileKnown || self || operation.blocked()) return;
-    const result = await operation.write<Envelope<StaffMember>>(
-      `/staff/${params.staffId}/status`,
-      'PATCH',
-      { is_active: !staff.data.is_active },
-    );
+    setPendingAction('status');
+    let result: Envelope<StaffMember> | undefined;
+    try {
+      result = await operation.write<Envelope<StaffMember>>(
+        `/staff/${params.staffId}/status`,
+        'PATCH',
+        { is_active: !staff.data.is_active },
+      );
+    } finally {
+      setPendingAction(null);
+    }
     if (result) {
       await client.invalidateQueries({ queryKey: ['admin-staff-detail', params.staffId] });
       await client.invalidateQueries({ queryKey: ['admin-staff'] });
@@ -386,7 +413,7 @@ export function StaffEditor() {
           ? 'Update staff account details and access.'
           : 'Create an account for a member of the administration team.'
       }
-      back={{ label: 'All staff', href: '/apps/admin/staff' }}
+      back={{ label: 'Back to staff', href: '/apps/admin/staff' }}
       contentWidth={720}
     >
       {!editing || validId ? (
@@ -397,7 +424,7 @@ export function StaffEditor() {
         ) : (
           <VStack gap={3}>
             <Section padding={6}>
-              <VStack gap={3}>
+              <VStack gap={4}>
                 <Heading level={2}>Account information</Heading>
                 <form onInput={changed} onSubmit={(event) => void save(event)}>
                   <FormLayout>
@@ -457,16 +484,15 @@ export function StaffEditor() {
                     )}
                     <WriteFeedback operation={operation} />
                     <HStack gap={2} wrap="wrap" justify="start">
-                      <Button
+                      <SubmitAction
                         label={
-                          operation.pending()
+                          pendingAction === 'profile'
                             ? 'Saving…'
                             : editing
                               ? 'Save changes'
                               : 'Create staff account'
                         }
-                        type="submit"
-                        variant="primary"
+                        isLoading={pendingAction === 'profile'}
                         isDisabled={operation.blocked()}
                       />
                     </HStack>
@@ -477,7 +503,7 @@ export function StaffEditor() {
             {editing && staff.data && (
               <>
                 <Section padding={6}>
-                  <VStack gap={3}>
+                  <VStack gap={4}>
                     <Heading level={2}>Account access</Heading>
                     <Text color="secondary">Sign-in status for {staff.data.email}.</Text>
                     <HStack>
@@ -486,6 +512,7 @@ export function StaffEditor() {
                     <HStack>
                       <Button
                         label={staff.data.is_active ? 'Deactivate account' : 'Activate account'}
+                        isLoading={pendingAction === 'status'}
                         isDisabled={operation.blocked() || selfSensitiveBlocked}
                         onClick={() => void toggleStatus()}
                       />
@@ -498,7 +525,7 @@ export function StaffEditor() {
                   </VStack>
                 </Section>
                 <Section padding={6}>
-                  <VStack gap={3}>
+                  <VStack gap={4}>
                     <Heading level={2}>Set staff password</Heading>
                     <Text color="secondary">
                       Confirm with your current password before setting a new password.
@@ -552,9 +579,9 @@ export function StaffEditor() {
                               />
                             )}
                             <HStack gap={2} wrap="wrap" justify="start">
-                              <Button
+                              <SubmitAction
                                 label={passwordOperation.pending() ? 'Saving…' : 'Set password'}
-                                type="submit"
+                                isLoading={passwordOperation.pending()}
                                 isDisabled={passwordOperation.blocked()}
                               />
                             </HStack>
@@ -571,7 +598,7 @@ export function StaffEditor() {
                   </VStack>
                 </Section>
                 <Section padding={6}>
-                  <VStack gap={3}>
+                  <VStack gap={4}>
                     <Heading level={2}>Delete account</Heading>
                     <Text color="secondary">Deleted staff accounts cannot be restored.</Text>
                     <WriteFeedback operation={operation} />
@@ -579,6 +606,7 @@ export function StaffEditor() {
                       <Button
                         label="Delete staff account"
                         variant="destructive"
+                        isLoading={pendingAction === 'delete'}
                         isDisabled={operation.blocked() || selfSensitiveBlocked}
                         onClick={() => void remove()}
                       />

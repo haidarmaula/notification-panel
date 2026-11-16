@@ -1,4 +1,4 @@
-import { Button } from '@astryxdesign/core/Button';
+import { CreateAction } from '../../components/ui/Actions';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { Icon } from '@astryxdesign/core/Icon';
 import { List, ListItem } from '@astryxdesign/core/List';
@@ -39,11 +39,9 @@ export default function Overview() {
     <PageFrame
       title="Overview"
       description="Continue campaign work and review delivery results."
-      actions={
-        <Button label="Create campaign" variant="primary" href={`/apps/${appId}/campaigns/new`} />
-      }
+      actions={<CreateAction label="Create campaign" href={`/apps/${appId}/campaigns/new`} />}
     >
-      <Stack gap={5}>
+      <Stack gap={6}>
         <Section padding={6}>
           <Stack gap={3}>
             <Stack direction="horizontal" gap={2} align="center" justify="between" wrap="wrap">
@@ -52,7 +50,7 @@ export default function Overview() {
             </Stack>
             <QueryState query={recent}>
               {recent.data?.items.length ? (
-                <Table aria-label="Recent campaigns">
+                <Table density="balanced" hasHover aria-label="Recent campaigns">
                   <TableHeader>
                     <TableRow isHeaderRow>
                       <TableHeaderCell>Campaign</TableHeaderCell>
@@ -65,7 +63,9 @@ export default function Overview() {
                       <TableRow key={item.id}>
                         <TableCell>
                           <Link href={`/apps/${appId}/campaigns/${item.id}`}>{item.title}</Link>{' '}
-                          <Text size="sm">#{item.id}</Text>
+                          <Text type="supporting" color="secondary">
+                            #{item.id}
+                          </Text>
                         </TableCell>
                         <TableCell>
                           <Status value={item.status} />
@@ -88,9 +88,9 @@ export default function Overview() {
                   title="No campaigns yet"
                   description="Create a draft campaign to start preparing a delivery."
                   actions={
-                    <Button
+                    <CreateAction
                       label="Create campaign"
-                      variant="primary"
+
                       href={`/apps/${appId}/campaigns/new`}
                     />
                   }
@@ -100,7 +100,7 @@ export default function Overview() {
           </Stack>
         </Section>
         <Section padding={6}>
-          <Stack gap={3}>
+          <Stack gap={4}>
             <Heading level={2}>Prepare a delivery</Heading>
             <List>
               <ListItem

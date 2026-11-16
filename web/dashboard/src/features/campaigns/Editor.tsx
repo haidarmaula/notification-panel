@@ -1,7 +1,8 @@
+import { BackAction, SubmitAction } from '../../components/ui/Actions';
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeftIcon, CheckIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { Button } from '@astryxdesign/core/Button';
 import { Card } from '@astryxdesign/core/Card';
 import { CheckboxInput } from '@astryxdesign/core/CheckboxInput';
@@ -244,18 +245,13 @@ export default function Editor() {
     <Layout
       height="fill"
       padding={6}
-      contentWidth={1120}
       header={
-        <LayoutHeader>
-          <VStack gap={3}>
-            <Link href={`/apps/${appId}/campaigns`}>
-              <HStack gap={2} vAlign="center">
-                <Icon icon={ArrowLeftIcon} size="sm" />
-                <Text>All campaigns</Text>
-              </HStack>
-            </Link>
+        <LayoutHeader role="region" label="Page header">
+          <VStack gap={4}>
+            <HStack>
+              <BackAction label="Back to campaigns" href={`/apps/${appId}/campaigns`} />
+            </HStack>
             <VStack gap={1}>
-              <Text>{editing ? `DRAFT #${campaignId}` : 'NEW CAMPAIGN'}</Text>
               <Heading level={1}>{editing ? 'Edit draft' : 'Create campaign'}</Heading>
               <Text color="secondary">Save as a draft. Sending happens in a separate step.</Text>
             </VStack>
@@ -266,18 +262,11 @@ export default function Editor() {
         editable && !(editing && draft.isPending) ? (
           <LayoutFooter hasDivider>
             <HStack gap={2} wrap="wrap" hAlign="start">
-              <Button
-                label="Back"
-                variant="ghost"
-                icon={<Icon icon={ArrowLeftIcon} size="sm" />}
-                href={`/apps/${appId}/campaigns`}
-              />
-              <Button
+              <BackAction label="Back to campaigns" href={`/apps/${appId}/campaigns`} />
+              <SubmitAction
                 label={mutation.isPending ? 'Saving…' : 'Save draft'}
-                variant="primary"
-                type="submit"
+                isLoading={mutation.isPending}
                 form="campaign-form"
-                icon={<Icon icon={CheckIcon} size="sm" />}
                 isDisabled={mutation.isPending || uncertain || templateDisabled}
               />
             </HStack>
@@ -286,7 +275,7 @@ export default function Editor() {
       }
     >
       <LayoutContent>
-        <VStack gap={4}>
+        <VStack gap={6} width="100%" maxWidth={1120}>
           {selectedTemplate && template.isError && (
             <Failure error={template.error} retry={() => void template.refetch()} />
           )}
@@ -513,17 +502,19 @@ export default function Editor() {
                     </Card>
                   )}
                 </VStack>
-                <Collapsible
-                  trigger="Notification preview"
-                  isOpen={previewOpen}
-                  onOpenChange={setPreviewOpen}
-                >
-                  <AndroidNotificationPreview
-                    applicationName={application.data?.name ?? 'Application'}
-                    title={title}
-                    body={body}
-                  />
-                </Collapsible>
+                <Section padding={6}>
+                  <Collapsible
+                    trigger="Notification preview"
+                    isOpen={previewOpen}
+                    onOpenChange={setPreviewOpen}
+                  >
+                    <AndroidNotificationPreview
+                      applicationName={application.data?.name ?? 'Application'}
+                      title={title}
+                      body={body}
+                    />
+                  </Collapsible>
+                </Section>
               </Grid>
             </form>
           )}
