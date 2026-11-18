@@ -1,6 +1,6 @@
 # Application onboarding implementation tasks
 
-Date: 2026-11-14. Status: implementation authorized and in progress. Setup and
+Date: 2026-11-18. Status: implementation authorized and in progress. Setup and
 OAuth slices have local code/tests; the full onboarding flow is not complete.
 [Current checkpoint](../analysis/application-onboarding-implementation.md).
 [Design](../design/application-onboarding.md) · [Spec](../specs/application-onboarding.md) ·
@@ -14,8 +14,14 @@ OAuth slices have local code/tests; the full onboarding flow is not complete.
 | ONB-02 | Root-owned file publication and reserved mTLS ingestion implemented; automatic orphan cleanup remains |
 | ONB-03 | Eight optional setup routes, safe responses, BFF forwarding and dashboard setup forms implemented; activation/device/release steps remain |
 | ONB-04 | Scoped OAuth worker and fenced completion implemented and exercised through the real local BFF/provisioner; target IAM/dry-run is part of ONB-08 |
-| ONB-05 | Protected delivery policy/plan and safe mobile-policy composition implemented; deployment, capacity reservation and runtime acknowledgements remain |
-| ONB-06 through ONB-12 | Pending except the one-way hold, supporting DTOs, audit constants and operational design |
+| ONB-05 | Partial: protected delivery plan/mobile composition, scoped durable capacity reservations (M45), typed stopped-container preparation and operator-only controlplane command implemented; full policy publication/runtime deployment, identities and acknowledgements remain |
+| ONB-06 | Pending: DB-delegated activation, executor, runtime acknowledgements and crash/race recovery; activation handler is not mounted |
+| ONB-07 | Pending: approved immutable enrollment trust/profile publication and external identity broker integration; policy-composition helper alone does not activate enrollment |
+| ONB-08 | Pending: scoped evidence import/list, delegated cohort approval and target-project dry-run; a test installation in VERIFY currently returns unavailable |
+| ONB-09 | Pending: guarded PILOT/FULL executors and device/campaign receipt evidence; synchronous one-way hold is implemented |
+| ONB-10 | Pending: held credential promotion, drain/rollback, recovery and reference-checked cleanup; promotion handler is not mounted |
+| ONB-11 | Partial: existing setup dashboard uses eight active endpoints; activation/device/release UI remains for a separate frontend session after backend gates; [frontend handoff](../api/application-onboarding-frontend-handoff.md) records current contract |
+| ONB-12 | Pending: production allocation, operational metrics, encrypted off-host backup/restore and staged rollout evidence; local simulator success is not production enablement |
 
 ## Ordered slices
 

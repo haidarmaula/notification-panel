@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Application onboarding setup",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "description": "Implemented local setup contract. This optional capability is not deployed by this artifact. The setup routes mount only when the protected onboarding server policy and mTLS provisioner are configured; verification also requires a per-application verifier grant.",
     "x-status": "implemented-local-not-deployed"
   },
@@ -59,14 +59,40 @@
                     "candidate_configuration_id": null,
                     "enrollment_profile_id": null,
                     "cohort_id": null,
-                    "checks": [],
+                    "checks": [
+                      {
+                        "code": "LOCAL_FORMAT",
+                        "outcome": "NOT_CHECKED",
+                        "checked_at": null,
+                        "expires_at": null
+                      },
+                      {
+                        "code": "OAUTH",
+                        "outcome": "NOT_CHECKED",
+                        "checked_at": null,
+                        "expires_at": null
+                      },
+                      {
+                        "code": "TARGET_PERMISSION",
+                        "outcome": "NOT_CHECKED",
+                        "checked_at": null,
+                        "expires_at": null
+                      },
+                      {
+                        "code": "DEVICE_DELIVERY",
+                        "outcome": "NOT_CHECKED",
+                        "checked_at": null,
+                        "expires_at": null
+                      }
+                    ],
                     "blockers": [
                       "FCM_NOT_CONFIGURED"
                     ],
                     "next_actions": [
                       "CONFIGURE_FCM"
                     ],
-                    "last_operation": null
+                    "last_operation": null,
+                    "checks_configuration_id": null
                   }
                 }
               }
@@ -772,14 +798,40 @@
                     "candidate_configuration_id": null,
                     "enrollment_profile_id": "11111111-1111-4111-8111-111111111111",
                     "cohort_id": null,
-                    "checks": [],
+                    "checks": [
+                      {
+                        "code": "LOCAL_FORMAT",
+                        "outcome": "NOT_CHECKED",
+                        "checked_at": null,
+                        "expires_at": null
+                      },
+                      {
+                        "code": "OAUTH",
+                        "outcome": "NOT_CHECKED",
+                        "checked_at": null,
+                        "expires_at": null
+                      },
+                      {
+                        "code": "TARGET_PERMISSION",
+                        "outcome": "NOT_CHECKED",
+                        "checked_at": null,
+                        "expires_at": null
+                      },
+                      {
+                        "code": "DEVICE_DELIVERY",
+                        "outcome": "NOT_CHECKED",
+                        "checked_at": null,
+                        "expires_at": null
+                      }
+                    ],
                     "blockers": [
                       "FCM_NOT_CONFIGURED"
                     ],
                     "next_actions": [
                       "CONFIGURE_FCM"
                     ],
-                    "last_operation": null
+                    "last_operation": null,
+                    "checks_configuration_id": null
                   }
                 }
               }
@@ -2077,7 +2129,8 @@
                 "checked_at",
                 "expires_at"
               ]
-            }
+            },
+            "description": "Latest evidence for checks_configuration_id. Missing LOCAL_FORMAT, OAUTH, TARGET_PERMISSION and DEVICE_DELIVERY checks are explicitly NOT_CHECKED with null timestamps. OAuth success alone proves neither target permission nor device reception."
           },
           "blockers": {
             "type": "array",
@@ -2100,6 +2153,18 @@
                 "type": "null"
               }
             ]
+          },
+          "checks_configuration_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Configuration evaluated by checks: candidate when present, otherwise current. Candidate evidence does not attest the active configuration."
           }
         },
         "required": [
@@ -2112,6 +2177,7 @@
           "candidate_configuration_id",
           "enrollment_profile_id",
           "cohort_id",
+          "checks_configuration_id",
           "checks",
           "blockers",
           "next_actions",

@@ -10,6 +10,12 @@ and approval metadata, and a dispatch hold. It does not provide end-to-end
 activation, promotion, device testing, cohort creation, or dispatch release.
 Those routes are not mounted.
 
+The [frontend handoff](application-onboarding-frontend-handoff.md) provides the
+step order, examples, polling rules and action gates for the separate UI session.
+The operator-only runtime preparation command is documented in the
+[runtime contract](../design/application-onboarding-runtime.md); it adds no HTTP
+endpoint or lifecycle/release authority.
+
 ## Availability and authorization
 
 Onboarding is an optional protected server capability. The default server
@@ -125,7 +131,14 @@ accepted; the limit returns `429` with `Retry-After: 60`.
 `GET .../onboarding` reports readiness checks, blockers, next actions, setup
 revision, and current/candidate configuration IDs. A stale or expired OAuth
 check may be reported as inconclusive. Readiness is a snapshot, not continuing
-proof of provider access. `GET .../approvals` only lists existing safe metadata;
+proof of provider access. `checks_configuration_id` identifies the candidate
+when present, otherwise the current configuration; it is null without either.
+Evidence for a replacement candidate does not attest the currently running
+configuration. Missing `LOCAL_FORMAT`, `OAUTH`, `TARGET_PERMISSION` and
+`DEVICE_DELIVERY` checks are explicitly `NOT_CHECKED` with null timestamps.
+Only independently recorded evidence can report a check as passed; OAuth
+success cannot fill target-permission or device-delivery checks.
+`GET .../approvals` only lists existing safe metadata;
 it does not issue approvals. `POST .../dispatch/hold` synchronously closes the
 dispatch policy and leaves application lifecycle status unchanged.
 

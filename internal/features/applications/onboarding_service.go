@@ -147,6 +147,10 @@ func operationView(op sqlc.ApplicationOnboardingOperation) onboarding.Operation 
 }
 func setupView(row sqlc.GetApplicationOnboardingRow) onboarding.Readiness {
 	result := onboarding.Readiness{ApplicationID: row.PublicID.String(), ApplicationStatus: onboarding.ApplicationStatus(row.ApplicationStatus), DispatchMode: onboarding.DispatchMode(row.DispatchMode), Revision: strconv.FormatInt(row.Revision, 10), CurrentConfigurationID: optionalOnboardingID(row.CurrentConfigurationID), CandidateConfigurationID: optionalOnboardingID(row.CandidateConfigurationID), EnrollmentProfileID: optionalOnboardingID(row.EnrollmentProfileID), CohortID: optionalOnboardingID(row.CohortID), Checks: []onboarding.ReadinessCheck{}, Blockers: []string{}, NextActions: []string{}}
+	result.ChecksConfigurationID = result.CandidateConfigurationID
+	if result.ChecksConfigurationID == nil {
+		result.ChecksConfigurationID = result.CurrentConfigurationID
+	}
 	if row.Environment.Valid {
 		v := onboarding.Environment(row.Environment.String)
 		result.Environment = &v
@@ -226,6 +230,19 @@ func (s *OnboardingService) Readiness(ctx context.Context, id pgtype.UUID) (onbo
 				result.Blockers = append(result.Blockers, "VERIFIER_NOT_CONFIGURED")
 				result.NextActions = append(result.NextActions, "CONFIGURE_VERIFIER")
 			}
+		}
+	}
+	// Missing evidence is explicit; OAuth success cannot fill permission or device checks.
+	for _, kind := range []string{"LOCAL_FORMAT", "OAUTH", "TARGET_PERMISSION", "DEVICE_DELIVERY"} {
+		found := false
+		for _, check := range result.Checks {
+			if check.Code == kind {
+				found = true
+				break
+			}
+		}
+		if !found {
+			result.Checks = append(result.Checks, onboarding.ReadinessCheck{Code: kind, Outcome: onboarding.CheckNotChecked})
 		}
 	}
 	op, err := s.base.q.GetLastApplicationOnboardingOperation(ctx, row.ApplicationID)

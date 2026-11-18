@@ -107,6 +107,7 @@ type Readiness struct {
 	CandidateConfigurationID *string           `json:"candidate_configuration_id"`
 	EnrollmentProfileID      *string           `json:"enrollment_profile_id"`
 	CohortID                 *string           `json:"cohort_id"`
+	ChecksConfigurationID    *string           `json:"checks_configuration_id"`
 	Checks                   []ReadinessCheck  `json:"checks"`
 	Blockers                 []string          `json:"blockers"`
 	NextActions              []string          `json:"next_actions"`

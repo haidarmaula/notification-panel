@@ -148,6 +148,37 @@ func TestOnboardingReadinessDoesNotConfuseActivationWithDispatch(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestOnboardingReadinessScopesReplacementEvidenceToCandidate(t *testing.T) {
+	appID, _ := onboardingID("11111111-1111-4111-8111-111111111111")
+	current, _ := onboardingID("22222222-2222-4222-8222-222222222222")
+	candidate, _ := onboardingID("33333333-3333-4333-8333-333333333333")
+	q := onboardingReads{
+		principalQueries: principalQueries{role: "SUPER_ADMIN", active: true},
+		row: sqlc.GetApplicationOnboardingRow{
+			PublicID: appID, ApplicationID: 1, Revision: 7, ApplicationStatus: "ACTIVE", DispatchMode: "FULL",
+			CurrentConfigurationID: current, CandidateConfigurationID: candidate,
+		},
+		lastError: pgx.ErrNoRows,
+	}
+	service, err := NewOnboardingService(q, panicDB{}, setupSettings())
+	require.NoError(t, err)
+	got, err := service.Readiness(staffContext(), appID)
+	require.NoError(t, err)
+	require.Equal(t, current.String(), *got.CurrentConfigurationID)
+	require.Equal(t, candidate.String(), *got.ChecksConfigurationID)
+	require.Equal(t, onboarding.DispatchFull, got.DispatchMode)
+	require.Len(t, got.Checks, 4)
+	for _, check := range got.Checks {
+		require.Equal(t, onboarding.CheckNotChecked, check.Outcome)
+	}
+	q.row.CandidateConfigurationID = pgtype.UUID{}
+	service, err = NewOnboardingService(q, panicDB{}, setupSettings())
+	require.NoError(t, err)
+	got, err = service.Readiness(staffContext(), appID)
+	require.NoError(t, err)
+	require.Equal(t, current.String(), *got.ChecksConfigurationID)
+}
+
 func TestOnboardingReadinessMarksStaleOAuthChecksInconclusive(t *testing.T) {
 	id, _ := onboardingID("11111111-1111-4111-8111-111111111111")
 	configID, _ := onboardingID("22222222-2222-4222-8222-222222222222")
@@ -208,7 +239,15 @@ func TestOnboardingReadinessMarksStaleOAuthChecksInconclusive(t *testing.T) {
 			require.NoError(t, err)
 			got, err := service.Readiness(staffContext(), id)
 			require.NoError(t, err)
-			require.Len(t, got.Checks, 1)
+			require.Len(t, got.Checks, 4)
+			require.Equal(t, configID.String(), *got.ChecksConfigurationID)
+			for _, check := range got.Checks {
+				if check.Code == "TARGET_PERMISSION" || check.Code == "DEVICE_DELIVERY" {
+					require.Equal(t, onboarding.CheckNotChecked, check.Outcome)
+					require.Nil(t, check.CheckedAt)
+					require.Nil(t, check.ExpiresAt)
+				}
+			}
 			if tc.fresh {
 				require.Equal(t, onboarding.CheckPassed, got.Checks[0].Outcome)
 				require.NotContains(t, got.Blockers, "FCM_NOT_VERIFIED")

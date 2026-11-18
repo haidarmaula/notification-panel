@@ -1,6 +1,6 @@
 # Application onboarding implementation checkpoint
 
-Date: 2026-11-15. Status: setup and OAuth verification implemented locally;
+Date: 2026-11-18. Status: setup and OAuth verification implemented locally;
 end-to-end onboarding and production enablement remain incomplete.
 
 ## Implemented boundary
@@ -19,9 +19,12 @@ end-to-end onboarding and production enablement remain incomplete.
   from one pinned client URI identity. Root-owned Linux files are published with
   fixed permissions, no caller paths and read-only consumer mounts. Credentials
   never enter a DB/outbox payload; only safe metadata and keyed fingerprints do.
-- `cmd/controlplane` currently runs one application's OAuth verifier, using a
-  protected fixed policy path and the existing file credential boundary. It does
-  not perform lifecycle, Docker deployment, route approval or dispatch execution.
+- `cmd/controlplane` runs one application's OAuth verifier, using a protected
+  fixed policy path and the existing file credential boundary. Its separate
+  `prepare-runtime` command uses fixed protected runtime and preparation policy
+  paths plus a restricted per-app LOGIN to reserve/check capacity before a
+  stopped Docker allocation. It does not start workers, acknowledge readiness,
+  perform lifecycle transitions, approve routes or execute dispatch release.
 - Eight optional setup routes are wired only when the protected server onboarding
   policy exists. [Implemented API](../api/application-onboarding-api.md). No new
   environment toggle or permission fallback enables them by accident.
@@ -47,14 +50,64 @@ end-to-end onboarding and production enablement remain incomplete.
   parser, and does not restart a process or grant enrollment authority.
 - A protected delivery runtime planning subset validates pinned image/network,
   bounded resources and capacity including replacement overlap. It produces
-  scoped delivery plans and explicit shared-component acknowledgement requirements;
-  Docker execution, capacity reservation and readiness acknowledgement remain
-  unimplemented. [Subset contract](../design/application-onboarding-runtime.md).
+  scoped delivery plans and explicit shared-component acknowledgement requirements.
+  [Subset contract](../design/application-onboarding-runtime.md).
+- Migration 000045 adds durable per-app runtime capacity reservations under an
+  owner-installed, immutable host capacity profile and per-app executor LOGIN
+  scopes. Exact retries retain their original reservation UUID and deadline;
+  conflicting retries, stale snapshots and capacity exhaustion fail closed.
+  Reservation checks bind the live setup/configuration, generation, runtime
+  epochs and profile digest. Expiry does not free an allocation whose external
+  outcome is uncertain: release is eligible only after the original preparation
+  deadline plus 30 seconds and requires an explicit scoped executor attestation
+  that the runtime is absent. The trusted executor must first quiesce preparers
+  and reconcile pending/uncertain Docker effects; elapsed time is not absence
+  evidence. Immutable history is retained, and rollback refuses any retained
+  profile, scope or reservation. The owner-only installer
+  `deploy/postgres/onboarding-runtime-grants.sql` grants the restricted executor
+  group only CONNECT/USAGE and the three definer capabilities; it does not create
+  roles, capacity profiles or per-app scopes. This foundation
+  grants no lifecycle, current-configuration, readiness-acknowledgement or
+  dispatch-release authority.
+- A typed Docker preparation adapter can create a deterministic, stopped worker
+  allocation through a fixed protected Unix socket. It checks an exact-plan
+  reservation before inspection and creation, refuses drift or a running
+  allocation, and reconciles create conflicts and lost responses by inspection.
+  The allocation has no network, mounts, environment or credential access, uses
+  a fixed worker command and unprivileged UID, and enforces resource, read-only
+  filesystem and capability restrictions. It cannot start/delete containers or
+  acknowledge a runtime. The protected controlplane command uses the adapter;
+  no public API exposes it. A stopped allocation is not a prepared functional
+  notification runtime.
+- GET readiness names `checks_configuration_id` (candidate first, then current) and
+  returns explicit `NOT_CHECKED` entries for missing local-format, OAuth,
+  target-permission and device-delivery evidence. OAuth success cannot implicitly
+  pass the latter two checks or describe a different configuration version.
+  Synchronous mutation/replay snapshots may retain empty checks; historical replay
+  snapshots may have a null check configuration until their replay window expires.
+  Clients refresh GET readiness after writes rather than infer evidence from them.
 
 The ordinary staging deployment has not been changed. The implementation is not
 an automatic replacement for the currently approved offline lifecycle procedure.
 
 ## Validation and practical limits
+
+The 2026-11-18 preparation/readiness slice passes focused package tests, the full
+Go race suite (1,644 passed; opt-in Docker and Linux-root publication tests skip
+in the ordinary Darwin run), CI provider/local-runner checks, format, module
+verification, build and vet. `make sqlc` regenerated the new metadata models.
+Both PostgreSQL fixtures and the explicit real Docker preparation fixture pass.
+The rebuilt `./dev up` stack also passes `./dev check-onboarding` through the BFF;
+the new app remains PROVISIONING/HELD. `./dev smoke` passes immediate and scheduled
+simulator acceptance through the existing active application's real pipeline.
+These distinguish existing delivery from incomplete greenfield onboarding.
+
+Current vulnerability scanning failed fetching `vuln.go.dev` because DNS timed
+out. Full OpenAPI validation could not run: installation of the repository-pinned
+Python validators failed resolving PyPI, including outside the sandbox. JSON
+syntax, required-property references and local OpenAPI references were checked;
+these are not substitutes for the full validator. Navigation/safe-example checks
+pass. No new full-flow, device or production acceptance is claimed.
 
 Focused Go tests cover strict JSON limits, malformed input, current DB authority,
 scoped identifiers, safe errors, request/response redaction, submission snapshots,
@@ -76,6 +129,27 @@ target built successfully. Full eight-image smoke coverage has not been run.
 The additional mobile composition helper has focused tests for preservation,
 cross-app identity rejection and malformed/oversized input. It is not yet wired
 into a host policy publisher or restart protocol.
+
+Docker adapter tests use a local simulated Engine HTTP endpoint. They exercise
+the bounded stopped-allocation contract, drift rejection and create-response
+recovery. `bash scripts/application-onboarding-docker.sh` also passes against a
+real local Docker daemon with a cached pinned worker image: stopped create,
+inspection, exact replay and scope-checked cleanup. That smoke uses a fake
+reservation guard to isolate Engine behavior; the SQL guard is exercised by the
+separate PostgreSQL fixture. Neither establishes combined DB/Docker orchestration,
+runtime policy installation, shared acknowledgements, enrollment activation or
+notification delivery. No container is started by the smoke.
+
+`bash scripts/application-onboarding-runtime.sh` passes against isolated synthetic
+PostgreSQL. It exercises scoped LOGIN/owner/unscoped denial, exact replay and
+digest binding, concurrent global capacity across applications, replacement and
+DB-connection budgets, expiry retaining uncertain allocations, explicit scoped
+release, setup-revision and membership-revocation fences, rejection of accidental
+direct UPDATE grants, no activation/current-pointer authority, and migration
+rollback/reapply on an empty fixture, and refusal to roll back retained history.
+Installer checks cover idempotence, nonowner denial, NOLOGIN group requirements
+and absence of excess data/lifecycle authority. This is database enforcement
+evidence, not an end-to-end new-app activation test.
 
 The additional BFF/config changes pass focused race tests, including upload
 limits, unsafe locations, queries, duplicate headers and protected local-policy
@@ -112,8 +186,10 @@ to deliver, and no new general-send endpoint or automatic ACTIVE transition exis
 
 ## Remaining implementation
 
-1. ONB-05/06: approved platform profiles, bounded Docker/runtime preparation and
-   delegated first activation, with real SQL-role and crash recovery tests.
+1. ONB-05/06: complete approved platform profiles and runtime preparation beyond
+   the stopped allocation foundation: publish immutable scoped policies, allocate
+   approved runtime identities, collect fenced acknowledgements and install the
+   DB-delegated first-activation executor, with real SQL-role/crash recovery tests.
 2. ONB-07/08: compose immutable mobile trust/profile generations, approved external
    identity mapping, test cohort/route approval and target-permission dry-run.
 3. ONB-09/10: guarded pilot/full release, signed per-platform test receipts,
@@ -131,3 +207,7 @@ a multi-key replay migration/rotation path is not implemented in this slice.
 Do not mount future activation/promotion/release handlers merely because request
 DTOs and intent-validation code exist. Their executors and privileged transitions
 are not implemented or validated, and remain absent from the implemented OpenAPI.
+
+The [frontend handoff](../api/application-onboarding-frontend-handoff.md) records
+the eight active endpoints, request examples, error/polling/replay handling and
+the actions that must remain unavailable until these backend gates are complete.
