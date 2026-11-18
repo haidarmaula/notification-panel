@@ -109,7 +109,7 @@ func TestSealedBackupRestoreDrill(t *testing.T) {
 	require.Regexp(t, `^sha256:[0-9a-f]{64}$`, image)
 	start := time.Now()
 	dump := requireRestoreDocker(t, ctx, nil, "exec", pg, "pg_dump", "-U", "integration", "-d", "notification_integration",
-		"--schema", m.Schema, "--no-owner", "--no-privileges", "--format=plain")
+		"--schema", m.Schema, "--schema", m.Schema+"_delivery", "--no-owner", "--no-privileges", "--format=plain")
 	dumped := time.Now()
 
 	// Kafka and the business ID allocator advance after the recovery point.
