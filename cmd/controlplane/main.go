@@ -28,10 +28,12 @@ func run(args []string) int {
 			return runRuntimePreparation(false)
 		case "preflight-delivery":
 			return runRuntimePreparation(true)
+		case "apply-first-activation":
+			return runFirstActivation()
 		}
 	}
 	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, "controlplane accepts prepare-runtime or preflight-delivery")
+		fmt.Fprintln(os.Stderr, "controlplane accepts prepare-runtime, preflight-delivery or apply-first-activation")
 		return 2
 	}
 	restore, err := runloop.PrepareCommandOutputs()

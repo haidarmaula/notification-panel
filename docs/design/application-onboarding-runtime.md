@@ -207,8 +207,15 @@ transaction. A trusted owner binds a pending operation and expected enrollment
 profile to an existing M38 lifecycle grant and reserved generation. The operator
 calls `apply_onboarding_first_activation`; direct lifecycle apply cannot use that
 bound grant. The transaction rechecks staff authority and OAuth evidence, installs
-the configuration and generation, and leaves dispatch `HELD`. No public route or
-activation executor currently calls this function.
+the configuration and generation, and leaves dispatch `HELD`.
+
+`controlplane apply-first-activation` executes one predelegated operation. It
+loads only `/etc/hello/first-activation.json`, with `database_url` for the dedicated
+lifecycle operator LOGIN and nonzero canonical UUIDs `operation_id`, `grant_id`,
+and `instance_id`. Grant `EXECUTE` on `apply_onboarding_first_activation` only
+to that operator LOGIN. Successful output is the numeric setup revision; an
+uncertain result requires checking the operation before replaying the same policy.
+The command does not poll the queue, create delegations, or expose an HTTP route.
 
 ## Local evidence
 
