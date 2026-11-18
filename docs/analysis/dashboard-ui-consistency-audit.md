@@ -8,17 +8,17 @@ The findings below describe checkpoint `a8356a2`; their original line numbers
 refer to that source snapshot. The subsequent implementation addresses all
 twelve findings:
 
-| Finding | Resolution                                                                                                              |
-| ------- | ----------------------------------------------------------------------------------------------------------------------- |
-| 1       | Campaign editor bounds its body only; shared named header regions align with PageFrame.                                 |
-| 2       | Campaign editor, detail, and template editor share AndroidNotificationPreview with context-specific guidance.           |
-| 3–5     | Shared CreateAction/SubmitAction/BackAction define icons and hierarchy; write actions expose loading state.             |
-| 6–7     | The long editor keeps its intentional sticky footer; both back actions use the same label and presentation.             |
-| 8       | Pagers hide during loading/error and on initial empty data, retaining return navigation on later empty pages.           |
-| 9       | All record tables use balanced density and hover; readable column budgets and secondary identity metadata are retained. |
-| 10      | DESIGN.md specifies spacing by relationship; section and preview composition now follow those rules.                    |
-| 11      | Appearance values have display labels and unknown status labels use readable words.                                     |
-| 12      | Destination title is My account; the two intentional navigation entry points and desktop theme selector are documented. |
+| Finding | Resolution                                                                                                                                                                                                  |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1       | Campaign editor bounds its body only; shared named header regions align with PageFrame.                                                                                                                     |
+| 2       | Campaign editor, detail, and template editor share AndroidNotificationPreview with context-specific guidance.                                                                                               |
+| 3–5     | Shared CreateAction/SubmitAction/BackAction define icons and hierarchy; write actions expose loading state.                                                                                                 |
+| 6–7     | The long editor keeps its intentional sticky footer; both back actions use the same label and presentation.                                                                                                 |
+| 8       | Page-level lists share pinned footer pagination; embedded detail tables retain inline pagers. Pagers hide during loading/error and on initial empty data, retaining return navigation on later empty pages. |
+| 9       | All record tables use balanced density and hover; readable column budgets and secondary identity metadata are retained.                                                                                     |
+| 10      | DESIGN.md specifies spacing by relationship; section and preview composition now follow those rules.                                                                                                        |
+| 11      | Appearance values have display labels and unknown status labels use readable words.                                                                                                                         |
+| 12      | Destination title is My account; the two intentional navigation entry points and desktop theme selector are documented.                                                                                     |
 
 Existing browser coverage and the new consistency suite check the changed
 patterns, including narrow layouts, three themes, long notification content,

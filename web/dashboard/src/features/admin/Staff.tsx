@@ -113,6 +113,37 @@ export default function Staff() {
       title="Staff management"
       description="Manage accounts that can access the dashboard."
       actions={<CreateAction label="Add staff" href="/apps/admin/staff/new" />}
+      footer={
+        !page.isPending && !page.isError && (rows.length > 0 || pageNumber > 1) ? (
+          <HStack gap={2} wrap="wrap" align="center" justify="between">
+            <Text>
+              {page.data?.total ?? 0} accounts · Page {pageNumber} of{' '}
+              {Math.max(page.data?.total_pages ?? 0, 1)}
+            </Text>
+            <HStack gap={2}>
+              <Button
+                label="Previous"
+                size="sm"
+                isDisabled={pageNumber <= 1 || page.isFetching}
+                onClick={() =>
+                  setParams({
+                    ...(search ? { search } : {}),
+                    ...(pageNumber > 2 ? { page: String(pageNumber - 1) } : {}),
+                  })
+                }
+              />
+              <Button
+                label="Next"
+                size="sm"
+                isDisabled={pageNumber >= (page.data?.total_pages ?? 0) || page.isFetching}
+                onClick={() =>
+                  setParams({ ...(search ? { search } : {}), page: String(pageNumber + 1) })
+                }
+              />
+            </HStack>
+          </HStack>
+        ) : undefined
+      }
     >
       <Section padding={6}>
         <VStack gap={3}>
@@ -190,35 +221,6 @@ export default function Staff() {
               density="balanced"
               hasHover
             />
-          )}
-          {!page.isPending && !page.isError && (rows.length > 0 || pageNumber > 1) && (
-            <HStack gap={2} wrap="wrap" align="center" justify="between">
-              <Text>
-                {page.data?.total ?? 0} accounts · Page {pageNumber} of{' '}
-                {Math.max(page.data?.total_pages ?? 0, 1)}
-              </Text>
-              <HStack gap={2}>
-                <Button
-                  label="Previous"
-                  size="sm"
-                  isDisabled={pageNumber <= 1 || page.isFetching}
-                  onClick={() =>
-                    setParams({
-                      ...(search ? { search } : {}),
-                      ...(pageNumber > 2 ? { page: String(pageNumber - 1) } : {}),
-                    })
-                  }
-                />
-                <Button
-                  label="Next"
-                  size="sm"
-                  isDisabled={pageNumber >= (page.data?.total_pages ?? 0) || page.isFetching}
-                  onClick={() =>
-                    setParams({ ...(search ? { search } : {}), page: String(pageNumber + 1) })
-                  }
-                />
-              </HStack>
-            </HStack>
           )}
         </VStack>
       </Section>

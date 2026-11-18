@@ -64,8 +64,9 @@ with a supporting secondary ID; action columns retain explicit readable budgets
 in data-driven tables. Both supported Table APIs are valid. Keep overflow inside
 the table, preserve ID precision, and use the same Status display mapping.
 
-Pagination is placed after its records, with the page summary before Previous /
-Next. The long campaign list may pin that row to its footer. Hide it during
+Page-level list pagination lives in the pinned PageFrame footer, with the page
+summary before Previous / Next. Embedded tables on detail or editor pages keep
+their own pagination directly after the corresponding table. Hide it during
 loading/error and on a first empty page; keep Previous available for an empty
 later page. Cursor and numbered pagination retain their own API contracts.
 

@@ -106,6 +106,29 @@ export default function Registry() {
     <PageFrame
       title="Application registry"
       description="Manage application identities and explicitly granted staff access."
+      footer={
+        !list.isPending && !list.isError && ((list.data?.total ?? 0) > 0 || page > 1) ? (
+          <HStack gap={2} wrap="wrap" align="center" justify="between">
+            <Text>
+              Page {page} · {list.data?.total ?? 0} applications
+            </Text>
+            <HStack gap={2}>
+              <Button
+                label="Previous"
+                size="sm"
+                isDisabled={page <= 1 || list.isFetching}
+                onClick={() => setPage((current) => current - 1)}
+              />
+              <Button
+                label="Next"
+                size="sm"
+                isDisabled={page * pageSize >= (list.data?.total ?? 0) || list.isFetching}
+                onClick={() => setPage((current) => current + 1)}
+              />
+            </HStack>
+          </HStack>
+        ) : undefined
+      }
     >
       <Section padding={6}>
         <VStack gap={4}>
@@ -181,27 +204,6 @@ export default function Registry() {
               />
             )}
           </QueryState>
-          {!list.isPending && !list.isError && ((list.data?.total ?? 0) > 0 || page > 1) && (
-            <HStack gap={2} wrap="wrap" align="center" justify="between">
-              <Text>
-                Page {page} · {list.data?.total ?? 0} applications
-              </Text>
-              <HStack gap={2}>
-                <Button
-                  label="Previous"
-                  size="sm"
-                  isDisabled={page <= 1 || list.isFetching}
-                  onClick={() => setPage((current) => current - 1)}
-                />
-                <Button
-                  label="Next"
-                  size="sm"
-                  isDisabled={page * pageSize >= (list.data?.total ?? 0) || list.isFetching}
-                  onClick={() => setPage((current) => current + 1)}
-                />
-              </HStack>
-            </HStack>
-          )}
         </VStack>
       </Section>
       <Section padding={6}>

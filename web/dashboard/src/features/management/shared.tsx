@@ -3,15 +3,10 @@ import { HStack } from '@astryxdesign/core/Stack';
 import { Text } from '@astryxdesign/core/Text';
 import { Button } from '@astryxdesign/core/Button';
 import { Banner } from '@astryxdesign/core/Banner';
-import type { usePage, useWrite } from './data-hooks';
+import { hasPageNavigation, type usePage, type useWrite } from './data-hooks';
 import { Failure, Loading } from '../../components/ui/Feedback';
 export function Pager<T>({ page }: { page: ReturnType<typeof usePage<T>> }) {
-  if (
-    page.query.isPending ||
-    page.query.isError ||
-    (!page.query.data?.items.length && !page.cursors().length)
-  )
-    return null;
+  if (!hasPageNavigation(page)) return null;
   return (
     <HStack gap={3} wrap="wrap" vAlign="center" hAlign="between">
       <Text>Page {page.cursors().length + 1}</Text>

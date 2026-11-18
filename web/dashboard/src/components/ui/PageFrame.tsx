@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { BackAction } from './Actions';
-import { Layout, LayoutContent, LayoutHeader } from '@astryxdesign/core/Layout';
+import { Layout, LayoutContent, LayoutHeader, LayoutFooter } from '@astryxdesign/core/Layout';
 import { HStack, VStack } from '@astryxdesign/core/Stack';
 import { Heading, Text } from '@astryxdesign/core/Text';
 
@@ -11,6 +11,7 @@ export function PageFrame({
   actions,
   children,
   contentWidth,
+  footer,
 }: {
   title: ReactNode;
   description?: ReactNode;
@@ -18,10 +19,18 @@ export function PageFrame({
   actions?: ReactNode;
   children: ReactNode;
   contentWidth?: number;
+  footer?: ReactNode;
 }) {
   return (
     <Layout
       padding={6}
+      footer={
+        footer ? (
+          <LayoutFooter hasDivider role="region" label="Page footer">
+            {footer}
+          </LayoutFooter>
+        ) : undefined
+      }
       header={
         <LayoutHeader role="region" label="Page header">
           <VStack gap={4}>

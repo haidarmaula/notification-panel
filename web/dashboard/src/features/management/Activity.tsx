@@ -13,7 +13,7 @@ import {
 } from '@astryxdesign/core/Table';
 import { useParams } from 'react-router-dom';
 import type { components } from '../../lib/api/generated/staff';
-import { date, usePage } from './data-hooks';
+import { date, hasPageNavigation, usePage } from './data-hooks';
 import { Pager, QueryState } from './shared';
 import { PageFrame } from '../../components/ui/PageFrame';
 type Upload = components['schemas']['Upload'];
@@ -30,6 +30,7 @@ export default function Uploads() {
   const page = usePage<Upload>(`/apps/${appId}/uploads`);
   return (
     <PageFrame
+      footer={hasPageNavigation(page) ? <Pager page={page} /> : undefined}
       title="Upload history"
       description="Review batches recorded through the application integration."
     >
@@ -67,7 +68,6 @@ export default function Uploads() {
             description="Upload batches will appear here after they are recorded through the application integration."
           />
         )}
-        <Pager page={page} />
       </QueryState>
     </PageFrame>
   );
@@ -77,6 +77,7 @@ export function UploadRows() {
   const page = usePage<UploadRow>(`/apps/${appId}/uploads/${batchId}/rows`);
   return (
     <PageFrame
+      footer={hasPageNavigation(page) ? <Pager page={page} /> : undefined}
       title={`Batch #${batchId}`}
       description="Validation status recorded by the backend."
       back={{ label: 'Back to upload history', href: `/apps/${appId}/uploads` }}
@@ -116,7 +117,6 @@ export function UploadRows() {
             isCompact
           />
         )}
-        <Pager page={page} />
       </QueryState>
       <Text>The API does not provide row contents or rejection reasons.</Text>
     </PageFrame>
@@ -127,6 +127,7 @@ export function AuditLog() {
   const page = usePage<Audit>(`/apps/${appId}/audit-logs`);
   return (
     <PageFrame
+      footer={hasPageNavigation(page) ? <Pager page={page} /> : undefined}
       title="Activity audit"
       description="Actions recorded for this application, ordered by record ID."
     >
@@ -176,7 +177,6 @@ export function AuditLog() {
             description="Application actions will appear here when the backend records them."
           />
         )}
-        <Pager page={page} />
       </QueryState>
     </PageFrame>
   );

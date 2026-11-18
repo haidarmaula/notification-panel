@@ -24,7 +24,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { data } from '../../lib/api/client';
 import type { Application } from '../../lib/api/types';
 import type { components } from '../../lib/api/generated/staff';
-import { usePage, useWrite } from './data-hooks';
+import { hasPageNavigation, usePage, useWrite } from './data-hooks';
 import { Pager, QueryState, WriteFeedback } from './shared';
 import { useUnsaved } from '../../app/unsaved';
 import { PageFrame } from '../../components/ui/PageFrame';
@@ -35,6 +35,7 @@ export default function Templates() {
   const page = usePage<Template>(`/apps/${appId}/templates`);
   return (
     <PageFrame
+      footer={hasPageNavigation(page) ? <Pager page={page} /> : undefined}
       title="Templates"
       description="Save frequently used messages for future campaigns."
       actions={<CreateAction label="Create template" href={`/apps/${appId}/templates/new`} />}
@@ -80,7 +81,6 @@ export default function Templates() {
             description="Create a template to reuse message content."
           />
         )}
-        <Pager page={page} />
       </QueryState>
     </PageFrame>
   );

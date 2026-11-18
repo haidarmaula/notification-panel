@@ -72,7 +72,7 @@ export default function Campaigns({ results = false }: { results?: boolean }) {
         </LayoutHeader>
       }
       footer={
-        <LayoutFooter hasDivider>
+        <LayoutFooter hasDivider role="region" label="Page footer">
           <HStack gap={4} wrap="wrap" hAlign="between" vAlign="center">
             <Text>Messages are sent only after you review and confirm the campaign.</Text>
             {!query.isPending &&

@@ -18,7 +18,7 @@ import { data } from '../../lib/api/client';
 import type { components } from '../../lib/api/generated/staff';
 import { PageFrame } from '../../components/ui/PageFrame';
 import { Status } from '../../components/ui/Feedback';
-import { date, usePage } from './data-hooks';
+import { date, hasPageNavigation, usePage } from './data-hooks';
 import { Pager, QueryState } from './shared';
 type User = components['schemas']['User'];
 type Device = components['schemas']['Device'];
@@ -27,6 +27,7 @@ export default function Audience() {
   const page = usePage<User>(`/apps/${appId}/users`);
   return (
     <PageFrame
+      footer={hasPageNavigation(page) ? <Pager page={page} /> : undefined}
       title="Users and devices"
       description="Review users and devices in the selected application."
       actions={
@@ -72,7 +73,6 @@ export default function Audience() {
             description="Users appear after syncing through the application integration."
           />
         )}
-        <Pager page={page} />
       </QueryState>
     </PageFrame>
   );

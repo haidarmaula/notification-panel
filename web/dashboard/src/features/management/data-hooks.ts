@@ -15,6 +15,13 @@ export function usePage<T>(path: string) {
   });
   return { query, cursors: () => cursors, setCursors };
 }
+export function hasPageNavigation<T>(page: ReturnType<typeof usePage<T>>) {
+  return (
+    !page.query.isPending &&
+    !page.query.isError &&
+    (!!page.query.data?.items.length || page.cursors().length > 0)
+  );
+}
 export function useWrite() {
   const auth = useAuth();
   const [, setPending] = useState(false);

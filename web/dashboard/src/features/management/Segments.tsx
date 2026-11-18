@@ -21,7 +21,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { data } from '../../lib/api/client';
 import type { components } from '../../lib/api/generated/staff';
-import { usePage, useWrite } from './data-hooks';
+import { hasPageNavigation, usePage, useWrite } from './data-hooks';
 import { Pager, QueryState, WriteFeedback } from './shared';
 import { useUnsaved } from '../../app/unsaved';
 import { PageFrame } from '../../components/ui/PageFrame';
@@ -33,6 +33,7 @@ export default function Segments() {
   const page = usePage<Segment>(`/apps/${appId}/segments`);
   return (
     <PageFrame
+      footer={hasPageNavigation(page) ? <Pager page={page} /> : undefined}
       title="Segments"
       description="Recipient groups whose members you manage manually."
       actions={<CreateAction label="Create segment" href={`/apps/${appId}/segments/new`} />}
@@ -70,7 +71,6 @@ export default function Segments() {
             description="Create a group and add users as members."
           />
         )}
-        <Pager page={page} />
       </QueryState>
     </PageFrame>
   );

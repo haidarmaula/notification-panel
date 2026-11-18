@@ -349,6 +349,27 @@ export default function Applications() {
     <PageFrame
       title="Choose application"
       description="Each application has its own campaigns and recipients."
+      footer={
+        !query.isPending && !query.isError && (!!query.data?.items.length || page > 1) ? (
+          <HStack gap={3} wrap="wrap" hAlign="between" vAlign="center">
+            <Text>Page {page}</Text>
+            <HStack gap={2}>
+              <Button
+                label="Previous"
+                size="sm"
+                isDisabled={page === 1 || query.isFetching}
+                onClick={() => setPage((value) => value - 1)}
+              />
+              <Button
+                label="Next"
+                size="sm"
+                isDisabled={!query.data || page * 20 >= query.data.total || query.isFetching}
+                onClick={() => setPage((value) => value + 1)}
+              />
+            </HStack>
+          </HStack>
+        ) : undefined
+      }
     >
       {query.isPending ? (
         <Loading />
@@ -362,23 +383,6 @@ export default function Applications() {
       ) : (
         <Table density="balanced" hasHover data={query.data.items} columns={columns} idKey="id" />
       )}
-      <HStack gap={3} wrap="wrap" hAlign="between" vAlign="center">
-        <Text>Page {page}</Text>
-        <HStack gap={2}>
-          <Button
-            label="Previous"
-            size="sm"
-            isDisabled={page === 1 || query.isFetching}
-            onClick={() => setPage((value) => value - 1)}
-          />
-          <Button
-            label="Next"
-            size="sm"
-            isDisabled={!query.data || page * 20 >= query.data.total || query.isFetching}
-            onClick={() => setPage((value) => value + 1)}
-          />
-        </HStack>
-      </HStack>
     </PageFrame>
   );
 }
