@@ -171,6 +171,15 @@ check attests startup of one process at that time. Activation still requires
 authenticated current-generation readiness for the long-running delivery worker
 and the shared server, admission and scheduler processes.
 
+M48 provides the database-side acknowledgement lease. The owner assigns each
+component a distinct LOGIN and approved policy digest for the reserved generation,
+then grants that LOGIN `EXECUTE` on `acknowledge_application_runtime` without table
+write access. The function rechecks the reservation, provider configuration, runtime
+fences and the session LOGIN; delivery also needs matching M46 approval. A process
+instance can renew its 15-second lease, and a different instance can take over only
+after expiry. The PostgreSQL fixture exercises this database contract directly;
+process integration and activation do not yet consume these leases.
+
 ## Local evidence
 
 `bash scripts/application-onboarding-runtime.sh` proves actual PostgreSQL role,

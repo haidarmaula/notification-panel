@@ -130,6 +130,40 @@ assert_query t runtime_a 'scoped fresh preparation guard' "$check_a"
 assert_query f runtime_b 'cross-app guard fails closed' "$check_a"
 assert_query f runtime_a 'wrong policy digest fails closed' "SELECT check_application_onboarding_runtime('$app_a','$reserve_a',decode(repeat('cd',32),'hex'))"
 assert_query t runtime_a 'worker policy, LOGIN and immutable provider metadata match' "$preflight_a"
+sql postgres <<'SQL'
+CREATE ROLE fixture_server LOGIN;
+CREATE ROLE fixture_admission LOGIN;
+CREATE ROLE fixture_scheduler LOGIN;
+GRANT EXECUTE ON FUNCTION acknowledge_application_runtime(uuid,bigint,text,bytea,uuid)
+    TO fixture_worker_a,fixture_worker_b,fixture_server,fixture_admission,fixture_scheduler;
+INSERT INTO application_runtime_component_scopes(application_id,generation,component,login_role,policy_sha256)
+SELECT a.id,1,s.component,s.login::regrole::oid,decode(repeat('ef',32),'hex')
+FROM applications a CROSS JOIN (VALUES ('SERVER','fixture_server'),('ADMISSION','fixture_admission'),
+    ('SCHEDULER','fixture_scheduler'),('DELIVERY','fixture_worker_a')) s(component,login)
+WHERE a.key='runtime-app-a';
+SQL
+ack() { printf "SELECT acknowledge_application_runtime('%s',1,'%s',decode(repeat('%s',32),'hex'),'%s')" "$1" "$2" "$3" "$4"; }
+instance_a='40000000-0000-4000-8000-000000000001'
+instance_b='40000000-0000-4000-8000-000000000002'
+ack_delivery=$(ack "$app_a" DELIVERY ef "$instance_a")
+assert_query f fixture_worker_b 'other worker cannot acknowledge approved policy' "$ack_delivery"
+assert_query f fixture_worker_a 'delivery digest mismatch' "$(ack "$app_a" DELIVERY ab "$instance_a")"
+assert_query f fixture_worker_a 'delivery cannot acknowledge for server' "$(ack "$app_a" SERVER ef "$instance_a")"
+assert_query t fixture_worker_a 'approved delivery process acknowledges' "$ack_delivery"
+assert_query f fixture_worker_a 'different instance cannot replace a live lease' "$(ack "$app_a" DELIVERY ef "$instance_b")"
+assert_query t fixture_worker_a 'same process renews lease' "$ack_delivery"
+assert_query t fixture_server 'approved server acknowledges' "$(ack "$app_a" SERVER ef "$instance_a")"
+assert_query t fixture_admission 'approved admission acknowledges' "$(ack "$app_a" ADMISSION ef "$instance_a")"
+assert_query t fixture_scheduler 'approved scheduler acknowledges' "$(ack "$app_a" SCHEDULER ef "$instance_a")"
+assert_query 4 postgres 'one readiness acknowledgement per runtime component' 'SELECT count(*) FROM application_runtime_acknowledgements'
+sql postgres -c "UPDATE application_runtime_acknowledgements SET acknowledged_at=clock_timestamp()-interval '30 seconds',lease_expires_at=clock_timestamp()-interval '15 seconds' WHERE component='DELIVERY'"
+assert_query t fixture_worker_a 'replacement takes over only after lease expiry' "$(ack "$app_a" DELIVERY ef "$instance_b")"
+assert_query f fixture_worker_a 'former process cannot retake live lease' "$ack_delivery"
+sql postgres -c 'UPDATE notification_runtime SET sealed=true WHERE singleton'
+assert_query f fixture_worker_a 'runtime seal blocks live acknowledgement' "$(ack "$app_a" DELIVERY ef "$instance_b")"
+sql postgres -c 'UPDATE notification_runtime SET sealed=false WHERE singleton'
+deny 42501 sql fixture_worker_a -c 'DELETE FROM application_runtime_acknowledgements'
+deny P0001 sql postgres < db/migrations/000048_onboarding_runtime_acknowledgement.down.sql
 assert_query f runtime_b 'worker preflight cross-app LOGIN denied' "$preflight_a"
 assert_query f runtime_unscoped 'worker preflight requires app scope' "$preflight_a"
 deny 42501 sql fixture_worker_a -c "$preflight_a"
@@ -220,6 +254,8 @@ assert_query 3 postgres 'rollback cannot discard retained history' 'SELECT count
 sql postgres -c 'CREATE DATABASE runtime_empty'
 empty_sql() { docker_cmd exec -iu postgres "$node" psql -d runtime_empty -XqAt -v ON_ERROR_STOP=1 -v VERBOSITY=verbose; }
 for migration in db/migrations/*.up.sql; do empty_sql < "$migration"; done
+empty_sql < db/migrations/000048_onboarding_runtime_acknowledgement.down.sql
+empty_sql < db/migrations/000047_onboarding_delivery_isolation.down.sql
 empty_sql < db/migrations/000046_onboarding_worker_preflight.down.sql
 empty_sql < deploy/postgres/onboarding-runtime-grants.sql
 empty_sql < db/migrations/000045_onboarding_runtime_preparation.down.sql

@@ -236,6 +236,14 @@ type ApplicationRuntimeCapacityProfile struct {
 	PolicySha256                []byte `db:"policy_sha256"`
 }
 
+type ApplicationRuntimeComponentScope struct {
+	ApplicationID int64         `db:"application_id"`
+	Generation    int64         `db:"generation"`
+	Component     string        `db:"component"`
+	LoginRole     pgtype.Uint32 `db:"login_role"`
+	PolicySha256  []byte        `db:"policy_sha256"`
+}
+
 type ApplicationRuntimeExecutorScope struct {
 	RoleID          pgtype.Uint32 `db:"role_id"`
 	ApplicationID   int64         `db:"application_id"`
