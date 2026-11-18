@@ -136,9 +136,11 @@ scoped M46 check. The policy digest covers the approved DB DSN and broker policy
 The worker verifies the actual session LOGIN against the approved DSN username.
 The owner must point the policy at the intended cluster because the report does
 not attest that the executor and worker reached an identical database. The existing
-worker role permits shared database queries by design. One application per worker
-policy and mount layout are required here; the LOGIN does not add database row
-isolation by itself.
+worker group retains shared grants for legacy LOGINs. M47 uses the immutable M46
+LOGIN assignment to restrict application rows, route visibility, and the delivery
+hold function to that application. Unassigned legacy LOGINs keep their existing
+access. This is a row boundary, not live authorization: the worker still needs to
+prove the current generation and source before it can run as an onboarded daemon.
 
 Install `/var/lib/hello/runtime` with ownership `root:65532` and mode `0750` on
 protected Linux storage. The command validates the worker policy, checks the

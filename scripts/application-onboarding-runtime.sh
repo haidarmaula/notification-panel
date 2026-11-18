@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Isolated real-role fixture for stopped-runtime capacity reservation only.
+# Isolated PostgreSQL fixture for runtime reservation, preflight and delivery row isolation.
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 [[ $# == 0 ]] || exit 2
@@ -33,7 +33,7 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 docker_cmd run -d --pull=never --name "$node" --label "hello.runtime-reservation=$node" --network none \
     -e POSTGRES_HOST_AUTH_METHOD=trust --tmpfs /var/lib/postgresql/data \
-    -v "$PWD/db/migrations:/migrations:ro" "$image" postgres -c listen_addresses= >/dev/null
+    -v "$PWD/db/migrations:/migrations:ro" -v "$PWD/deploy/postgres:/grants:ro" "$image" postgres -c listen_addresses= >/dev/null
 [[ "$(docker_cmd inspect --format '{{.HostConfig.NetworkMode}} {{len .HostConfig.PortBindings}}' "$node")" == 'none 0' ]]
 sql() { docker_cmd exec -iu postgres "$node" psql -U "$1" -d postgres -XqAt -v ON_ERROR_STOP=1 -v VERBOSITY=verbose "${@:2}"; }
 assert_query() {
@@ -61,9 +61,13 @@ CREATE ROLE runtime_b LOGIN IN ROLE hello_onboarding_runtime_executor;
 CREATE ROLE runtime_c LOGIN IN ROLE hello_onboarding_runtime_executor;
 CREATE ROLE runtime_unscoped LOGIN IN ROLE hello_onboarding_runtime_executor;
 CREATE ROLE hello_delivery NOLOGIN;
+CREATE ROLE hello_admission NOLOGIN;
+CREATE ROLE hello_scheduler NOLOGIN;
+CREATE ROLE fixture_legacy_worker LOGIN IN ROLE hello_delivery;
 CREATE ROLE fixture_worker_a LOGIN IN ROLE hello_delivery;
 CREATE ROLE fixture_worker_b LOGIN IN ROLE hello_delivery;
 SQL
+sql postgres -f /grants/daemon-grants.sql
 sql postgres < deploy/postgres/onboarding-runtime-grants.sql
 sql postgres < deploy/postgres/onboarding-runtime-grants.sql
 sql postgres <<'SQL'
@@ -87,8 +91,19 @@ SELECT setup.application_id,setup.candidate_configuration_id,'staging',1,1,decod
     ('fixture_worker_'||right(app.key,1))::regrole::oid
 FROM application_onboarding setup JOIN applications app ON app.id=setup.application_id
 WHERE app.key IN ('runtime-app-a','runtime-app-b');
+INSERT INTO application_dispatch_policy(application_id,hold_new,push_ttl_seconds,key_ttl_seconds)
+SELECT id,false,300,300 FROM applications WHERE key LIKE 'runtime-app-%';
 UPDATE notification_runtime SET sealed=false,migration_hold=false WHERE singleton;
 SQL
+assert_query '1' fixture_worker_a 'A sees only its app' "SELECT count(*) FROM applications WHERE public_id IN ('10000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002')"
+assert_query '10000000-0000-4000-8000-000000000002' fixture_worker_b 'B sees its own app after SET ROLE' 'SET ROLE hello_delivery; SELECT public_id FROM applications'
+assert_query '3' fixture_legacy_worker 'unscoped legacy worker remains unchanged' 'SELECT count(*) FROM applications'
+assert_query '0' fixture_worker_a 'direct cross-app writes see no rows' "WITH updated AS (UPDATE applications SET id=id WHERE public_id='10000000-0000-4000-8000-000000000002' RETURNING id) SELECT count(*) FROM updated"
+app_b_id=$(sql postgres -c "SELECT id FROM applications WHERE key='runtime-app-b'")
+app_a_id=$(sql postgres -c "SELECT id FROM applications WHERE key='runtime-app-a'")
+sql fixture_worker_a -c "SET ROLE hello_delivery; SELECT hold_delivery_dispatch($app_b_id); SELECT hold_delivery_dispatch($app_a_id)"
+assert_query 't|f' postgres 'definer holds only the calling worker app' "SELECT (SELECT hold_new FROM application_dispatch_policy WHERE application_id=$app_a_id),(SELECT hold_new FROM application_dispatch_policy WHERE application_id=$app_b_id)"
+deny P0001 sql postgres < db/migrations/000047_onboarding_delivery_isolation.down.sql
 origin=$(sql postgres -c 'SELECT origin_epoch FROM notification_runtime WHERE singleton')
 source=$(sql postgres -c 'SELECT source_epoch FROM notification_runtime WHERE singleton')
 app_a='10000000-0000-4000-8000-000000000001'
