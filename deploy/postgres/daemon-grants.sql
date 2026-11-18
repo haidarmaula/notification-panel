@@ -89,6 +89,10 @@ INSERT INTO daemon_routines VALUES
 ('s','public.abandon_expired_replay_attempt(bigint,uuid,uuid,integer,bigint,uuid)'),
 ('s','public.clear_finished_replay_claim(bigint,uuid,uuid,integer,bigint,uuid)');
 
+INSERT INTO daemon_routines
+SELECT 'd', signature FROM (SELECT to_regprocedure('public.delivery_worker_scope(uuid)') AS signature) scope
+WHERE signature IS NOT NULL;
+
 DO $$
 DECLARE r record; g record; item record; col_list text;
 BEGIN

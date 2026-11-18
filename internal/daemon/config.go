@@ -4,6 +4,7 @@ package daemon
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"io"
 	"time"
@@ -32,6 +33,7 @@ type Configuration struct {
 	scheduler  scheduler.Config
 	retry      runloop.RetryPolicy
 	delivery   *deliveryConfig
+	policyHash [32]byte
 }
 
 // Load validates a caller-owned trusted policy stream without network I/O.
@@ -50,7 +52,7 @@ func loadPolicy(role deployment.Component, reader io.Reader,
 	if err != nil {
 		return nil, ErrConfiguration
 	}
-	cfg := &Configuration{role: role}
+	cfg := &Configuration{role: role, policyHash: sha256.Sum256(data)}
 	var databaseURL, sourceID, groupID, mode string
 	var brokerPolicy, deliveryPolicy, admin json.RawMessage
 	var retryMin, retryMax, poll int64

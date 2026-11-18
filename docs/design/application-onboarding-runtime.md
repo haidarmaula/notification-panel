@@ -177,8 +177,18 @@ then grants that LOGIN `EXECUTE` on `acknowledge_application_runtime` without ta
 write access. The function rechecks the reservation, provider configuration, runtime
 fences and the session LOGIN; delivery also needs matching M46 approval. A process
 instance can renew its 15-second lease, and a different instance can take over only
-after expiry. The PostgreSQL fixture exercises this database contract directly;
-process integration and activation do not yet consume these leases.
+after expiry. The PostgreSQL fixture exercises this database contract directly.
+
+M49 makes the normal delivery process check its assigned generation at startup.
+Apply the migration and reapply `deploy/postgres/daemon-grants.sql` before
+upgrading delivery binaries. An assigned worker hashes the exact policy bytes it
+loaded and renews its `DELIVERY` lease every three seconds. It waits without
+polling or publishing until its generation is current and the app is active.
+A failed renewal or loss of current generation cancels and joins both loops;
+this does not undo an already-started provider request. Unassigned legacy
+workers continue without an acknowledgement lease. The server, admission and
+scheduler do not yet publish leases, and the protected preparation command does
+not yet launch the normal worker process.
 
 ## Local evidence
 

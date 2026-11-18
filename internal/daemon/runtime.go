@@ -62,9 +62,19 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 		if err != nil {
 			return ErrConfiguration
 		}
+		lease, err := c.startDeliveryLease(startup, pool)
+		if err != nil {
+			return startupFailure(ctx, err)
+		}
 		cancelStartup()
 		return state.Run(ctx, c.monitoring, pool, logger, func(ctx context.Context) error {
-			return runDelivery(ctx, logger, c.delivery, c.retry, state, poller, outbox)
+			run := func(ctx context.Context) error {
+				return runDelivery(ctx, logger, c.delivery, c.retry, state, poller, outbox)
+			}
+			if lease == nil {
+				return run(ctx)
+			}
+			return lease.run(ctx, run)
 		})
 	}
 	// Startup deadlines must not become the lifetime of a healthy daemon.

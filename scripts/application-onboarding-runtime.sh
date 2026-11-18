@@ -98,6 +98,9 @@ SQL
 assert_query '1' fixture_worker_a 'A sees only its app' "SELECT count(*) FROM applications WHERE public_id IN ('10000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002')"
 assert_query '10000000-0000-4000-8000-000000000002' fixture_worker_b 'B sees its own app after SET ROLE' 'SET ROLE hello_delivery; SELECT public_id FROM applications'
 assert_query '3' fixture_legacy_worker 'unscoped legacy worker remains unchanged' 'SELECT count(*) FROM applications'
+assert_query '1|f' fixture_worker_a 'reserved generation is not active' "SELECT * FROM delivery_worker_scope('10000000-0000-4000-8000-000000000001')"
+assert_query '-1|f' fixture_worker_a 'different app cannot start with scoped worker login' "SELECT * FROM delivery_worker_scope('10000000-0000-4000-8000-000000000002')"
+assert_query '0|f' fixture_legacy_worker 'legacy worker has no generation lease' "SELECT * FROM delivery_worker_scope('10000000-0000-4000-8000-000000000001')"
 assert_query '0' fixture_worker_a 'direct cross-app writes see no rows' "WITH updated AS (UPDATE applications SET id=id WHERE public_id='10000000-0000-4000-8000-000000000002' RETURNING id) SELECT count(*) FROM updated"
 app_b_id=$(sql postgres -c "SELECT id FROM applications WHERE key='runtime-app-b'")
 app_a_id=$(sql postgres -c "SELECT id FROM applications WHERE key='runtime-app-a'")
