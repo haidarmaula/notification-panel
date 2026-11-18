@@ -38,11 +38,13 @@ for _ in {1..80}; do
     sleep .25
 done
 for migration in db/migrations/*.up.sql; do sql postgres < "$migration"; done
-# The unused migration may roll back safely before any evidence is written.
+# Roll back the dependent delegation before the unused lifecycle foundation.
+sql postgres < db/migrations/000052_onboarding_first_activation.down.sql
 sql postgres < db/migrations/000039_application_dispatch_control.down.sql
 sql postgres < db/migrations/000038_application_lifecycle.down.sql
 sql postgres < db/migrations/000038_application_lifecycle.up.sql
 sql postgres < db/migrations/000039_application_dispatch_control.up.sql
+sql postgres < db/migrations/000052_onboarding_first_activation.up.sql
 sql postgres <<'SQL'
 CREATE ROLE hello_application_lifecycle_issuer;
 CREATE ROLE hello_application_lifecycle_operator;
@@ -143,7 +145,7 @@ issue 8 3 HELD RETIRED
 [[ "$(apply 8)" == 4 ]]
 deny 23514 apply 7
 deny 23514 sql postgres -c "UPDATE application_lifecycle_grants SET expires_at=clock_timestamp()+interval '1 hour' WHERE id='$(grant_id 8)'"
-deny 23514 sql postgres -c 'TRUNCATE application_lifecycle_grants'
+deny 23514 sql postgres -c 'TRUNCATE application_lifecycle_grants,application_onboarding_lifecycle_delegations'
 deny P0001 sql postgres < db/migrations/000038_application_lifecycle.down.sql
 [[ "$(sql postgres -c "SELECT status,revision FROM applications WHERE public_id='$other'")" == 'PROVISIONING|1' ]]
 [[ "$(sql postgres -c 'SELECT sealed,migration_hold FROM notification_runtime')" == 't|t' ]]

@@ -15,7 +15,7 @@ OAuth slices have local code/tests; the full onboarding flow is not complete.
 | ONB-03 | Eight optional setup routes, safe responses, BFF forwarding and dashboard setup forms implemented; activation/device/release steps remain |
 | ONB-04 | Scoped OAuth worker and fenced completion implemented and exercised through the real local BFF/provisioner; target IAM/dry-run is part of ONB-08 |
 | ONB-05 | Partial: protected delivery plan/mobile composition, scoped durable reservations (M45), immutable worker policy publication and owner-approved one-shot delivery preflight (M46), including takeover of the exact inert allocation; app-scoped live delivery and shared runtime rollout with authenticated generation acknowledgements remain |
-| ONB-06 | Pending: DB-delegated activation, executor, runtime acknowledgements and crash/race recovery; activation handler is not mounted |
+| ONB-06 | Partial: M52 applies an owner-bound first activation atomically with dispatch held; PostgreSQL exercises the transition and replay. The asynchronous executor and public activation route are not wired |
 | ONB-07 | Pending: approved immutable enrollment trust/profile publication and external identity broker integration; policy-composition helper alone does not activate enrollment |
 | ONB-08 | Pending: scoped evidence import/list, delegated cohort approval and target-project dry-run; a test installation in VERIFY currently returns unavailable |
 | ONB-09 | Pending: guarded PILOT/FULL executors and device/campaign receipt evidence; synchronous one-way hold is implemented |

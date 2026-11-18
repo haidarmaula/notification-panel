@@ -129,6 +129,13 @@ type ApplicationOnboardingIngestion struct {
 	CreatedAt             pgtype.Timestamptz `db:"created_at"`
 }
 
+type ApplicationOnboardingLifecycleDelegation struct {
+	GrantID             pgtype.UUID `db:"grant_id"`
+	OperationID         pgtype.UUID `db:"operation_id"`
+	EnrollmentProfileID pgtype.UUID `db:"enrollment_profile_id"`
+	Generation          int64       `db:"generation"`
+}
+
 type ApplicationOnboardingOperation struct {
 	ID                          pgtype.UUID        `db:"id"`
 	ApplicationID               int64              `db:"application_id"`

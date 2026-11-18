@@ -202,7 +202,13 @@ continue serving existing apps while onboarding leases expire. Host publication
 and coordinated rollout of the shared policies remain separate work. M51 exposes
 an internal readiness predicate for the activation transaction: all four leases
 must match the reserved configuration, epochs, immutable policy digests and
-current LOGIN privileges. The predicate is not an activation capability.
+current LOGIN privileges. M52 consumes this predicate in the protected first-activation
+transaction. A trusted owner binds a pending operation and expected enrollment
+profile to an existing M38 lifecycle grant and reserved generation. The operator
+calls `apply_onboarding_first_activation`; direct lifecycle apply cannot use that
+bound grant. The transaction rechecks staff authority and OAuth evidence, installs
+the configuration and generation, and leaves dispatch `HELD`. No public route or
+activation executor currently calls this function.
 
 ## Local evidence
 
