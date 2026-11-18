@@ -5,11 +5,13 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
+	"io"
 	"log"
 	"net"
 	"net/http"
@@ -25,7 +27,19 @@ import (
 const fixtureIssuer = "fixture@integration-fixture.iam.gserviceaccount.com"
 const fixtureBearer = "disposable-worker-integration-access-token"
 
+const onboardingPayloadPath = "/tmp/onboarding-payload.json"
+
 func main() {
+	if len(os.Args) == 2 && os.Args[1] == "read-onboarding-payload" && os.Getenv("HELLO_PROVIDER_ONBOARDING") == "synthetic" {
+		payload, err := os.ReadFile(onboardingPayloadPath)
+		if err != nil {
+			log.Fatal("missing synthetic push payload")
+		}
+		if _, err := os.Stdout.Write(payload); err != nil {
+			log.Fatal("cannot relay synthetic push payload")
+		}
+		return
+	}
 	data, err := os.ReadFile("/fixtures/oauth-public.pem")
 	if err != nil {
 		log.Fatal("missing synthetic account")
@@ -48,6 +62,7 @@ func main() {
 	}
 	load := os.Getenv("HELLO_PROVIDER_LOAD") == "synthetic"
 	local := os.Getenv("HELLO_PROVIDER_LOCAL") == "synthetic"
+	capture := os.Getenv("HELLO_PROVIDER_ONBOARDING") == "synthetic"
 	stats := &loadStats{seen: make(map[string]time.Time)}
 	server := &http.Server{
 		ReadTimeout: 5 * time.Second, WriteTimeout: 5 * time.Second, IdleTimeout: 10 * time.Second,
@@ -73,8 +88,21 @@ func main() {
 						stats.respond(w, r)
 						return
 					}
+					var payload []byte
+					if capture {
+						var err error
+						payload, err = io.ReadAll(r.Body)
+						if err != nil {
+							break
+						}
+						r.Body = io.NopCloser(bytes.NewReader(payload))
+					}
 					if _, _, _, valid := readSend(r, false, local); !valid {
 						break
+					}
+					if capture && os.WriteFile(onboardingPayloadPath, payload, 0600) != nil {
+						http.Error(w, "fixture capture unavailable", http.StatusInternalServerError)
+						return
 					}
 					w.Header().Set("Content-Type", "application/json")
 					_, _ = w.Write([]byte(`{"name":"projects/integration-fixture/messages/accepted-1"}`))

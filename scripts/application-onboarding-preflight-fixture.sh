@@ -37,6 +37,7 @@ worker=$name-worker
 scheduler=$name-scheduler
 admission=$name-admission
 server=$name-server
+provider=$name-provider
 worker_tag="hello-preflight-fixture:$name"
 shared_tag="hello-preflight-fixture:$name-shared"
 image_owned=false
@@ -63,7 +64,7 @@ cleanup() {
             d rm -fv "$id" >/dev/null || rc=1
         done
     fi
-    for id in "$worker" "$scheduler" "$admission" "$server" "$pg" "$broker"; do
+    for id in "$worker" "$scheduler" "$admission" "$server" "$provider" "$pg" "$broker"; do
         if [[ $(d inspect --format "{{index .Config.Labels \"$label\"}}" "$id" 2>/dev/null) == "$name" ]]; then
             d rm -fv "$id" >/dev/null || rc=1
         fi
@@ -232,6 +233,7 @@ if [[ "$mode" == --preflight-services ]]; then
     admission_digest=$(file_digest "$tmp/admission.json")
     "$timeout_bin" -k 5s 180s env CGO_ENABLED=0 GOOS=linux GOARCH="$arch" "$go_bin" build -trimpath -o "$tmp/image/scheduler" ./cmd/scheduler
     "$timeout_bin" -k 5s 180s env CGO_ENABLED=0 GOOS=linux GOARCH="$arch" "$go_bin" build -trimpath -o "$tmp/image/server" ./cmd/server
+    "$timeout_bin" -k 5s 180s env CGO_ENABLED=0 GOOS=linux GOARCH="$arch" "$go_bin" build -trimpath -o "$tmp/image/mobile-client" scripts/fixture-onboarding-mobile.go
     server_digest=$(python3 - "$tmp" <<'PY'
 import hashlib
 import pathlib
@@ -244,15 +246,21 @@ PY
     )
     inputs archive -:etc:0755:0.0 -:etc/hello:0755:0.0 \
         server.json:etc/hello/server.json:0640:0.65532 mobile.json:etc/hello/mobile.json:0640:0.65532 \
+        certs/ca.crt:etc/hello/fixture-ca.crt:0640:0.65532 certs/client.crt:etc/hello/fixture-client.crt:0640:0.65532 \
+        certs/client.key:etc/hello/fixture-client.key:0640:0.65532 \
         scheduler.json:etc/hello/scheduler.json:0640:0.65532 admission.json:etc/hello/worker.json:0640:0.65532 \
         certs/ca.crt:etc/hello/postgres-ca.crt:0644:0.0 > "$tmp/image/shared.tar"
-    printf '%s\n' 'FROM scratch' 'COPY --chmod=0555 worker scheduler server /' 'ADD shared.tar /' |
+    printf '%s\n' 'FROM scratch' 'COPY --chmod=0555 worker scheduler server mobile-client /' 'ADD shared.tar /' |
         "$timeout_bin" -k 5s 90s docker build -q --platform "linux/$arch" -t "$shared_tag" -f - "$tmp/image" >/dev/null
     shared_image_owned=true
+    "$timeout_bin" -k 5s 180s env CGO_ENABLED=0 GOOS=linux GOARCH="$arch" "$go_bin" build -trimpath -o "$tmp/image/provider" scripts/integration-provider.go
     inputs archive -:etc:0755:0.0 -:etc/hello:0755:0.0 -:etc/hello/fcm:0755:0.0 \
+        -:etc/ssl:0755:0.0 -:etc/ssl/certs:0755:0.0 certs/ca.crt:etc/ssl/certs/ca-certificates.crt:0644:0.0 \
+        -:fixtures:0755:0.0 certs/oauth-public.pem:fixtures/oauth-public.pem:0644:0.0 \
+        certs/provider.crt:fixtures/provider.crt:0644:0.0 certs/provider.key:fixtures/provider.key:0640:0.65532 \
         worker.json:etc/hello/worker.json:0640:0.65532 certs/ca.crt:etc/hello/postgres-ca.crt:0644:0.0 \
         certs/service-account.json:etc/hello/fcm/service-account.json:0640:0.65532 > "$tmp/image/policy.tar"
-    printf '%s\n' 'FROM scratch' 'COPY --chmod=0555 worker /worker' \
+    printf '%s\n' 'FROM scratch' 'COPY --chmod=0555 worker provider /' \
         'ADD policy.tar /' 'ENTRYPOINT ["/worker"]' |
         "$timeout_bin" -k 5s 90s docker build -q --platform "linux/$arch" -t "$worker_tag" -f - "$tmp/image" >/dev/null
     image_owned=true
@@ -269,11 +277,12 @@ PY
     assert_no_delivery
     sql -v app="$app" -v config="$config" -v reservation="$reservation" -v worker="$worker_digest" \
         -v scheduler="$scheduler_digest" -v admission="$admission_digest" -v server="$server_digest" -v source="$send_source_id" <<'SQL'
-CREATE ROLE fixture_server LOGIN PASSWORD 'server_only';
+CREATE ROLE hello_server NOLOGIN;
+CREATE ROLE fixture_server LOGIN IN ROLE hello_server PASSWORD 'server_only';
 CREATE ROLE fixture_scheduler LOGIN IN ROLE hello_scheduler PASSWORD 'scheduler_only';
 CREATE ROLE fixture_admission LOGIN IN ROLE hello_admission PASSWORD 'admission_only';
 GRANT EXECUTE ON FUNCTION public.acknowledge_shared_application_runtime(text,bytea,uuid)
-TO fixture_scheduler, fixture_admission, fixture_server;
+TO fixture_scheduler, fixture_admission;
 INSERT INTO notification_log_sources(id,topic,cluster_identity,topic_incarnation,active)
 VALUES(:'source','notification.send.requested','MkU3OEVBNTcwNTJENDM2Qk','preflight-fixture',true);
 INSERT INTO application_runtime_reservations(id,application_id,configuration_id,environment,generation,profile_revision,
@@ -291,6 +300,9 @@ FROM applications CROSS JOIN (VALUES
 ) AS approvals(component,login_role,digest) WHERE public_id=:'app';
 GRANT EXECUTE ON FUNCTION acknowledge_application_runtime(uuid,bigint,text,bytea,uuid) TO fixture_worker;
 SQL
+    sql -f /fixture/grants/server-grants.sql
+    sql -c 'GRANT EXECUTE ON FUNCTION public.acknowledge_shared_application_runtime(text,bytea,uuid) TO fixture_server'
+    d cp scripts/sql "$pg:/fixture-sql"
     # Admission rejects a missing commit; seed the empty topic's numeric offset without a record.
     kafka kafka-consumer-groups --group "$name" --topic notification.send.requested \
         --reset-offsets --to-offset 0 --execute >/dev/null
@@ -329,6 +341,39 @@ SQL
     assert_renewal "$server" SERVER "$server_digest"
     prepared="SELECT onboarding_runtime_prepared(id,1,'$config') FROM applications WHERE public_id='$app'"
     [[ $(sql -c "$prepared") == t ]] || fail 'Four live processes did not satisfy the prepared runtime gate'
+    app_id=$(sql -c "SELECT id FROM applications WHERE public_id='$app'")
+    sql -v app="$app" -v config="$config" -v app_id="$app_id" -v commit_activation=true \
+        -f /fixture-sql/fixture-onboarding-first-activation.sql >/dev/null
+    enrollment_state=$(lifecycle)
+    sql -v app_id="$app_id" <<'SQL'
+WITH seeded AS (INSERT INTO users(application_id,external_id) VALUES(:app_id,'fixture-device') RETURNING id)
+INSERT INTO mobile_identities(application_id,identity_namespace,subject,user_id)
+SELECT :app_id,'fixture-users','fixture-device',id FROM seeded;
+SQL
+    installation=$(d exec "$server" /mobile-client "$app")
+    [[ "$installation" =~ ^[0-9a-f-]{36}$ ]] || fail 'Expected an installation ID from the mobile API'
+    [[ $(sql -c "SELECT count(*) FROM mobile_installations WHERE application_id=$app_id AND public_id='$installation'") == 1 ]] ||
+        fail 'Mobile API did not persist an isolated test installation'
+    [[ $(lifecycle) == "$enrollment_state" ]] || fail 'Enrollment changed lifecycle or dispatch state'
+    d create --pull=never --name "$provider" --label "$label=$name" --network "$name" \
+        --network-alias oauth2.googleapis.com --network-alias fcm.googleapis.com \
+        --user 65532:65532 --read-only --cap-drop ALL --security-opt no-new-privileges \
+        --tmpfs /tmp -e HELLO_PROVIDER_ONBOARDING=synthetic --entrypoint /provider "$worker_image" >/dev/null
+    d start "$provider" >/dev/null
+    campaign=$(sql -v app="$app" -v app_id="$app_id" -v installation="$installation" -f /fixture-sql/fixture-onboarding-pilot.sql)
+    [[ "$campaign" =~ ^[0-9]+$ ]] || fail 'Fixture did not schedule one campaign'
+    deadline=$((SECONDS + 35))
+    while [[ $(sql -c "SELECT count(*) FROM notification_delivery_intents WHERE application_id=$app_id AND notification_id=$campaign AND provider_accepted_at IS NOT NULL") != 1 ]]; do
+        (( SECONDS < deadline )) || fail 'Simulator did not accept the pilot notification'
+        sleep .25
+    done
+    [[ $(sql -c "SELECT count(*) FROM notification_delivery_intents x JOIN mobile_installations i ON (i.application_id,i.id)=(x.application_id,x.installation_id) WHERE x.application_id=$app_id AND x.notification_id=$campaign AND i.public_id='$installation'") == 1 ]] || fail 'Pilot delivery did not target the enrolled installation'
+    [[ $(sql -c "SELECT count(*) FROM notification_delivery_intents WHERE application_id=$app_id AND notification_id=$campaign") == 1 ]] || fail 'Pilot created additional delivery intents'
+    binding=$(sql -c "SELECT x.binding_id FROM notification_delivery_intents x JOIN mobile_installations i ON (i.application_id,i.id)=(x.application_id,x.installation_id) WHERE x.application_id=$app_id AND x.notification_id=$campaign AND i.public_id='$installation'")
+    [[ "$binding" =~ ^[0-9]+$ ]] || fail 'Expected a single binding for the pilot payload'
+    d exec "$provider" /provider read-onboarding-payload | d exec -i "$server" /mobile-client "$app" "$campaign" "$binding"
+    [[ $(sql -c "SELECT count(*) FROM notification_observations o JOIN notification_delivery_intents x ON (x.application_id,x.id)=(o.application_id,o.delivery_id) WHERE x.application_id=$app_id AND x.notification_id=$campaign AND o.event='DELIVERED'") == 1 ]] || fail 'Expected one durable receipt after exact replay'
+    pilot_state=$(lifecycle)
     sql -c 'UPDATE notification_runtime SET sealed=true WHERE singleton'
     [[ $(sql -c "$prepared") == f ]] || fail 'Sealed runtime remained prepared'
     [[ $(d wait "$worker") == 1 ]] || fail 'Delivery daemon did not fail closed after the runtime was sealed'
@@ -345,10 +390,9 @@ SQL
     assert_running "$scheduler"
     assert_running "$admission"
     assert_running "$server"
-    [[ $(ledger) == '0|0|0|0|0|0|0|0|4' ]] || fail 'Unexpected durable delivery or acknowledgement evidence'
-    [[ $(offsets | sort) == $'notification.delivery.updated:0:0\nnotification.send.requested:0:0' ]] || fail 'Unexpected Kafka end offsets'
-    [[ $(lifecycle) == "$initial_lifecycle" ]] || fail 'Lifecycle or dispatch state changed'
-    printf '%s\n' 'Services fixture passed: four live components satisfy runtime readiness; sealing revokes readiness without activation or delivery'
+    [[ $(sql -c 'SELECT count(*) FROM application_runtime_acknowledgements') == 4 ]] || fail 'Expected four runtime acknowledgements'
+    [[ $(lifecycle) == "$pilot_state" ]] || fail 'Sealing changed lifecycle or dispatch state'
+    printf '%s\n' 'Services fixture passed: delegated activation, HTTPS enrollment while held, one simulated PILOT push and one signed DELIVERED receipt after replay'
     exit
 fi
 

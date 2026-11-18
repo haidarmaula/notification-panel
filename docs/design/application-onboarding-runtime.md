@@ -250,10 +250,14 @@ Kafka (mTLS). It checks the report digest, unchanged lifecycle state and empty
 ledger, acknowledgement records and Kafka offsets. It then runs the normal
 delivery worker, scheduler, admission worker, and protected server against a
 fixture-seeded reservation. It checks renewal by the same process for each role
-and verifies that the four leases satisfy the prepared-runtime gate. Sealing
-immediately closes that gate, delivery exits, and the shared leases expire
-without any send. The daemons have no external network access. This mode does
-not run the host CLI or test activation.
+and verifies that the four leases satisfy the prepared-runtime gate. It applies
+a delegated first activation, enrolls a test installation over HTTPS while
+dispatch stays held, and sends one scheduled PILOT campaign through the real
+pipeline to an isolated FCM simulator. A synthetic client receives the captured
+payload and posts the signed receipt twice; PostgreSQL must retain one `DELIVERED`
+observation. Sealing then stops delivery and lets shared leases expire. This mode
+seeds OAuth evidence, identity mapping, and operator approvals; it does not prove
+those steps through the dashboard, the Linux host CLI, or a physical device.
 
 `bash scripts/application-onboarding-docker.sh --preflight` adds stopped
 preparation, policy publication, exact replay and rejection of changed policy
