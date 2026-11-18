@@ -199,7 +199,10 @@ at least one assigned partition. The scheduler checks source registration and
 broker metadata first; the server loads mobile routes and binds its listener
 first. An invalid scope or digest does not renew a lease. Shared processes can
 continue serving existing apps while onboarding leases expire. Host publication
-and coordinated rollout of the shared policies remain separate work.
+and coordinated rollout of the shared policies remain separate work. M51 exposes
+an internal readiness predicate for the activation transaction: all four leases
+must match the reserved configuration, epochs, immutable policy digests and
+current LOGIN privileges. The predicate is not an activation capability.
 
 ## Local evidence
 
@@ -227,10 +230,11 @@ recorded no accepted OAuth or FCM requests.
 worker from current source and runs it against isolated PostgreSQL (TLS) and
 Kafka (mTLS). It checks the report digest, unchanged lifecycle state and empty
 ledger, acknowledgement records and Kafka offsets. It then runs the normal
-worker with a fixture-seeded reservation, verifies that the same process renews
-its lease while the app remains provisioning, and seals the runtime to verify
-fail-closed exit without delivery. The worker has no external network access.
-This mode does not run the host CLI or test activation.
+delivery worker, scheduler, and admission worker against a fixture-seeded
+reservation. It checks renewal by the same process for each role, then seals the
+runtime to verify that delivery exits and the shared leases expire without any
+send. The daemons have no external network access. This mode does not run the
+server or host CLI and does not test activation.
 
 `bash scripts/application-onboarding-docker.sh --preflight` adds stopped
 preparation, policy publication, exact replay and rejection of changed policy

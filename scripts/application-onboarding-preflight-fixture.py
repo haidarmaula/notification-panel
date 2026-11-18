@@ -9,7 +9,7 @@ import tarfile
 import uuid
 
 
-def render(root, image, network):
+def render(root, image, network, mode):
     ids = {key: str(uuid.uuid4()) for key in (
         "application_id", "configuration_id", "reservation_id", "log_source_id"
     )}
@@ -53,7 +53,27 @@ def render(root, image, network):
                   network=network, max_applications=1, max_overlap=1, max_database_connections=4,
                   delivery=dict(memory_bytes=134217728, nano_cpus=500000000, pids_limit=64,
                                 max_database_connections=2))
-    for name, value in (("worker.json", worker), ("policy.json", policy)):
+    policies = {"worker.json": worker, "policy.json": policy}
+    if mode == "--preflight-services":
+        send_source_id = str(uuid.uuid4())
+        (root / "send-source-id").write_text(send_source_id + "\n")
+        shared = dict(
+            log_source_id=send_source_id, cluster_identity=worker["cluster_identity"],
+            topic_name="notification.send.requested", topic_incarnation=worker["topic_incarnation"],
+            partition_count=1, retry_min_ms=100, retry_max_ms=1000, kafka=worker["kafka"],
+        )
+
+        def database_url(role):
+            return (f"postgres://fixture_{role}:{role}_only@postgres:5432/postgres"
+                    "?sslmode=verify-full&sslrootcert=/etc/hello/postgres-ca.crt")
+
+        policies["scheduler.json"] = dict(
+            **shared, database_url=database_url("scheduler"), poll_interval_ms=250, page_size=20,
+        )
+        policies["admission.json"] = dict(
+            **shared, database_url=database_url("admission"), mode="admission_only", group_id=network,
+        )
+    for name, value in policies.items():
         (root / name).write_text(json.dumps(value, separators=(",", ":")) + "\n")
 
 

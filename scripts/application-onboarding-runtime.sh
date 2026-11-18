@@ -165,7 +165,16 @@ assert_query 1 fixture_admission 'approved admission acknowledges' "$(shared_ack
 assert_query 1 fixture_scheduler 'approved scheduler acknowledges' "$(shared_ack SCHEDULER ef)"
 deny 42501 sql fixture_worker_a -c "$(shared_ack ADMISSION ef)"
 assert_query 4 postgres 'one readiness acknowledgement per runtime component' 'SELECT count(*) FROM application_runtime_acknowledgements'
+prepared="SELECT onboarding_runtime_prepared($app_a_id,1,'$config_a')"
+assert_query t postgres 'all four live approvals make the exact runtime prepared' "$prepared"
+assert_query f postgres 'different configuration cannot use runtime evidence' "SELECT onboarding_runtime_prepared($app_a_id,1,'$config_b')"
+deny 42501 sql fixture_worker_a -c "$prepared"
+deny 23514 sql postgres -c "UPDATE application_runtime_component_scopes SET policy_sha256=decode(repeat('ab',32),'hex') WHERE component='SERVER'"
+sql postgres -c 'REVOKE EXECUTE ON FUNCTION acknowledge_shared_application_runtime(text,bytea,uuid) FROM fixture_scheduler'
+assert_query f postgres 'revoked shared authority immediately invalidates prepared evidence' "$prepared"
+sql postgres -c 'GRANT EXECUTE ON FUNCTION acknowledge_shared_application_runtime(text,bytea,uuid) TO fixture_scheduler'
 sql postgres -c "UPDATE application_runtime_acknowledgements SET acknowledged_at=clock_timestamp()-interval '30 seconds',lease_expires_at=clock_timestamp()-interval '15 seconds' WHERE component='DELIVERY'"
+assert_query f postgres 'expired worker lease invalidates prepared runtime' "$prepared"
 assert_query t fixture_worker_a 'replacement takes over only after lease expiry' "$(ack "$app_a" DELIVERY ef "$instance_b")"
 assert_query f fixture_worker_a 'former process cannot retake live lease' "$ack_delivery"
 sql postgres -c 'UPDATE notification_runtime SET sealed=true WHERE singleton'
@@ -263,6 +272,7 @@ assert_query 3 postgres 'rollback cannot discard retained history' 'SELECT count
 sql postgres -c 'CREATE DATABASE runtime_empty'
 empty_sql() { docker_cmd exec -iu postgres "$node" psql -d runtime_empty -XqAt -v ON_ERROR_STOP=1 -v VERBOSITY=verbose; }
 for migration in db/migrations/*.up.sql; do empty_sql < "$migration"; done
+empty_sql < db/migrations/000051_onboarding_prepared_runtime_gate.down.sql
 empty_sql < db/migrations/000050_onboarding_shared_runtime_leases.down.sql
 empty_sql < db/migrations/000049_onboarding_delivery_lease_startup.down.sql
 empty_sql < db/migrations/000048_onboarding_runtime_acknowledgement.down.sql

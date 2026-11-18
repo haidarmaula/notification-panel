@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Run --preflight as root on a disposable Linux Docker host with empty protected paths.
-# --preflight-services runs only the isolated DB, Kafka and real worker leg (also on Desktop).
+# --preflight-services runs the real daemons on isolated PostgreSQL and Kafka (also on Desktop).
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 mode=${1:-}
@@ -34,8 +34,12 @@ name=$(basename "$tmp" | tr '[:upper:].' '[:lower:]-')
 pg=$name-db
 broker=$name-kafka
 worker=$name-worker
+scheduler=$name-scheduler
+admission=$name-admission
 worker_tag="hello-preflight-fixture:$name"
+shared_tag="hello-preflight-fixture:$name-shared"
 image_owned=false
+shared_image_owned=false
 app=''
 etc_owned=false
 var_owned=false
@@ -45,7 +49,7 @@ cleanup() {
     local rc=$? id ids
     trap - EXIT
     if (( rc != 0 )); then
-        for id in "$pg" "$broker" "$worker"; do
+        for id in "$pg" "$broker" "$worker" "$scheduler" "$admission"; do
             if [[ $(d inspect --format "{{index .Config.Labels \"$label\"}}" "$id" 2>/dev/null) == "$name" ]]; then
                 d logs --tail 20 "$id" >&2 || true
             fi
@@ -58,7 +62,7 @@ cleanup() {
             d rm -fv "$id" >/dev/null || rc=1
         done
     fi
-    for id in "$worker" "$pg" "$broker"; do
+    for id in "$worker" "$scheduler" "$admission" "$pg" "$broker"; do
         if [[ $(d inspect --format "{{index .Config.Labels \"$label\"}}" "$id" 2>/dev/null) == "$name" ]]; then
             d rm -fv "$id" >/dev/null || rc=1
         fi
@@ -66,6 +70,7 @@ cleanup() {
     if $executor_network_owned; then d network rm "$name-executor" >/dev/null || rc=1; fi
     if $network_owned; then d network rm "$name" >/dev/null || rc=1; fi
     if $image_owned; then d image rm "$worker_tag" >/dev/null || rc=1; fi
+    if $shared_image_owned; then d image rm "$shared_tag" >/dev/null || rc=1; fi
     if $etc_owned; then rm -rf -- /etc/hello || rc=1; fi
     if $var_owned; then rm -rf -- /var/lib/hello || rc=1; fi
     rm -rf -- "$tmp" || rc=1
@@ -94,10 +99,15 @@ if [[ "$mode" == --preflight ]]; then
     worker_image=$(d image inspect --format '{{if .RepoDigests}}{{index .RepoDigests 0}}{{end}}' "$worker_tag")
     [[ "$worker_image" == hello-preflight-fixture@sha256:* ]] || fail 'Docker image store did not supply a pinned local worker digest'
 fi
-inputs render "$worker_image" "$name"
+inputs render "$worker_image" "$name" "$mode"
 { read -r app; read -r config; read -r reservation; read -r source_id; } < "$tmp/ids"
-policy_digest=$(shasum -a 256 "$tmp/policy.json"); policy_digest=${policy_digest%% *}
-worker_digest=$(shasum -a 256 "$tmp/worker.json"); worker_digest=${worker_digest%% *}
+file_digest() {
+    local sum
+    sum=$(shasum -a 256 "$1") || return
+    printf '%s\n' "${sum%% *}"
+}
+policy_digest=$(file_digest "$tmp/policy.json")
+worker_digest=$(file_digest "$tmp/worker.json")
 report=$(printf '{"application_id":"%s","policy_sha256":"%s"}' "$app" "$worker_digest")
 
 if [[ "$mode" == --preflight ]]; then
@@ -216,6 +226,16 @@ initial_lifecycle=$(lifecycle)
 assert_no_delivery
 
 if [[ "$mode" == --preflight-services ]]; then
+    read -r send_source_id < "$tmp/send-source-id"
+    scheduler_digest=$(file_digest "$tmp/scheduler.json")
+    admission_digest=$(file_digest "$tmp/admission.json")
+    "$timeout_bin" -k 5s 180s env CGO_ENABLED=0 GOOS=linux GOARCH="$arch" "$go_bin" build -trimpath -o "$tmp/image/scheduler" ./cmd/scheduler
+    inputs archive -:etc:0755:0.0 -:etc/hello:0755:0.0 \
+        scheduler.json:etc/hello/scheduler.json:0640:0.65532 admission.json:etc/hello/worker.json:0640:0.65532 \
+        certs/ca.crt:etc/hello/postgres-ca.crt:0644:0.0 > "$tmp/image/shared.tar"
+    printf '%s\n' 'FROM scratch' 'COPY --chmod=0555 worker scheduler /' 'ADD shared.tar /' |
+        "$timeout_bin" -k 5s 90s docker build -q --platform "linux/$arch" -t "$shared_tag" -f - "$tmp/image" >/dev/null
+    shared_image_owned=true
     inputs archive -:etc:0755:0.0 -:etc/hello:0755:0.0 -:etc/hello/fcm:0755:0.0 \
         worker.json:etc/hello/worker.json:0640:0.65532 certs/ca.crt:etc/hello/postgres-ca.crt:0644:0.0 \
         certs/service-account.json:etc/hello/fcm/service-account.json:0640:0.65532 > "$tmp/image/policy.tar"
@@ -223,52 +243,90 @@ if [[ "$mode" == --preflight-services ]]; then
         'ADD policy.tar /' 'ENTRYPOINT ["/worker"]' |
         "$timeout_bin" -k 5s 90s docker build -q --platform "linux/$arch" -t "$worker_tag" -f - "$tmp/image" >/dev/null
     image_owned=true
-    create_worker() {
-        d create --pull=never --name "$worker" --label "$label=$name" --network "$name" \
+    create_daemon() {
+        local container=$1
+        shift
+        d create --pull=never --name "$container" --label "$label=$name" --network "$name" \
             --user 65532:65532 --read-only --cap-drop ALL --security-opt no-new-privileges \
-            --memory 128m --cpus .5 --pids-limit 64 "$worker_image" "$@" >/dev/null
+            --memory 128m --cpus .5 --pids-limit 64 "$@" >/dev/null
     }
-    create_worker --check-delivery-policy
+    create_daemon "$worker" "$worker_image" --check-delivery-policy
     [[ $(d start -a "$worker") == "$report" ]] || fail 'Unexpected worker preflight report'
     [[ $(d inspect --format '{{.State.Status}} {{.State.ExitCode}}' "$worker") == 'exited 0' ]]
     assert_no_delivery
-    sql -v app="$app" -v config="$config" -v reservation="$reservation" -v worker="$worker_digest" <<'SQL'
+    sql -v app="$app" -v config="$config" -v reservation="$reservation" -v worker="$worker_digest" \
+        -v scheduler="$scheduler_digest" -v admission="$admission_digest" -v source="$send_source_id" <<'SQL'
+CREATE ROLE fixture_scheduler LOGIN IN ROLE hello_scheduler PASSWORD 'scheduler_only';
+CREATE ROLE fixture_admission LOGIN IN ROLE hello_admission PASSWORD 'admission_only';
+GRANT EXECUTE ON FUNCTION public.acknowledge_shared_application_runtime(text,bytea,uuid)
+TO fixture_scheduler, fixture_admission;
+INSERT INTO notification_log_sources(id,topic,cluster_identity,topic_incarnation,active)
+VALUES(:'source','notification.send.requested','MkU3OEVBNTcwNTJENDM2Qk','preflight-fixture',true);
 INSERT INTO application_runtime_reservations(id,application_id,configuration_id,environment,generation,profile_revision,
     setup_revision,origin_epoch,source_epoch,executor_role,database_connections)
 SELECT :'reservation',a.id,:'config','staging',1,1,s.revision,n.origin_epoch,n.source_epoch,'fixture_executor'::regrole::oid,2
 FROM applications a JOIN application_onboarding s ON s.application_id=a.id
 CROSS JOIN notification_runtime n WHERE a.public_id=:'app' AND n.singleton;
 INSERT INTO application_runtime_component_scopes(application_id,generation,component,login_role,policy_sha256)
-SELECT id,1,'DELIVERY','fixture_worker'::regrole::oid,decode(:'worker','hex') FROM applications WHERE public_id=:'app';
+SELECT id,1,component,login_role::regrole::oid,decode(digest,'hex')
+FROM applications CROSS JOIN (VALUES
+    ('DELIVERY','fixture_worker',:'worker'),
+    ('SCHEDULER','fixture_scheduler',:'scheduler'),
+    ('ADMISSION','fixture_admission',:'admission')
+) AS approvals(component,login_role,digest) WHERE public_id=:'app';
 GRANT EXECUTE ON FUNCTION acknowledge_application_runtime(uuid,bigint,text,bytea,uuid) TO fixture_worker;
 SQL
+    # Admission rejects a missing commit; seed the empty topic's numeric offset without a record.
+    kafka kafka-consumer-groups --group "$name" --topic notification.send.requested \
+        --reset-offsets --to-offset 0 --execute >/dev/null
     d rm "$worker" >/dev/null
-    create_worker
-    d start "$worker" >/dev/null
-    lease() {
-        sql -c "SELECT executor_id,acknowledged_at FROM application_runtime_acknowledgements
-            WHERE component='DELIVERY' AND generation=1 AND policy_sha256=decode('$worker_digest','hex')
-            AND lease_expires_at>clock_timestamp()"
+    create_daemon "$worker" "$worker_image"
+    create_daemon "$scheduler" --entrypoint /scheduler "$shared_tag"
+    create_daemon "$admission" --entrypoint /worker "$shared_tag"
+    d start "$worker" "$scheduler" "$admission" >/dev/null
+    assert_running() {
+        [[ $(d inspect --format '{{.State.Running}}' "$1") == true ]] || fail "$1 exited unexpectedly"
     }
-    first=''
-    renewed=false
-    for _ in {1..50}; do
-        [[ $(d inspect --format '{{.State.Running}}' "$worker") == true ]] || fail 'Delivery daemon exited before renewing its lease'
-        current=$(lease)
-        if [[ -n "$current" ]]; then
-            if [[ -z "$first" ]]; then first=$current
-            elif [[ "$current" != "$first" && "${current%%|*}" == "${first%%|*}" ]]; then renewed=true; break
+    live_lease() {
+        sql -c "SELECT executor_id,lease_expires_at FROM application_runtime_acknowledgements
+            WHERE application_id=(SELECT id FROM applications WHERE public_id='$app')
+            AND configuration_id='$config' AND component='$1' AND generation=1
+            AND policy_sha256=decode('$2','hex') AND lease_expires_at>clock_timestamp()"
+    }
+    assert_renewal() {
+        local container=$1 component=$2 digest=$3 first='' current until=$((SECONDS + 30))
+        while (( SECONDS < until )); do
+            assert_running "$container"
+            current=$(live_lease "$component" "$digest")
+            if [[ -n "$current" ]]; then
+                if [[ -z "$first" ]]; then first=$current
+                elif [[ "${current%%|*}" == "${first%%|*}" && "${current#*|}" > "${first#*|}" ]]; then return
+                elif [[ "${current%%|*}" != "${first%%|*}" ]]; then fail "$component lease changed executor"; fi
             fi
-        fi
-        sleep .25
-    done
-    $renewed || fail 'Prepared delivery daemon did not renew its lease'
+            sleep .25
+        done
+        fail "$component daemon did not renew its lease"
+    }
+    assert_renewal "$worker" DELIVERY "$worker_digest"
+    assert_renewal "$scheduler" SCHEDULER "$scheduler_digest"
+    assert_renewal "$admission" ADMISSION "$admission_digest"
     sql -c 'UPDATE notification_runtime SET sealed=true WHERE singleton'
     [[ $(d wait "$worker") == 1 ]] || fail 'Delivery daemon did not fail closed after the runtime was sealed'
-    [[ $(ledger) == '0|0|0|0|0|0|0|0|1' ]] || fail 'Unexpected durable delivery evidence'
+    # Shared daemons stay running, but a sealed runtime must stop extending their leases.
+    deadline=$((SECONDS + 20))
+    while true; do
+        scheduler_lease=$(live_lease SCHEDULER "$scheduler_digest")
+        admission_lease=$(live_lease ADMISSION "$admission_digest")
+        [[ -n "$scheduler_lease" || -n "$admission_lease" ]] || break
+        (( SECONDS < deadline )) || fail 'Shared runtime lease remained live after sealing'
+        sleep .25
+    done
+    assert_running "$scheduler"
+    assert_running "$admission"
+    [[ $(ledger) == '0|0|0|0|0|0|0|0|3' ]] || fail 'Unexpected durable delivery or acknowledgement evidence'
     [[ $(offsets | sort) == $'notification.delivery.updated:0:0\nnotification.send.requested:0:0' ]] || fail 'Unexpected Kafka end offsets'
     [[ $(lifecycle) == "$initial_lifecycle" ]] || fail 'Lifecycle or dispatch state changed'
-    printf '%s\n' 'Services fixture passed: preflight, live lease renewal, and fail-closed seal; no activation, delivery or host CLI'
+    printf '%s\n' 'Services fixture passed: delivery preflight; delivery, scheduler and admission lease renewal; seal stops renewal without activation or delivery'
     exit
 fi
 

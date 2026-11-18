@@ -1,0 +1,3 @@
+DROP FUNCTION public.onboarding_runtime_prepared(bigint,bigint,uuid);
+DROP TRIGGER protect_runtime_component_scope_history ON public.application_runtime_component_scopes;
+DROP TRIGGER protect_runtime_component_scope ON public.application_runtime_component_scopes;
