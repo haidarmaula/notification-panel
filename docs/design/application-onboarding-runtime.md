@@ -189,6 +189,17 @@ read-only mounts, immutable-ID start, lost responses and exact report replay.
 Separately, the real Linux worker command ran in Docker as UID/GID 65532 with a
 temporary restricted LOGIN and the synthetic stack's real Kafka metadata and
 credential file. Delivery ledger counts remained unchanged and the simulator
-recorded no accepted OAuth or FCM requests. The host CLI's entire sequence from
-the restricted PostgreSQL approval through a real Docker start has not been
-exercised in one fixture.
+recorded no accepted OAuth or FCM requests.
+
+`bash scripts/application-onboarding-docker.sh --preflight-services` builds the
+worker from current source and runs it against isolated PostgreSQL (TLS) and
+Kafka (mTLS). It checks the report digest, unchanged lifecycle state and empty
+ledger, acknowledgement records and Kafka offsets. The worker has no external
+network access. This mode does not run the host CLI.
+
+`bash scripts/application-onboarding-docker.sh --preflight` adds stopped
+preparation, policy publication, exact replay and rejection of changed policy
+bytes. It requires root on a disposable Linux host with the local Docker socket,
+a Docker image store that provides local repository digests, and no existing
+`/etc/hello` or `/var/lib/hello`. This combined host sequence has not been verified
+on the Darwin development host.

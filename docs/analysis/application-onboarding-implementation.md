@@ -111,8 +111,11 @@ and digest matched, delivery ledger counts stayed unchanged, and no accepted
 OAuth or FCM requests were recorded. The rebuilt stack passed setup/OAuth through
 the BFF and immediate/scheduled simulator delivery for its existing active app.
 The full race suite passed (1,669 tests), along with build, vet, format, module
-verification and the reachable vulnerability scan. The combined host CLI sequence
-remains untested against one live fixture. See the
+verification and the reachable vulnerability scan. The reproducible services fixture now runs the worker built from current source
+against isolated PostgreSQL and mTLS Kafka. It checks the exact policy digest,
+unchanged lifecycle state, empty delivery and acknowledgement ledgers, and zero
+Kafka offsets. The combined host CLI mode still requires verification on a
+disposable Linux Docker host. See the
 [runtime contract](../design/application-onboarding-runtime.md#protected-delivery-preflight).
 
 The 2026-11-18 preparation/readiness slice passes focused package tests, the full

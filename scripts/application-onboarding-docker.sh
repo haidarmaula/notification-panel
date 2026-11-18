@@ -1,7 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
-[[ $# == 0 ]] || exit 2
+case "${1:-}" in
+    --preflight|--preflight-services)
+        [[ $# == 1 ]] || exit 2
+        exec bash scripts/application-onboarding-preflight-fixture.sh "$1"
+        ;;
+    '') [[ $# == 0 ]] || exit 2 ;;
+    *) echo 'Usage: application-onboarding-docker.sh [--preflight | --preflight-services]' >&2; exit 2 ;;
+esac
 
 # Cached current worker image only. No pull, build, start or deployed-stack change.
 image='hello-worker@sha256:6fd5790002d398907b0fc81cfa03c19251f35d2eb11e262a4eab6ca7d47a4a84'
