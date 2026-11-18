@@ -39,6 +39,7 @@ func acceptanceFixture(t *testing.T, ctx context.Context) *pgxpool.Pool {
 	require.NoError(t, err)
 	name := fmt.Sprintf("acceptance_%d", time.Now().UnixNano())
 	identifier := pgx.Identifier{name}.Sanitize()
+	internal := pgx.Identifier{name + "_delivery"}.Sanitize()
 	_, err = base.Exec(ctx, "CREATE SCHEMA "+identifier)
 	require.NoError(t, err)
 	cfg, err := pgxpool.ParseConfig(databaseURL)
@@ -50,7 +51,7 @@ func acceptanceFixture(t *testing.T, ctx context.Context) *pgxpool.Pool {
 		pool.Close()
 		cleanup, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		_, err := base.Exec(cleanup, "DROP SCHEMA "+identifier+" CASCADE")
+		_, err := base.Exec(cleanup, "DROP SCHEMA IF EXISTS "+identifier+", "+internal+" CASCADE")
 		require.NoError(t, err)
 		base.Close()
 	})
@@ -62,6 +63,7 @@ func acceptanceFixture(t *testing.T, ctx context.Context) *pgxpool.Pool {
 		require.NoError(t, err)
 		// Rebind schema-qualified privileged routines to this disposable schema.
 		data = bytes.ReplaceAll(data, []byte("public."), []byte(identifier+"."))
+		data = bytes.ReplaceAll(data, []byte("hello_delivery_internal"), []byte(internal))
 		_, err = pool.Exec(ctx, string(data))
 		require.NoError(t, err, file)
 	}
