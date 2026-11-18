@@ -226,8 +226,11 @@ recorded no accepted OAuth or FCM requests.
 `bash scripts/application-onboarding-docker.sh --preflight-services` builds the
 worker from current source and runs it against isolated PostgreSQL (TLS) and
 Kafka (mTLS). It checks the report digest, unchanged lifecycle state and empty
-ledger, acknowledgement records and Kafka offsets. The worker has no external
-network access. This mode does not run the host CLI.
+ledger, acknowledgement records and Kafka offsets. It then runs the normal
+worker with a fixture-seeded reservation, verifies that the same process renews
+its lease while the app remains provisioning, and seals the runtime to verify
+fail-closed exit without delivery. The worker has no external network access.
+This mode does not run the host CLI or test activation.
 
 `bash scripts/application-onboarding-docker.sh --preflight` adds stopped
 preparation, policy publication, exact replay and rejection of changed policy

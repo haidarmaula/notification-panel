@@ -223,13 +223,52 @@ if [[ "$mode" == --preflight-services ]]; then
         'ADD policy.tar /' 'ENTRYPOINT ["/worker"]' |
         "$timeout_bin" -k 5s 90s docker build -q --platform "linux/$arch" -t "$worker_tag" -f - "$tmp/image" >/dev/null
     image_owned=true
-    d create --pull=never --name "$worker" --label "$label=$name" --network "$name" \
-        --user 65532:65532 --read-only --cap-drop ALL --security-opt no-new-privileges \
-        --memory 128m --cpus .5 --pids-limit 64 "$worker_image" --check-delivery-policy >/dev/null
+    create_worker() {
+        d create --pull=never --name "$worker" --label "$label=$name" --network "$name" \
+            --user 65532:65532 --read-only --cap-drop ALL --security-opt no-new-privileges \
+            --memory 128m --cpus .5 --pids-limit 64 "$worker_image" "$@" >/dev/null
+    }
+    create_worker --check-delivery-policy
     [[ $(d start -a "$worker") == "$report" ]] || fail 'Unexpected worker preflight report'
     [[ $(d inspect --format '{{.State.Status}} {{.State.ExitCode}}' "$worker") == 'exited 0' ]]
     assert_no_delivery
-    printf '%s\n' 'Services-only fixture passed: real worker, restricted PostgreSQL, mTLS Kafka, no delivery evidence (no host CLI or replay)'
+    sql -v app="$app" -v config="$config" -v reservation="$reservation" -v worker="$worker_digest" <<'SQL'
+INSERT INTO application_runtime_reservations(id,application_id,configuration_id,environment,generation,profile_revision,
+    setup_revision,origin_epoch,source_epoch,executor_role,database_connections)
+SELECT :'reservation',a.id,:'config','staging',1,1,s.revision,n.origin_epoch,n.source_epoch,'fixture_executor'::regrole::oid,2
+FROM applications a JOIN application_onboarding s ON s.application_id=a.id
+CROSS JOIN notification_runtime n WHERE a.public_id=:'app' AND n.singleton;
+INSERT INTO application_runtime_component_scopes(application_id,generation,component,login_role,policy_sha256)
+SELECT id,1,'DELIVERY','fixture_worker'::regrole::oid,decode(:'worker','hex') FROM applications WHERE public_id=:'app';
+GRANT EXECUTE ON FUNCTION acknowledge_application_runtime(uuid,bigint,text,bytea,uuid) TO fixture_worker;
+SQL
+    d rm "$worker" >/dev/null
+    create_worker
+    d start "$worker" >/dev/null
+    lease() {
+        sql -c "SELECT executor_id,acknowledged_at FROM application_runtime_acknowledgements
+            WHERE component='DELIVERY' AND generation=1 AND policy_sha256=decode('$worker_digest','hex')
+            AND lease_expires_at>clock_timestamp()"
+    }
+    first=''
+    renewed=false
+    for _ in {1..50}; do
+        [[ $(d inspect --format '{{.State.Running}}' "$worker") == true ]] || fail 'Delivery daemon exited before renewing its lease'
+        current=$(lease)
+        if [[ -n "$current" ]]; then
+            if [[ -z "$first" ]]; then first=$current
+            elif [[ "$current" != "$first" && "${current%%|*}" == "${first%%|*}" ]]; then renewed=true; break
+            fi
+        fi
+        sleep .25
+    done
+    $renewed || fail 'Prepared delivery daemon did not renew its lease'
+    sql -c 'UPDATE notification_runtime SET sealed=true WHERE singleton'
+    [[ $(d wait "$worker") == 1 ]] || fail 'Delivery daemon did not fail closed after the runtime was sealed'
+    [[ $(ledger) == '0|0|0|0|0|0|0|0|1' ]] || fail 'Unexpected durable delivery evidence'
+    [[ $(offsets | sort) == $'notification.delivery.updated:0:0\nnotification.send.requested:0:0' ]] || fail 'Unexpected Kafka end offsets'
+    [[ $(lifecycle) == "$initial_lifecycle" ]] || fail 'Lifecycle or dispatch state changed'
+    printf '%s\n' 'Services fixture passed: preflight, live lease renewal, and fail-closed seal; no activation, delivery or host CLI'
     exit
 fi
 
