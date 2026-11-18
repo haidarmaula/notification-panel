@@ -1,6 +1,7 @@
 package onboarding
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"regexp"
@@ -34,6 +35,7 @@ const (
 // RuntimePolicy contains the protected immutable subset used to plan one delivery runtime.
 // It does not represent the complete platform profile described by the design.
 type RuntimePolicy struct {
+	policySHA256           [32]byte
 	environment            Environment
 	revision               int64
 	deliveryImage          string
@@ -85,8 +87,9 @@ type RuntimeAcknowledgement struct {
 // RuntimePlan contains the one per-application delivery plan and required
 // shared-component acknowledgements. It does not assert that any component is ready.
 type RuntimePlan struct {
-	delivery RuntimeDeliveryPlan
-	shared   []RuntimeAcknowledgement
+	delivery     RuntimeDeliveryPlan
+	shared       []RuntimeAcknowledgement
+	policySHA256 [32]byte
 }
 
 type runtimePolicyWire struct {
@@ -142,7 +145,8 @@ func ParseRuntimePolicy(data []byte) (*RuntimePolicy, error) {
 		return nil, ErrInvalidRuntimePolicy
 	}
 	return &RuntimePolicy{
-		environment: Environment(wire.Environment), revision: wire.Revision, deliveryImage: wire.DeliveryImage,
+		policySHA256: sha256.Sum256(data),
+		environment:  Environment(wire.Environment), revision: wire.Revision, deliveryImage: wire.DeliveryImage,
 		network: wire.Network, maxApplications: wire.MaxApplications, maxOverlap: wire.MaxOverlap,
 		maxDatabaseConnections: wire.MaxDatabaseConnections, deliveryMemoryBytes: delivery.MemoryBytes,
 		deliveryNanoCPUs: delivery.NanoCPUs, deliveryPIDsLimit: delivery.PIDsLimit,
@@ -178,6 +182,7 @@ func (p *RuntimePolicy) BuildRuntimePlan(applicationID, configurationID string, 
 		Replicas: 1, Concurrency: 1, RequestsPerSecond: 1, ProjectRequestsPerSecond: 1, UID: 65532, GID: 65532,
 		ReadOnlyRoot: true, DropAllCapabilities: true, NoNewPrivileges: true,
 	}
+	plan.policySHA256 = p.policySHA256
 	for _, component := range []string{"SERVER", "ADMISSION", "SCHEDULER"} {
 		plan.shared = append(plan.shared, RuntimeAcknowledgement{
 			Component: component, ApplicationID: applicationID, ConfigurationID: configurationID,

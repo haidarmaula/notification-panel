@@ -22,8 +22,11 @@ func main() { os.Exit(run(os.Args[1:])) }
 
 func run(args []string) int {
 	signal.Ignore(syscall.SIGPIPE)
+	if len(args) == 1 && args[0] == "prepare-runtime" {
+		return runRuntimePreparation()
+	}
 	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, "controlplane accepts no arguments")
+		fmt.Fprintln(os.Stderr, "controlplane accepts only the optional prepare-runtime command")
 		return 2
 	}
 	restore, err := runloop.PrepareCommandOutputs()

@@ -961,3 +961,32 @@ to discard security history or automatically reenable earlier dispatch policy.
 See the [implementation design](design/application-onboarding.md) and
 [checkpoint](analysis/application-onboarding-implementation.md) for remaining
 runtime provisioning, first activation and production release gates.
+
+### Durable runtime preparation reservations (000045)
+
+`application_runtime_capacity_profile` holds one immutable, owner-installed host
+budget and protected policy digest. `application_runtime_executor_scopes` binds a
+restricted LOGIN OID to one application/environment/profile. Separate host or
+profile replacement is not implemented by this preparation subset. Reconcile
+role OIDs after restore before enabling executors.
+
+`application_runtime_reservations` records configuration, generation, setup
+revision, runtime epochs, executor and derived DB allocation. Capacity is
+serialized across application LOGINs using the profile row; distinct app slots,
+replacement overlap and total connections are counted together. Configuration
+foreign keys preserve app/environment isolation. Resource allocations and
+identity are immutable; release is a one-way retained fact.
+
+The restricted reserve/check/release functions grant no table DML, lifecycle,
+configuration-pointer, acknowledgement or dispatch-release authority. An exact
+reservation retry returns its original ID without extending the host-effect
+deadline. Check revalidates the policy digest, live scope, setup and epochs before
+stopped-container preparation. A timeout or expired deadline retains capacity:
+the daemon may still have committed an uncertain external effect. Explicit
+release requires the deadline plus a 30-second grace, quiesced preparers,
+reconciled pending effects and newly observed runtime absence; elapsed time alone
+does not prove absence. These functions do not authorize starting a container.
+
+`scripts/application-onboarding-runtime.sh` exercises the migration and actual
+restricted PostgreSQL LOGINs in an isolated fixture. This is independent of real
+Docker inspection and does not establish enrollment or delivery readiness.

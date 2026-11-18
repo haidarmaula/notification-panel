@@ -225,6 +225,41 @@ type ApplicationRuntimeAcknowledgement struct {
 	AcknowledgedAt  pgtype.Timestamptz `db:"acknowledged_at"`
 }
 
+type ApplicationRuntimeCapacityProfile struct {
+	Singleton                   bool   `db:"singleton"`
+	Environment                 string `db:"environment"`
+	Revision                    int64  `db:"revision"`
+	MaxApplications             int32  `db:"max_applications"`
+	MaxOverlap                  int32  `db:"max_overlap"`
+	MaxDatabaseConnections      int32  `db:"max_database_connections"`
+	DeliveryDatabaseConnections int32  `db:"delivery_database_connections"`
+	PolicySha256                []byte `db:"policy_sha256"`
+}
+
+type ApplicationRuntimeExecutorScope struct {
+	RoleID          pgtype.Uint32 `db:"role_id"`
+	ApplicationID   int64         `db:"application_id"`
+	Environment     string        `db:"environment"`
+	ProfileRevision int64         `db:"profile_revision"`
+}
+
+type ApplicationRuntimeReservation struct {
+	ID                  pgtype.UUID        `db:"id"`
+	ApplicationID       int64              `db:"application_id"`
+	ConfigurationID     pgtype.UUID        `db:"configuration_id"`
+	Environment         string             `db:"environment"`
+	Generation          int64              `db:"generation"`
+	ProfileRevision     int64              `db:"profile_revision"`
+	SetupRevision       int64              `db:"setup_revision"`
+	OriginEpoch         pgtype.UUID        `db:"origin_epoch"`
+	SourceEpoch         pgtype.UUID        `db:"source_epoch"`
+	ExecutorRole        pgtype.Uint32      `db:"executor_role"`
+	DatabaseConnections int32              `db:"database_connections"`
+	ReservedAt          pgtype.Timestamptz `db:"reserved_at"`
+	PrepareBefore       pgtype.Timestamptz `db:"prepare_before"`
+	ReleasedAt          pgtype.Timestamptz `db:"released_at"`
+}
+
 type ApplicationStaffGrant struct {
 	ApplicationID int64              `db:"application_id"`
 	StaffID       int64              `db:"staff_id"`
