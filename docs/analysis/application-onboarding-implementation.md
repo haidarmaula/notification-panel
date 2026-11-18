@@ -11,7 +11,10 @@ end-to-end onboarding and production enablement remain incomplete.
   host runs a bounded Docker check, verifies the worker's actual app/digest
   report and rechecks the reservation. Startup checks cover the worker database,
   registered source, Kafka metadata and local credential format without sending.
-  Live delivery and shared-process generation acknowledgements remain pending.
+  The preflight adapter can take over the exact inert allocation without reserving
+  a second slot; lost removal responses are resolved by inspecting the original
+  deterministic name on retry. Live delivery authority and shared-process generation
+  acknowledgements remain pending.
 
 - Migration 000042 adds setup revisions, immutable app/environment credential
   versions, ingestion reservations, typed operations, checks, acknowledgements,

@@ -153,8 +153,12 @@ It uses the profile's approved named network and pinned worker image, UID/GID
 65532, a read-only root and the same resource bounds as `prepare-runtime`.
 The image must include `/worker --check-delivery-policy`. A host lock serializes
 preflight for that generation. The container shares the deterministic allocation
-name with the stopped-only mode, so an existing mismatching allocation must be
-reconciled by the trusted operator. A timeout retains capacity and the allocation.
+name with the stopped-only mode. Preflight may replace the exact inert, never-started
+allocation under the same reservation, after rechecking the owner approval. Docker
+removal uses the inspected container ID without force or volume removal. Drifted
+allocations still require trusted operator reconciliation. After an uncertain removal,
+retry the same preflight; it inspects the deterministic name again. Capacity remains
+reserved throughout.
 
 The one-shot worker loads its actual mounted policy, checks the restricted DB
 LOGIN, app, registered Kafka source and broker metadata, validates the local

@@ -138,7 +138,33 @@ func (p *RuntimePreparer) RunDeliveryPreflight(ctx context.Context, plan Runtime
 	if syscall.Flock(int(dir.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) != nil {
 		return name, ErrRuntimePreparationUnavailable
 	}
+	if err := p.replaceStoppedAllocation(ctx, check, stoppedRuntimeEnvelope(d), name); err != nil {
+		return name, err
+	}
 	return p.runDeliveryPreflight(ctx, check, d.ApplicationID, evidence.PolicySHA256, config, name)
+}
+
+func (p *RuntimePreparer) replaceStoppedAllocation(ctx context.Context, check func() error, stopped stoppedRuntimeConfig, name string) error {
+	actual, err := p.inspectRuntime(ctx, name)
+	if err != nil || !validStoppedRuntimeInspection(actual, name, stopped) {
+		return err
+	}
+	if !dockerContainerID.MatchString(actual.ID) {
+		return ErrRuntimePreparationDrift
+	}
+	if err := check(); err != nil {
+		return err
+	}
+	// Delete only the inert envelope by immutable ID, without force or volume removal.
+	response, err := p.request(ctx, http.MethodDelete, actual.ID+"?force=false&v=false", nil)
+	if err != nil {
+		return err
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusNoContent && response.StatusCode != http.StatusNotFound {
+		return ErrRuntimePreparationUnavailable
+	}
+	return nil
 }
 
 func (p *RuntimePreparer) runDeliveryPreflight(ctx context.Context, check func() error, applicationID string, digest [32]byte, config stoppedRuntimeConfig, name string) (string, error) {

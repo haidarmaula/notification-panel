@@ -18,9 +18,11 @@ type preflightEngine struct {
 	config                stoppedRuntimeConfig
 	state                 string
 	creates, starts, logs int
-	startedBy             string
+	startedBy, deletedBy  string
+	deletes               int
 	lostResponse          string
 	writableMount         bool
+	concurrentCreate      *stoppedRuntimeConfig
 	output                []byte
 }
 
@@ -31,6 +33,12 @@ func (e *preflightEngine) RoundTrip(request *http.Request) (*http.Response, erro
 	switch {
 	case request.Method == http.MethodPost && path == "create":
 		e.creates++
+		if e.concurrentCreate != nil {
+			e.config, e.state = *e.concurrentCreate, "created"
+			e.concurrentCreate = nil
+			recorder.WriteHeader(http.StatusConflict)
+			break
+		}
 		if json.NewDecoder(request.Body).Decode(&e.config) != nil || request.URL.Query().Get("name") != e.name {
 			recorder.WriteHeader(http.StatusBadRequest)
 			break
@@ -55,6 +63,19 @@ func (e *preflightEngine) RoundTrip(request *http.Request) (*http.Response, erro
 			}{Type: stored.Type, Source: stored.Source, Destination: stored.Target, RW: e.writableMount})
 		}
 		_ = json.NewEncoder(recorder).Encode(actual)
+	case request.Method == http.MethodDelete:
+		e.deletedBy = path
+		if path != e.id || request.URL.RawQuery != "force=false&v=false" || e.state != "created" {
+			recorder.WriteHeader(http.StatusConflict)
+			break
+		}
+		e.deletes++
+		e.state = ""
+		if e.lostResponse == "delete" {
+			e.lostResponse = ""
+			return nil, errors.New("lost Engine delete response")
+		}
+		recorder.WriteHeader(http.StatusNoContent)
 	case request.Method == http.MethodPost && strings.HasSuffix(path, "/start"):
 		e.startedBy = strings.TrimSuffix(path, "/start")
 		if e.startedBy != e.id || e.state != "created" {
@@ -102,6 +123,77 @@ func newPreflightFixture(t *testing.T) (*preflightEngine, stoppedRuntimeConfig, 
 	digest := sha256.Sum256([]byte("worker policy fixture"))
 	engine := &preflightEngine{name: name, id: strings.Repeat("a", 64), output: preflightReport(plan.ApplicationID, digest)}
 	return engine, config, plan.ApplicationID, digest
+}
+
+func TestDeliveryPreflightReconcilesLostStoppedRemoval(t *testing.T) {
+	engine, config, applicationID, digest := newPreflightFixture(t)
+	stopped := stoppedRuntimeEnvelope(preparationPlan(t).Delivery())
+	engine.config, engine.state, engine.lostResponse = stopped, "created", "delete"
+	preparer := &RuntimePreparer{client: &http.Client{Transport: engine}}
+	check := func() error { return nil }
+	if err := preparer.replaceStoppedAllocation(t.Context(), check, stopped, engine.name); !errors.Is(err, ErrRuntimePreparationUnavailable) {
+		t.Fatalf("expected ambiguous removal: %v", err)
+	}
+	for range 2 {
+		if err := preparer.replaceStoppedAllocation(t.Context(), check, stopped, engine.name); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := preparer.runDeliveryPreflight(t.Context(), check, applicationID, digest, config, engine.name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if engine.deletes != 1 || engine.deletedBy != engine.id || engine.creates != 1 || engine.starts != 1 {
+		t.Fatalf("expected one removal by ID, one create and one start; got %d/%d/%d", engine.deletes, engine.creates, engine.starts)
+	}
+}
+
+func TestDeliveryPreflightDoesNotRemoveUnapprovedStoppedAllocation(t *testing.T) {
+	for _, scenario := range []string{"revoked", "drifted", "exited"} {
+		t.Run(scenario, func(t *testing.T) {
+			engine, _, _, _ := newPreflightFixture(t)
+			stopped := stoppedRuntimeEnvelope(preparationPlan(t).Delivery())
+			engine.config, engine.state = stopped, "created"
+			var want error
+			switch scenario {
+			case "revoked":
+				want = ErrRuntimeReservationUnavailable
+			case "drifted":
+				engine.config.User = "0:0"
+			case "exited":
+				engine.state = "exited"
+			}
+			preparer := &RuntimePreparer{client: &http.Client{Transport: engine}}
+			if err := preparer.replaceStoppedAllocation(t.Context(), func() error { return want }, stopped, engine.name); !errors.Is(err, want) {
+				t.Fatalf("check error = %v, want %v", err, want)
+			}
+			if engine.deletedBy != "" {
+				t.Fatal("unapproved removal attempted")
+			}
+		})
+	}
+}
+
+func TestDeliveryPreflightDoesNotStartConcurrentInertAllocation(t *testing.T) {
+	engine, config, applicationID, digest := newPreflightFixture(t)
+	stopped := stoppedRuntimeEnvelope(preparationPlan(t).Delivery())
+	engine.concurrentCreate = &stopped
+	preparer := &RuntimePreparer{client: &http.Client{Transport: engine}}
+	check := func() error { return nil }
+	if _, err := preparer.runDeliveryPreflight(t.Context(), check, applicationID, digest, config, engine.name); !errors.Is(err, ErrRuntimePreparationDrift) {
+		t.Fatalf("expected the concurrent inert allocation to block preflight: %v", err)
+	}
+	if engine.starts != 0 {
+		t.Fatal("concurrent inert allocation was started")
+	}
+	if err := preparer.replaceStoppedAllocation(t.Context(), check, stopped, engine.name); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := preparer.runDeliveryPreflight(t.Context(), check, applicationID, digest, config, engine.name); err != nil {
+		t.Fatalf("exact retry should reconcile allocation: %v", err)
+	}
+	if engine.deletes != 1 || engine.starts != 1 {
+		t.Fatalf("deletes=%d, starts=%d", engine.deletes, engine.starts)
+	}
 }
 
 func TestDeliveryPreflightStartsByIDAndReplaysReport(t *testing.T) {

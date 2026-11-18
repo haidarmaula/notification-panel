@@ -12,9 +12,10 @@ Those routes are not mounted.
 
 The [frontend handoff](application-onboarding-frontend-handoff.md) provides the
 step order, examples, polling rules and action gates for the separate UI session.
-The operator-only runtime preparation command is documented in the
-[runtime contract](../design/application-onboarding-runtime.md); it adds no HTTP
-endpoint or lifecycle/release authority.
+The [runtime contract](../design/application-onboarding-runtime.md) documents the
+operator-only preparation and one-shot preflight commands. They add no HTTP
+endpoint or lifecycle/release authority. A successful preflight is not a readiness
+acknowledgement or evidence of an FCM send.
 
 ## Availability and authorization
 

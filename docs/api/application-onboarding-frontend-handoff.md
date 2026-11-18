@@ -210,12 +210,12 @@ The intended sequence remains registration → setup → OAuth → enrollment
 activation (`ACTIVE`/`HELD`) → external client enrollment and route/cohort review →
 approved PILOT campaign and per-platform device receipt → explicit FULL release.
 Only registration, setup, OAuth and one-way hold currently have running dashboard
-contracts. A protected operator-only `controlplane prepare-runtime` command can
-reserve capacity and prepare a stopped allocation using a separate restricted
-database identity and fixed policy files. It exposes no dashboard endpoint and
-does not start a worker, acknowledge readiness or change lifecycle/dispatch.
-Activation requires completed runtime allocation, policy publication,
-acknowledgements and DB-enforced delegated lifecycle execution. Device testing
+contracts. Operators can reserve and prepare a stopped allocation, then run an
+owner-approved one-shot delivery preflight under the same reservation. Neither
+operation has an HTTP endpoint. Preflight starts only the startup-check process;
+its result is not a readiness acknowledgement and does not change enrollment or
+dispatch. Activation requires app-scoped live delivery authority, published shared
+policies, current-generation acknowledgements and DB-delegated lifecycle execution. Device testing
 requires approved identity mappings, scoped cohort/evidence handling and target
 IAM checks. Release requires current campaign/provider/device evidence and guarded
 delegation. Credential rotation requires held promotion/drain/recovery.

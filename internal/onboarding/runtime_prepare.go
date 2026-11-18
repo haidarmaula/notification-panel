@@ -28,10 +28,7 @@ type RuntimeReservationGuard interface {
 	Check(context.Context, RuntimeDeliveryPlan) error
 }
 
-// RuntimePreparer creates only stopped, unconfigured Docker envelopes. It cannot
-// start, delete or modify containers, publish credentials, or acknowledge readiness.
-// The caller must retain a durable capacity reservation before calling Prepare;
-// a timeout does not prove that Docker failed to create the container.
+// RuntimePreparer reconciles Docker allocations against a retained capacity reservation.
 type RuntimePreparer struct {
 	client *http.Client
 	guard  RuntimeReservationGuard
@@ -180,11 +177,16 @@ func (p *RuntimePreparer) inspect(ctx context.Context, name string, expected sto
 	if err != nil || actual == nil {
 		return actual != nil, err
 	}
-	if actual.Name != "/"+name || actual.State.Status != "created" || actual.State.Running || actual.State.Restarting || actual.State.Paused ||
-		len(actual.Mounts) != 0 || !sameRuntimeConfig(actual.Config, expected) {
+	if !validStoppedRuntimeInspection(actual, name, expected) {
 		return true, ErrRuntimePreparationDrift
 	}
 	return true, nil
+}
+
+func validStoppedRuntimeInspection(actual *runtimeInspection, name string, expected stoppedRuntimeConfig) bool {
+	return actual != nil && actual.Name == "/"+name && actual.State.Status == "created" &&
+		!actual.State.Running && !actual.State.Restarting && !actual.State.Paused &&
+		len(actual.Mounts) == 0 && sameRuntimeConfig(actual.Config, expected)
 }
 
 func sameRuntimeConfig(actual, expected stoppedRuntimeConfig) bool {
