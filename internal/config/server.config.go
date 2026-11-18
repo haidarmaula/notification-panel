@@ -22,6 +22,7 @@ type ServerConfig struct {
 	ListenAddress      string
 	CORSAllowedOrigins []string
 	mobilePolicyFile   string
+	deploymentHash     [32]byte
 	staffTokens        *token.TokenManager
 
 	BaseConfig

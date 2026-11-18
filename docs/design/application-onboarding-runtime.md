@@ -186,9 +186,20 @@ loaded and renews its `DELIVERY` lease every three seconds. It waits without
 polling or publishing until its generation is current and the app is active.
 A failed renewal or loss of current generation cancels and joins both loops;
 this does not undo an already-started provider request. Unassigned legacy
-workers continue without an acknowledgement lease. The server, admission and
-scheduler do not yet publish leases, and the protected preparation command does
-not yet launch the normal worker process.
+workers continue without an acknowledgement lease. The protected preparation
+command does not yet launch the normal worker process.
+
+M50 adds heartbeat renewal for shared processes. Grant `EXECUTE` on
+`acknowledge_shared_application_runtime(text,bytea,uuid)` to each approved
+shared LOGIN; workers must not receive this capability. Admission and scheduler
+use SHA-256 of the exact loaded role policy bytes. Protected server mode uses
+`SHA256(SHA256(server policy bytes) || SHA256(mobile policy bytes))` (raw digests).
+Admission renews only inside a Kafka generation with a verified checkpoint and
+at least one assigned partition. The scheduler checks source registration and
+broker metadata first; the server loads mobile routes and binds its listener
+first. An invalid scope or digest does not renew a lease. Shared processes can
+continue serving existing apps while onboarding leases expire. Host publication
+and coordinated rollout of the shared policies remain separate work.
 
 ## Local evidence
 

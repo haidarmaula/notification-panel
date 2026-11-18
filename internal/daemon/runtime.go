@@ -12,6 +12,7 @@ import (
 	"hello/internal/dispatch"
 	"hello/internal/kafka"
 	"hello/internal/observability"
+	"hello/internal/onboarding"
 	"hello/internal/runloop"
 	"hello/internal/scheduler"
 )
@@ -77,6 +78,14 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 			return lease.run(ctx, run)
 		})
 	}
+	component := "SCHEDULER"
+	if c.role == deployment.Worker {
+		component = "ADMISSION"
+	}
+	heartbeat, err := onboarding.SharedRuntimeHeartbeat(startup, pool, logger, component, c.policyHash)
+	if err != nil {
+		return startupFailure(ctx, errDatabase)
+	}
 	// Startup deadlines must not become the lifetime of a healthy daemon.
 	cancelStartup()
 	if ctx.Err() != nil {
@@ -120,7 +129,9 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 			})
 		}
 		return state.Run(ctx, c.monitoring, pool, logger, func(ctx context.Context) error {
-			return runloop.SuperviseObserved(ctx, "admission", worker.Run, c.retry, logger, state)
+			return runloop.SuperviseObserved(ctx, "admission", func(ctx context.Context) error {
+				return worker.RunWithHeartbeat(ctx, heartbeat)
+			}, c.retry, logger, state)
 		})
 	case deployment.Scheduler:
 		state := observability.New("schedule_promotion", "send_outbox", "queued_recovery", "replay_cleanup")
@@ -131,7 +142,12 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 			return ErrConfiguration
 		}
 		logger.InfoContext(ctx, "durable scheduler started")
-		return state.Run(ctx, c.monitoring, pool, logger, runtime.Run)
+		return state.Run(ctx, c.monitoring, pool, logger, func(ctx context.Context) error {
+			if heartbeat == nil {
+				return runtime.Run(ctx)
+			}
+			return runloop.RunGroup(ctx, runtime.Run, heartbeat)
+		})
 	default:
 		return ErrConfiguration
 	}

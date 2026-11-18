@@ -3,7 +3,9 @@ package main
 
 import (
 	"context"
+	"crypto/sha256"
 	"errors"
+	"io"
 	"log"
 	"log/slog"
 	"net"
@@ -101,8 +103,11 @@ func runServer(ctx context.Context, cfg *config.ServerConfig) (err error) {
 	if err != nil {
 		return errors.New("cannot open mobile policy file")
 	}
+	var mobileHash [32]byte
 	if file != nil {
-		runtime, loadErr := installation.LoadRuntime(file, queries, db)
+		hash := sha256.New()
+		runtime, loadErr := installation.LoadRuntime(io.TeeReader(file, hash), queries, db)
+		copy(mobileHash[:], hash.Sum(nil))
 		closeErr := file.Close()
 		if loadErr != nil || closeErr != nil {
 			return errors.New("invalid mobile policy configuration")
@@ -131,7 +136,20 @@ func runServer(ctx context.Context, cfg *config.ServerConfig) (err error) {
 			return errors.New("server listener startup failed")
 		}
 		logger.InfoContext(ctx, "public API listener started")
-		return serveHTTP(ctx, listener, observability.Access(handler, state.Observe), state.TransportLog(), 10*time.Second, 5*time.Second)
+		serve := func(ctx context.Context) error {
+			return serveHTTP(ctx, listener, observability.Access(handler, state.Observe), state.TransportLog(), 10*time.Second, 5*time.Second)
+		}
+		if digest, ok := cfg.RuntimePolicyHash(mobileHash); ok {
+			heartbeat, err := onboarding.SharedRuntimeHeartbeat(ctx, db, logger, "SERVER", digest)
+			if err != nil {
+				_ = listener.Close()
+				return errors.New("server runtime lease startup failed")
+			}
+			if heartbeat != nil {
+				return runloop.RunGroup(ctx, serve, heartbeat)
+			}
+		}
+		return serve(ctx)
 	})
 }
 

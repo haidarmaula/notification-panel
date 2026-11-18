@@ -155,9 +155,15 @@ assert_query f fixture_worker_a 'delivery cannot acknowledge for server' "$(ack 
 assert_query t fixture_worker_a 'approved delivery process acknowledges' "$ack_delivery"
 assert_query f fixture_worker_a 'different instance cannot replace a live lease' "$(ack "$app_a" DELIVERY ef "$instance_b")"
 assert_query t fixture_worker_a 'same process renews lease' "$ack_delivery"
-assert_query t fixture_server 'approved server acknowledges' "$(ack "$app_a" SERVER ef "$instance_a")"
-assert_query t fixture_admission 'approved admission acknowledges' "$(ack "$app_a" ADMISSION ef "$instance_a")"
-assert_query t fixture_scheduler 'approved scheduler acknowledges' "$(ack "$app_a" SCHEDULER ef "$instance_a")"
+sql postgres -c 'GRANT EXECUTE ON FUNCTION acknowledge_shared_application_runtime(text,bytea,uuid) TO fixture_server,fixture_admission,fixture_scheduler'
+shared_ack() { printf "SELECT acknowledge_shared_application_runtime('%s',decode(repeat('%s',32),'hex'),'%s')" "$1" "$2" "$instance_a"; }
+assert_query 0 fixture_server 'server digest mismatch renews no lease' "$(shared_ack SERVER ab)"
+assert_query 0 fixture_server 'server cannot renew for another component' "$(shared_ack ADMISSION ef)"
+assert_query 0 fixture_server 'shared heartbeat cannot renew delivery' "$(shared_ack DELIVERY ef)"
+assert_query 1 fixture_server 'approved server acknowledges' "$(shared_ack SERVER ef)"
+assert_query 1 fixture_admission 'approved admission acknowledges' "$(shared_ack ADMISSION ef)"
+assert_query 1 fixture_scheduler 'approved scheduler acknowledges' "$(shared_ack SCHEDULER ef)"
+deny 42501 sql fixture_worker_a -c "$(shared_ack ADMISSION ef)"
 assert_query 4 postgres 'one readiness acknowledgement per runtime component' 'SELECT count(*) FROM application_runtime_acknowledgements'
 sql postgres -c "UPDATE application_runtime_acknowledgements SET acknowledged_at=clock_timestamp()-interval '30 seconds',lease_expires_at=clock_timestamp()-interval '15 seconds' WHERE component='DELIVERY'"
 assert_query t fixture_worker_a 'replacement takes over only after lease expiry' "$(ack "$app_a" DELIVERY ef "$instance_b")"
@@ -257,6 +263,8 @@ assert_query 3 postgres 'rollback cannot discard retained history' 'SELECT count
 sql postgres -c 'CREATE DATABASE runtime_empty'
 empty_sql() { docker_cmd exec -iu postgres "$node" psql -d runtime_empty -XqAt -v ON_ERROR_STOP=1 -v VERBOSITY=verbose; }
 for migration in db/migrations/*.up.sql; do empty_sql < "$migration"; done
+empty_sql < db/migrations/000050_onboarding_shared_runtime_leases.down.sql
+empty_sql < db/migrations/000049_onboarding_delivery_lease_startup.down.sql
 empty_sql < db/migrations/000048_onboarding_runtime_acknowledgement.down.sql
 empty_sql < db/migrations/000047_onboarding_delivery_isolation.down.sql
 empty_sql < db/migrations/000046_onboarding_worker_preflight.down.sql

@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"io"
 	"os"
@@ -91,7 +92,19 @@ func parseServerDeployment(data []byte) (*ServerConfig, error) {
 	if err != nil {
 		return nil, err
 	}
+	c.deploymentHash = sha256.Sum256(data)
 	return &c, nil
+}
+
+// RuntimePolicyHash binds the validated server and mobile deployment policies.
+func (c *ServerConfig) RuntimePolicyHash(mobileHash [32]byte) ([32]byte, bool) {
+	if c.deploymentHash == [32]byte{} || mobileHash == [32]byte{} {
+		return [32]byte{}, false
+	}
+	var combined [64]byte
+	copy(combined[:32], c.deploymentHash[:])
+	copy(combined[32:], mobileHash[:])
+	return sha256.Sum256(combined[:]), true
 }
 
 // MobilePolicy returns an optional, caller-owned mobile policy stream. Production

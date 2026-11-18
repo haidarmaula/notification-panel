@@ -18,6 +18,7 @@ import (
 	"github.com/segmentio/kafka-go/sasl"
 	"hello/internal/database/sqlc"
 	"hello/internal/kafka"
+	"hello/internal/runloop"
 )
 
 // ErrAdmissionCheckpoint holds admission until an operator reconciles the
@@ -107,6 +108,11 @@ func (c KafkaAdmissionConfig) dialer() *broker.Dialer {
 // Run owns the group and joins generation fetchers on every exit. An unsafe
 // acknowledgement/source error stops the run for supervised backoff/recreation.
 func (r *KafkaAdmission) Run(ctx context.Context) error {
+	return r.RunWithHeartbeat(ctx, nil)
+}
+
+// RunWithHeartbeat ties readiness to a verified generation with partition ownership.
+func (r *KafkaAdmission) RunWithHeartbeat(ctx context.Context, heartbeat func(context.Context) error) error {
 	ctx, stop := context.WithCancelCause(ctx)
 	defer stop(nil)
 	group, err := broker.NewConsumerGroup(broker.ConsumerGroupConfig{
@@ -136,7 +142,18 @@ func (r *KafkaAdmission) Run(ctx context.Context) error {
 			reader := &generationAdmissionReader{q: r.q, config: r.config, generation: generation, generationCtx: generationCtx}
 			defer reader.Close()
 			consumer, err := NewSerialConsumer(reader, r.preparer, r.quarantine)
-			if err == nil {
+			if err == nil && heartbeat != nil && len(generation.Assignments[r.config.Topic]) > 0 {
+				ready := make(chan struct{})
+				reader.ready = func() { close(ready) }
+				err = runloop.RunGroup(runCtx, consumer.Run, func(ctx context.Context) error {
+					select {
+					case <-ctx.Done():
+						return context.Cause(ctx)
+					case <-ready:
+						return heartbeat(ctx)
+					}
+				})
+			} else if err == nil {
 				err = consumer.Run(runCtx)
 			}
 			if err != nil && generationCtx.Err() == nil && ctx.Err() == nil {
@@ -159,6 +176,7 @@ type generationAdmissionReader struct {
 	cancel        context.CancelFunc
 	fetches       chan generationFetch
 	transport     *broker.Transport
+	ready         func()
 	wg            sync.WaitGroup
 }
 
@@ -249,6 +267,10 @@ func (r *generationAdmissionReader) VerifySource(ctx context.Context) error {
 				}
 			}
 		})
+	}
+	if r.ready != nil {
+		r.ready()
+		r.ready = nil
 	}
 	return nil
 }
