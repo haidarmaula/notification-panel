@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"net"
 	"net/http"
 	"reflect"
@@ -77,7 +76,7 @@ type stoppedRuntimeHost struct {
 	PidsLimit       int32
 	Privileged      bool
 	Binds           []string
-	Mounts          []json.RawMessage
+	Mounts          []runtimeBindMount
 	Devices         []json.RawMessage
 	DeviceRequests  []json.RawMessage
 	PidMode         string
@@ -87,10 +86,16 @@ type stoppedRuntimeHost struct {
 	PortBindings    map[string]json.RawMessage
 	PublishAllPorts bool
 	VolumesFrom     []string
+	LogConfig       *runtimeLogConfig `json:",omitempty"`
 	RestartPolicy   struct {
 		Name              string
 		MaximumRetryCount int
 	}
+}
+
+type runtimeLogConfig struct {
+	Type   string
+	Config map[string]string
 }
 
 // Prepare creates or reconciles one exact stopped envelope. The returned name
@@ -110,18 +115,9 @@ func (p *RuntimePreparer) Prepare(ctx context.Context, plan RuntimePlan) (string
 	if err := p.guard.Check(ctx, d); err != nil {
 		return "", err
 	}
-	config := stoppedRuntimeConfig{
-		Image: d.ImageDigest, User: "65532:65532", Entrypoint: []string{runtimePreparationCommand}, Cmd: []string{}, Env: []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"},
-		Labels: map[string]string{"hello.onboarding.application": d.ApplicationID, "hello.onboarding.configuration": d.ConfigurationID,
-			"hello.onboarding.generation": strconv.FormatInt(d.Generation, 10), "hello.onboarding.profile": strconv.FormatInt(d.PolicyRevision, 10),
-			"hello.onboarding.environment": string(d.Environment), "hello.onboarding.state": "stopped-unconfigured"},
-		HostConfig: stoppedRuntimeHost{NetworkMode: "none", ReadonlyRootfs: true, CapDrop: []string{"ALL"},
-			SecurityOpt: []string{"no-new-privileges"}, Memory: d.MemoryBytes, NanoCpus: d.NanoCPUs, PidsLimit: d.PIDsLimit},
-	}
-	config.HostConfig.RestartPolicy.Name = "no"
+	config := stoppedRuntimeEnvelope(d)
 	encoded, _ := json.Marshal(config)
-	digest := sha256.Sum256(encoded)
-	name := "hello-onboarding-" + hex.EncodeToString(digest[:])
+	name := stoppedRuntimeName(config)
 	exists, err := p.inspect(ctx, name, config)
 	if err != nil || exists {
 		return name, err
@@ -147,6 +143,25 @@ func (p *RuntimePreparer) Prepare(ctx context.Context, plan RuntimePlan) (string
 	return name, err
 }
 
+func stoppedRuntimeEnvelope(d RuntimeDeliveryPlan) stoppedRuntimeConfig {
+	config := stoppedRuntimeConfig{
+		Image: d.ImageDigest, User: "65532:65532", Entrypoint: []string{runtimePreparationCommand}, Cmd: []string{}, Env: []string{"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"},
+		Labels: map[string]string{"hello.onboarding.application": d.ApplicationID, "hello.onboarding.configuration": d.ConfigurationID,
+			"hello.onboarding.generation": strconv.FormatInt(d.Generation, 10), "hello.onboarding.profile": strconv.FormatInt(d.PolicyRevision, 10),
+			"hello.onboarding.environment": string(d.Environment), "hello.onboarding.state": "stopped-unconfigured"},
+		HostConfig: stoppedRuntimeHost{NetworkMode: "none", ReadonlyRootfs: true, CapDrop: []string{"ALL"},
+			SecurityOpt: []string{"no-new-privileges"}, Memory: d.MemoryBytes, NanoCpus: d.NanoCPUs, PidsLimit: d.PIDsLimit},
+	}
+	config.HostConfig.RestartPolicy.Name = "no"
+	return config
+}
+
+func stoppedRuntimeName(config stoppedRuntimeConfig) string {
+	encoded, _ := json.Marshal(config)
+	digest := sha256.Sum256(encoded)
+	return "hello-onboarding-" + hex.EncodeToString(digest[:])
+}
+
 func (p *RuntimePreparer) request(ctx context.Context, method, path string, body []byte) (*http.Response, error) {
 	request, err := http.NewRequestWithContext(ctx, method, runtimeEnginePrefix+path, bytes.NewReader(body))
 	if err != nil {
@@ -161,37 +176,18 @@ func (p *RuntimePreparer) request(ctx context.Context, method, path string, body
 }
 
 func (p *RuntimePreparer) inspect(ctx context.Context, name string, expected stoppedRuntimeConfig) (bool, error) {
-	response, err := p.request(ctx, http.MethodGet, name+"/json", nil)
-	if err != nil {
-		return false, err
+	actual, err := p.inspectRuntime(ctx, name)
+	if err != nil || actual == nil {
+		return actual != nil, err
 	}
-	defer response.Body.Close()
-	if response.StatusCode == http.StatusNotFound {
-		return false, nil
+	if actual.Name != "/"+name || actual.State.Status != "created" || actual.State.Running || actual.State.Restarting || actual.State.Paused ||
+		len(actual.Mounts) != 0 || !sameRuntimeConfig(actual.Config, expected) {
+		return true, ErrRuntimePreparationDrift
 	}
-	if response.StatusCode != http.StatusOK {
-		return false, ErrRuntimePreparationUnavailable
-	}
-	data, err := io.ReadAll(io.LimitReader(response.Body, 64*1024+1))
-	if err != nil || len(data) > 64*1024 {
-		return false, ErrRuntimePreparationUnavailable
-	}
-	var actual struct {
-		Name       string
-		Config     stoppedRuntimeConfig
-		HostConfig stoppedRuntimeHost
-		State      struct {
-			Status     string
-			Running    bool
-			Restarting bool
-			Paused     bool
-		}
-		Mounts []json.RawMessage
-	}
-	if json.Unmarshal(data, &actual) != nil {
-		return false, ErrRuntimePreparationUnavailable
-	}
-	actual.Config.HostConfig = actual.HostConfig
+	return true, nil
+}
+
+func sameRuntimeConfig(actual, expected stoppedRuntimeConfig) bool {
 	// Docker normalizes empty arrays to null. Treat those representations alike.
 	normalize := func(c *stoppedRuntimeConfig) {
 		if len(c.Cmd) == 0 {
@@ -225,12 +221,11 @@ func (p *RuntimePreparer) inspect(ctx context.Context, name string, expected sto
 		if c.HostConfig.IpcMode == "private" {
 			c.HostConfig.IpcMode = ""
 		}
+		if expected.HostConfig.LogConfig == nil {
+			c.HostConfig.LogConfig = nil
+		}
 	}
-	normalize(&actual.Config)
+	normalize(&actual)
 	normalize(&expected)
-	if actual.Name != "/"+name || actual.State.Status != "created" || actual.State.Running || actual.State.Restarting || actual.State.Paused ||
-		len(actual.Mounts) != 0 || !reflect.DeepEqual(actual.Config, expected) {
-		return true, ErrRuntimePreparationDrift
-	}
-	return true, nil
+	return reflect.DeepEqual(actual, expected)
 }

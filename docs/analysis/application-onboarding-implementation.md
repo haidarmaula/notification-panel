@@ -5,6 +5,14 @@ end-to-end onboarding and production enablement remain incomplete.
 
 ## Implemented boundary
 
+- ONB-05 now supports immutable delivery policy publication on Linux and a
+  protected `controlplane preflight-delivery` command. M46 pins the exact policy
+  bytes, configuration and dedicated worker LOGIN to the live reservation. The
+  host runs a bounded Docker check, verifies the worker's actual app/digest
+  report and rechecks the reservation. Startup checks cover the worker database,
+  registered source, Kafka metadata and local credential format without sending.
+  Live delivery and shared-process generation acknowledgements remain pending.
+
 - Migration 000042 adds setup revisions, immutable app/environment credential
   versions, ingestion reservations, typed operations, checks, acknowledgements,
   approvals and replay snapshots. Existing apps are marked non-greenfield;
@@ -92,6 +100,18 @@ an automatic replacement for the currently approved offline lifecycle procedure.
 
 ## Validation and practical limits
 
+The subsequent M46 slice passed real PostgreSQL approval and role checks, Linux
+policy publication tests, simulated Engine failure/replay tests and the existing
+stopped-container Docker fixture. The actual worker preflight ran in Docker on
+the synthetic local stack with a temporary restricted LOGIN. The reported app
+and digest matched, delivery ledger counts stayed unchanged, and no accepted
+OAuth or FCM requests were recorded. The rebuilt stack passed setup/OAuth through
+the BFF and immediate/scheduled simulator delivery for its existing active app.
+The full race suite passed (1,669 tests), along with build, vet, format, module
+verification and the reachable vulnerability scan. The combined host CLI sequence
+remains untested against one live fixture. See the
+[runtime contract](../design/application-onboarding-runtime.md#protected-delivery-preflight).
+
 The 2026-11-18 preparation/readiness slice passes focused package tests, the full
 Go race suite (1,644 passed; opt-in Docker and Linux-root publication tests skip
 in the ordinary Darwin run), CI provider/local-runner checks, format, module
@@ -102,8 +122,8 @@ the new app remains PROVISIONING/HELD. `./dev smoke` passes immediate and schedu
 simulator acceptance through the existing active application's real pipeline.
 These distinguish existing delivery from incomplete greenfield onboarding.
 
-Current vulnerability scanning failed fetching `vuln.go.dev` because DNS timed
-out. Full OpenAPI validation could not run: installation of the repository-pinned
+During the earlier M45 slice, vulnerability scanning failed fetching
+`vuln.go.dev` because DNS timed out. Full OpenAPI validation could not run: installation of the repository-pinned
 Python validators failed resolving PyPI, including outside the sandbox. JSON
 syntax, required-property references and local OpenAPI references were checked;
 these are not substitutes for the full validator. Navigation/safe-example checks
@@ -186,10 +206,10 @@ to deliver, and no new general-send endpoint or automatic ACTIVE transition exis
 
 ## Remaining implementation
 
-1. ONB-05/06: complete approved platform profiles and runtime preparation beyond
-   the stopped allocation foundation: publish immutable scoped policies, allocate
-   approved runtime identities, collect fenced acknowledgements and install the
-   DB-delegated first-activation executor, with real SQL-role/crash recovery tests.
+1. ONB-05/06: extend the validated delivery policy to a runnable, generation-fenced
+   worker with app-scoped execution authority. Complete shared policy publication,
+   serialized rollout and authenticated live acknowledgements, then install the
+   DB-delegated first-activation executor with SQL-role and crash recovery tests.
 2. ONB-07/08: compose immutable mobile trust/profile generations, approved external
    identity mapping, test cohort/route approval and target-permission dry-run.
 3. ONB-09/10: guarded pilot/full release, signed per-platform test receipts,

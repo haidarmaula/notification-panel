@@ -37,6 +37,12 @@ type Configuration struct {
 // Load validates a caller-owned trusted policy stream without network I/O.
 // Each role has an exact schema; operator JWT/key/grant settings are rejected.
 func Load(role deployment.Component, reader io.Reader) (*Configuration, error) {
+	return loadPolicy(role, reader, deployment.Database)
+}
+
+func loadPolicy(role deployment.Component, reader io.Reader,
+	database func(string, string) (*pgxpool.Config, error),
+) (*Configuration, error) {
 	if !daemonRole(role) || !deployment.EnvironmentAllowed() {
 		return nil, ErrConfiguration
 	}
@@ -108,7 +114,7 @@ func Load(role deployment.Component, reader io.Reader) (*Configuration, error) {
 		}
 		cfg.scheduler = scheduler.Config{Interval: time.Duration(poll) * time.Millisecond, PageSize: page, Retry: cfg.retry}
 	}
-	cfg.database, err = deployment.Database(databaseURL, "hello-"+string(role))
+	cfg.database, err = database(databaseURL, "hello-"+string(role))
 	if err != nil {
 		return nil, ErrConfiguration
 	}

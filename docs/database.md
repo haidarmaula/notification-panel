@@ -990,3 +990,16 @@ does not prove absence. These functions do not authorize starting a container.
 `scripts/application-onboarding-runtime.sh` exercises the migration and actual
 restricted PostgreSQL LOGINs in an isolated fixture. This is independent of real
 Docker inspection and does not establish enrollment or delivery readiness.
+
+### Worker policy preflight scope (000046)
+
+`application_worker_preflight_scopes` retains immutable owner-approved app,
+configuration, environment, generation and profile references. The scope pins the
+exact protected delivery policy digest and the restricted worker LOGIN OID. Its
+role is separate from the preparation executor and uses the existing delivery
+privilege profile. Reconcile OIDs after restore before running a preflight.
+
+The scoped check extends the live M45 reservation validation with the approved
+worker identity and digest, the configuration's exact file reference, and the
+stored Firebase target project and account email. It returns a boolean and grants
+no table access or write privilege. Rollback refuses retained scope history.

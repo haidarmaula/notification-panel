@@ -22,6 +22,8 @@ import (
 // Only the FCM credential factory reads a separate managed secret.
 type deliveryConfig struct {
 	databaseMaxConns int32
+	replicas         int32
+	projectRate      int32
 	application      pgtype.UUID
 	poll, activePoll time.Duration
 	pageSize         int32
@@ -40,7 +42,7 @@ func parseDelivery(raw json.RawMessage) (*deliveryConfig, error) {
 	var databasePool json.RawMessage
 	var activeMS *int32
 	var pollMS, lease, renew, request, retry, observation, cooldown int32
-	var version, projectRate, replicas int32
+	var version int32
 	p := &d.execution.Receipt
 	err := jsonobject.DecodeOptional(raw, map[string]any{
 		"application_id": &application, "environment": &p.Environment,
@@ -50,8 +52,8 @@ func parseDelivery(raw json.RawMessage) (*deliveryConfig, error) {
 		"lease_seconds": &lease, "renew_seconds": &renew, "request_timeout_seconds": &request,
 		"retry_floor_seconds": &retry, "max_attempts": &d.execution.MaxAttempts,
 		"receipt_key_id": &p.KeyID, "observation_window_seconds": &observation,
-		"requests_per_second": &d.transport.RequestsPerSecond, "project_requests_per_second": &projectRate,
-		"replica_count": &replicas, "concurrency": &d.transport.Concurrency,
+		"requests_per_second": &d.transport.RequestsPerSecond, "project_requests_per_second": &d.projectRate,
+		"replica_count": &d.replicas, "concurrency": &d.transport.Concurrency,
 		"breaker_threshold": &d.transport.BreakerThreshold, "breaker_cooldown_seconds": &cooldown,
 		"poll_interval_ms": &pollMS, "page_size": &d.pageSize,
 		"current_key_version": &version, "fingerprint_key": &fingerprint, "encryption_keys": &encryption,
@@ -95,7 +97,7 @@ func parseDelivery(raw json.RawMessage) (*deliveryConfig, error) {
 	// Compare by division to avoid multiplying a caller-supplied rate.
 	if renew < 1 || d.renew > d.execution.LeaseDuration/3 ||
 		d.renew+d.transport.RequestTimeout+5*time.Second >= d.execution.LeaseDuration ||
-		replicas < 1 || projectRate < 1 || d.transport.RequestsPerSecond > int(projectRate/replicas) ||
+		d.replicas < 1 || d.projectRate < 1 || d.transport.RequestsPerSecond > int(d.projectRate/d.replicas) ||
 		pollMS < 100 || pollMS > 60000 || d.pageSize < 1 || d.pageSize > 100 ||
 		!filepath.IsAbs(d.credential.Path) || filepath.Clean(d.credential.Path) != d.credential.Path || d.credential.Path == "/" {
 		return nil, ErrConfiguration
@@ -103,7 +105,7 @@ func parseDelivery(raw json.RawMessage) (*deliveryConfig, error) {
 	if len(databasePool) > 0 {
 		var budget int32
 		if jsonobject.Decode(databasePool, map[string]any{"max_connections_per_replica": &d.databaseMaxConns, "deployment_connection_budget": &budget}) != nil ||
-			d.databaseMaxConns < 2 || d.databaseMaxConns > 32 || d.databaseMaxConns > budget/replicas {
+			d.databaseMaxConns < 2 || d.databaseMaxConns > 32 || d.databaseMaxConns > budget/d.replicas {
 			return nil, ErrConfiguration
 		}
 	}

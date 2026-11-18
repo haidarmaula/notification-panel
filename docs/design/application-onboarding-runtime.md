@@ -1,8 +1,9 @@
 # Onboarding runtime preparation subset
 
-This implements a partial ONB-05 preparation path: immutable delivery plans,
-durable scoped capacity reservations and stopped Docker allocations. It does not
-publish executable runtime policies, start containers or acknowledge readiness.
+This implements a partial ONB-05 preparation path with immutable delivery plans,
+durable scoped capacity reservations, protected worker policy publication and a
+one-shot delivery worker preflight. Shared policy deployment and live readiness
+acknowledgements remain pending.
 The complete protected platform profile in
 [the onboarding design](application-onboarding.md#protected-profile-and-approval-file-shapes)
 remains required before a runtime adapter can start usable delivery processes.
@@ -114,6 +115,56 @@ after quiescing preparers and reconciling pending daemon effects. The grace peri
 alone cannot prove a timed-out create failed. No automatic release/cleanup CLI is
 provided, and rollback refuses retained reservation/scope/profile history.
 
+## Protected delivery preflight
+
+`controlplane preflight-delivery` uses the same preparation settings and host
+profile as `prepare-runtime`, plus the protected input file
+`/etc/hello/runtime-preparation-worker.json`. Use the real `delivery_only` worker
+schema with one replica, one concurrent request, one request per second per
+worker and project, and the exact database connection budget from the host plan.
+It requires a same-project FCM credential and the fixed worker-side path
+`/etc/hello/fcm/service-account.json`. The DB connection uses `verify-full` TLS.
+If the approved DSN names `/etc/hello/postgres-ca.crt`, install its protected
+host file at `/etc/hello/runtime-preparation-postgres-ca.crt`. Client TLS key and
+certificate paths are excluded from this preflight profile.
+
+The schema owner installs one M46 preflight approval for the app, configuration,
+environment, generation and profile revision. It pins SHA-256 of the exact worker
+policy bytes and the OID of a dedicated restricted `hello_delivery` LOGIN. Reapply
+`deploy/postgres/onboarding-runtime-grants.sql` to grant the preparation LOGIN the
+scoped M46 check. The policy digest covers the approved DB DSN and broker policy.
+The worker verifies the actual session LOGIN against the approved DSN username.
+The owner must point the policy at the intended cluster because the report does
+not attest that the executor and worker reached an identical database. The existing
+worker role permits shared database queries by design. One application per worker
+policy and mount layout are required here; the LOGIN does not add database row
+isolation by itself.
+
+Install `/var/lib/hello/runtime` with ownership `root:65532` and mode `0750` on
+protected Linux storage. The command validates the worker policy, checks the
+live reservation and owner approval, and publishes bytes atomically to
+`/var/lib/hello/runtime/<app>/<environment>/<config>/<generation>/worker.json`.
+The exact replay syncs directory entries again. A different file at the same
+generation fails closed. The credential source is the existing, protected
+`/var/lib/hello/credentials/<app>/<environment>/<config>/service-account.json`.
+
+The adapter mounts only those specific files and the optional pinned-path CA read-only.
+It uses the profile's approved named network and pinned worker image, UID/GID
+65532, a read-only root and the same resource bounds as `prepare-runtime`.
+The image must include `/worker --check-delivery-policy`. A host lock serializes
+preflight for that generation. The container shares the deterministic allocation
+name with the stopped-only mode, so an existing mismatching allocation must be
+reconciled by the trusted operator. A timeout retains capacity and the allocation.
+
+The one-shot worker loads its actual mounted policy, checks the restricted DB
+LOGIN, app, registered Kafka source and broker metadata, validates the local
+credential, and closes its startup resources. The host requires exit success and
+the exact app/digest report from bounded Docker output, then checks the reservation
+again. These checks perform no provider or Kafka send. Observing a completed
+check attests startup of one process at that time. Activation still requires
+authenticated current-generation readiness for the long-running delivery worker
+and the shared server, admission and scheduler processes.
+
 ## Local evidence
 
 `bash scripts/application-onboarding-runtime.sh` proves actual PostgreSQL role,
@@ -127,3 +178,13 @@ create conflicts, malformed responses, cancellation and drift.
 
 Neither fixture proves shared-process policy publication/restart, real mobile
 enrollment, Firebase IAM permission, device receipts or dispatch readiness.
+
+For M46, the PostgreSQL fixture also verifies approval isolation, provider
+metadata, digest and LOGIN fences, and revocation. The Engine HTTP fixture checks
+read-only mounts, immutable-ID start, lost responses and exact report replay.
+Separately, the real Linux worker command ran in Docker as UID/GID 65532 with a
+temporary restricted LOGIN and the synthetic stack's real Kafka metadata and
+credential file. Delivery ledger counts remained unchanged and the simulator
+recorded no accepted OAuth or FCM requests. The host CLI's entire sequence from
+the restricted PostgreSQL approval through a real Docker start has not been
+exercised in one fixture.

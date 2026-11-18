@@ -60,6 +60,9 @@ CREATE ROLE runtime_a LOGIN IN ROLE hello_onboarding_runtime_executor;
 CREATE ROLE runtime_b LOGIN IN ROLE hello_onboarding_runtime_executor;
 CREATE ROLE runtime_c LOGIN IN ROLE hello_onboarding_runtime_executor;
 CREATE ROLE runtime_unscoped LOGIN IN ROLE hello_onboarding_runtime_executor;
+CREATE ROLE hello_delivery NOLOGIN;
+CREATE ROLE fixture_worker_a LOGIN IN ROLE hello_delivery;
+CREATE ROLE fixture_worker_b LOGIN IN ROLE hello_delivery;
 SQL
 sql postgres < deploy/postgres/onboarding-runtime-grants.sql
 sql postgres < deploy/postgres/onboarding-runtime-grants.sql
@@ -79,6 +82,11 @@ UPDATE application_onboarding setup SET environment='staging',candidate_configur
 FROM application_provider_configurations config WHERE config.application_id=setup.application_id;
 INSERT INTO application_runtime_executor_scopes(role_id,application_id,environment,profile_revision)
 SELECT ('runtime_'||right(a.key,1))::regrole::oid,a.id,'staging',1 FROM applications a WHERE a.key LIKE 'runtime-app-%';
+INSERT INTO application_worker_preflight_scopes(application_id,configuration_id,environment,generation,profile_revision,delivery_policy_sha256,worker_role)
+SELECT setup.application_id,setup.candidate_configuration_id,'staging',1,1,decode(repeat('ef',32),'hex'),
+    ('fixture_worker_'||right(app.key,1))::regrole::oid
+FROM application_onboarding setup JOIN applications app ON app.id=setup.application_id
+WHERE app.key IN ('runtime-app-a','runtime-app-b');
 UPDATE notification_runtime SET sealed=false,migration_hold=false WHERE singleton;
 SQL
 origin=$(sql postgres -c 'SELECT origin_epoch FROM notification_runtime WHERE singleton')
@@ -94,7 +102,9 @@ reserve_b='30000000-0000-4000-8000-000000000002'
 reserve_c='30000000-0000-4000-8000-000000000003'
 reserve() { printf "SELECT reserve_application_onboarding_runtime('%s','%s','%s',%s,1,1,'%s','%s')" "$1" "$2" "$3" "$4" "$origin" "$source"; }
 check_a="SELECT check_application_onboarding_runtime('$app_a','$reserve_a',decode(repeat('ab',32),'hex'))"
-assert_query t postgres 'installer grants three functions and no lifecycle or data authority' "SELECT has_function_privilege('runtime_a','reserve_application_onboarding_runtime(uuid,uuid,uuid,bigint,bigint,bigint,uuid,uuid)','EXECUTE') AND has_function_privilege('runtime_a','check_application_onboarding_runtime(uuid,uuid,bytea)','EXECUTE') AND has_function_privilege('runtime_a','release_application_onboarding_runtime(uuid,uuid,boolean)','EXECUTE') AND NOT has_function_privilege('runtime_a','revoke_application_lifecycle(uuid,uuid)','EXECUTE') AND NOT has_table_privilege('runtime_a','application_runtime_reservations','SELECT,INSERT,UPDATE,DELETE') AND NOT has_table_privilege('runtime_a','application_onboarding','SELECT,INSERT,UPDATE,DELETE')"
+preflight() { printf "SELECT check_application_onboarding_worker_preflight('%s','%s',decode(repeat('%s',32),'hex'),'%s','%s',decode(repeat('%s',32),'hex'),'%s')" "$1" "$2" "$3" "$4" "$5" "$6" "$7"; }
+preflight_a=$(preflight "$app_a" "$reserve_a" ab fixture-project fixture@example.invalid ef fixture_worker_a)
+assert_query t postgres 'installer grants scoped functions and no lifecycle or data authority' "SELECT has_function_privilege('runtime_a','reserve_application_onboarding_runtime(uuid,uuid,uuid,bigint,bigint,bigint,uuid,uuid)','EXECUTE') AND has_function_privilege('runtime_a','check_application_onboarding_runtime(uuid,uuid,bytea)','EXECUTE') AND has_function_privilege('runtime_a','release_application_onboarding_runtime(uuid,uuid,boolean)','EXECUTE') AND has_function_privilege('runtime_a','check_application_onboarding_worker_preflight(uuid,uuid,bytea,text,text,bytea,text)','EXECUTE') AND NOT has_function_privilege('runtime_a','revoke_application_lifecycle(uuid,uuid)','EXECUTE') AND NOT has_table_privilege('runtime_a','application_runtime_reservations','SELECT,INSERT,UPDATE,DELETE') AND NOT has_table_privilege('runtime_a','application_onboarding','SELECT,INSERT,UPDATE,DELETE') AND NOT has_table_privilege('runtime_a','application_worker_preflight_scopes','SELECT,INSERT,UPDATE,DELETE')"
 deny P0001 sql runtime_a < deploy/postgres/onboarding-runtime-grants.sql
 sql postgres -c 'ALTER ROLE hello_onboarding_runtime_executor LOGIN'
 deny P0001 sql postgres < deploy/postgres/onboarding-runtime-grants.sql
@@ -104,6 +114,21 @@ assert_query "$reserve_a" runtime_a 'exact retry' "$(reserve "$app_a" "$reserve_
 assert_query t runtime_a 'scoped fresh preparation guard' "$check_a"
 assert_query f runtime_b 'cross-app guard fails closed' "$check_a"
 assert_query f runtime_a 'wrong policy digest fails closed' "SELECT check_application_onboarding_runtime('$app_a','$reserve_a',decode(repeat('cd',32),'hex'))"
+assert_query t runtime_a 'worker policy, LOGIN and immutable provider metadata match' "$preflight_a"
+assert_query f runtime_b 'worker preflight cross-app LOGIN denied' "$preflight_a"
+assert_query f runtime_unscoped 'worker preflight requires app scope' "$preflight_a"
+deny 42501 sql fixture_worker_a -c "$preflight_a"
+deny 42501 sql postgres -c "$preflight_a"
+assert_query f runtime_a 'worker preflight checks capacity profile digest' "$(preflight "$app_a" "$reserve_a" cd fixture-project fixture@example.invalid ef fixture_worker_a)"
+assert_query f runtime_a 'worker preflight checks target project' "$(preflight "$app_a" "$reserve_a" ab other-project fixture@example.invalid ef fixture_worker_a)"
+assert_query f runtime_a 'worker preflight checks service account' "$(preflight "$app_a" "$reserve_a" ab fixture-project other@example.invalid ef fixture_worker_a)"
+assert_query f runtime_a 'worker preflight checks exact delivery policy digest' "$(preflight "$app_a" "$reserve_a" ab fixture-project fixture@example.invalid cd fixture_worker_a)"
+assert_query f runtime_a 'worker preflight checks approved worker role' "$(preflight "$app_a" "$reserve_a" ab fixture-project fixture@example.invalid ef fixture_worker_b)"
+deny 23514 sql postgres -c "UPDATE application_worker_preflight_scopes SET worker_role='fixture_worker_b'::regrole::oid WHERE worker_role='fixture_worker_a'::regrole::oid"
+sql postgres -c 'REVOKE hello_delivery FROM fixture_worker_a'
+assert_query f runtime_a 'worker preflight checks current membership' "$preflight_a"
+sql postgres -c 'GRANT hello_delivery TO fixture_worker_a'
+assert_query t runtime_a 'restored dedicated worker membership' "$preflight_a"
 deny 23505 sql runtime_a -c "$(reserve "$app_a" "$reserve_a" "$config_a" 2)"
 deny 42501 sql runtime_b -c "$(reserve "$app_a" "$reserve_b" "$config_a" 1)"
 deny 42501 sql runtime_unscoped -c "$(reserve "$app_a" "$reserve_b" "$config_a" 1)"
@@ -115,12 +140,15 @@ deny 55000 sql runtime_a -c "SELECT release_application_onboarding_runtime('$app
 deny 55000 sql runtime_a -c "$(reserve "$app_a" '30000000-0000-4000-8000-000000000009' "$config_b" 2)"
 sql postgres -c 'UPDATE notification_runtime SET sealed=true WHERE singleton'
 assert_query f runtime_a 'sealed runtime blocks preparation' "$check_a"
+assert_query f runtime_a 'sealed runtime blocks worker preflight' "$preflight_a"
 deny 55000 sql runtime_b -c "$(reserve "$app_b" "$reserve_b" "$config_b" 1)"
 sql postgres -c 'UPDATE notification_runtime SET sealed=false,migration_hold=true WHERE singleton'
 assert_query f runtime_a 'migration hold blocks preparation' "$check_a"
+assert_query f runtime_a 'migration hold blocks worker preflight' "$preflight_a"
 deny 55000 sql runtime_b -c "$(reserve "$app_b" "$reserve_b" "$config_b" 1)"
 sql postgres -c "UPDATE notification_runtime SET migration_hold=false,source_epoch=gen_random_uuid() WHERE singleton"
 assert_query f runtime_a 'source epoch change fences preparation' "$check_a"
+assert_query f runtime_a 'source epoch change fences worker preflight' "$preflight_a"
 deny 55000 sql runtime_b -c "$(reserve "$app_b" "$reserve_b" "$config_b" 1)"
 sql postgres -c "UPDATE notification_runtime SET source_epoch='$source' WHERE singleton"
 
@@ -140,6 +168,7 @@ assert_query 2 postgres 'global capacity preserved across LOGINs' 'SELECT count(
 # One replacement consumes overlap; another is refused without losing records.
 replacement_a='30000000-0000-4000-8000-000000000004'
 assert_query "$replacement_a" runtime_a 'replacement overlap reservation' "$(reserve "$app_a" "$replacement_a" "$config_a" 2)"
+assert_query f runtime_a 'worker preflight requires approval for exact generation' "$(preflight "$app_a" "$replacement_a" ab fixture-project fixture@example.invalid ef fixture_worker_a)"
 deny 53300 sql runtime_b -c "$(reserve "$app_b" '30000000-0000-4000-8000-000000000005' "$config_b" 2)"
 assert_query 6 postgres 'connection budget includes overlap' 'SELECT sum(database_connections) FROM application_runtime_reservations WHERE released_at IS NULL'
 
@@ -151,6 +180,7 @@ deny 55000 sql runtime_a -c "SELECT release_application_onboarding_runtime('$app
 assert_query 3 postgres 'release grace preserves capacity' 'SELECT count(*) FROM application_runtime_reservations WHERE released_at IS NULL'
 sql postgres -c "ALTER TABLE application_runtime_reservations DISABLE TRIGGER protect_runtime_reservation; UPDATE application_runtime_reservations SET reserved_at=clock_timestamp()-interval '2 minutes',prepare_before=clock_timestamp()-interval '1 minute' WHERE id='$reserve_a'; ALTER TABLE application_runtime_reservations ENABLE TRIGGER protect_runtime_reservation"
 assert_query f runtime_a 'expired reservation cannot prepare' "$check_a"
+assert_query f runtime_a 'expired reservation cannot authorize worker preflight' "$preflight_a"
 assert_query "$reserve_a" runtime_a 'expired replay keeps original allocation' "$(reserve "$app_a" "$reserve_a" "$config_a" 1)"
 assert_query 3 postgres 'expired reservation still occupies capacity' 'SELECT count(*) FROM application_runtime_reservations WHERE released_at IS NULL'
 deny 42501 sql runtime_b -c "SELECT release_application_onboarding_runtime('$app_b','$reserve_a',true)"
@@ -166,13 +196,18 @@ deny 42501 sql runtime_a -c "UPDATE application_runtime_reservations SET release
 sql postgres -c 'REVOKE UPDATE ON application_runtime_reservations FROM runtime_a'
 sql postgres -c 'REVOKE hello_onboarding_runtime_executor FROM runtime_a'
 deny 42501 sql runtime_a -c "$check_a"
+deny 42501 sql runtime_a -c "$preflight_a"
 assert_query '3|0' postgres 'preparation never activates or installs configuration' "SELECT count(*)||'|'||count(*) FILTER(WHERE current_configuration_id IS NOT NULL) FROM application_onboarding setup JOIN applications app ON app.id=setup.application_id WHERE app.status='PROVISIONING'"
 deny P0001 sql postgres < db/migrations/000045_onboarding_runtime_preparation.down.sql
+deny P0001 sql postgres < db/migrations/000046_onboarding_worker_preflight.down.sql
 assert_query 3 postgres 'rollback cannot discard retained history' 'SELECT count(*) FROM application_runtime_reservations'
 # Rollback/reapply is safe only before any profile, scope or reservation exists.
 sql postgres -c 'CREATE DATABASE runtime_empty'
 empty_sql() { docker_cmd exec -iu postgres "$node" psql -d runtime_empty -XqAt -v ON_ERROR_STOP=1 -v VERBOSITY=verbose; }
 for migration in db/migrations/*.up.sql; do empty_sql < "$migration"; done
+empty_sql < db/migrations/000046_onboarding_worker_preflight.down.sql
+empty_sql < deploy/postgres/onboarding-runtime-grants.sql
 empty_sql < db/migrations/000045_onboarding_runtime_preparation.down.sql
 empty_sql < db/migrations/000045_onboarding_runtime_preparation.up.sql
+empty_sql < db/migrations/000046_onboarding_worker_preflight.up.sql
 [[ "$(printf '%s\n' 'SELECT count(*) FROM application_runtime_reservations' | empty_sql)" == 0 ]] || { echo 'Empty migration rollback/reapply failed' >&2; exit 1; }

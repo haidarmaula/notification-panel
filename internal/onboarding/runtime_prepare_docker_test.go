@@ -2,7 +2,6 @@ package onboarding
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"strings"
 	"testing"
@@ -39,24 +38,20 @@ func TestRuntimePrepareDocker(t *testing.T) {
 			p.client.Timeout = 30 * time.Second
 			cleanupCtx, stop := context.WithTimeout(context.Background(), 30*time.Second)
 			defer stop()
-			response, cleanupErr := p.request(cleanupCtx, "GET", name+"/json", nil)
+			actual, cleanupErr := p.inspectRuntime(cleanupCtx, name)
 			if cleanupErr != nil {
 				t.Errorf("inspect cleanup %s: %v", name, cleanupErr)
 				return
 			}
-			defer response.Body.Close()
-			if response.StatusCode == 404 {
+			if actual == nil {
 				return
 			}
-			var actual struct {
-				Config struct{ Labels map[string]string }
-				State  struct{ Running bool }
-			}
-			if json.NewDecoder(response.Body).Decode(&actual) != nil || actual.State.Running || actual.Config.Labels["hello.onboarding.application"] != plan.Delivery().ApplicationID {
+			if !dockerContainerID.MatchString(actual.ID) || actual.Name != "/"+name || actual.State.Status != "created" ||
+				actual.Config.Labels["hello.onboarding.application"] != plan.Delivery().ApplicationID {
 				t.Errorf("refusing cleanup of unexpected allocation %s", name)
 				return
 			}
-			removed, removeErr := p.request(cleanupCtx, "DELETE", name+"?v=true", nil)
+			removed, removeErr := p.request(cleanupCtx, "DELETE", actual.ID+"?v=true", nil)
 			if removeErr != nil {
 				t.Errorf("remove cleanup %s: %v", name, removeErr)
 				return

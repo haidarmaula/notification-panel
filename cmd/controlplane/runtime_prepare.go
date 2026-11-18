@@ -11,16 +11,19 @@ import (
 	"unicode/utf8"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"hello/internal/daemon"
 	"hello/internal/database"
 	"hello/internal/deployment"
 	"hello/internal/jsonobject"
 	"hello/internal/onboarding"
+	"hello/internal/provisioning"
 	"hello/internal/runloop"
 )
 
 const (
 	runtimePreparationSettingsPath = "/etc/hello/runtime-preparation.json"
 	runtimePreparationPolicyPath   = "/etc/hello/runtime-preparation-policy.json"
+	runtimePreparationDeliveryPath = "/etc/hello/runtime-preparation-worker.json"
 )
 
 type runtimePreparationSettings struct {
@@ -60,7 +63,7 @@ func parseRuntimePreparationSettings(data []byte) (runtimePreparationSettings, e
 
 // runRuntimePreparation is a separate operator-only, one-shot preparation mode.
 // It never uses the OAuth identity or exposes a privileged command through HTTP.
-func runRuntimePreparation() int {
+func runRuntimePreparation(preflight bool) int {
 	restore, err := runloop.PrepareCommandOutputs()
 	if err != nil {
 		return 1
@@ -91,6 +94,15 @@ func runRuntimePreparation() int {
 		fmt.Fprintln(os.Stderr, "invalid runtime preparation scope")
 		return 1
 	}
+	var workerPolicy []byte
+	var evidence onboarding.DeliveryPreflightEvidence
+	if preflight {
+		workerPolicy, evidence, err = readDeliveryPreparationPolicy(plan.Delivery())
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "invalid protected delivery worker policy")
+			return 1
+		}
+	}
 	settings.reservation.PolicySHA256 = sha256.Sum256(policyData)
 	dbConfig, err := deployment.Database(settings.databaseURL, "hello-runtime-preparation")
 	if err != nil || deployment.CheckDatabaseFiles(settings.databaseURL) != nil {
@@ -120,10 +132,45 @@ func runRuntimePreparation() int {
 	}
 	preparer := onboarding.NewRuntimePreparer(reservation)
 	defer preparer.Close()
+	if preflight {
+		if err := reservation.CheckDeliveryPreflight(ctx, plan.Delivery(), evidence); err != nil {
+			fmt.Fprintln(os.Stderr, "delivery preflight authority unavailable")
+			return 1
+		}
+		if _, err := provisioning.PublishDeliveryPolicy(ctx, settings.applicationID, string(settings.environment),
+			settings.configurationID, settings.generation, workerPolicy); err != nil {
+			fmt.Fprintln(os.Stderr, "delivery policy publication unavailable")
+			return 1
+		}
+		if _, err := preparer.RunDeliveryPreflight(ctx, plan, evidence); err != nil {
+			fmt.Fprintln(os.Stderr, "delivery preflight unavailable; retain reservation for reconciliation")
+			return 1
+		}
+		fmt.Fprintln(os.Stdout, "Delivery worker policy preflight passed")
+		return 0
+	}
 	if _, err := preparer.Prepare(ctx, plan); err != nil {
 		fmt.Fprintln(os.Stderr, "runtime preparation unavailable; retain reservation for reconciliation")
 		return 1
 	}
 	fmt.Fprintln(os.Stdout, "Stopped runtime prepared; enrollment and dispatch remain unchanged")
 	return 0
+}
+
+func readDeliveryPreparationPolicy(plan onboarding.RuntimeDeliveryPlan) ([]byte, onboarding.DeliveryPreflightEvidence, error) {
+	policy, err := deployment.ReadSecret(runtimePreparationDeliveryPath)
+	if err != nil {
+		return nil, onboarding.DeliveryPreflightEvidence{}, err
+	}
+	metadata, err := daemon.ValidateDeliveryPreparationPolicy(policy, daemon.DeliveryPreparationScope{
+		ApplicationID: plan.ApplicationID, Environment: string(plan.Environment),
+		DatabaseConnections: plan.DatabaseConnections,
+	})
+	if err != nil {
+		return nil, onboarding.DeliveryPreflightEvidence{}, err
+	}
+	return policy, onboarding.DeliveryPreflightEvidence{
+		ProjectID: metadata.ProjectID, ServiceAccountEmail: metadata.ServiceAccountEmail,
+		DatabaseUsername: metadata.DatabaseUsername, PolicySHA256: sha256.Sum256(policy), NeedsDBCA: metadata.NeedsDBCA,
+	}, nil
 }

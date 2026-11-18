@@ -35,30 +35,19 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 	}
 	startup, cancelStartup := context.WithTimeout(ctx, 15*time.Second)
 	defer cancelStartup()
-	pool, err := pgxpool.NewWithConfig(startup, c.database.Copy())
+	pool, producer, err := c.openStartup(startup)
 	if err != nil {
-		return startupFailure(ctx, errDatabase)
+		if errors.Is(err, errDrain) {
+			return err
+		}
+		return startupFailure(ctx, err)
 	}
-	var producer *kafka.ScopedProducer
 	defer func() {
 		if producer != nil && producer.Close() != nil {
 			err = errors.Join(err, errDrain)
 		}
 		pool.Close()
 	}()
-	if pool.Ping(startup) != nil {
-		return startupFailure(ctx, errDatabase)
-	}
-	if c.source.VerifyRegistration(startup, pool) != nil {
-		return startupFailure(ctx, errSource)
-	}
-	producer, err = kafka.NewAuthenticatedScopedProducer(c.broker)
-	if err != nil {
-		return ErrConfiguration
-	}
-	if producer.VerifyClusterTopic(startup, c.source.ClusterID, c.source.PartitionCount) != nil {
-		return startupFailure(ctx, errBroker)
-	}
 	if c.role == deployment.Worker && c.delivery != nil {
 		state := observability.New("delivery_recovery", "delivery_updates")
 		poller, client, err := c.delivery.open(startup, pool, state.Provider())
@@ -69,7 +58,7 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 		if c.monitoring != nil {
 			state.ObserveProviderAdmission(client)
 		}
-		outbox, err := dispatch.NewApplicationUpdateOutbox(pool, sourcePublisher{producer, c.source}, c.source, c.delivery.application)
+		outbox, err := c.deliveryOutbox(pool, producer)
 		if err != nil {
 			return ErrConfiguration
 		}
@@ -136,6 +125,39 @@ func (c *Configuration) Run(ctx context.Context, logger *slog.Logger) (err error
 	default:
 		return ErrConfiguration
 	}
+}
+
+func (c *Configuration) deliveryOutbox(pool *pgxpool.Pool, producer *kafka.ScopedProducer) (*dispatch.UpdateOutbox, error) {
+	return dispatch.NewApplicationUpdateOutbox(pool, sourcePublisher{producer, c.source}, c.source, c.delivery.application)
+}
+
+func (c *Configuration) openStartup(ctx context.Context) (*pgxpool.Pool, *kafka.ScopedProducer, error) {
+	pool, err := pgxpool.NewWithConfig(ctx, c.database.Copy())
+	if err != nil {
+		return nil, nil, errDatabase
+	}
+	if pool.Ping(ctx) != nil {
+		pool.Close()
+		return nil, nil, errDatabase
+	}
+	if c.source.VerifyRegistration(ctx, pool) != nil {
+		pool.Close()
+		return nil, nil, errSource
+	}
+	producer, err := kafka.NewAuthenticatedScopedProducer(c.broker)
+	if err != nil {
+		pool.Close()
+		return nil, nil, ErrConfiguration
+	}
+	if producer.VerifyClusterTopic(ctx, c.source.ClusterID, c.source.PartitionCount) != nil {
+		err = errBroker
+		if producer.Close() != nil {
+			err = errors.Join(err, errDrain)
+		}
+		pool.Close()
+		return nil, nil, err
+	}
+	return pool, producer, nil
 }
 
 type sourcePublisher struct {

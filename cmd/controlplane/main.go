@@ -22,11 +22,16 @@ func main() { os.Exit(run(os.Args[1:])) }
 
 func run(args []string) int {
 	signal.Ignore(syscall.SIGPIPE)
-	if len(args) == 1 && args[0] == "prepare-runtime" {
-		return runRuntimePreparation()
+	if len(args) == 1 {
+		switch args[0] {
+		case "prepare-runtime":
+			return runRuntimePreparation(false)
+		case "preflight-delivery":
+			return runRuntimePreparation(true)
+		}
 	}
 	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, "controlplane accepts only the optional prepare-runtime command")
+		fmt.Fprintln(os.Stderr, "controlplane accepts prepare-runtime or preflight-delivery")
 		return 2
 	}
 	restore, err := runloop.PrepareCommandOutputs()

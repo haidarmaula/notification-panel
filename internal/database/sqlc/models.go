@@ -269,6 +269,16 @@ type ApplicationStaffGrant struct {
 	UpdatedAt     pgtype.Timestamptz `db:"updated_at"`
 }
 
+type ApplicationWorkerPreflightScope struct {
+	ApplicationID        int64         `db:"application_id"`
+	ConfigurationID      pgtype.UUID   `db:"configuration_id"`
+	Environment          string        `db:"environment"`
+	Generation           int64         `db:"generation"`
+	ProfileRevision      int64         `db:"profile_revision"`
+	DeliveryPolicySha256 []byte        `db:"delivery_policy_sha256"`
+	WorkerRole           pgtype.Uint32 `db:"worker_role"`
+}
+
 type AuditLog struct {
 	ID            int64              `db:"id"`
 	ActorUserID   int64              `db:"actor_user_id"`
