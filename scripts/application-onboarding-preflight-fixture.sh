@@ -36,6 +36,7 @@ broker=$name-kafka
 worker=$name-worker
 scheduler=$name-scheduler
 admission=$name-admission
+server=$name-server
 worker_tag="hello-preflight-fixture:$name"
 shared_tag="hello-preflight-fixture:$name-shared"
 image_owned=false
@@ -49,7 +50,7 @@ cleanup() {
     local rc=$? id ids
     trap - EXIT
     if (( rc != 0 )); then
-        for id in "$pg" "$broker" "$worker" "$scheduler" "$admission"; do
+        for id in "$pg" "$broker" "$worker" "$scheduler" "$admission" "$server"; do
             if [[ $(d inspect --format "{{index .Config.Labels \"$label\"}}" "$id" 2>/dev/null) == "$name" ]]; then
                 d logs --tail 20 "$id" >&2 || true
             fi
@@ -62,7 +63,7 @@ cleanup() {
             d rm -fv "$id" >/dev/null || rc=1
         done
     fi
-    for id in "$worker" "$scheduler" "$admission" "$pg" "$broker"; do
+    for id in "$worker" "$scheduler" "$admission" "$server" "$pg" "$broker"; do
         if [[ $(d inspect --format "{{index .Config.Labels \"$label\"}}" "$id" 2>/dev/null) == "$name" ]]; then
             d rm -fv "$id" >/dev/null || rc=1
         fi
@@ -230,10 +231,22 @@ if [[ "$mode" == --preflight-services ]]; then
     scheduler_digest=$(file_digest "$tmp/scheduler.json")
     admission_digest=$(file_digest "$tmp/admission.json")
     "$timeout_bin" -k 5s 180s env CGO_ENABLED=0 GOOS=linux GOARCH="$arch" "$go_bin" build -trimpath -o "$tmp/image/scheduler" ./cmd/scheduler
+    "$timeout_bin" -k 5s 180s env CGO_ENABLED=0 GOOS=linux GOARCH="$arch" "$go_bin" build -trimpath -o "$tmp/image/server" ./cmd/server
+    server_digest=$(python3 - "$tmp" <<'PY'
+import hashlib
+import pathlib
+import sys
+
+root = pathlib.Path(sys.argv[1])
+parts = (hashlib.sha256((root / name).read_bytes()).digest() for name in ("server.json", "mobile.json"))
+print(hashlib.sha256(b"".join(parts)).hexdigest())
+PY
+    )
     inputs archive -:etc:0755:0.0 -:etc/hello:0755:0.0 \
+        server.json:etc/hello/server.json:0640:0.65532 mobile.json:etc/hello/mobile.json:0640:0.65532 \
         scheduler.json:etc/hello/scheduler.json:0640:0.65532 admission.json:etc/hello/worker.json:0640:0.65532 \
         certs/ca.crt:etc/hello/postgres-ca.crt:0644:0.0 > "$tmp/image/shared.tar"
-    printf '%s\n' 'FROM scratch' 'COPY --chmod=0555 worker scheduler /' 'ADD shared.tar /' |
+    printf '%s\n' 'FROM scratch' 'COPY --chmod=0555 worker scheduler server /' 'ADD shared.tar /' |
         "$timeout_bin" -k 5s 90s docker build -q --platform "linux/$arch" -t "$shared_tag" -f - "$tmp/image" >/dev/null
     shared_image_owned=true
     inputs archive -:etc:0755:0.0 -:etc/hello:0755:0.0 -:etc/hello/fcm:0755:0.0 \
@@ -255,11 +268,12 @@ if [[ "$mode" == --preflight-services ]]; then
     [[ $(d inspect --format '{{.State.Status}} {{.State.ExitCode}}' "$worker") == 'exited 0' ]]
     assert_no_delivery
     sql -v app="$app" -v config="$config" -v reservation="$reservation" -v worker="$worker_digest" \
-        -v scheduler="$scheduler_digest" -v admission="$admission_digest" -v source="$send_source_id" <<'SQL'
+        -v scheduler="$scheduler_digest" -v admission="$admission_digest" -v server="$server_digest" -v source="$send_source_id" <<'SQL'
+CREATE ROLE fixture_server LOGIN PASSWORD 'server_only';
 CREATE ROLE fixture_scheduler LOGIN IN ROLE hello_scheduler PASSWORD 'scheduler_only';
 CREATE ROLE fixture_admission LOGIN IN ROLE hello_admission PASSWORD 'admission_only';
 GRANT EXECUTE ON FUNCTION public.acknowledge_shared_application_runtime(text,bytea,uuid)
-TO fixture_scheduler, fixture_admission;
+TO fixture_scheduler, fixture_admission, fixture_server;
 INSERT INTO notification_log_sources(id,topic,cluster_identity,topic_incarnation,active)
 VALUES(:'source','notification.send.requested','MkU3OEVBNTcwNTJENDM2Qk','preflight-fixture',true);
 INSERT INTO application_runtime_reservations(id,application_id,configuration_id,environment,generation,profile_revision,
@@ -272,7 +286,8 @@ SELECT id,1,component,login_role::regrole::oid,decode(digest,'hex')
 FROM applications CROSS JOIN (VALUES
     ('DELIVERY','fixture_worker',:'worker'),
     ('SCHEDULER','fixture_scheduler',:'scheduler'),
-    ('ADMISSION','fixture_admission',:'admission')
+    ('ADMISSION','fixture_admission',:'admission'),
+    ('SERVER','fixture_server',:'server')
 ) AS approvals(component,login_role,digest) WHERE public_id=:'app';
 GRANT EXECUTE ON FUNCTION acknowledge_application_runtime(uuid,bigint,text,bytea,uuid) TO fixture_worker;
 SQL
@@ -283,7 +298,8 @@ SQL
     create_daemon "$worker" "$worker_image"
     create_daemon "$scheduler" --entrypoint /scheduler "$shared_tag"
     create_daemon "$admission" --entrypoint /worker "$shared_tag"
-    d start "$worker" "$scheduler" "$admission" >/dev/null
+    create_daemon "$server" --entrypoint /server "$shared_tag" --deployment
+    d start "$worker" "$scheduler" "$admission" "$server" >/dev/null
     assert_running() {
         [[ $(d inspect --format '{{.State.Running}}' "$1") == true ]] || fail "$1 exited unexpectedly"
     }
@@ -310,23 +326,29 @@ SQL
     assert_renewal "$worker" DELIVERY "$worker_digest"
     assert_renewal "$scheduler" SCHEDULER "$scheduler_digest"
     assert_renewal "$admission" ADMISSION "$admission_digest"
+    assert_renewal "$server" SERVER "$server_digest"
+    prepared="SELECT onboarding_runtime_prepared(id,1,'$config') FROM applications WHERE public_id='$app'"
+    [[ $(sql -c "$prepared") == t ]] || fail 'Four live processes did not satisfy the prepared runtime gate'
     sql -c 'UPDATE notification_runtime SET sealed=true WHERE singleton'
+    [[ $(sql -c "$prepared") == f ]] || fail 'Sealed runtime remained prepared'
     [[ $(d wait "$worker") == 1 ]] || fail 'Delivery daemon did not fail closed after the runtime was sealed'
     # Shared daemons stay running, but a sealed runtime must stop extending their leases.
     deadline=$((SECONDS + 20))
     while true; do
         scheduler_lease=$(live_lease SCHEDULER "$scheduler_digest")
         admission_lease=$(live_lease ADMISSION "$admission_digest")
-        [[ -n "$scheduler_lease" || -n "$admission_lease" ]] || break
+        server_lease=$(live_lease SERVER "$server_digest")
+        [[ -n "$scheduler_lease" || -n "$admission_lease" || -n "$server_lease" ]] || break
         (( SECONDS < deadline )) || fail 'Shared runtime lease remained live after sealing'
         sleep .25
     done
     assert_running "$scheduler"
     assert_running "$admission"
-    [[ $(ledger) == '0|0|0|0|0|0|0|0|3' ]] || fail 'Unexpected durable delivery or acknowledgement evidence'
+    assert_running "$server"
+    [[ $(ledger) == '0|0|0|0|0|0|0|0|4' ]] || fail 'Unexpected durable delivery or acknowledgement evidence'
     [[ $(offsets | sort) == $'notification.delivery.updated:0:0\nnotification.send.requested:0:0' ]] || fail 'Unexpected Kafka end offsets'
     [[ $(lifecycle) == "$initial_lifecycle" ]] || fail 'Lifecycle or dispatch state changed'
-    printf '%s\n' 'Services fixture passed: delivery preflight; delivery, scheduler and admission lease renewal; seal stops renewal without activation or delivery'
+    printf '%s\n' 'Services fixture passed: four live components satisfy runtime readiness; sealing revokes readiness without activation or delivery'
     exit
 fi
 

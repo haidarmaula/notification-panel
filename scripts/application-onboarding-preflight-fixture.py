@@ -73,6 +73,29 @@ def render(root, image, network, mode):
         policies["admission.json"] = dict(
             **shared, database_url=database_url("admission"), mode="admission_only", group_id=network,
         )
+        staff = {"issuer": "preflight-fixture"}
+        for index, purpose in enumerate(("access", "refresh"), start=7):
+            key = base64.urlsafe_b64encode(bytes([index]) * 32).decode().rstrip("=")
+            staff[purpose] = dict(audience=f"fixture-{purpose}", active_kid=purpose,
+                                 keys=[dict(kid=purpose, key=key)])
+        policies["server.json"] = dict(
+            database_url=database_url("server"), api_key="fixture-api-key-not-for-deployment",
+            staff_tokens=staff, mobile_policy_file="/etc/hello/mobile.json",
+            ingress=dict(endpoint=dict(listen="127.0.0.1:8080", client_ca_pem=(certs / "ca.crt").read_text(),
+                                      server_certificate_pem=(certs / "server.crt").read_text(),
+                                      server_key_pem=(certs / "server.key").read_text()),
+                         gateway_ips=["127.0.0.1"], ip_per_minute=120, auth_ip_per_minute=8,
+                         auth_total_per_minute=60, concurrent_requests=4),
+        )
+        policies["mobile.json"] = dict(
+            current_key_version=1, fingerprint_key=encode(bytes([1]) * 32),
+            encryption_keys=[dict(version=1, key=encode(bytes([2]) * 32))],
+            projects=[dict(app_id=ids["application_id"], issuer="fixture-identity", audience="fixture-mobile",
+                           purpose="mobile", namespace="fixture-users", verification_key=encode(bytes([3]) * 32),
+                           origin_issuer="fixture-origin", origin_audience="fixture-installation", origin_key=encode(bytes([4]) * 32),
+                           routes=[dict(platform="ANDROID", address_type="FCM_REGISTRATION_TOKEN",
+                                        provider_namespace="mobile", provider_route_key="android")])],
+        )
     for name, value in policies.items():
         (root / name).write_text(json.dumps(value, separators=(",", ":")) + "\n")
 

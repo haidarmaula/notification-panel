@@ -230,11 +230,12 @@ recorded no accepted OAuth or FCM requests.
 worker from current source and runs it against isolated PostgreSQL (TLS) and
 Kafka (mTLS). It checks the report digest, unchanged lifecycle state and empty
 ledger, acknowledgement records and Kafka offsets. It then runs the normal
-delivery worker, scheduler, and admission worker against a fixture-seeded
-reservation. It checks renewal by the same process for each role, then seals the
-runtime to verify that delivery exits and the shared leases expire without any
-send. The daemons have no external network access. This mode does not run the
-server or host CLI and does not test activation.
+delivery worker, scheduler, admission worker, and protected server against a
+fixture-seeded reservation. It checks renewal by the same process for each role
+and verifies that the four leases satisfy the prepared-runtime gate. Sealing
+immediately closes that gate, delivery exits, and the shared leases expire
+without any send. The daemons have no external network access. This mode does
+not run the host CLI or test activation.
 
 `bash scripts/application-onboarding-docker.sh --preflight` adds stopped
 preparation, policy publication, exact replay and rejection of changed policy
