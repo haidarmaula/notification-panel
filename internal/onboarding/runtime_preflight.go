@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -112,6 +113,15 @@ type deliveryPreflightGuard interface {
 // existing stopped allocation name is reused so the same generation cannot
 // consume a second slot. Its result cannot acknowledge a live runtime.
 func (p *RuntimePreparer) RunDeliveryPreflight(ctx context.Context, plan RuntimePlan, evidence DeliveryPreflightEvidence) (string, error) {
+	return p.runApprovedDelivery(ctx, plan, evidence, false)
+}
+
+// StartDelivery starts the lease-gated worker without changing enrollment or dispatch.
+func (p *RuntimePreparer) StartDelivery(ctx context.Context, plan RuntimePlan, evidence DeliveryPreflightEvidence) (string, error) {
+	return p.runApprovedDelivery(ctx, plan, evidence, true)
+}
+
+func (p *RuntimePreparer) runApprovedDelivery(ctx context.Context, plan RuntimePlan, evidence DeliveryPreflightEvidence, live bool) (string, error) {
 	if p == nil || p.client == nil {
 		return "", ErrRuntimePreparationUnavailable
 	}
@@ -138,10 +148,81 @@ func (p *RuntimePreparer) RunDeliveryPreflight(ctx context.Context, plan Runtime
 	if syscall.Flock(int(dir.Fd()), syscall.LOCK_EX|syscall.LOCK_NB) != nil {
 		return name, ErrRuntimePreparationUnavailable
 	}
+	if live {
+		return p.startApprovedDelivery(ctx, check, stoppedRuntimeEnvelope(d), d.ApplicationID, evidence.PolicySHA256, config, name)
+	}
 	if err := p.replaceStoppedAllocation(ctx, check, stoppedRuntimeEnvelope(d), name); err != nil {
 		return name, err
 	}
 	return p.runDeliveryPreflight(ctx, check, d.ApplicationID, evidence.PolicySHA256, config, name)
+}
+
+func (p *RuntimePreparer) startApprovedDelivery(ctx context.Context, check func() error, stopped stoppedRuntimeConfig, app string, digest [32]byte, preflight stoppedRuntimeConfig, name string) (string, error) {
+	live := preflight
+	live.Cmd = []string{"--run-approved-delivery"}
+	live.Labels = maps.Clone(preflight.Labels)
+	live.Labels["hello.onboarding.state"] = "delivery-live"
+	actual, err := p.inspectRuntime(ctx, name)
+	if err != nil {
+		return name, err
+	}
+	if !validPreflightInspection(actual, name, live) {
+		if err := p.replaceStoppedAllocation(ctx, check, stopped, name); err != nil {
+			return name, err
+		}
+		if _, err := p.runDeliveryPreflight(ctx, check, app, digest, preflight, name); err != nil {
+			return name, err
+		}
+		actual, err = p.inspectRuntime(ctx, name)
+		if err != nil || !validPreflightInspection(actual, name, preflight) || actual.State.Status != "exited" ||
+			actual.State.ExitCode != 0 || actual.State.OOMKilled || actual.State.Error != "" ||
+			!p.verifyDeliveryPreflightOutput(ctx, actual.ID, app, digest) {
+			return name, ErrRuntimePreparationDrift
+		}
+		if err := check(); err != nil {
+			return name, err
+		}
+		response, err := p.request(ctx, http.MethodDelete, actual.ID+"?force=false&v=false", nil)
+		if err != nil {
+			return name, err
+		}
+		response.Body.Close()
+		if response.StatusCode != http.StatusNoContent {
+			return name, ErrRuntimePreparationUnavailable
+		}
+		if err := check(); err != nil {
+			return name, err
+		}
+		encoded, _ := json.Marshal(live)
+		status, err := p.preflightEffect(ctx, "create?name="+name, encoded)
+		if err != nil || (status != http.StatusCreated && status != http.StatusConflict) {
+			return name, ErrRuntimePreparationUnavailable
+		}
+		actual, err = p.inspectRuntime(ctx, name)
+		if err != nil || !validPreflightInspection(actual, name, live) {
+			return name, ErrRuntimePreparationDrift
+		}
+	}
+	if err := check(); err != nil {
+		return name, err
+	}
+	id := actual.ID
+	switch actual.State.Status {
+	case "running":
+		return name, nil
+	case "created":
+		status, err := p.preflightEffect(ctx, id+"/start", nil)
+		if err != nil || (status != http.StatusNoContent && status != http.StatusNotModified) {
+			return name, ErrRuntimePreparationUnavailable
+		}
+	default:
+		return name, ErrRuntimePreparationDrift
+	}
+	actual, err = p.inspectRuntime(ctx, id)
+	if err != nil || !validPreflightInspection(actual, name, live) || actual.ID != id || !actual.State.Running {
+		return name, ErrRuntimePreparationUnavailable
+	}
+	return name, check()
 }
 
 func (p *RuntimePreparer) replaceStoppedAllocation(ctx context.Context, check func() error, stopped stoppedRuntimeConfig, name string) error {

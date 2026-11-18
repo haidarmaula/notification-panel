@@ -63,7 +63,8 @@ func parseRuntimePreparationSettings(data []byte) (runtimePreparationSettings, e
 
 // runRuntimePreparation is a separate operator-only, one-shot preparation mode.
 // It never uses the OAuth identity or exposes a privileged command through HTTP.
-func runRuntimePreparation(preflight bool) int {
+func runRuntimePreparation(mode string) int {
+	preflight := mode != "prepare-runtime"
 	restore, err := runloop.PrepareCommandOutputs()
 	if err != nil {
 		return 1
@@ -141,6 +142,14 @@ func runRuntimePreparation(preflight bool) int {
 			settings.configurationID, settings.generation, workerPolicy); err != nil {
 			fmt.Fprintln(os.Stderr, "delivery policy publication unavailable")
 			return 1
+		}
+		if mode == "start-delivery" {
+			if _, err := preparer.StartDelivery(ctx, plan, evidence); err != nil {
+				fmt.Fprintln(os.Stderr, "delivery startup unavailable; retain reservation for reconciliation")
+				return 1
+			}
+			fmt.Fprintln(os.Stdout, "Delivery container running; live readiness must be checked separately")
+			return 0
 		}
 		if _, err := preparer.RunDeliveryPreflight(ctx, plan, evidence); err != nil {
 			fmt.Fprintln(os.Stderr, "delivery preflight unavailable; retain reservation for reconciliation")

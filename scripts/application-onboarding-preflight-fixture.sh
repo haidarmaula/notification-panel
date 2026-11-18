@@ -295,7 +295,7 @@ SQL
     kafka kafka-consumer-groups --group "$name" --topic notification.send.requested \
         --reset-offsets --to-offset 0 --execute >/dev/null
     d rm "$worker" >/dev/null
-    create_daemon "$worker" "$worker_image"
+    create_daemon "$worker" "$worker_image" --run-approved-delivery
     create_daemon "$scheduler" --entrypoint /scheduler "$shared_tag"
     create_daemon "$admission" --entrypoint /worker "$shared_tag"
     create_daemon "$server" --entrypoint /server "$shared_tag" --deployment

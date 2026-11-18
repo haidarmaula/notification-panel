@@ -186,8 +186,13 @@ loaded and renews its `DELIVERY` lease every three seconds. It waits without
 polling or publishing until its generation is current and the app is active.
 A failed renewal or loss of current generation cancels and joins both loops;
 this does not undo an already-started provider request. Unassigned legacy
-workers continue without an acknowledgement lease. The protected preparation
-command does not yet launch the normal worker process.
+workers continue without an acknowledgement lease when invoked normally.
+`controlplane start-delivery` runs (or reuses) the approved preflight and replaces
+its successful, exited container with a live worker at the same allocation name.
+The fixed `--run-approved-delivery` worker mode rejects legacy LOGINs without an
+assigned lease. A lost start response can be reconciled against the same running
+container; an exited live container requires operator reconciliation and is not
+restarted. Docker running state is not readiness and does not change dispatch.
 
 M50 adds heartbeat renewal for shared processes. Grant `EXECUTE` on
 `acknowledge_shared_application_runtime(text,bytea,uuid)` to each approved

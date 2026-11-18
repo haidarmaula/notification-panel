@@ -26,6 +26,7 @@ func TestCommandArgumentAndRoleBoundary(t *testing.T) {
 		{name: "nil policy", want: 1, loads: 1},
 		{name: "wrong role", loaded: &Configuration{role: deployment.Scheduler}, want: 1, loads: 1},
 		{name: "worker", loaded: &Configuration{role: deployment.Worker}, want: 0, loads: 1, runs: 1},
+		{name: "approved delivery rejects admission", args: []string{"--run-approved-delivery"}, loaded: &Configuration{role: deployment.Worker}, want: 1, loads: 1},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var out, logs bytes.Buffer

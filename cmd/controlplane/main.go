@@ -24,16 +24,14 @@ func run(args []string) int {
 	signal.Ignore(syscall.SIGPIPE)
 	if len(args) == 1 {
 		switch args[0] {
-		case "prepare-runtime":
-			return runRuntimePreparation(false)
-		case "preflight-delivery":
-			return runRuntimePreparation(true)
+		case "prepare-runtime", "preflight-delivery", "start-delivery":
+			return runRuntimePreparation(args[0])
 		case "apply-first-activation":
 			return runFirstActivation()
 		}
 	}
 	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, "controlplane accepts prepare-runtime, preflight-delivery or apply-first-activation")
+		fmt.Fprintln(os.Stderr, "controlplane accepts prepare-runtime, preflight-delivery, start-delivery or apply-first-activation")
 		return 2
 	}
 	restore, err := runloop.PrepareCommandOutputs()

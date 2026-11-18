@@ -56,6 +56,7 @@ func (e *preflightEngine) RoundTrip(request *http.Request) (*http.Response, erro
 		}
 		actual := runtimeInspection{ID: e.id, Name: "/" + e.name, Config: e.config, HostConfig: e.config.HostConfig}
 		actual.State.Status = e.state
+		actual.State.Running = e.state == "running"
 		for _, stored := range e.config.HostConfig.Mounts {
 			actual.Mounts = append(actual.Mounts, struct {
 				Type, Source, Destination string
@@ -65,7 +66,7 @@ func (e *preflightEngine) RoundTrip(request *http.Request) (*http.Response, erro
 		_ = json.NewEncoder(recorder).Encode(actual)
 	case request.Method == http.MethodDelete:
 		e.deletedBy = path
-		if path != e.id || request.URL.RawQuery != "force=false&v=false" || e.state != "created" {
+		if path != e.id || request.URL.RawQuery != "force=false&v=false" || (e.state != "created" && e.state != "exited") {
 			recorder.WriteHeader(http.StatusConflict)
 			break
 		}
@@ -84,7 +85,10 @@ func (e *preflightEngine) RoundTrip(request *http.Request) (*http.Response, erro
 		}
 		e.starts++
 		e.state = "exited"
-		if e.lostResponse == "start" {
+		if len(e.config.Cmd) == 1 && e.config.Cmd[0] == "--run-approved-delivery" {
+			e.state = "running"
+		}
+		if e.lostResponse == "start" || (e.state == "running" && e.lostResponse == "live-start") {
 			e.lostResponse = ""
 			return nil, errors.New("lost Engine start response")
 		}
@@ -193,6 +197,26 @@ func TestDeliveryPreflightDoesNotStartConcurrentInertAllocation(t *testing.T) {
 	}
 	if engine.deletes != 1 || engine.starts != 1 {
 		t.Fatalf("deletes=%d, starts=%d", engine.deletes, engine.starts)
+	}
+}
+
+func TestStartApprovedDeliveryReconcilesLostStart(t *testing.T) {
+	engine, config, applicationID, digest := newPreflightFixture(t)
+	engine.lostResponse = "live-start"
+	preparer := &RuntimePreparer{client: &http.Client{Transport: engine}}
+	stopped := stoppedRuntimeEnvelope(preparationPlan(t).Delivery())
+	start := func() error {
+		_, err := preparer.startApprovedDelivery(t.Context(), func() error { return nil }, stopped, applicationID, digest, config, engine.name)
+		return err
+	}
+	if err := start(); !errors.Is(err, ErrRuntimePreparationUnavailable) {
+		t.Fatalf("want ambiguous start, got %v", err)
+	}
+	if err := start(); err != nil {
+		t.Fatalf("reconcile live container: %v", err)
+	}
+	if engine.creates != 2 || engine.deletes != 1 || engine.starts != 2 || engine.state != "running" {
+		t.Fatalf("unexpected effects: creates=%d deletes=%d starts=%d state=%s", engine.creates, engine.deletes, engine.starts, engine.state)
 	}
 }
 

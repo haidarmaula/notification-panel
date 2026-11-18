@@ -31,6 +31,9 @@ func (c *Configuration) startDeliveryLease(ctx context.Context, pool *pgxpool.Po
 		return nil, errDeliveryLease
 	}
 	if generation == 0 {
+		if c.requireDeliveryLease {
+			return nil, errDeliveryLease
+		}
 		return nil, nil
 	}
 	instance := pgtype.UUID{Valid: true}

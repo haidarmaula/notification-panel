@@ -24,16 +24,17 @@ var ErrConfiguration = deployment.ErrConfiguration
 
 // Configuration is loaded once and retained privately for one process role.
 type Configuration struct {
-	monitoring *observability.Admin
-	role       deployment.Component
-	database   *pgxpool.Config
-	source     dispatch.SourceManifest
-	broker     kafka.ScopedProducerConfig
-	admission  dispatch.KafkaAdmissionConfig
-	scheduler  scheduler.Config
-	retry      runloop.RetryPolicy
-	delivery   *deliveryConfig
-	policyHash [32]byte
+	monitoring           *observability.Admin
+	role                 deployment.Component
+	database             *pgxpool.Config
+	source               dispatch.SourceManifest
+	broker               kafka.ScopedProducerConfig
+	admission            dispatch.KafkaAdmissionConfig
+	scheduler            scheduler.Config
+	retry                runloop.RetryPolicy
+	delivery             *deliveryConfig
+	policyHash           [32]byte
+	requireDeliveryLease bool
 }
 
 // Load validates a caller-owned trusted policy stream without network I/O.

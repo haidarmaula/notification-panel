@@ -29,7 +29,8 @@ func command(ctx context.Context, role deployment.Component, args []string, stdo
 		}
 		return 0
 	}
-	if len(args) != 0 {
+	approvedDelivery := role == deployment.Worker && len(args) == 1 && args[0] == "--run-approved-delivery"
+	if len(args) != 0 && !approvedDelivery {
 		_, _ = io.WriteString(stderr, "invalid arguments; use --help\n")
 		return 2
 	}
@@ -41,6 +42,13 @@ func command(ctx context.Context, role deployment.Component, args []string, stdo
 	if err != nil || cfg == nil || cfg.role != role {
 		logger.ErrorContext(ctx, "deployment policy rejected")
 		return 1
+	}
+	if approvedDelivery {
+		if cfg.delivery == nil || !cfg.delivery.acceptsPreparation() || cfg.monitoring != nil {
+			logger.ErrorContext(ctx, "approved delivery policy rejected")
+			return 1
+		}
+		cfg.requireDeliveryLease = true
 	}
 	err = run(cfg, ctx, logger)
 	// Only a clean cancellation is normal. A joined producer-drain failure must
