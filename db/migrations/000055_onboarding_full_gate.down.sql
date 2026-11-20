@@ -1,0 +1,5 @@
+DROP TRIGGER require_onboarding_full_ready ON public.application_dispatch_policy;
+DROP FUNCTION public.require_onboarding_full_ready();
+DROP TRIGGER record_onboarding_pilot_attempt ON public.notification_delivery_intents;
+DROP FUNCTION hello_delivery_internal.record_onboarding_pilot_attempt();
+DROP TABLE hello_delivery_internal.onboarding_pilot_attempts;

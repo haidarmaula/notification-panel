@@ -2,6 +2,11 @@ package onboarding
 
 import "log/slog"
 
+func (CohortTargetClaim) String() string               { return "[REDACTED]" }
+func (v CohortTargetClaim) GoString() string           { return v.String() }
+func (v CohortTargetClaim) LogValue() slog.Value       { return slog.StringValue(v.String()) }
+func (CohortTargetClaim) MarshalJSON() ([]byte, error) { return []byte(`"[REDACTED]"`), nil }
+
 func (FCMRequest) String() string                     { return "[REDACTED]" }
 func (v FCMRequest) GoString() string                 { return v.String() }
 func (v FCMRequest) LogValue() slog.Value             { return slog.StringValue(v.String()) }

@@ -10,6 +10,7 @@ DECLARE
     allowed_columns text[]:=ARRAY['id','project_id','operator_role','origin_epoch','source_epoch','expected_revision',
         'previous_status','destination','ownership_evidence','writer_fence_evidence','cohort_fence_evidence','retired_writer_roles','expires_at'];
     allowed_function oid;
+    onboarding_function oid;
 BEGIN
     FOREACH group_name IN ARRAY ARRAY['hello_application_lifecycle_issuer','hello_application_lifecycle_operator'] LOOP
         SELECT * INTO r FROM pg_roles WHERE rolname=group_name;
@@ -20,6 +21,9 @@ BEGIN
         THEN RAISE EXCEPTION 'expected a dedicated non-owning NOLOGIN group: %',group_name; END IF;
         allowed_function:=CASE group_name WHEN 'hello_application_lifecycle_issuer' THEN
             'public.revoke_application_lifecycle(uuid,uuid)'::regprocedure ELSE 'public.apply_application_lifecycle(uuid,uuid)'::regprocedure END;
+        onboarding_function:=CASE group_name WHEN 'hello_application_lifecycle_issuer' THEN
+            NULL
+            ELSE to_regprocedure('public.apply_onboarding_first_activation(uuid,uuid,uuid)') END;
         IF EXISTS(SELECT FROM pg_class c WHERE c.relnamespace='public'::regnamespace AND c.relkind IN ('r','p','v','m')
               AND has_table_privilege(r.oid,c.oid,'SELECT,INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER,MAINTAIN'))
            OR EXISTS(SELECT FROM pg_class c JOIN pg_attribute a ON a.attrelid=c.oid AND a.attnum>0 AND NOT a.attisdropped
@@ -29,11 +33,15 @@ BEGIN
                 AND NOT (group_name='hello_application_lifecycle_issuer' AND c.oid='public.application_lifecycle_grants'::regclass
                     AND p.privilege='INSERT' AND a.attname=ANY(allowed_columns)))
            OR EXISTS(SELECT FROM pg_proc f WHERE f.pronamespace='public'::regnamespace AND f.prosecdef AND f.oid<>allowed_function
+                AND f.oid IS DISTINCT FROM onboarding_function
                 AND has_function_privilege(r.oid,f.oid,'EXECUTE'))
         THEN RAISE EXCEPTION 'unexpected lifecycle profile privileges for %',group_name; END IF;
         EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I',current_database(),group_name);
         EXECUTE format('GRANT USAGE ON SCHEMA public TO %I',group_name);
         EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO %I',allowed_function::regprocedure,group_name);
+        IF onboarding_function IS NOT NULL THEN
+            EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO %I',onboarding_function::regprocedure,group_name);
+        END IF;
     END LOOP;
 END;
 $profile$;

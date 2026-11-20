@@ -4,11 +4,10 @@ Status: **implemented locally; optional and not deployed by this artifact**.
 The [OpenAPI contract](../contracts/application-onboarding.openapi.json) lists
 only the routes mounted by the current setup runtime.
 
-This is a partial setup capability. It supports readiness, allowlisted enrollment
-configuration, FCM candidate staging and OAuth verification, read-only operation
-and approval metadata, and a dispatch hold. It does not provide end-to-end
-activation, promotion, device testing, cohort creation, or dispatch release.
-Those routes are not mounted.
+The protected setup API supports readiness, enrollment configuration, candidate
+staging, OAuth verification, activation requests, test installation discovery,
+cohort dry-run requests, and dispatch hold/release. Lifecycle and dispatch
+execution use protected operator commands. Credential promotion remains pending.
 
 The [frontend handoff](application-onboarding-frontend-handoff.md) provides the
 step order, examples, polling rules and action gates for the separate UI session.
@@ -35,11 +34,12 @@ There is no caller-supplied policy path or environment toggle. The production
 `--deployment` command still uses its protected server policy without falling
 back to local configuration.
 
-The dashboard BFF permits these same eight setup routes under
+The dashboard BFF forwards setup and release requests under
 `/bff/api/admin/apps/{app_id}/onboarding`. It preserves setup ETags, idempotency
 keys/replay acknowledgement, and bounded retry delays. Operation locations are
 rewritten into the same app's BFF namespace. Queries and duplicate concurrency
-headers are rejected, and only FCM upload receives the 96 KiB outer-body budget;
+headers are rejected, except that the test installation list accepts the
+`after` cursor. Only FCM upload receives the 96 KiB outer-body budget;
 other requests retain the 64 KiB limit. Browser writes still require the current
 session, exact Origin and CSRF token. The dashboard setup screen is available at
 `/apps/admin/applications/{app_id}/onboarding`, linked from registry detail. It
@@ -47,7 +47,7 @@ supports profile configuration, file upload and OAuth polling, with explicit
 review after a stale version and same-request retry after an unknown outcome.
 Credentials remain in component memory only and are cleared after definitive
 upload success or navigation; they are not stored in browser storage or query
-caches. Activation, device testing and release remain unavailable.
+caches. The existing dashboard screen still covers the setup steps only.
 
 Every route uses the existing API key and staff bearer authentication chain and
 the current database-backed `applications.manage` guard (SUPER_ADMIN). A token
@@ -68,6 +68,11 @@ with query parameters are rejected. Responses carry `Cache-Control: no-store`.
 | `GET /api/v1/admin/apps/{app_id}/onboarding/operations/{operation_id}` | — | `200` sanitized, app-scoped operation |
 | `GET /api/v1/admin/apps/{app_id}/onboarding/approvals` | — | `200` safe approval metadata list |
 | `POST /api/v1/admin/apps/{app_id}/onboarding/dispatch/hold` | Reason | `200` readiness; dispatch held |
+| `POST /api/v1/admin/apps/{app_id}/onboarding/dispatch/release` | `mode`, `cohort_id`, `evidence_id` | `202` queued release operation and `Location` |
+| `POST /api/v1/admin/apps/{app_id}/onboarding/activate` | `configuration_id` | `202` queued activation and `Location` |
+| `GET /api/v1/admin/apps/{app_id}/onboarding/test-installations` | Optional `after` UUID cursor | `200` scoped installation page |
+| `PUT /api/v1/admin/apps/{app_id}/onboarding/test-cohort` | `installation_ids`, `reason`, `evidence_id` | `202` queued cohort verification and `Location` |
+| `GET /api/v1/admin/apps/{app_id}/onboarding/operations/{operation_id}/targets` | — | `200` per-target cohort status |
 
 The response envelope is `{ "success": true, "message": "…", "data": … }`.
 Errors use the shared envelope with `success: false` and `data: null`.
@@ -143,6 +148,45 @@ success cannot fill target-permission or device-delivery checks.
 it does not issue approvals. `POST .../dispatch/hold` synchronously closes the
 dispatch policy and leaves application lifecycle status unchanged.
 
+## Activation and test cohort
+
+The operator workflow starts with `issue-first-activation` and
+`apply-first-activation`. These commands use separate database roles. An
+activation request stays pending until the required runtime leases and the
+credential verification are current. Once applied, the app is ACTIVE and dispatch
+is HELD.
+
+After enrollment, use the installation UUIDs from `GET .../test-installations`.
+An operator uses `approve-cohort` to authorize the exact roster. Submit the
+approval UUID as `evidence_id` on the cohort request, then poll the operation
+and its `/targets` list. A target may show a null outcome before the verifier
+finishes. PASSED establishes dry-run permission for that binding. The operator
+then approves and applies the pilot route for the verified binding.
+
+## Dispatch release
+
+Submit `mode` (`PILOT` or `FULL`), the current `cohort_id`, and `evidence_id`
+(the UUID of a matching, unconsumed onboarding approval, not a dispatch grant).
+PILOT queues from HELD; FULL queues from PILOT. The application must be ACTIVE
+with a current configuration and runtime generation. A `202` only records a
+request; it does not change dispatch mode. Poll `Location` for completion.
+
+A reviewed issuer creates the approval with `approve-release` and uses
+`delegate-release` to issue and bind a dispatch grant to the accepted operation.
+A separate operator runs `controlplane apply-release`; PostgreSQL revalidates
+staff session authority, approval, runtime and the PILOT/FULL gates. FULL still
+requires signed `DELIVERED` evidence, not merely provider acceptance.
+
+A pending release with a current approval and a usable grant, or one still
+awaiting its grant, occupies the mutation slot (`409` for another release).
+If its approval becomes unusable or its unapplied grant expires or is revoked,
+submit a valid same-mode request with the latest setup ETag and a new idempotency
+key. The API atomically marks the old operation `SUPERSEDED` with failure code
+`RELEASE_GRANT_UNAVAILABLE` and queues the new one. A replay of the old key still
+returns its original acceptance. The old grant cannot be rebound; the issuer
+must issue and bind a new one. A still-valid approval may be reused until a
+release commits.
+
 ## Local verification
 
 The fixture uses synthetic metadata and a network-isolated pinned Postgres
@@ -153,9 +197,11 @@ go test ./internal/features/applications/...
 go test ./internal/onboarding/...
 scripts/application-onboarding.sh
 scripts/server-grants.sh
+scripts/application-onboarding-preflight-fixture.sh --preflight-services
 ```
 
 The application-onboarding fixture exercises migration backfill, configuration
 scoping, verifier roles and sessions, operation idempotency, and rollback
-guards. The route and request schemas are maintained in the linked OpenAPI
-artifact.
+guards. The composed services fixture queues both release modes over HTTPS,
+exercises grant expiry and revocation recovery, and runs the protected release
+command. Its FCM provider and device receipt are simulated.

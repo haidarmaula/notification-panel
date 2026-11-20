@@ -103,6 +103,16 @@ an automatic replacement for the currently approved offline lifecycle procedure.
 
 ## Validation and practical limits
 
+The Docker services fixture passed on 2026-11-20. It registered a new application,
+uploaded a synthetic credential through the protected provisioner, verified OAuth,
+and activated the application with dispatch HELD after four current runtime
+leases. It enrolled a synthetic Android device over HTTPS, approved and verified
+its cohort, opened PILOT, and sent an HTTPS campaign through the normal pipeline.
+It rejected FULL with provider acceptance alone, recorded signed DELIVERED and
+then applied FULL. The fixture bootstraps synthetic trust and scoped roles. Its
+provider and device are simulators. Device and Firebase evidence for a real
+target environment remain separate.
+
 The subsequent M46 slice passed real PostgreSQL approval and role checks, Linux
 policy publication tests, simulated Engine failure/replay tests and the existing
 stopped-container Docker fixture. The actual worker preflight ran in Docker on
@@ -212,16 +222,17 @@ to deliver, and no new general-send endpoint or automatic ACTIVE transition exis
 
 ## Remaining implementation
 
-1. ONB-05/06: extend the validated delivery policy to a runnable, generation-fenced
-   worker with app-scoped execution authority. Complete shared policy publication,
-   serialized rollout and authenticated live acknowledgements, then install the
-   DB-delegated first-activation executor with SQL-role and crash recovery tests.
-2. ONB-07/08: compose immutable mobile trust/profile generations, approved external
-   identity mapping, test cohort/route approval and target-permission dry-run.
-3. ONB-09/10: guarded pilot/full release, signed per-platform test receipts,
-   credential promotion/drain/rollback and reference-checked orphan/old-file cleanup.
-4. ONB-11/12: activation/device/release dashboard steps, production runtime and verifier allocation,
-   independent encrypted backup delivery, operational metrics and rollout drills.
+The API and BFF now accept activation, cohort and dispatch release requests.
+Dedicated operator commands authorize and apply the resulting transitions. The
+combined services fixture exercises registration, protected credential upload,
+scoped runtime leases, mobile enrollment, target dry-run, and the release
+sequence. Treat each recorded test result as evidence only for the stages it
+actually reached.
+
+ONB-10 still covers credential promotion, drain, rollback and reference-checked
+file cleanup. ONB-11 covers the separate frontend work. ONB-12 covers production
+runtime and verifier allocation, real Firebase and device evidence, encrypted
+backup and restore drills, and operational rollout.
 
 The production verifier scope registry is installed by the trusted DB owner for a
 restricted per-app verifier LOGIN. The local synthetic allocator does not provide
@@ -230,10 +241,5 @@ Reconcile those role OIDs against the target cluster after restore before starti
 verifiers. Fingerprint key changes also require preserving the replay window;
 a multi-key replay migration/rotation path is not implemented in this slice.
 
-Do not mount future activation/promotion/release handlers merely because request
-DTOs and intent-validation code exist. Their executors and privileged transitions
-are not implemented or validated, and remain absent from the implemented OpenAPI.
-
-The [frontend handoff](../api/application-onboarding-frontend-handoff.md) records
-the eight active endpoints, request examples, error/polling/replay handling and
-the actions that must remain unavailable until these backend gates are complete.
+The [frontend handoff](../api/application-onboarding-frontend-handoff.md)
+records the active routes, request examples, action gates and polling behavior.

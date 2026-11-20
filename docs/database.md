@@ -1003,3 +1003,76 @@ The scoped check extends the live M45 reservation validation with the approved
 worker identity and digest, the configuration's exact file reference, and the
 stored Firebase target project and account email. It returns a boolean and grants
 no table access or write privilege. Rollback refuses retained scope history.
+
+### Onboarding cohort approval provisioning (000053)
+
+A dedicated login with an `APPROVAL_IMPORTER` scope for the application and
+its environment can be granted execute-only access to
+`provision_onboarding_cohort_approval`. The importer attests external consent
+review by supplying the issuer, evidence digest and exact reviewed binding IDs;
+enrollment alone is not approval. The function records a `TEST_COHORT` approval
+and its live Android roster atomically against the current configuration, runtime
+lineage and policy revisions. It neither queues an operation nor grants dispatch
+release authority. The HTTP server receives no importer grant.
+
+### Onboarding PILOT gate (000054)
+
+M39 still authorizes dispatch transitions. For an app with an activated onboarding
+configuration, M54 also checks that the current cohort is a completed M53 operation
+and that its exact approved installation and binding roster matches the active pilot
+routes. The cohort-level result and every member's target-permission check must still
+be fresh when the policy enters PILOT. Legacy releases without activated onboarding
+and transitions to HELD are unchanged by M54.
+
+### Onboarding FULL gate (000055)
+
+M55 adds a database fence to M39's authorized PILOT-to-FULL transition. Every
+configured enrollment platform needs a current approved cohort binding with both
+provider acceptance and a `DELIVERED` observation from the signed receipt path
+for the same delivery. `OPENED` alone does not qualify. Receipt ingestion may
+precede persistence of provider acceptance.
+
+A private table captures first-attempt provenance from the scoped worker login,
+current runtime generation/configuration, exact route revision and applied PILOT
+grant. Pre-M55 attempts and retried deliveries cannot prove that the receipt
+corresponds to the accepted attempt. Platforms without a provable current pilot
+delivery block FULL. Pilot targets must match the configured enrollment platforms.
+
+### Queued onboarding dispatch release (000056)
+
+Grant `EXECUTE` on `public.bind_onboarding_release(uuid,uuid,bigint)` explicitly
+to the reviewed M39 issuer login, not the issuer group or the executor. Run
+`scripts/sql/bind-onboarding-release.sql` as that same login with `operation_id`,
+`grant_id`, and `runtime_generation`. The function binds an existing queued
+PILOT or FULL operation to an existing grant issued by that login. It does not
+issue a grant or release dispatch. A binding is one-to-one and immutable. Exact
+replay returns the operation ID even after application; it grants no new authority.
+
+The separate dispatch executor uses `controlplane apply-release`. Binding and
+execution recheck the exact onboarding approval recorded by HTTP; execution
+consumes the approval atomically with the dispatch grant and operation completion.
+The server receives only the scoped `supersede_unusable_onboarding_release`
+routine via `deploy/postgres/server-grants.sql`, not grant or delegation table
+access. A valid new same-mode HTTP request can retire an expired or revoked,
+unapplied delegation and queue a replacement in one transaction. The original
+binding and audit history are retained; the issuer binds a fresh grant to the
+new operation.
+
+### Scoped onboarding operator workflow (000057–000061)
+
+M57 constrains the onboarding activation issuer to its DBA-installed application
+and executor scope. Use the dedicated grants installer and
+`controlplane issue-first-activation` followed by `apply-first-activation`
+under the separate executor login. M60 installs an initially HELD dispatch
+policy from the approved runtime profile and records the chosen TTLs. It leaves
+existing policy untouched.
+
+M58 exposes safe cohort outcomes and resolves approved installation UUIDs to
+current bindings. Use `approve-cohort`, then submit the scoped cohort request
+through the API. M61 allows a scoped reviewer and executor to approve and apply
+a pilot route for bindings that passed this dry-run.
+
+For current release requests, M59 provides `approve-release` and
+`delegate-release` under an app-scoped reviewer. Delegation issues and binds
+the grant in one transaction. A separate executor applies it. The manual M56
+binding path above remains available to the existing reviewed issuer.

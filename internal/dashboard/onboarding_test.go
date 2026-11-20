@@ -22,8 +22,9 @@ func TestOnboardingAllowlist(t *testing.T) {
 		{"GET", "/", false}, {"GET", "/fcm", false}, {"POST", "/fcm", false},
 		{"PUT", "/fcm/verify", false}, {"GET", "/operations/not-a-uuid", false},
 		{"GET", "/operations/" + onboardingTestOperation + "/extra", false},
-		{"POST", "/activate", false}, {"POST", "/test-cohort", false},
-		{"POST", "/dispatch/release", false}, {"POST", "/fcm/promote", false},
+		{"POST", "/activate", true}, {"POST", "/test-cohort", false}, {"PUT", "/test-cohort", true},
+		{"GET", "/test-installations", true}, {"GET", "/operations/" + onboardingTestOperation + "/targets", true},
+		{"POST", "/dispatch/release", true}, {"GET", "/dispatch/release", false}, {"POST", "/fcm/promote", false},
 		{"DELETE", "", false}, {"PATCH", "/enrollment", false},
 	} {
 		if got := allowed(tc.method, onboardingTestPath+tc.suffix); got != tc.want {

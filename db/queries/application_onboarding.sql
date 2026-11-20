@@ -93,6 +93,9 @@ WHERE application_id=$1;
 -- name: HasApplicationOnboardingMutation :one
 SELECT EXISTS(SELECT FROM public.application_onboarding_operations WHERE application_id=$1 AND kind<>'VERIFY' AND state IN ('PENDING','RUNNING'));
 
+-- name: SupersedeUnusableOnboardingRelease :exec
+SELECT public.supersede_unusable_onboarding_release(sqlc.arg(application_id)::bigint,sqlc.arg(kind)::text);
+
 -- name: GetApplicationOnboardingApproval :one
 SELECT * FROM public.application_onboarding_approvals WHERE application_id=$1 AND id=$2;
 

@@ -22,6 +22,8 @@ type Querier interface {
 	CampaignHasProtectedChildren(ctx context.Context, arg CampaignHasProtectedChildrenParams) (bool, error)
 	CheckScopedObservedRead(ctx context.Context, arg CheckScopedObservedReadParams) (bool, error)
 	ClaimApplicationOnboardingVerification(ctx context.Context, arg ClaimApplicationOnboardingVerificationParams) (pgtype.UUID, error)
+	// Keep the nullable text mapping of the onboarding setup environment in sqlc.
+	ClaimOnboardingCohortTarget(ctx context.Context, arg ClaimOnboardingCohortTargetParams) (ClaimOnboardingCohortTargetRow, error)
 	ClaimReplayControl(ctx context.Context, arg ClaimReplayControlParams) (int64, error)
 	ClearFinishedReplayClaim(ctx context.Context, arg ClearFinishedReplayClaimParams) (int64, error)
 	ClearScopedCampaignTargets(ctx context.Context, arg ClearScopedCampaignTargetsParams) error
@@ -253,11 +255,13 @@ type Querier interface {
 	ExpireUnpreparedCampaign(ctx context.Context, arg ExpireUnpreparedCampaignParams) error
 	FailRecoveredDelivery(ctx context.Context, arg FailRecoveredDeliveryParams) (NotificationDeliveryIntent, error)
 	FinalizeExecutionCampaign(ctx context.Context, arg FinalizeExecutionCampaignParams) (int64, error)
+	FinalizeOnboardingCohort(ctx context.Context, arg FinalizeOnboardingCohortParams) (bool, error)
 	FindApplicationFCMIngestion(ctx context.Context, arg FindApplicationFCMIngestionParams) (ApplicationOnboardingIngestion, error)
 	FindApplicationOnboardingOperation(ctx context.Context, arg FindApplicationOnboardingOperationParams) (ApplicationOnboardingOperation, error)
 	FindApplicationOnboardingRequest(ctx context.Context, arg FindApplicationOnboardingRequestParams) (ApplicationOnboardingRequest, error)
 	FindOnboardingTestInstallation(ctx context.Context, arg FindOnboardingTestInstallationParams) (int64, error)
 	FinishApplicationOnboardingVerification(ctx context.Context, arg FinishApplicationOnboardingVerificationParams) (bool, error)
+	FinishOnboardingCohortTarget(ctx context.Context, arg FinishOnboardingCohortTargetParams) (int64, error)
 	FinishReplayAttempt(ctx context.Context, arg FinishReplayAttemptParams) (int64, error)
 	FreezeReceiptMetadata(ctx context.Context, arg FreezeReceiptMetadataParams) error
 	// Keep staff row when app/grant is absent, for correct 401/404 distinctions.
@@ -349,6 +353,7 @@ type Querier interface {
 	HoldApplicationOnboardingDispatch(ctx context.Context, applicationID int64) (int64, error)
 	HoldCampaignPreparation(ctx context.Context, arg HoldCampaignPreparationParams) error
 	HoldResultDispatch(ctx context.Context, applicationID int64) error
+	InitializeOnboardingCohort(ctx context.Context, arg InitializeOnboardingCohortParams) (int64, error)
 	InsertDeliveryUpdate(ctx context.Context, arg InsertDeliveryUpdateParams) error
 	InsertInstallationBinding(ctx context.Context, arg InsertInstallationBindingParams) error
 	InsertPreparationIntents(ctx context.Context, arg InsertPreparationIntentsParams) (InsertPreparationIntentsRow, error)
@@ -400,6 +405,8 @@ type Querier interface {
 	// ==========================================
 	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error)
 	ListNotificationsWithFilters(ctx context.Context, arg ListNotificationsWithFiltersParams) ([]ListNotificationsWithFiltersRow, error)
+	ListOnboardingCohortTargetStatus(ctx context.Context, arg ListOnboardingCohortTargetStatusParams) ([]ListOnboardingCohortTargetStatusRow, error)
+	ListOnboardingTestInstallations(ctx context.Context, arg ListOnboardingTestInstallationsParams) ([]ListOnboardingTestInstallationsRow, error)
 	ListRecoverableQueuedCampaigns(ctx context.Context, arg ListRecoverableQueuedCampaignsParams) ([]ListRecoverableQueuedCampaignsRow, error)
 	// ==========================================
 	// LIST
@@ -571,6 +578,7 @@ type Querier interface {
 	StaffSessionActive(ctx context.Context, arg StaffSessionActiveParams) (bool, error)
 	StoreSendKey(ctx context.Context, arg StoreSendKeyParams) error
 	SupersedeApplicationOnboardingMutations(ctx context.Context, applicationID int64) error
+	SupersedeUnusableOnboardingRelease(ctx context.Context, arg SupersedeUnusableOnboardingReleaseParams) error
 	TouchMobileInstallation(ctx context.Context, arg TouchMobileInstallationParams) error
 	// ==========================================
 	// UPDATE

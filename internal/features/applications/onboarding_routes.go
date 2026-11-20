@@ -37,4 +37,9 @@ func RegisterOnboardingSetup(mux *http.ServeMux, q sqlc.Querier, service *Onboar
 	mux.Handle("GET "+prefix+"/operations/{operation_id}", wrap(h.Operation))
 	mux.Handle("GET "+prefix+"/approvals", wrap(h.Approvals))
 	mux.Handle("POST "+prefix+"/dispatch/hold", wrap(h.Hold))
+	mux.Handle("POST "+prefix+"/dispatch/release", wrap(h.Release))
+	mux.Handle("POST "+prefix+"/activate", wrap(h.Activate))
+	mux.Handle("GET "+prefix+"/test-installations", wrap(service.TestInstallationsHTTP))
+	mux.Handle("PUT "+prefix+"/test-cohort", wrap(h.TestCohort))
+	mux.Handle("GET "+prefix+"/operations/{operation_id}/targets", wrap(service.CohortTargetsHTTP))
 }

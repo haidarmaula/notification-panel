@@ -107,6 +107,7 @@ INSERT INTO server_grant_spec VALUES
 ('application_provider_checks','SELECT',NULL),
 ('application_onboarding_verifier_scopes','SELECT',NULL),
 ('application_onboarding_approvals','SELECT',NULL),
+('application_onboarding_cohort_target_status','SELECT',NULL),
 ('application_onboarding_requests','SELECT',NULL),
 ('application_onboarding_requests','INSERT','application_id,actor_id,kind,idempotency_key,request_fingerprint,fingerprint_key_version,response_data');
 CREATE TEMP TABLE server_sequence_spec(sequence_name name PRIMARY KEY) ON COMMIT DROP;
@@ -194,6 +195,9 @@ BEGIN
     END LOOP;
     IF EXISTS(
         SELECT FROM pg_proc f WHERE f.pronamespace='public'::regnamespace AND f.prosecdef
+          AND (f.oid IS DISTINCT FROM to_regprocedure('public.supersede_unusable_onboarding_release(bigint,text)')::oid
+               OR has_function_privilege(r.oid,f.oid,'EXECUTE WITH GRANT OPTION') OR EXISTS(
+                   SELECT FROM pg_auth_members m WHERE m.roleid=r.oid AND has_function_privilege(m.member,f.oid,'EXECUTE WITH GRANT OPTION')))
           AND (has_function_privilege(r.oid,f.oid,'EXECUTE') OR EXISTS(
               SELECT FROM pg_auth_members m WHERE m.roleid=r.oid AND has_function_privilege(m.member,f.oid,'EXECUTE')))
     ) THEN
@@ -210,6 +214,9 @@ BEGIN
     END LOOP;
     EXECUTE format('GRANT CONNECT ON DATABASE %I TO %I',current_database(),server_role);
     EXECUTE format('GRANT USAGE ON SCHEMA public TO %I',server_role);
+    IF to_regprocedure('public.supersede_unusable_onboarding_release(bigint,text)') IS NOT NULL THEN
+        GRANT EXECUTE ON FUNCTION public.supersede_unusable_onboarding_release(bigint,text) TO hello_server;
+    END IF;
 END;
 $$;
 COMMIT;

@@ -17,7 +17,7 @@ MANIFEST = ROOT / "docs/contracts/application-scope-inventory.json"
 def source_inventory():
     tables = set()
     for path in (ROOT / "db/migrations").glob("*.up.sql"):
-        tables.update(re.findall(r"\bCREATE TABLE\s+(\w+)\s*\(", path.read_text(), re.I))
+        tables.update(re.findall(r"\bCREATE TABLE\s+(?:\w+\.)?(\w+)\s*\(", path.read_text(), re.I))
     queries = {}
     for path in sorted((ROOT / "db/queries").glob("*.sql")):
         names = re.findall(r"^-- name: (\w+) :\w+", path.read_text(), re.M)

@@ -9,6 +9,7 @@ BEGIN;
 SET LOCAL search_path=pg_catalog,pg_temp;
 DO $$
 DECLARE runtime_group pg_roles%ROWTYPE; principal record;
+    dispatch_bootstrap oid := to_regprocedure('public.bootstrap_onboarding_held_dispatch(uuid,text,bigint,integer,integer)');
     worker_preflight oid := to_regprocedure('public.check_application_onboarding_worker_preflight(uuid,uuid,bytea,text,text,bytea,text)');
 BEGIN
     IF EXISTS(SELECT FROM pg_class WHERE oid IN (
@@ -16,7 +17,7 @@ BEGIN
         'public.application_runtime_executor_scopes'::regclass,
         'public.application_runtime_reservations'::regclass
     ) AND relowner<>current_user::regrole::oid)
-    OR EXISTS(SELECT FROM pg_proc WHERE oid=worker_preflight AND proowner<>current_user::regrole::oid)
+    OR EXISTS(SELECT FROM pg_proc WHERE oid IN (worker_preflight,dispatch_bootstrap) AND proowner<>current_user::regrole::oid)
     THEN RAISE EXCEPTION 'trusted runtime preparation schema owner required'; END IF;
     SELECT * INTO runtime_group FROM pg_roles WHERE rolname='hello_onboarding_runtime_executor';
     IF NOT FOUND OR runtime_group.rolcanlogin OR EXISTS(SELECT FROM pg_auth_members WHERE member=runtime_group.oid)
@@ -41,13 +42,18 @@ BEGIN
                 AND CASE WHEN c.relkind='S' THEN has_sequence_privilege(principal.oid,c.oid,'SELECT,UPDATE,USAGE') ELSE false END)
            OR EXISTS(SELECT FROM pg_proc f WHERE f.pronamespace='public'::regnamespace AND f.prosecdef
                 AND (has_function_privilege(principal.oid,f.oid,'EXECUTE WITH GRANT OPTION')
-                    OR (has_function_privilege(principal.oid,f.oid,'EXECUTE') AND f.oid IS DISTINCT FROM worker_preflight AND f.oid NOT IN (
+                    OR (has_function_privilege(principal.oid,f.oid,'EXECUTE') AND f.oid IS DISTINCT FROM worker_preflight
+                      AND f.oid IS DISTINCT FROM dispatch_bootstrap AND f.oid NOT IN (
                         'public.reserve_application_onboarding_runtime(uuid,uuid,uuid,bigint,bigint,bigint,uuid,uuid)'::regprocedure,
                         'public.check_application_onboarding_runtime(uuid,uuid,bytea)'::regprocedure,
                         'public.release_application_onboarding_runtime(uuid,uuid,boolean)'::regprocedure))))
         THEN RAISE EXCEPTION 'unexpected runtime preparation privileges for %',principal.rolname; END IF;
     END LOOP;
     EXECUTE format('GRANT CONNECT ON DATABASE %I TO hello_onboarding_runtime_executor',current_database());
+    IF dispatch_bootstrap IS NOT NULL THEN
+        GRANT EXECUTE ON FUNCTION public.bootstrap_onboarding_held_dispatch(uuid,text,bigint,integer,integer)
+            TO hello_onboarding_runtime_executor;
+    END IF;
     IF worker_preflight IS NOT NULL THEN
         GRANT EXECUTE ON FUNCTION public.check_application_onboarding_worker_preflight(uuid,uuid,bytea,text,text,bytea,text)
             TO hello_onboarding_runtime_executor;

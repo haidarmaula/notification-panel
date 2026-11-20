@@ -23,7 +23,7 @@ cleanup() {
         cat "$log" >&2
         echo "Full log preserved at $log" >&2
     else
-        echo 'PostgreSQL fixture passed: reservation, readiness and delegated activation (transaction rolled back; no device delivery)' >&3
+        echo 'PostgreSQL fixture passed: reservation, readiness, delegated activation and cohort fences (no device delivery)' >&3
         rm -rf -- "$tmp" || status=1
     fi
     exit "$status"
@@ -92,7 +92,7 @@ SELECT setup.application_id,setup.candidate_configuration_id,'staging',1,1,decod
 FROM application_onboarding setup JOIN applications app ON app.id=setup.application_id
 WHERE app.key IN ('runtime-app-a','runtime-app-b');
 INSERT INTO application_dispatch_policy(application_id,hold_new,push_ttl_seconds,key_ttl_seconds)
-SELECT id,false,300,300 FROM applications WHERE key LIKE 'runtime-app-%';
+SELECT id,false,300,300 FROM applications WHERE key IN ('runtime-app-a','runtime-app-b');
 UPDATE notification_runtime SET sealed=false,migration_hold=false WHERE singleton;
 SQL
 assert_query '1' fixture_worker_a 'A sees only its app' "SELECT count(*) FROM applications WHERE public_id IN ('10000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000002')"
@@ -112,13 +112,19 @@ source=$(sql postgres -c 'SELECT source_epoch FROM notification_runtime WHERE si
 app_a='10000000-0000-4000-8000-000000000001'
 app_b='10000000-0000-4000-8000-000000000002'
 app_c='10000000-0000-4000-8000-000000000003'
+bootstrap_c="SELECT bootstrap_onboarding_held_dispatch('$app_c','staging',1,300,300)"
+deny 42501 sql runtime_a -c "$bootstrap_c"
+assert_query 1 runtime_c 'greenfield held policy bootstrap' "$bootstrap_c"
+assert_query 1 runtime_c 'held policy bootstrap replay' "$bootstrap_c"
+deny 55000 sql runtime_c -c "SELECT bootstrap_onboarding_held_dispatch('$app_c','staging',1,301,300)"
+
 config_a='20000000-0000-4000-8000-000000000001'
 config_b='20000000-0000-4000-8000-000000000002'
 config_c='20000000-0000-4000-8000-000000000003'
 reserve_a='30000000-0000-4000-8000-000000000001'
 reserve_b='30000000-0000-4000-8000-000000000002'
 reserve_c='30000000-0000-4000-8000-000000000003'
-reserve() { printf "SELECT reserve_application_onboarding_runtime('%s','%s','%s',%s,1,1,'%s','%s')" "$1" "$2" "$3" "$4" "$origin" "$source"; }
+reserve() { printf "SELECT reserve_application_onboarding_runtime('%s','%s','%s',%s,1,%s,'%s','%s')" "$1" "$2" "$3" "$4" "${5:-1}" "$origin" "$source"; }
 check_a="SELECT check_application_onboarding_runtime('$app_a','$reserve_a',decode(repeat('ab',32),'hex'))"
 preflight() { printf "SELECT check_application_onboarding_worker_preflight('%s','%s',decode(repeat('%s',32),'hex'),'%s','%s',decode(repeat('%s',32),'hex'),'%s')" "$1" "$2" "$3" "$4" "$5" "$6" "$7"; }
 preflight_a=$(preflight "$app_a" "$reserve_a" ab fixture-project fixture@example.invalid ef fixture_worker_a)
@@ -168,7 +174,7 @@ assert_query 4 postgres 'one readiness acknowledgement per runtime component' 'S
 prepared="SELECT onboarding_runtime_prepared($app_a_id,1,'$config_a')"
 assert_query t postgres 'all four live approvals make the exact runtime prepared' "$prepared"
 sql postgres -v app="$app_a" -v config="$config_a" -v app_id="$app_a_id" -v commit_activation=false \
-    -f /fixture-sql/fixture-onboarding-first-activation.sql
+    -v test_cohort=true -f /fixture-sql/fixture-onboarding-first-activation.sql
 assert_query f postgres 'different configuration cannot use runtime evidence' "SELECT onboarding_runtime_prepared($app_a_id,1,'$config_b')"
 deny 42501 sql fixture_worker_a -c "$prepared"
 deny 23514 sql postgres -c "UPDATE application_runtime_component_scopes SET policy_sha256=decode(repeat('ab',32),'hex') WHERE component='SERVER'"
@@ -230,7 +236,7 @@ for _ in {1..30}; do
     sleep .05
 done
 [[ "$sleeping" == true ]] || { wait "$concurrent_pid"; cat "$tmp/concurrent.log"; echo 'Concurrent reservation did not reach capacity lock' >&2; exit 1; }
-deny 53300 sql runtime_c -c "$(reserve "$app_c" "$reserve_c" "$config_c" 1)"
+deny 53300 sql runtime_c -c "$(reserve "$app_c" "$reserve_c" "$config_c" 1 2)"
 wait "$concurrent_pid"
 assert_query 2 postgres 'global capacity preserved across LOGINs' 'SELECT count(*) FROM application_runtime_reservations WHERE released_at IS NULL'
 
@@ -274,6 +280,19 @@ assert_query 3 postgres 'rollback cannot discard retained history' 'SELECT count
 sql postgres -c 'CREATE DATABASE runtime_empty'
 empty_sql() { docker_cmd exec -iu postgres "$node" psql -d runtime_empty -XqAt -v ON_ERROR_STOP=1 -v VERBOSITY=verbose; }
 for migration in db/migrations/*.up.sql; do empty_sql < "$migration"; done
+empty_sql < db/migrations/000061_onboarding_pilot_routes.down.sql
+empty_sql < db/migrations/000060_onboarding_held_dispatch_bootstrap.down.sql
+empty_sql < db/migrations/000059_onboarding_release_review.down.sql
+empty_sql < db/migrations/000058_onboarding_cohort_api.down.sql
+empty_sql < db/migrations/000057_onboarding_activation_issuance.down.sql
+empty_sql < db/migrations/000056_onboarding_dispatch_release.down.sql
+empty_sql < db/migrations/000055_onboarding_full_gate.down.sql
+empty_sql < db/migrations/000055_onboarding_full_gate.up.sql
+empty_sql < db/migrations/000055_onboarding_full_gate.down.sql
+empty_sql < db/migrations/000054_onboarding_pilot_gate.down.sql
+empty_sql < db/migrations/000054_onboarding_pilot_gate.up.sql
+empty_sql < db/migrations/000054_onboarding_pilot_gate.down.sql
+empty_sql < db/migrations/000053_onboarding_cohort_targets.down.sql
 empty_sql < db/migrations/000052_onboarding_first_activation.down.sql
 empty_sql < db/migrations/000051_onboarding_prepared_runtime_gate.down.sql
 empty_sql < db/migrations/000050_onboarding_shared_runtime_leases.down.sql

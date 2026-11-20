@@ -151,6 +151,21 @@
     {"name": "application_onboarding", "scope": "registry-control"},
     {"name": "application_onboarding_approvals", "scope": "registry-control"},
     {"name": "application_onboarding_ingestions", "scope": "registry-control"},
+    {"name": "application_onboarding_activation_issuer_scopes", "scope": "registry-control"},
+    {"name": "application_onboarding_approved_targets", "scope": "registry-control"},
+    {"name": "application_onboarding_cohort_scopes", "scope": "registry-control"},
+    {"name": "application_onboarding_cohort_targets", "scope": "registry-control"},
+    {"name": "application_onboarding_dispatch_delegations", "scope": "registry-control"},
+    {"name": "application_onboarding_held_dispatch_bootstraps", "scope": "registry-control"},
+    {"name": "application_onboarding_lifecycle_delegations", "scope": "registry-control"},
+    {"name": "application_onboarding_release_reviewers", "scope": "registry-control"},
+    {"name": "application_onboarding_route_reviewers", "scope": "registry-control"},
+    {"name": "application_runtime_capacity_profile", "scope": "registry-control"},
+    {"name": "application_runtime_component_scopes", "scope": "registry-control"},
+    {"name": "application_runtime_executor_scopes", "scope": "registry-control"},
+    {"name": "application_runtime_reservations", "scope": "registry-control"},
+    {"name": "application_worker_preflight_scopes", "scope": "registry-control"},
+    {"name": "onboarding_pilot_attempts", "scope": "application-scoped"},
     {"name": "application_onboarding_operations", "scope": "registry-control"},
     {"name": "application_onboarding_requests", "scope": "registry-control"},
     {"name": "application_onboarding_verifier_scopes", "scope": "registry-control"},
@@ -159,6 +174,24 @@
     {"name": "application_runtime_acknowledgements", "scope": "registry-control"}
   ],
   "query_files": [
+    {
+      "path": "db/queries/onboarding_cohort_api.sql",
+      "scope": "registry-control",
+      "names": [
+        "ListOnboardingCohortTargetStatus",
+        "ListOnboardingTestInstallations"
+      ]
+    },
+    {
+      "path": "db/queries/onboarding_cohort_targets.sql",
+      "scope": "registry-control",
+      "names": [
+        "ClaimOnboardingCohortTarget",
+        "FinalizeOnboardingCohort",
+        "FinishOnboardingCohortTarget",
+        "InitializeOnboardingCohort"
+      ]
+    },
     {"path": "db/queries/preparation_recovery.sql", "scope": "application-scoped", "names": ["ListRecoverableQueuedCampaigns"]},
     {"path": "db/queries/send_quarantine.sql", "scope": "global-control", "names": ["GetSendQuarantine", "InsertSendQuarantine", "LockSendLogSource"]},
     {"path": "db/queries/preparation.sql", "scope": "application-scoped", "names": ["CompleteCampaignPreparation", "ExpireUnpreparedCampaign", "GetCompletePreparation", "HoldCampaignPreparation", "InsertPreparationIntents", "LockPreparationCampaign", "MarkCampaignPrepared"]},
@@ -600,6 +633,7 @@
         "SaveApplicationOnboardingRequest",
         "SetApplicationOnboardingCandidate",
         "SupersedeApplicationOnboardingMutations",
+        "SupersedeUnusableOnboardingRelease",
         "VerifyApplicationFCMReservation"
       ]
     }
@@ -794,7 +828,12 @@
     {"pattern": "POST /api/v1/admin/apps/{app_id}/onboarding/fcm/verify", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
     {"pattern": "GET /api/v1/admin/apps/{app_id}/onboarding/operations/{operation_id}", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
     {"pattern": "GET /api/v1/admin/apps/{app_id}/onboarding/approvals", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
-    {"pattern": "POST /api/v1/admin/apps/{app_id}/onboarding/dispatch/hold", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"}
+    {"pattern": "POST /api/v1/admin/apps/{app_id}/onboarding/dispatch/hold", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
+    {"pattern": "POST /api/v1/admin/apps/{app_id}/onboarding/dispatch/release", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
+    {"pattern": "POST /api/v1/admin/apps/{app_id}/onboarding/activate", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
+    {"pattern": "PUT /api/v1/admin/apps/{app_id}/onboarding/test-cohort", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
+    {"pattern": "GET /api/v1/admin/apps/{app_id}/onboarding/test-installations", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"},
+    {"pattern": "GET /api/v1/admin/apps/{app_id}/onboarding/operations/{operation_id}/targets", "source": "internal/features/applications/onboarding_routes.go", "scope": "registry-control", "disposition": "configured-onboarding"}
   ],
   "commands": [
     {

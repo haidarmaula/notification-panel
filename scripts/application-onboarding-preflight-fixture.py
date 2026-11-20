@@ -9,10 +9,14 @@ import tarfile
 import uuid
 
 
-def render(root, image, network, mode):
+def render(root, image, network, mode, *exact_ids):
     ids = {key: str(uuid.uuid4()) for key in (
         "application_id", "configuration_id", "reservation_id", "log_source_id"
     )}
+    if exact_ids:
+        if len(exact_ids) != len(ids):
+            raise ValueError("Expected all four runtime identifiers")
+        ids = {key: str(uuid.UUID(value)) for key, value in zip(ids, exact_ids)}
     (root / "ids").write_text("\n".join(ids.values()) + "\n")
     encode = lambda key: base64.b64encode(key).decode("ascii")
     scope = dict(application_id=ids["application_id"], environment="staging")
@@ -81,11 +85,26 @@ def render(root, image, network, mode):
         policies["server.json"] = dict(
             database_url=database_url("server"), api_key="fixture-api-key-not-for-deployment",
             staff_tokens=staff, mobile_policy_file="/etc/hello/mobile.json",
+            onboarding=dict(fingerprint_key=encode(bytes(range(32))), fingerprint_key_version=1,
+                            provisioner_url="https://localhost:8081/",
+                            profiles=[dict(id="50000000-0000-4000-8000-000000000001", name="Fixture mobile",
+                                           platforms=[dict(platform="ANDROID",application_identifiers=["invalid.fixture.onboarding"])])],
+                            ca_pem=(certs / "ca.crt").read_text(),
+                            client_certificate_pem=(certs / "onboarding-client.crt").read_text(),
+                            client_private_key_pem=(certs / "onboarding-client.key").read_text()),
             ingress=dict(endpoint=dict(listen="127.0.0.1:8080", client_ca_pem=(certs / "ca.crt").read_text(),
                                       server_certificate_pem=(certs / "server.crt").read_text(),
                                       server_key_pem=(certs / "server.key").read_text()),
                          gateway_ips=["127.0.0.1"], ip_per_minute=120, auth_ip_per_minute=8,
                          auth_total_per_minute=60, concurrent_requests=4),
+        )
+        policies["bootstrap-server.json"] = dict(policies["server.json"], mobile_policy_file="")
+        policies["provisioner.json"] = dict(
+            listen_address="127.0.0.1:8081", credential_root="/var/lib/hello/credentials",
+            database_url=database_url("provisioner"), ingress_identity="spiffe://hello/local/server",
+            ca_pem=(certs / "ca.crt").read_text(),
+            server_certificate_pem=(certs / "provisioner.crt").read_text(),
+            server_private_key_pem=(certs / "provisioner.key").read_text(),
         )
         policies["mobile.json"] = dict(
             current_key_version=1, fingerprint_key=encode(bytes([1]) * 32),

@@ -392,7 +392,7 @@ func (s *Server) callWithHeaders(r *http.Request, method, path, query string, bo
 }
 func (s *Server) forward(w http.ResponseWriter, r *http.Request, id string, value *session, path string) {
 	if onboardingRoute(r.Method, path) {
-		if r.URL.RawQuery != "" || r.URL.ForceQuery || len(r.Header.Values("If-Match")) > 1 || len(r.Header.Values("Idempotency-Key")) > 1 {
+		if !onboardingQueryAllowed(path, r.URL.RawQuery) || r.URL.ForceQuery || len(r.Header.Values("If-Match")) > 1 || len(r.Header.Values("Idempotency-Key")) > 1 {
 			fail(w, http.StatusBadRequest, "invalid onboarding request")
 			return
 		}

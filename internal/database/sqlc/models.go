@@ -90,6 +90,12 @@ type ApplicationOnboarding struct {
 	UpdatedAt                pgtype.Timestamptz `db:"updated_at"`
 }
 
+type ApplicationOnboardingActivationIssuerScope struct {
+	ApplicationID int64         `db:"application_id"`
+	IssuerRole    pgtype.Uint32 `db:"issuer_role"`
+	ExecutorRole  pgtype.Uint32 `db:"executor_role"`
+}
+
 type ApplicationOnboardingApproval struct {
 	ID                  pgtype.UUID        `db:"id"`
 	ApplicationID       int64              `db:"application_id"`
@@ -107,6 +113,61 @@ type ApplicationOnboardingApproval struct {
 	ExpiresAt           pgtype.Timestamptz `db:"expires_at"`
 	RevokedAt           pgtype.Timestamptz `db:"revoked_at"`
 	ConsumedAt          pgtype.Timestamptz `db:"consumed_at"`
+}
+
+type ApplicationOnboardingApprovedTarget struct {
+	ApprovalID     pgtype.UUID        `db:"approval_id"`
+	ApplicationID  int64              `db:"application_id"`
+	InstallationID int64              `db:"installation_id"`
+	BindingID      int64              `db:"binding_id"`
+	RevokedAt      pgtype.Timestamptz `db:"revoked_at"`
+}
+
+type ApplicationOnboardingCohortScope struct {
+	RoleID        pgtype.Uint32 `db:"role_id"`
+	ApplicationID int64         `db:"application_id"`
+	Environment   string        `db:"environment"`
+	Capability    string        `db:"capability"`
+}
+
+type ApplicationOnboardingCohortTarget struct {
+	OperationID         pgtype.UUID        `db:"operation_id"`
+	InstallationID      int64              `db:"installation_id"`
+	BindingID           int64              `db:"binding_id"`
+	Attempts            int32              `db:"attempts"`
+	OperationLeaseToken pgtype.Int8        `db:"operation_lease_token"`
+	OperationLeaseOwner pgtype.UUID        `db:"operation_lease_owner"`
+	LeaseOwner          pgtype.UUID        `db:"lease_owner"`
+	LeaseExpiresAt      pgtype.Timestamptz `db:"lease_expires_at"`
+	NotBefore           pgtype.Timestamptz `db:"not_before"`
+	Outcome             pgtype.Text        `db:"outcome"`
+	FailureCode         pgtype.Text        `db:"failure_code"`
+	CheckedAt           pgtype.Timestamptz `db:"checked_at"`
+}
+
+type ApplicationOnboardingCohortTargetStatus struct {
+	ApplicationID  int64              `db:"application_id"`
+	OperationID    pgtype.UUID        `db:"operation_id"`
+	InstallationID pgtype.UUID        `db:"installation_id"`
+	Platform       string             `db:"platform"`
+	Outcome        pgtype.Text        `db:"outcome"`
+	FailureCode    pgtype.Text        `db:"failure_code"`
+	CheckedAt      pgtype.Timestamptz `db:"checked_at"`
+}
+
+type ApplicationOnboardingDispatchDelegation struct {
+	GrantID     pgtype.UUID `db:"grant_id"`
+	OperationID pgtype.UUID `db:"operation_id"`
+	Generation  int64       `db:"generation"`
+}
+
+type ApplicationOnboardingHeldDispatchBootstrap struct {
+	ApplicationID   int64              `db:"application_id"`
+	RuntimeExecutor pgtype.Uint32      `db:"runtime_executor"`
+	ProfileRevision int64              `db:"profile_revision"`
+	PushTtlSeconds  int32              `db:"push_ttl_seconds"`
+	KeyTtlSeconds   int32              `db:"key_ttl_seconds"`
+	BootstrappedAt  pgtype.Timestamptz `db:"bootstrapped_at"`
 }
 
 type ApplicationOnboardingIngestion struct {
@@ -134,6 +195,28 @@ type ApplicationOnboardingLifecycleDelegation struct {
 	OperationID         pgtype.UUID `db:"operation_id"`
 	EnrollmentProfileID pgtype.UUID `db:"enrollment_profile_id"`
 	Generation          int64       `db:"generation"`
+}
+
+type ApplicationOnboardingLiveTarget struct {
+	ApplicationKey       int64       `db:"application_key"`
+	Application          pgtype.UUID `db:"application"`
+	Environment          pgtype.Text `db:"environment"`
+	OperationID          pgtype.UUID `db:"operation_id"`
+	CohortID             pgtype.UUID `db:"cohort_id"`
+	ApprovalID           pgtype.UUID `db:"approval_id"`
+	ConfigurationID      pgtype.UUID `db:"configuration_id"`
+	InstallationKey      int64       `db:"installation_key"`
+	InstallationID       pgtype.UUID `db:"installation_id"`
+	BindingEpoch         int64       `db:"binding_epoch"`
+	LeaseOwner           pgtype.UUID `db:"lease_owner"`
+	OperationToken       int64       `db:"operation_token"`
+	Deadline             interface{} `db:"deadline"`
+	FileReference        pgtype.UUID `db:"file_reference"`
+	TargetProjectID      string      `db:"target_project_id"`
+	ServiceAccountEmail  string      `db:"service_account_email"`
+	AddressType          string      `db:"address_type"`
+	AddressCiphertext    []byte      `db:"address_ciphertext"`
+	EncryptionKeyVersion int32       `db:"encryption_key_version"`
 }
 
 type ApplicationOnboardingOperation struct {
@@ -171,6 +254,13 @@ type ApplicationOnboardingOperation struct {
 	FailureCode                 pgtype.Text        `db:"failure_code"`
 }
 
+type ApplicationOnboardingReleaseReviewer struct {
+	ProjectID    pgtype.UUID   `db:"project_id"`
+	Environment  string        `db:"environment"`
+	IssuerRole   pgtype.Uint32 `db:"issuer_role"`
+	ExecutorRole pgtype.Uint32 `db:"executor_role"`
+}
+
 type ApplicationOnboardingRequest struct {
 	ApplicationID         int64              `db:"application_id"`
 	ActorID               int64              `db:"actor_id"`
@@ -181,6 +271,13 @@ type ApplicationOnboardingRequest struct {
 	ResponseData          []byte             `db:"response_data"`
 	CreatedAt             pgtype.Timestamptz `db:"created_at"`
 	ExpiresAt             pgtype.Timestamptz `db:"expires_at"`
+}
+
+type ApplicationOnboardingRouteReviewer struct {
+	ProjectID    pgtype.UUID   `db:"project_id"`
+	Environment  string        `db:"environment"`
+	IssuerRole   pgtype.Uint32 `db:"issuer_role"`
+	ExecutorRole pgtype.Uint32 `db:"executor_role"`
 }
 
 type ApplicationOnboardingVerifierScope struct {
@@ -355,6 +452,17 @@ type DeviceToken struct {
 	CreatedAt      pgtype.Timestamptz `db:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `db:"updated_at"`
 	ApplicationID  pgtype.Int8        `db:"application_id"`
+}
+
+type HelloDeliveryInternalOnboardingPilotAttempt struct {
+	ApplicationID     int64              `db:"application_id"`
+	DeliveryID        pgtype.UUID        `db:"delivery_id"`
+	AttemptID         pgtype.UUID        `db:"attempt_id"`
+	DispatchGrantID   pgtype.UUID        `db:"dispatch_grant_id"`
+	ConfigurationID   pgtype.UUID        `db:"configuration_id"`
+	RuntimeGeneration int64              `db:"runtime_generation"`
+	WorkerRole        pgtype.Uint32      `db:"worker_role"`
+	AcceptedAt        pgtype.Timestamptz `db:"accepted_at"`
 }
 
 type InstallationBinding struct {

@@ -748,8 +748,22 @@ func (s *OnboardingService) Queue(ctx context.Context, id pgtype.UUID, command O
 				if cohortID != setup.CohortID || cohortID != approval.CohortID {
 					return ErrOnboardingConflict
 				}
-				if command.Kind == onboarding.OperationReleaseFull && policy.DispatchMode != "PILOT" {
+				previousMode := "HELD"
+				if command.Kind == onboarding.OperationReleaseFull {
+					previousMode = "PILOT"
+				}
+				if policy.DispatchMode != previousMode || setup.RuntimeGeneration <= 0 {
 					return ErrOnboardingConflict
+				}
+				if runtime.Sealed || runtime.MigrationHold {
+					return ErrOnboardingUnavailable
+				}
+				// A live (or not yet bound) operation still owns the mutation slot.
+				// Retiring a dead delegation and queuing its replacement commit together.
+				if err := q.SupersedeUnusableOnboardingRelease(ctx, sqlc.SupersedeUnusableOnboardingReleaseParams{
+					ApplicationID: app.ID, Kind: string(command.Kind),
+				}); err != nil {
+					return err
 				}
 			}
 		default:

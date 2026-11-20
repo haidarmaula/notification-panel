@@ -95,9 +95,18 @@ func main() {
 						if err != nil {
 							break
 						}
+						if dryRun, valid := readOnboardingDryRun(r.Header.Get("Authorization"), payload); dryRun {
+							if !valid {
+								break
+							}
+							w.Header().Set("Content-Type", "application/json")
+							_, _ = w.Write([]byte(`{"name":"projects/integration-fixture/messages/validated"}`))
+							log.Print("accepted synthetic FCM validation")
+							return
+						}
 						r.Body = io.NopCloser(bytes.NewReader(payload))
 					}
-					if _, _, _, valid := readSend(r, false, local); !valid {
+					if _, _, _, valid := readSend(r, false, local, capture); !valid {
 						break
 					}
 					if capture && os.WriteFile(onboardingPayloadPath, payload, 0600) != nil {
@@ -136,12 +145,29 @@ func validAssertion(r *http.Request, public *rsa.PublicKey) bool {
 		claims.Scope == "https://www.googleapis.com/auth/firebase.messaging"
 }
 
-func readSend(r *http.Request, load, local bool) (token, delivery, mode string, valid bool) {
+func readOnboardingDryRun(authorization string, payload []byte) (dryRun, valid bool) {
+	var body struct {
+		ValidateOnly json.RawMessage `json:"validate_only"`
+		Message      struct{ Token string }
+	}
+	decoder := json.NewDecoder(bytes.NewReader(payload))
+	if err := decoder.Decode(&body); err != nil || len(body.ValidateOnly) == 0 || string(body.ValidateOnly) == "false" {
+		return false, false
+	}
+	decoder = json.NewDecoder(bytes.NewReader(payload))
+	decoder.DisallowUnknownFields()
+	return true, decoder.Decode(&body) == nil && decoder.Decode(new(any)) == io.EOF &&
+		authorization == "Bearer "+fixtureBearer && string(body.ValidateOnly) == "true" &&
+		(body.Message.Token == "execution-address-0" || body.Message.Token == "execution-address-1")
+}
+
+func readSend(r *http.Request, load, local, onboarding bool) (token, delivery, mode string, valid bool) {
 	var body struct {
 		Message struct {
-			Token   string
-			Data    map[string]string
-			Android struct{ TTL string }
+			Token        string
+			Data         map[string]string
+			Android      struct{ TTL string }
+			Notification struct{ Title, Body string }
 		}
 	}
 	if r.Header.Get("Authorization") != "Bearer "+fixtureBearer || json.NewDecoder(r.Body).Decode(&body) != nil {
@@ -150,6 +176,12 @@ func readSend(r *http.Request, load, local bool) (token, delivery, mode string, 
 	m := body.Message
 	ttl, err := time.ParseDuration(m.Android.TTL)
 	fixture := ttl <= 5*time.Minute && (m.Token == "execution-address-0" || m.Token == "execution-address-1") && m.Data["fixture"] == "integration"
+	if onboarding {
+		// HTTPS campaign creation accepts the title, body and recipients. Bind
+		// the synthetic capture mode to that exact harmless fixture message.
+		fixture = ttl <= 5*time.Minute && m.Token == "execution-address-0" &&
+			m.Notification.Title == "Fixture pilot" && m.Notification.Body == "Synthetic enrollment test"
+	}
 	if local {
 		n, numErr := strconv.Atoi(strings.TrimPrefix(m.Token, "load-"))
 		fixture = numErr == nil && m.Token == "load-"+strconv.Itoa(n) && n >= 1 && n <= 3 && ttl <= time.Hour
@@ -204,7 +236,7 @@ func (s *loadStats) respond(w http.ResponseWriter, r *http.Request) {
 		s.LastResponseUTC = time.Now().UTC()
 		s.mu.Unlock()
 	}()
-	token, delivery, mode, valid := readSend(r, true, false)
+	token, delivery, mode, valid := readSend(r, true, false, false)
 	if !valid {
 		s.mu.Lock()
 		s.Invalid++

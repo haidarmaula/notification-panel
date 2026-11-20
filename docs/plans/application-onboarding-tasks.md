@@ -15,10 +15,10 @@ OAuth slices have local code/tests; the full onboarding flow is not complete.
 | ONB-03 | Eight optional setup routes, safe responses, BFF forwarding and dashboard setup forms implemented; activation/device/release steps remain |
 | ONB-04 | Scoped OAuth worker and fenced completion implemented and exercised through the real local BFF/provisioner; target IAM/dry-run is part of ONB-08 |
 | ONB-05 | Partial: protected delivery plan/mobile composition, scoped durable reservations (M45), immutable worker policy publication and owner-approved one-shot delivery preflight (M46), including takeover of the exact inert allocation; app-scoped live delivery and shared runtime rollout with authenticated generation acknowledgements remain |
-| ONB-06 | Partial: M52 applies an owner-bound first activation atomically with dispatch held; PostgreSQL exercises the transition and replay. The protected CLI can apply one predelegated operation; queue polling and the public activation route are not wired |
-| ONB-07 | Pending: approved immutable enrollment trust/profile publication and external identity broker integration; policy-composition helper alone does not activate enrollment |
-| ONB-08 | Pending: scoped evidence import/list, delegated cohort approval and target-project dry-run; a test installation in VERIFY currently returns unavailable |
-| ONB-09 | Pending: guarded PILOT/FULL executors and device/campaign receipt evidence; synchronous one-way hold is implemented |
+| ONB-06 | Activation API, app-scoped issuance and separate execution verified from a new registry application to ACTIVE/HELD in the services fixture |
+| ONB-07 | Protected mobile policy and HTTPS enrollment verified with synthetic external identity and one Android test device |
+| ONB-08 | Scoped installation list, protected roster approval, HTTPS cohort operation, provider dry-run and per-target polling verified with the synthetic provider |
+| ONB-09 | Protected route, PILOT and FULL workflows verified with HTTPS campaign/send, simulator acceptance, signed DELIVERED, grant recovery and replay |
 | ONB-10 | Pending: held credential promotion, drain/rollback, recovery and reference-checked cleanup; promotion handler is not mounted |
 | ONB-11 | Partial: existing setup dashboard uses eight active endpoints; activation/device/release UI remains for a separate frontend session after backend gates; [frontend handoff](../api/application-onboarding-frontend-handoff.md) records current contract |
 | ONB-12 | Pending: production allocation, operational metrics, encrypted off-host backup/restore and staged rollout evidence; local simulator success is not production enablement |

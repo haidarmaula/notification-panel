@@ -957,6 +957,20 @@ func (q *Queries) SupersedeApplicationOnboardingMutations(ctx context.Context, a
 	return err
 }
 
+const supersedeUnusableOnboardingRelease = `-- name: SupersedeUnusableOnboardingRelease :exec
+SELECT public.supersede_unusable_onboarding_release($1::bigint,$2::text)
+`
+
+type SupersedeUnusableOnboardingReleaseParams struct {
+	ApplicationID int64  `db:"application_id"`
+	Kind          string `db:"kind"`
+}
+
+func (q *Queries) SupersedeUnusableOnboardingRelease(ctx context.Context, arg SupersedeUnusableOnboardingReleaseParams) error {
+	_, err := q.db.Exec(ctx, supersedeUnusableOnboardingRelease, arg.ApplicationID, arg.Kind)
+	return err
+}
+
 const verifyApplicationFCMReservation = `-- name: VerifyApplicationFCMReservation :one
 SELECT EXISTS(
     SELECT FROM public.application_onboarding_ingestions i

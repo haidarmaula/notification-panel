@@ -9,6 +9,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
 	"hello/internal/database"
 	"hello/internal/database/sqlc"
 	"hello/internal/deployment"
@@ -28,10 +30,24 @@ func run(args []string) int {
 			return runRuntimePreparation(args[0])
 		case "apply-first-activation":
 			return runFirstActivation()
+		case "issue-first-activation":
+			return runIssueFirstActivation()
+		case "bootstrap-held-dispatch":
+			return runBootstrapHeldDispatch()
+		case "apply-release":
+			return runRelease()
+		case "approve-release", "delegate-release":
+			return runReleaseReview(args[0])
+		case "approve-pilot-route", "apply-pilot-route":
+			return runPilotRoute(args[0])
+		case "coordinate-cohort", "verify-cohort":
+			return runCohort(args[0])
+		case "approve-cohort":
+			return runCohortApproval()
 		}
 	}
 	if len(args) != 0 {
-		fmt.Fprintln(os.Stderr, "controlplane accepts prepare-runtime, preflight-delivery, start-delivery or apply-first-activation")
+		fmt.Fprintln(os.Stderr, "unknown controlplane command")
 		return 2
 	}
 	restore, err := runloop.PrepareCommandOutputs()
@@ -49,8 +65,20 @@ func run(args []string) int {
 		fmt.Fprintln(os.Stderr, "invalid control-plane configuration")
 		return 1
 	}
-	databaseConfig, err := deployment.Database(policy.DatabaseURL, "hello-controlplane")
-	if err != nil || deployment.CheckDatabaseFiles(policy.DatabaseURL) != nil {
+	return runProtectedWorker(policy.DatabaseURL, "hello-controlplane", policy.PollInterval, func(pool *pgxpool.Pool) (workStep, error) {
+		verifier, err := onboarding.NewVerifier(sqlc.New(pool), policy.ApplicationID, policy.Environment, policy.CredentialRoot)
+		if err != nil {
+			return nil, err
+		}
+		return verifier.RunOnce, nil
+	})
+}
+
+type workStep func(context.Context) (bool, error)
+
+func runProtectedWorker(dsn, identity string, interval time.Duration, build func(*pgxpool.Pool) (workStep, error)) int {
+	databaseConfig, err := deployment.Database(dsn, identity)
+	if err != nil || deployment.CheckDatabaseFiles(dsn) != nil {
 		fmt.Fprintln(os.Stderr, "invalid control-plane database configuration")
 		return 1
 	}
@@ -72,21 +100,21 @@ func run(args []string) int {
 		return 1
 	}
 	defer pool.Close()
-	verifier, err := onboarding.NewVerifier(sqlc.New(pool), policy.ApplicationID, policy.Environment, policy.CredentialRoot)
+	step, err := build(pool)
 	if err != nil {
-		fmt.Fprintln(os.Stderr, "invalid control-plane verifier configuration")
+		fmt.Fprintln(os.Stderr, "invalid control-plane worker configuration")
 		return 1
 	}
 
 	for ctx.Err() == nil {
-		worked, runErr := verifier.RunOnce(ctx)
-		if runErr != nil {
-			fmt.Fprintln(os.Stderr, "onboarding verification attempt unavailable")
+		worked, runErr := step(ctx)
+		if runErr != nil && ctx.Err() == nil {
+			fmt.Fprintln(os.Stderr, "control-plane work attempt unavailable")
 		}
 		if worked && runErr == nil {
 			continue
 		}
-		timer := time.NewTimer(policy.PollInterval)
+		timer := time.NewTimer(interval)
 		select {
 		case <-ctx.Done():
 			timer.Stop()

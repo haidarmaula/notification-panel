@@ -1,11 +1,11 @@
 # Application Registry onboarding frontend handoff
 
-Date: 2026-11-18. Status: **setup and OAuth are available when explicitly
-configured; end-to-end onboarding remains incomplete**. This handoff describes
-the running contract, not the proposed lifecycle API. Use the
-[implemented API](application-onboarding-api.md) and
-[implemented OpenAPI](../contracts/application-onboarding.openapi.json) for wire
-details. Backend runtime-preparation work does not add a dashboard capability.
+The API and BFF expose requests for activation, cohort verification and dispatch
+release when onboarding is configured. These writes queue operations. Operators
+review and apply privileged transitions through protected commands. Use the
+[API contract](application-onboarding-api.md) and
+[OpenAPI specification](../contracts/application-onboarding.openapi.json)
+for wire details.
 
 ## Active routes and sequence
 
@@ -28,7 +28,29 @@ for current database authority.
 | 5 | `POST /fcm/verify` | `202` VERIFY acceptance and operation Location | Verify OAuth using the candidate configuration ID |
 | 6 | `GET /operations/{operation_id}` | `200` current operation | Poll accepted verification to a terminal state |
 | 7 | `GET /approvals` | `200` safe approval list | Show existing approval metadata; no approval creation action |
+| Activation | `POST /activate` | `202` operation and Location | Queue activation for the verified candidate |
+| Device choice | `GET /test-installations` | `200` installation page and cursor | List eligible installations for configured platforms |
+| Dry-run | `PUT /test-cohort` | `202` operation and Location | Submit the approved installation roster |
+| Dry-run results | `GET /operations/{operation_id}/targets` | `200` target status list | Read each installation's outcome |
+| Release request | `POST /dispatch/release` | `202` operation and Location | Queue PILOT or FULL for the approved cohort |
 | Incident | `POST /dispatch/hold` | `200` readiness and new ETag | Hold dispatch with a reason; this does not change application lifecycle status |
+
+Activate with `{"configuration_id":"11111111-1111-4111-8111-111111111111"}`.
+After enrollment and roster approval, submit the approved installation UUIDs
+and approval UUID to `PUT /test-cohort`:
+
+```json
+{
+  "installation_ids": ["22222222-2222-4222-8222-222222222222"],
+  "reason": "Pilot verification",
+  "evidence_id": "33333333-3333-4333-8333-333333333333"
+}
+```
+
+Use the same conditional write and replay rules as verification. Follow
+`next_after` as the `after` query parameter to page through installations.
+The target list is empty before the coordinator records targets. An individual
+target can have a null outcome while its dry-run is pending.
 
 Enrollment configuration and FCM upload can be completed in either order. Fetch
 GET readiness again after each write and each completed asynchronous operation.
@@ -176,10 +198,12 @@ are present. Enable upload only with the chosen environment, target project and
 valid file input. Enable OAuth verification only with a candidate/current
 configuration ID, known current ETag and no unresolved write; unavailable verifier
 scope is an actionable blocker. Backend validation remains authoritative.
-Hold is available for an authorized incident action with a reason. Never enable
-Activate, test-cohort approval, device-test, Promote, PILOT release or FULL release
-from readiness text or because a handler/type exists in the source: these routes
-are not mounted.
+Hold is available for an authorized incident action with a reason. Release
+requests require an ACTIVE application, an eligible cohort and a matching
+approval. Send `mode`, `cohort_id` and `evidence_id` with the current setup ETag
+and a UUID idempotency key. Poll the returned operation Location. The request
+queues protected work, and dispatch changes only after the executor commits.
+Refresh readiness after completion to see the current dispatch mode.
 
 ## Errors and input limits
 
@@ -209,19 +233,14 @@ or navigation, and exclude them from caches and browser storage.
 The intended sequence remains registration → setup → OAuth → enrollment
 activation (`ACTIVE`/`HELD`) → external client enrollment and route/cohort review →
 approved PILOT campaign and per-platform device receipt → explicit FULL release.
-Only registration, setup, OAuth and one-way hold currently have running dashboard
-contracts. Operators can reserve and prepare a stopped allocation, then run an
-owner-approved one-shot delivery preflight under the same reservation. Neither
-operation has an HTTP endpoint. Preflight starts only the startup-check process;
-its result is not a readiness acknowledgement and does not change enrollment or
-dispatch. Activation requires app-scoped live delivery authority, published shared
-policies, current-generation acknowledgements and DB-delegated lifecycle execution. Device testing
-requires approved identity mappings, scoped cohort/evidence handling and target
-IAM checks. Release requires current campaign/provider/device evidence and guarded
-delegation. Credential rotation requires held promotion/drain/recovery.
+After activation succeeds, fetch readiness and confirm ACTIVE/HELD. Offer
+eligible installations from the device list. After an operator approves the
+selected roster, submit its installation IDs and approval ID. Poll the operation
+and its targets. PASSED records dry-run permission on the current binding.
+A later campaign receipt records delivery. The operator opens PILOT only for the
+current approved cohort. FULL requires signed DELIVERED evidence for each
+configured platform and a separate explicit approval.
 
-Local synthetic OAuth and existing-app simulator delivery establish different
-facts: neither proves a new registry app can activate or receive a notification.
 Target-project IAM, actual Firebase submission, Android/iOS device receipts,
 production capacity and backup/restore need separate evidence in authorized real
 environments. See the [implementation checkpoint](../analysis/application-onboarding-implementation.md)
