@@ -14,7 +14,7 @@ OAuth slices have local code/tests; the full onboarding flow is not complete.
 | ONB-02 | Root-owned file publication and reserved mTLS ingestion implemented; automatic orphan cleanup remains |
 | ONB-03 | Eight optional setup routes, safe responses, BFF forwarding and dashboard setup forms implemented; activation/device/release steps remain |
 | ONB-04 | Scoped OAuth worker and fenced completion implemented and exercised through the real local BFF/provisioner; target IAM/dry-run is part of ONB-08 |
-| ONB-05 | Partial: protected delivery plan/mobile composition, scoped durable reservations (M45), immutable worker policy publication and owner-approved one-shot delivery preflight (M46), including takeover of the exact inert allocation; app-scoped live delivery and shared runtime rollout with authenticated generation acknowledgements remain |
+| ONB-05 | Scoped runtime preparation and delivery start are implemented. The services fixture verifies four authenticated live leases for the approved generation. Production runtime allocation and rollout remain ONB-12 work |
 | ONB-06 | Activation API, app-scoped issuance and separate execution verified from a new registry application to ACTIVE/HELD in the services fixture |
 | ONB-07 | Protected mobile policy and HTTPS enrollment verified with synthetic external identity and one Android test device |
 | ONB-08 | Scoped installation list, protected roster approval, HTTPS cohort operation, provider dry-run and per-target polling verified with the synthetic provider |
