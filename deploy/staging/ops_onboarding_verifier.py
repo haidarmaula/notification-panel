@@ -151,8 +151,16 @@ def start_verifier(app_uuid, revision, image, configuration_uuid):
               'policy_volume': policy_volume, 'login': login}
 
     if record_path.exists():
-        if json.loads(record_path.read_text()) != record:
+        existing_record = json.loads(record_path.read_text())
+        # Verification advances the setup revision. A retry for the same app and
+        # immutable configuration must therefore refresh only the reviewed
+        # revision; all container, role, image, and credential bindings remain
+        # pinned to the original record.
+        existing_identity = {key: value for key, value in existing_record.items() if key != 'revision'}
+        current_identity = {key: value for key, value in record.items() if key != 'revision'}
+        if existing_identity != current_identity:
             raise RuntimeError('Existing verifier configuration differs; inspect before changing it.')
+        atomic(record_path, (json.dumps(record, sort_keys=True, indent=2) + '\n').encode())
     else:
         if _inspect_exists('container', container) or _inspect_exists('volume', policy_volume):
             raise RuntimeError('Verifier resources exist without a matching private record.')

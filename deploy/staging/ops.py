@@ -64,9 +64,10 @@ def prepare(name,revision,schema,archive=None):
 def main():
     os.umask(0o077)
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','cd','sync-cd-schema','docs-gateway','dashboard-bootstrap','onboarding-enable','onboarding-verifier'])
+    parser.add_argument('command',choices=['diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','cd','sync-cd-schema','docs-gateway','dashboard-bootstrap','onboarding-enable','onboarding-verifier','onboarding-approve-app','onboarding-reconcile'])
     parser.add_argument('--release');parser.add_argument('--revision');parser.add_argument('--schema',type=int);parser.add_argument('--cron',action='store_true')
     parser.add_argument('--application');parser.add_argument('--configuration');parser.add_argument('--setup-revision',type=int)
+    parser.add_argument('--firebase-project');parser.add_argument('--android-package');parser.add_argument('--ios-bundle')
     args=parser.parse_args()
     if args.command in ['capture','prepare','deploy'] and (not args.release or not re.fullmatch('[a-z0-9][a-z0-9-]{0,63}',args.release)):raise SystemExit('Valid --release is required.')
     try:
@@ -89,6 +90,13 @@ def main():
             elif args.command=='onboarding-enable':
                 from ops_onboarding import enable
                 result=enable()
+            elif args.command=='onboarding-approve-app':
+                from ops_onboarding import approve_app
+                result=approve_app(args.application,args.firebase_project,args.android_package,args.ios_bundle)
+            elif args.command=='onboarding-reconcile':
+                from ops_onboarding import reconcile_verifiers
+                result=reconcile_verifiers()
+                if args.cron and result is None:return
             elif args.command=='onboarding-verifier':
                 from ops_onboarding import release
                 from ops_onboarding_verifier import start_verifier

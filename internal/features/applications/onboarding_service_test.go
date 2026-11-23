@@ -261,6 +261,23 @@ func TestOnboardingReadinessMarksStaleOAuthChecksInconclusive(t *testing.T) {
 	}
 }
 
+func TestStagingCredentialRequiresMatchingAppProfileAndProject(t *testing.T) {
+	app, err := onboardingID("11111111-1111-4111-8111-111111111111")
+	require.NoError(t, err)
+	other, err := onboardingID("22222222-2222-4222-8222-222222222222")
+	require.NoError(t, err)
+	profile, err := onboardingID("33333333-3333-4333-8333-333333333333")
+	require.NoError(t, err)
+	service := OnboardingService{settings: OnboardingSettings{Profiles: []OnboardingProfile{{
+		Profile: onboarding.Profile{ID: profile.String()}, StagingAppID: app.String(), StagingProject: "approved-staging",
+	}}}}
+	require.True(t, service.acceptsCredential(app, profile, onboarding.EnvironmentStaging, "approved-staging"))
+	require.False(t, service.acceptsCredential(other, profile, onboarding.EnvironmentStaging, "approved-staging"))
+	require.False(t, service.acceptsCredential(app, other, onboarding.EnvironmentStaging, "approved-staging"))
+	require.False(t, service.acceptsCredential(app, profile, onboarding.EnvironmentProduction, "approved-staging"))
+	require.False(t, service.acceptsCredential(app, profile, onboarding.EnvironmentStaging, "other-project"))
+}
+
 func TestOnboardingSettingsCopyProfileAliases(t *testing.T) {
 	settings := setupSettings()
 	platforms := []onboarding.Platform{onboarding.PlatformAndroid}

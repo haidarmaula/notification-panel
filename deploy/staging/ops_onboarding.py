@@ -1,7 +1,8 @@
-"""Enable the single reviewed smoke onboarding profile on the staging VM."""
+"""Enable staged credentials and approve app-specific onboarding profiles."""
 import base64
 import io
 import json
+import re
 import secrets
 import ssl
 import subprocess
@@ -10,6 +11,7 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import uuid
 from pathlib import Path
 
 from ops_backup import backup
@@ -112,9 +114,13 @@ def provisioner_config(image, tls):
         run(['docker','volume','create',name])
     run([*BASE,'--mount',f'type=volume,src={CREDENTIALS},dst=/credentials',
          '--entrypoint','install',SEED,'-d','-o','0','-g','65532','-m','0750','/credentials'])
+    write_provisioner_files({'provisioner.json': (json.dumps(config).encode(), 0o640), 'postgres-ca.crt': (ca, 0o644)})
+
+
+def write_provisioner_files(files):
     buffer=io.BytesIO()
     with tarfile.open(fileobj=buffer,mode='w') as archive:
-        for name,data,mode in [('provisioner.json',json.dumps(config).encode(),0o640),('postgres-ca.crt',ca,0o644)]:
+        for name,(data,mode) in files.items():
             entry=tarfile.TarInfo(name); entry.uid=0; entry.gid=65532; entry.mode=mode; entry.size=len(data)
             archive.addfile(entry,io.BytesIO(data))
     run([*BASE,'-i','--mount',f'type=volume,src={POLICY},dst=/etc/hello',
@@ -150,6 +156,115 @@ def check_server():
             if attempt==19:
                 raise
             time.sleep(.5)
+
+
+def approve_app(application, project, android, ios):
+    from ops_onboarding_verifier import _canonical_uuid
+    application = _canonical_uuid(application)
+    if not project or not re.fullmatch(r'[a-z][a-z0-9-]{4,28}[a-z0-9]', project):
+        raise RuntimeError('Provide the Firebase project ID for this staging app.')
+    platforms = []
+    for platform, value, pattern in (
+        ('ANDROID', android, r'[A-Za-z][A-Za-z0-9_]*(?:\.[A-Za-z][A-Za-z0-9_]*)+'),
+        ('IOS', ios, r'[A-Za-z0-9-]+(?:\.[A-Za-z0-9-]+)+'),
+    ):
+        if value is None:
+            continue
+        if len(value) > 255 or not re.fullmatch(pattern, value):
+            raise RuntimeError('Invalid '+platform+' application identifier.')
+        platforms.append({'platform': platform, 'application_identifiers': [value]})
+    if not platforms:
+        raise RuntimeError('Provide at least one Android package or iOS bundle ID.')
+    release()
+    current = state()
+    if current['sealed'] or not current['migration_hold'] or any(p['dispatch_mode'] != 'HELD' for p in current['policies']):
+        raise RuntimeError('App approval requires staging runtime and dispatch held.')
+    row = db("SELECT json_build_object('status',a.status,'key',a.key,'candidate',o.candidate_configuration_id,'current',o.current_configuration_id)::text FROM applications a JOIN application_onboarding o ON o.application_id=a.id WHERE a.public_id='"+application+"';")
+    if not row:
+        raise RuntimeError('Create the application in the staff registry first.')
+    app = json.loads(row)
+    old_server = read_container('hello-staging-server','/etc/hello/server.json')
+    server = json.loads(old_server)
+    profiles = server.get('onboarding', {}).get('profiles', [])
+    smoke = next((item for item in profiles if item['id'] == PROFILE), None)
+    if smoke is None or not containers(PROVISIONER):
+        raise RuntimeError('Enable the staging onboarding service first.')
+    profile = {'id': str(uuid.uuid5(uuid.UUID(PROFILE), application)), 'name': app['key']+' staging',
+               'staging_app_id': application, 'staging_project_id': project, 'platforms': platforms}
+    existing = next((item for item in profiles if item.get('staging_app_id') == application), None)
+    if existing != profile and (existing or app['status'] != 'PROVISIONING' or app['candidate'] or app['current'] or len(profiles) >= 100):
+        raise RuntimeError('App approval requires a fresh provisioning entry with available profile capacity.')
+
+    old_provisioner = read_container(PROVISIONER,'/etc/hello/provisioner.json')
+    provisioner = json.loads(old_provisioner)
+    if provisioner.get('environment') != 'staging' or provisioner.get('target_project_id', PROJECT) != PROJECT:
+        raise RuntimeError('Unexpected staging credential provisioner policy.')
+    if existing == profile and 'target_project_id' not in provisioner:
+        run(['docker','restart','--time','30',PROVISIONER], timeout=45)
+        check_provisioner(material())
+        return {'application': application, 'profile': profile['id'], 'state': 'approved'}
+    backup()
+    smoke['staging_project_id'] = PROJECT
+    if existing is None:
+        profiles.append(profile)
+    provisioner.pop('target_project_id', None)
+    tls = material()
+    try:
+        write_policy('server', json.dumps(server).encode())
+        run(['docker','restart','--time','30','hello-staging-server'], timeout=45)
+        check_server()
+        if 'target_project_id' in json.loads(old_provisioner):
+            write_provisioner_files({'provisioner.json': (json.dumps(provisioner).encode(), 0o640)})
+            run(['docker','restart','--time','30',PROVISIONER], timeout=45)
+        check_provisioner(tls)
+        if state() != current:
+            raise RuntimeError('Staging dispatch or runtime state changed unexpectedly.')
+    except Exception:
+        write_provisioner_files({'provisioner.json': (old_provisioner, 0o640)})
+        run(['docker','restart','--time','30',PROVISIONER], timeout=45)
+        check_provisioner(tls)
+        write_policy('server', old_server)
+        run(['docker','restart','--time','30','hello-staging-server'], timeout=45)
+        check_server()
+        raise
+    return {'application': application, 'profile': profile['id'], 'state': 'approved'}
+
+
+def reconcile_verifiers():
+    from ops_onboarding_verifier import _canonical_uuid, _inspect_exists, start_verifier
+    server = json.loads(read_container('hello-staging-server','/etc/hello/server.json'))
+    approved = {item['staging_app_id']: item for item in server.get('onboarding', {}).get('profiles', [])
+                if item.get('staging_app_id')}
+    if not approved:
+        return None
+    cd = json.loads((ROOT/'cd'/'status.json').read_text())
+    if cd['phase'] != 'deployed':
+        return None
+    _, manifest = release()
+    for application, profile in approved.items():
+        _canonical_uuid(application)
+        row = db("SELECT json_build_object('revision',o.revision,'profile',o.enrollment_profile_id,'project',c.target_project_id,'candidate',c.id)::text "
+                 "FROM applications a JOIN application_onboarding o ON o.application_id=a.id "
+                 "JOIN application_provider_configurations c ON c.application_id=a.id AND c.id=o.candidate_configuration_id "
+                 "WHERE a.status='PROVISIONING' AND o.environment='staging' AND c.environment='staging' AND a.public_id='"+application+"';")
+        if not row:
+            continue
+        setup = json.loads(row)
+        if setup['profile'] != profile['id'] or setup['project'] != profile['staging_project_id']:
+            continue
+        candidate = _canonical_uuid(setup['candidate'])
+        name = 'hello-staging-onboarding-verifier-' + application.replace('-', '')[:20]
+        record_path = ROOT/'onboarding-verifiers'/application/'verifier.json'
+        record = json.loads(record_path.read_text()) if record_path.exists() else None
+        if record and record['configuration_id'] != candidate:
+            continue
+        observed = _inspect_exists('container', name)
+        if observed and observed['State']['Running']:
+            continue
+        image = record['image'] if record else manifest['candidate_images']['controlplane']
+        # Preserve the original immutable image when resuming a reviewed configuration.
+        return start_verifier(application, setup['revision'], image, candidate)
+    return None
 
 def enable():
     current=state()

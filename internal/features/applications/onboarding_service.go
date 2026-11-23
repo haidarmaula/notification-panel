@@ -43,6 +43,8 @@ type CredentialStager interface {
 type OnboardingProfile struct {
 	Profile                onboarding.Profile
 	ApplicationIdentifiers map[onboarding.Platform][]string
+	StagingAppID           string
+	StagingProject         string
 }
 
 // OnboardingSettings is fixed at startup, never selected by an HTTP request.
@@ -79,6 +81,11 @@ func NewOnboardingService(q sqlc.Querier, db Transactor, settings OnboardingSett
 		if err != nil || id.String() != profile.Profile.ID || seen[id.String()] || strings.TrimSpace(profile.Profile.Name) == "" || len(profile.Profile.Name) > 128 || !utf8.ValidString(profile.Profile.Name) || strings.IndexFunc(profile.Profile.Name, unicode.IsControl) >= 0 || len(profile.Profile.Platforms) == 0 || len(profile.Profile.Platforms) > 2 {
 			return nil, ErrOnboardingUnavailable
 		}
+		if profile.StagingAppID != "" {
+			if _, err := onboardingID(profile.StagingAppID); err != nil || profile.StagingProject == "" {
+				return nil, ErrOnboardingUnavailable
+			}
+		}
 		seen[id.String()] = true
 		seenPlatforms := map[onboarding.Platform]bool{}
 		for _, platform := range profile.Profile.Platforms {
@@ -101,7 +108,8 @@ func NewOnboardingService(q sqlc.Querier, db Transactor, settings OnboardingSett
 		if len(profile.ApplicationIdentifiers) != len(seenPlatforms) {
 			return nil, ErrOnboardingUnavailable
 		}
-		copyProfile := OnboardingProfile{Profile: profile.Profile, ApplicationIdentifiers: map[onboarding.Platform][]string{}}
+		copyProfile := profile
+		copyProfile.ApplicationIdentifiers = make(map[onboarding.Platform][]string, len(profile.ApplicationIdentifiers))
 		copyProfile.Profile.Platforms = append([]onboarding.Platform(nil), profile.Profile.Platforms...)
 		for platform, ids := range profile.ApplicationIdentifiers {
 			copyProfile.ApplicationIdentifiers[platform] = append([]string(nil), ids...)
@@ -111,6 +119,33 @@ func NewOnboardingService(q sqlc.Querier, db Transactor, settings OnboardingSett
 	sort.Slice(profiles, func(i, j int) bool { return profiles[i].Profile.ID < profiles[j].Profile.ID })
 	settings.Profiles = profiles
 	return &OnboardingService{base: NewService(q, db), settings: settings}, nil
+}
+
+func (s *OnboardingService) acceptsCredential(appID, profileID pgtype.UUID, environment onboarding.Environment, project string) bool {
+	restricted := false
+	approved := s.appProfile(appID)
+	for _, profile := range s.settings.Profiles {
+		if profile.StagingProject == "" {
+			continue
+		}
+		restricted = true
+		if profileID.Valid && profile.Profile.ID == profileID.String() &&
+			(approved == "" || approved == profile.Profile.ID) &&
+			(profile.StagingAppID == "" || profile.StagingAppID == appID.String()) &&
+			environment == onboarding.EnvironmentStaging && project == profile.StagingProject {
+			return true
+		}
+	}
+	return !restricted
+}
+
+func (s *OnboardingService) appProfile(appID pgtype.UUID) string {
+	for _, profile := range s.settings.Profiles {
+		if profile.StagingAppID != "" && profile.StagingAppID == appID.String() {
+			return profile.Profile.ID
+		}
+	}
+	return ""
 }
 
 func onboardingID(value string) (pgtype.UUID, error) {
@@ -259,7 +294,11 @@ func (s *OnboardingService) Profiles(ctx context.Context, id pgtype.UUID) ([]onb
 		return nil, err
 	}
 	results := make([]onboarding.Profile, 0, len(s.settings.Profiles))
+	appProfile := s.appProfile(id)
 	for _, p := range s.settings.Profiles {
+		if (p.StagingAppID != "" || appProfile != "") && p.Profile.ID != appProfile {
+			continue
+		}
 		copy := p.Profile
 		copy.Platforms = append([]onboarding.Platform(nil), copy.Platforms...)
 		results = append(results, copy)
@@ -378,7 +417,8 @@ func (s *OnboardingService) ConfigureEnrollment(ctx context.Context, id pgtype.U
 			break
 		}
 	}
-	if approved == nil {
+	appProfile := s.appProfile(id)
+	if approved == nil || ((approved.StagingAppID != "" || appProfile != "") && approved.Profile.ID != appProfile) {
 		return onboarding.Readiness{}, false, ErrOnboardingConflict
 	}
 	for _, p := range validated.Platforms {
@@ -422,6 +462,9 @@ func (s *OnboardingService) ConfigureEnrollment(ctx context.Context, id pgtype.U
 			return ErrOnboardingConflict
 		}
 		profile, _ := onboardingID(validated.ProfileID)
+		if approved.StagingProject != "" && setup.CandidateConfigurationID.Valid && setup.EnrollmentProfileID != profile {
+			return ErrOnboardingConflict
+		}
 		platforms, _ := json.Marshal(validated.Platforms)
 		_, err = q.ConfigureApplicationEnrollment(ctx, sqlc.ConfigureApplicationEnrollmentParams{ApplicationID: app.ID, EnrollmentProfileID: profile, EnrollmentPlatforms: platforms, Revision: setup.Revision})
 		if err != nil {
@@ -480,6 +523,9 @@ func (s *OnboardingService) StoreFCM(ctx context.Context, id pgtype.UUID, input 
 	var result onboarding.Candidate
 	replay := false
 	err = s.mutate(ctx, id, func(ctx context.Context, q *sqlc.Queries, app sqlc.Application, session staffWriteSession, epoch pgtype.UUID, setup sqlc.ApplicationOnboarding) error {
+		if !s.acceptsCredential(id, setup.EnrollmentProfileID, input.Environment, input.TargetProjectID) {
+			return ErrOnboardingConflict
+		}
 		key, err := onboardingID(pre.IdempotencyKey)
 		if err != nil {
 			return ErrInvalidPrecondition

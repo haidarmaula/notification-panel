@@ -127,6 +127,12 @@ platform entries (`ANDROID` or `IOS`) with application identifiers. The server
 checks each identifier against the selected profile's server-side allowlist.
 This records setup only; it does not activate the application.
 
+An operator can bind a staging profile to one registry application and one
+Firebase project. That profile is listed only for its application. Deployments
+with staging project assignments reject credential uploads unless their saved
+profile, staging environment, and Firebase project match policy. See the
+[staging operations guide](../../deploy/staging/OPERATIONS.md#application-onboarding).
+
 Verification accepts a configuration UUID and optional `test_installation_id`
 UUID. Explicit JSON `null` is invalid. With the field omitted, the queued worker
 checks the staged credential through OAuth. This is OAuth credential

@@ -76,6 +76,7 @@ def schedule():
     entries=['# BEGIN HELLO STAGING OPS',
         f'7 * * * * /usr/bin/python3 {script} backup --cron >> {ROOT}/backup-cron.log 2>&1',
         f'* * * * * /usr/bin/python3 {script} health --cron >> {ROOT}/health-cron.log 2>&1',
+        f'* * * * * /usr/bin/python3 {script} onboarding-reconcile --cron >> {ROOT}/onboarding-cron.log 2>&1',
         '# END HELLO STAGING OPS']
     if (ROOT/'cd/config.json').exists() and json.loads((ROOT/'cd/config.json').read_text()).get('enabled'):
         entries.insert(-1,f'* * * * * /usr/bin/python3 {script} cd --cron >> {ROOT}/cd/poll.log 2>&1')

@@ -87,6 +87,8 @@ func runServer(ctx context.Context, cfg *config.ServerConfig) (err error) {
 		profiles := make([]applications.OnboardingProfile, 0, len(cfg.Onboarding.Profiles))
 		for _, profile := range cfg.Onboarding.Profiles {
 			mapped := applications.OnboardingProfile{Profile: onboarding.Profile{ID: profile.ID, Name: profile.Name, Platforms: []onboarding.Platform{}}, ApplicationIdentifiers: map[onboarding.Platform][]string{}}
+			mapped.StagingAppID = profile.StagingAppID
+			mapped.StagingProject = profile.StagingProject
 			for _, platform := range profile.Platforms {
 				mapped.Profile.Platforms = append(mapped.Profile.Platforms, platform.Platform)
 				mapped.ApplicationIdentifiers[platform.Platform] = append([]string(nil), platform.ApplicationIdentifiers...)

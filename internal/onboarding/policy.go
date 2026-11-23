@@ -35,9 +35,11 @@ type ServerPolicy struct {
 
 // ProfilePolicy describes one enrollment profile and its allowed platform identifiers.
 type ProfilePolicy struct {
-	ID        string
-	Name      string
-	Platforms []PlatformPolicy
+	ID             string
+	Name           string
+	Platforms      []PlatformPolicy
+	StagingAppID   string
+	StagingProject string
 }
 
 // PlatformPolicy describes the allowed application identifiers for a platform.
@@ -123,11 +125,14 @@ func (p *ServerPolicy) TLSConfig() (*tls.Config, error) {
 func parseProfile(data []byte) (ProfilePolicy, bool) {
 	var profile ProfilePolicy
 	var platforms []json.RawMessage
-	if jsonobject.Decode(data, map[string]any{
+	if jsonobject.DecodeOptional(data, map[string]any{
 		"id":        &profile.ID,
 		"name":      &profile.Name,
 		"platforms": &platforms,
-	}) != nil || !canonicalPolicyUUID(profile.ID) || !validPolicyText(profile.Name, 1, 128) || len(platforms) < 1 || len(platforms) > 2 {
+	}, map[string]any{"staging_app_id": &profile.StagingAppID, "staging_project_id": &profile.StagingProject}) != nil ||
+		!canonicalPolicyUUID(profile.ID) || !validPolicyText(profile.Name, 1, 128) || len(platforms) < 1 || len(platforms) > 2 ||
+		(profile.StagingAppID != "" && (!canonicalPolicyUUID(profile.StagingAppID) || profile.StagingProject == "")) ||
+		(profile.StagingProject != "" && !validPolicyText(profile.StagingProject, 1, 128)) {
 		return ProfilePolicy{}, false
 	}
 	profile.Platforms = make([]PlatformPolicy, 0, len(platforms))

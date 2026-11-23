@@ -50,7 +50,7 @@ version before importing modules; cron and active commands cannot mix versions.
 The backup recipient certificate is pinned on repeat installs. Never overwrite
 its private key or rotate recipients without an independent recovery plan.
 
-## Android smoke onboarding
+## Application onboarding
 
 Run onboarding setup only after the signed staging release has deployed on
 clean schema 61. Install its operations package first. The enable command
@@ -62,17 +62,35 @@ python3 deploy/staging/staging.py install
 python3 deploy/staging/staging.py onboarding-enable
 ```
 
-In the staff dashboard, create a staging test registry entry. In **Notification
-setup**, choose **Hello staging Android smoke** and the package
-`com.example.hellofcmsmoke`. Upload the approved test Firebase project
-credential with environment **Staging**. The provisioner accepts only the
-configured staging Firebase project. The staging smoke store uses root-owned
-directories and `0640` credential files. The off-host encrypted backup includes
-these files and their policies. Production still requires verified encryption
-at rest and separate key custody.
+Create the registry entry in the staff dashboard. For a new staging application,
+the operator approves its staging Firebase project and exact Android package or
+iOS bundle ID. The command accepts one or both platform flags. It takes public
+identifiers only. The service-account key is uploaded through the dashboard.
 
-Start the scoped verifier for the resulting candidate before requesting OAuth
-verification. Use the setup revision displayed in readiness.
+```sh
+python3 deploy/staging/staging.py onboarding-approve-app \
+  --application "$APP_UUID" --firebase-project "$STAGING_FIREBASE_PROJECT" \
+  --android-package "$ANDROID_PACKAGE"
+```
+
+In **Notification setup**, select the app's approved profile and save its
+platform identifiers. Upload the Firebase service account with environment
+**Staging** and the approved project ID. The staging API rejects credentials
+whose environment, project, or profile differs from the app's approval. The
+scheduled reconciler starts the app-scoped OAuth verifier after the candidate is
+stored. The dashboard detects verifier readiness and enables verification.
+Install the VM operations schedule with `staging.py schedule` when setting up
+this feature. To check once without waiting for cron, run `staging.py
+onboarding-reconcile`.
+
+The **Hello staging Android smoke** profile remains available for
+`com.example.hellofcmsmoke` with its existing staging Firebase project. The
+staging store uses root-owned directories and `0640` credential files. Encrypted
+off-host backups include these files and their policies. Production still
+requires verified encryption at rest and separate key custody.
+
+The smoke app or a verifier undergoing manual recovery can use the current
+setup revision from readiness to start its scoped verifier explicitly.
 
 ```sh
 python3 deploy/staging/staging.py onboarding-verifier \

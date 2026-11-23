@@ -93,9 +93,10 @@ def fetch_backup():
 def main():
     os.umask(0o077)
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('command',choices=['install','diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','sync-cd-schema','docs-gateway','dashboard-bootstrap','onboarding-enable','onboarding-verifier'])
+    p.add_argument('command',choices=['install','diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','sync-cd-schema','docs-gateway','dashboard-bootstrap','onboarding-enable','onboarding-verifier','onboarding-approve-app','onboarding-reconcile'])
     p.add_argument('--release');p.add_argument('--ref');p.add_argument('--schema',type=int)
     p.add_argument('--application');p.add_argument('--configuration');p.add_argument('--setup-revision',type=int)
+    p.add_argument('--firebase-project');p.add_argument('--android-package');p.add_argument('--ios-bundle')
     a=p.parse_args()
     if a.command=='install':install();return
     if a.command=='backup':fetch_backup();return
@@ -116,6 +117,12 @@ def main():
         if a.command=='prepare':return
         print(remote('deploy','--release',release,timeout=300).decode());return
     args=[]
+    if a.command=='onboarding-approve-app':
+        if not a.application or not a.firebase_project or not (a.android_package or a.ios_bundle):
+            p.error('onboarding-approve-app requires --application, --firebase-project, and at least one platform identifier')
+        args=['--application',a.application,'--firebase-project',a.firebase_project]
+        for option, value in (('--android-package',a.android_package),('--ios-bundle',a.ios_bundle)):
+            if value is not None:args.extend((option,value))
     if a.command=='onboarding-verifier':
         if not a.application or not a.configuration or not a.setup_revision:
             p.error('onboarding-verifier requires --application, --configuration and --setup-revision')
