@@ -51,7 +51,7 @@ stat -c '%u:%g:%a:%F' "$root" "$app" "$env" "$version" "$version/service-account
                   '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges', '--mount',
                   f'type=volume,src={CREDENTIAL_VOLUME},dst=/credentials,readonly',
                   '--entrypoint', 'sh', SEED, '-c', script, 'sh', app_uuid, config_uuid]).decode().splitlines()
-    if output != ['0:0:755:directory', '0:65532:750:directory', '0:65532:750:directory',
+    if output != ['0:65532:750:directory', '0:65532:750:directory', '0:65532:750:directory',
                   '0:65532:750:directory', '0:65532:640:regular file']:
         raise RuntimeError('Credential path ownership, permissions, or file type is invalid.')
     return str(mountpoint / app_uuid / ENVIRONMENT / config_uuid)
