@@ -61,18 +61,24 @@ def _inspect_exists(kind, name):
     result = subprocess.run(['docker', kind, 'inspect', name], capture_output=True, timeout=20)
     if result.returncode == 0:
         return json.loads(result.stdout)[0]
-    if b'No such ' in result.stderr or b'not found' in result.stderr.lower():
+    detail = result.stderr.lower()
+    if b'no such ' in detail or b'not found' in detail:
         return None
     raise RuntimeError('Docker inspection failed; protected diagnostics are required.')
 
 
-def _write_policy_volume(name, files):
+def _write_policy_volume(name, configuration_uuid, files):
     import io
     import tarfile
     if _inspect_exists('volume', name) is None:
         run(['docker', 'volume', 'create', '--label', 'hello.purpose=protected-staging-policy', name])
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode='w') as tar:
+        # Docker needs the nested bind target before mounting the policy volume read-only.
+        for directory in ('fcm', 'fcm/' + configuration_uuid):
+            entry = tarfile.TarInfo(directory)
+            entry.type, entry.uid, entry.gid, entry.mode = tarfile.DIRTYPE, 0, 65532, 0o750
+            tar.addfile(entry)
         for entry_name, content in files.items():
             item = tarfile.TarInfo(entry_name)
             item.uid, item.gid, item.mode, item.size = 0, 65532, 0o640, len(content)
@@ -181,7 +187,7 @@ def start_verifier(app_uuid, revision, image, configuration_uuid):
     policy = {'application_id': app_uuid, 'environment': ENVIRONMENT, 'credential_root': '/etc/hello/fcm',
               'database_url': database_url, 'poll_interval_ms': 1000}
     policy_bytes = (json.dumps(policy, separators=(',', ':')) + '\n').encode()
-    _write_policy_volume(policy_volume, {'controlplane.json': policy_bytes, 'postgres-ca.crt': ca})
+    _write_policy_volume(policy_volume, configuration_uuid, {'controlplane.json': policy_bytes, 'postgres-ca.crt': ca})
 
     if not _verify_existing_container(container, image, app_uuid, configuration_uuid, credential_dir, policy_volume):
         args = ['docker', 'create', '--name', container, '--restart', 'unless-stopped', '--network', 'host',
