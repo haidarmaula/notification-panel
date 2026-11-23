@@ -1,0 +1,268 @@
+{
+  "files": {
+    "cmd/controlplane/activation_approval.go": {
+      "name": "First activation approval",
+      "description": "Validates a protected one-shot approval policy and records the reviewed application activation grant."
+    },
+    "cmd/controlplane/activation_approval_test.go": {
+      "name": "First activation approval tests",
+      "description": "Checks strict activation-policy parsing and rejects invalid identifiers, roles, and evidence digests."
+    },
+    "cmd/controlplane/cohort.go": {
+      "name": "Cohort coordination and verification workers",
+      "description": "Runs protected workers that initialize approved test cohorts or validate one enrolled target per poll using FCM dry-run checks."
+    },
+    "cmd/controlplane/cohort_approval.go": {
+      "name": "Approved cohort importer",
+      "description": "Imports a reviewed, consent-backed installation roster for one application and environment through a protected database identity."
+    },
+    "cmd/controlplane/cohort_approval_test.go": {
+      "name": "Cohort approval policy tests",
+      "description": "Checks exact reviewed roster and evidence digest validation, and coordinator policy support for discovering eligible work without a fixed operation ID."
+    },
+    "cmd/controlplane/held_dispatch_policy.go": {
+      "name": "Held dispatch bootstrap",
+      "description": "Validates a protected policy and initializes an application's dispatch profile in the held state."
+    },
+    "cmd/controlplane/held_dispatch_policy_test.go": {
+      "name": "Held dispatch policy tests",
+      "description": "Checks environment, application, revision, and TTL validation for held-dispatch bootstrap settings."
+    },
+    "cmd/controlplane/main_test.go": {
+      "name": "Control-plane command tests",
+      "description": "Checks policy loading, elevated work fencing, and cohort initialization and finalization."
+    },
+    "cmd/controlplane/pilot_route.go": {
+      "name": "Pilot route approval and application",
+      "description": "Issues or applies a protected, application-scoped pilot route policy for an approved cohort installation."
+    },
+    "cmd/controlplane/pilot_route_test.go": {
+      "name": "Pilot route policy tests",
+      "description": "Checks pilot-route policy parsing and validates results for approval and application modes."
+    },
+    "cmd/controlplane/release.go": {
+      "name": "Dispatch release executor",
+      "description": "Applies a protected, reviewed release grant to the matching operation and runtime instance."
+    },
+    "cmd/controlplane/release_review.go": {
+      "name": "Release approval and delegation",
+      "description": "Records protected pilot or full-release approvals and delegates reviewed release operations with evidence digests."
+    },
+    "cmd/controlplane/release_review_test.go": {
+      "name": "Release review policy tests",
+      "description": "Checks release approval and delegation policies, including environment, expiry, identifiers, mode, and evidence digests."
+    },
+    "compose.local-real-fcm.yml": {
+      "name": "Compose real FCM profile",
+      "description": "Adds an explicit local profile for real Firebase delivery, mounting the supplied service-account key only in the delivery worker and keeping the dashboard and provider endpoint on loopback."
+    },
+    "db/migrations/000053_onboarding_cohort_targets.down.sql": {
+      "name": "Remove onboarding cohort verification schema",
+      "description": "Refuses rollback while cohort approvals, scopes, or target evidence remain, then removes the cohort routines and tables."
+    },
+    "db/migrations/000053_onboarding_cohort_targets.up.sql": {
+      "name": "Create scoped onboarding cohort verification",
+      "description": "Adds approved cohort scopes and per-installation targets, with locked initialization, verifier claims, result recording, and finalization routines."
+    },
+    "db/migrations/000054_onboarding_pilot_gate.down.sql": {
+      "name": "Restore prior PILOT transition rules",
+      "description": "Removes the onboarding-specific PILOT gate while retaining the migration safety checks for recorded state."
+    },
+    "db/migrations/000054_onboarding_pilot_gate.up.sql": {
+      "name": "Require verified cohort for PILOT",
+      "description": "Fences onboarding dispatch transitions into PILOT on a completed approved cohort whose exact installation and binding roster still matches pilot routes."
+    },
+    "db/migrations/000055_onboarding_full_gate.down.sql": {
+      "name": "Remove onboarding FULL evidence gate",
+      "description": "Restores the prior dispatch transition function after checking the migration rollback preconditions."
+    },
+    "db/migrations/000055_onboarding_full_gate.up.sql": {
+      "name": "Require delivered pilot evidence for FULL",
+      "description": "Fences PILOT-to-FULL on current approved cohort bindings with provider acceptance and signed DELIVERED receipt evidence from the same attempt."
+    },
+    "db/migrations/000056_onboarding_dispatch_release.down.sql": {
+      "name": "Remove queued dispatch release binding",
+      "description": "Removes the M56 binding routine and delegation trigger subject to retained-history rollback guards."
+    },
+    "db/migrations/000056_onboarding_dispatch_release.up.sql": {
+      "name": "Bind queued dispatch release grants",
+      "description": "Adds immutable one-to-one binding between an existing queued PILOT or FULL operation and its reviewed dispatch grant, with exact replay support."
+    },
+    "db/migrations/000057_onboarding_activation_issuance.down.sql": {
+      "name": "Remove scoped activation issuance",
+      "description": "Removes the scoped activation issuer routine and schema after checking that retained delegation history permits rollback."
+    },
+    "db/migrations/000057_onboarding_activation_issuance.up.sql": {
+      "name": "Scope first-activation issuance",
+      "description": "Adds app-scoped issuer authority and a transactional routine to issue first-activation grants through a separately authorized executor."
+    },
+    "db/migrations/000058_onboarding_cohort_api.down.sql": {
+      "name": "Remove cohort API functions and view",
+      "description": "Drops the safe cohort status view and the scoped approval and operation-discovery functions."
+    },
+    "db/migrations/000058_onboarding_cohort_api.up.sql": {
+      "name": "Expose safe cohort approval and status",
+      "description": "Adds a redacted cohort-target status view plus scoped approval and operation-discovery functions for the onboarding API."
+    },
+    "db/migrations/000059_onboarding_release_review.down.sql": {
+      "name": "Remove scoped release review",
+      "description": "Drops the release reviewer registry and its approval, delegation, and supersession routines under retained-history safeguards."
+    },
+    "db/migrations/000059_onboarding_release_review.up.sql": {
+      "name": "Add scoped dispatch release review",
+      "description": "Adds app/environment-scoped reviewer and executor roles with routines to approve release evidence, delegate a grant, and supersede unusable requests."
+    },
+    "db/migrations/000060_onboarding_held_dispatch_bootstrap.down.sql": {
+      "name": "Remove held dispatch bootstrap support",
+      "description": "Removes the bootstrap routine and protected history table only when rollback preconditions allow."
+    },
+    "db/migrations/000060_onboarding_held_dispatch_bootstrap.up.sql": {
+      "name": "Bootstrap initial held dispatch policy",
+      "description": "Adds an auditable, protected bootstrap record and a scoped routine that installs an initial HELD dispatch policy with explicit TTL settings."
+    },
+    "db/migrations/000061_onboarding_pilot_routes.down.sql": {
+      "name": "Remove onboarding pilot-route controls",
+      "description": "Drops the pilot-route reviewer registry and route approval/application routines subject to history safeguards."
+    },
+    "db/migrations/000061_onboarding_pilot_routes.up.sql": {
+      "name": "Approve and apply pilot routes",
+      "description": "Adds app-scoped reviewer/executor controls to approve and apply routes only for bindings in an approved, dry-run-verified onboarding cohort."
+    },
+    "db/queries/onboarding_cohort_api.sql": {
+      "name": "Read eligible installations and cohort outcomes",
+      "description": "Lists bounded eligible onboarding test installations and safe per-target cohort outcomes for the staff API."
+    },
+    "db/queries/onboarding_cohort_targets.sql": {
+      "name": "Coordinate cohort target verification",
+      "description": "Initializes and finalizes cohort operations and claims or records individual target checks through scoped database routines."
+    },
+    "deploy/postgres/onboarding-activation-grants.sql": {
+      "name": "Install first-activation issuer grants",
+      "description": "Validates and grants the scoped activation-issuance function to separately provisioned issuer roles; the activation executor remains distinct."
+    },
+    "deploy/postgres/onboarding-grants.sql": {
+      "name": "Install onboarding setup and verifier grants",
+      "description": "Grants restricted onboarding setup and verification capabilities to DBA-created roles without table-level lifecycle or dispatch mutation authority."
+    },
+    "deploy/postgres/onboarding-pilot-route-grants.sql": {
+      "name": "Provision pilot-route reviewer and executor",
+      "description": "Registers a scoped reviewer-executor pair and grants pilot-route approval and application separately, without raw lifecycle-grant writes."
+    },
+    "deploy/postgres/onboarding-release-review-grants.sql": {
+      "name": "Provision release reviewer and executor",
+      "description": "Registers an app/environment reviewer-executor pair and grants only release approval/delegation to the reviewer and release application to the executor."
+    },
+    "deploy/postgres/onboarding-runtime-grants.sql": {
+      "name": "Install onboarding runtime executor grants",
+      "description": "Grants scoped runtime reservation and preflight functions to DBA-created executor roles; grants no table access, activation, readiness acknowledgement, or dispatch authority."
+    },
+    "devtools/local-mobile-issuer/dashboard_control.go": {
+      "name": "Dashboard pairing control",
+      "description": "Serves a private Unix-socket endpoint that creates one-use mobile pairing QR codes for the local dashboard, separate from the issuer's LAN routes."
+    },
+    "devtools/local-mobile-issuer/dashboard_control_test.go": {
+      "name": "Dashboard pairing control tests",
+      "description": "Checks dashboard QR issuance, one-use pairing codes, retained device sessions, and that the LAN handler cannot issue QR codes."
+    },
+    "devtools/local-mobile-issuer/lan.go": {
+      "name": "LAN mobile issuer",
+      "description": "Serves scoped mobile API routes over HTTPS on a private IPv4 address, using a locally managed CA and proxying only to a loopback backend."
+    },
+    "devtools/local-mobile-issuer/lan_test.go": {
+      "name": "LAN mobile issuer tests",
+      "description": "Checks that LAN certificates retain trust across host IP changes and that the HTTPS proxy allows only scoped mobile routes while preserving authentication."
+    },
+    "devtools/local-mobile-issuer/main.go": {
+      "name": "Local mobile issuer command",
+      "description": "Runs a local issuer for physical-device smoke tests, with loopback pairing or optional private-LAN HTTPS pairing; it is not a production identity or attestation service."
+    },
+    "devtools/local-mobile-issuer/pairing_qr.go": {
+      "name": "Pairing QR helpers",
+      "description": "Builds mobile pairing links from validated loopback origins and renders one-use links as QR codes for the local smoke app."
+    },
+    "devtools/local-mobile-issuer/pairing_qr_test.go": {
+      "name": "Pairing QR helper tests",
+      "description": "Checks pairing link compatibility, QR rendering without plaintext links, and rejection of non-loopback or malformed QR destinations."
+    },
+    "internal/database/repository/users.go": {
+      "name": "Legacy user fixture repository",
+      "description": "Creates a fixture user and looks it up by external identifier in the dependency integration check."
+    },
+    "internal/fcm/verification.go": {
+      "name": "Firebase credential and target verification",
+      "description": "Exchanges credentials for an OAuth token and validates a test device in Firebase dry-run mode."
+    },
+    "internal/fcm/verification_test.go": {
+      "name": "Firebase verification tests",
+      "description": "Checks OAuth exchange, FCM dry-run validation, and rejection of invalid policies and credentials."
+    },
+    "internal/features/applications/onboarding_cohort.go": {
+      "name": "Onboarding test cohort endpoints",
+      "description": "Lists safe installation details and returns per-target dry-run outcomes for an application-scoped test cohort."
+    },
+    "internal/features/applications/onboarding_cohort_test.go": {
+      "name": "Onboarding cohort endpoint tests",
+      "description": "Checks paginated installation listings and scoped cohort target outcomes, including pending and completed dry-run results."
+    },
+    "internal/onboarding/cohort_postgres.go": {
+      "name": "PostgreSQL cohort verification store",
+      "description": "Leases approved cohort targets, decrypts the current bound address in memory, and stores sanitized results under the exact lease fence."
+    },
+    "internal/onboarding/cohort_verifier.go": {
+      "name": "Cohort target verifier",
+      "description": "Checks one approved staging or production cohort target per run with FCM validate-only, then records fenced dry-run evidence without enabling dispatch."
+    },
+    "internal/onboarding/cohort_verifier_test.go": {
+      "name": "Cohort verifier tests",
+      "description": "Checks target claim validation, FCM dry-run outcomes, cancellation, and fenced evidence persistence."
+    },
+    "internal/onboarding/redaction.go": {
+      "name": "Onboarding data redaction",
+      "description": "Keeps credential policy and test-target data out of ordinary logging, string output, and protected JSON values."
+    },
+    "scripts/integration_provider_test.go": {
+      "name": "Simulated provider tests",
+      "description": "Checks that the local OAuth and FCM fixtures distinguish validation from delivery and accept only the configured synthetic targets."
+    },
+    "scripts/local-dev/build_real_fcm_apk.py": {
+      "name": "Standalone Android APK builder",
+      "description": "Builds the companion app with bundled JavaScript and the public local TLS certificate authority in an isolated checkout."
+    },
+    "scripts/local-dev/dev.py": {
+      "name": "Local development stack manager",
+      "description": "Coordinates the isolated local development stack, including startup, fixtures, dashboard checks, smoke workflows, and the explicitly selected real-FCM profile."
+    },
+    "scripts/local-dev/real-fcm-open-runtime.sql": {
+      "name": "Open local real-FCM runtime",
+      "description": "Checks the isolated database, app and held dispatch state, then opens the sealed runtime only when delivery history is empty and the preflight invariants hold."
+    },
+    "scripts/local-dev/real_fcm_dashboard.py": {
+      "name": "Local device test dashboard helper",
+      "description": "Authorizes local pairing and test actions through the dashboard session and submits test pushes through the campaign API."
+    },
+    "scripts/local-dev/setup_test.go": {
+      "name": "Real-FCM target selection tests",
+      "description": "Checks that selection activates only the intended Android binding and does not require other phones to disconnect."
+    },
+    "scripts/sql/bind-onboarding-release.sql": {
+      "name": "Bind onboarding release grant",
+      "description": "Runs the scoped database function that binds a reviewed release grant to an accepted operation and its specified runtime generation."
+    },
+    "web/dashboard/e2e/onboarding-lifecycle-fixture.ts": {
+      "name": "Onboarding lifecycle browser fixture",
+      "description": "Provides deterministic API routes and state for browser tests of activation, test-cohort verification, and PILOT/FULL release requests."
+    },
+    "web/dashboard/src/app/local-test-devices.ts": {
+      "name": "Local test-device route gate",
+      "description": "Enables the test-device dashboard route only for the explicitly flagged localhost real-FCM development profile."
+    },
+    "web/dashboard/src/features/TestDevices.tsx": {
+      "name": "Local test-device dashboard",
+      "description": "Provides local Android pairing and test-device management, APK status, and real-FCM test sending with separate provider-acceptance and device-receipt status."
+    },
+    "web/dashboard/src/features/admin/OnboardingLifecycle.tsx": {
+      "name": "Onboarding lifecycle dashboard",
+      "description": "Lets an authorized admin request activation, select and verify a test cohort, review target outcomes, and request PILOT or FULL dispatch release."
+    }
+  }
+}

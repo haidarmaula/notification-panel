@@ -45,10 +45,15 @@ operational rollout remain open.
 ## Sources and maintenance
 
 The interactive map uses [haydenschmitty/floorplan](https://github.com/haydenschmitty/floorplan).
-Edit the checked-in [Floorplan architecture source](../../floorplan/architecture.json)
-for module summaries, flows, and environment boundaries. Refresh the map with
-Floorplan to regenerate the local viewer at `floorplan/index.html`. The
-generated viewer, graph, and cache are workstation files.
+Edit the checked-in [architecture source](../../floorplan/architecture.json)
+for module summaries, flows, and environment boundaries. Update
+[reviewed labels](../../floorplan/descriptions/hello-reviewed.json) when a mapped
+file changes purpose. Refresh the map with Floorplan to regenerate
+the local viewer at `floorplan/index.html`. The viewer, graph, and cache are
+workstation files. Floorplan's scanner can miss dynamically registered dashboard
+routes and Go route wrappers. Use the [API contracts](../contracts/README.md) and
+the [dashboard router](../../web/dashboard/src/app/DashboardApp.tsx) for route
+coverage.
 
 Use the [production readiness plan](../analysis/production-readiness-plan.md)
 and [implementation milestones](../analysis/implementation-milestones.md) for
