@@ -9,10 +9,15 @@ const docsDirectory = process.env.HELLO_LOCAL_DOCS_DIR;
 const tlsDirectory = process.env.HELLO_LOCAL_TLS_DIR;
 const docsUpstream = new URL(process.env.HELLO_LOCAL_API_UPSTREAM ?? 'https://127.0.0.1:18082');
 if (
-  docsDirectory && tlsDirectory &&
-  (docsUpstream.protocol !== 'https:' || docsUpstream.hostname !== '127.0.0.1' ||
-    docsUpstream.username || docsUpstream.password || docsUpstream.pathname !== '/' ||
-    docsUpstream.search || docsUpstream.hash)
+  docsDirectory &&
+  tlsDirectory &&
+  (docsUpstream.protocol !== 'https:' ||
+    docsUpstream.hostname !== '127.0.0.1' ||
+    docsUpstream.username ||
+    docsUpstream.password ||
+    docsUpstream.pathname !== '/' ||
+    docsUpstream.search ||
+    docsUpstream.hash)
 ) {
   throw new Error('Development API reference proxy must be a loopback HTTPS origin');
 }
@@ -69,21 +74,30 @@ const localDocs =
 const proxy = process.env.HELLO_DASHBOARD_PROXY ?? 'http://127.0.0.1:8090';
 const localControl = process.env.HELLO_LOCAL_FCM_CONTROL;
 const localDashboard = process.env.HELLO_LOCAL_DASHBOARD_ORIGIN;
-const localDevices = localControl === 'http://127.0.0.1:18191' && localDashboard === 'http://localhost:5273';
-const canonicalLocalDashboard = localDevices ? {
-  name: 'hello-real-fcm-origin',
-  configureServer(server: import('vite').ViteDevServer) {
-    server.middlewares.use((request, response, next) => {
-      if (request.headers.host !== '127.0.0.1:5273' ||
-          (request.method !== 'GET' && request.method !== 'HEAD') ||
-          !request.headers.accept?.includes('text/html')) return next();
-      const path = request.url || '/';
-      if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) return next();
-      response.writeHead(302, { Location: `${localDashboard}${path}`, 'Cache-Control': 'no-store' });
-      response.end();
-    });
-  },
-} : undefined;
+const localDevices =
+  localControl === 'http://127.0.0.1:18191' && localDashboard === 'http://localhost:5273';
+const canonicalLocalDashboard = localDevices
+  ? {
+      name: 'hello-real-fcm-origin',
+      configureServer(server: import('vite').ViteDevServer) {
+        server.middlewares.use((request, response, next) => {
+          if (
+            request.headers.host !== '127.0.0.1:5273' ||
+            (request.method !== 'GET' && request.method !== 'HEAD') ||
+            !request.headers.accept?.includes('text/html')
+          )
+            return next();
+          const path = request.url || '/';
+          if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) return next();
+          response.writeHead(302, {
+            Location: `${localDashboard}${path}`,
+            'Cache-Control': 'no-store',
+          });
+          response.end();
+        });
+      },
+    }
+  : undefined;
 const target = new URL(proxy);
 if (
   target.protocol !== 'http:' ||
