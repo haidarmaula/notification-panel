@@ -30,13 +30,19 @@ BEGIN
     ) AS spec(relation_name,application_column)
     LOOP
         IF EXISTS(SELECT FROM pg_policies WHERE schemaname='public' AND tablename=item.relation_name
-                  AND policyname<>'hello_staging_onboarding_scope') THEN
+                  AND policyname NOT IN ('hello_staging_onboarding_scope','hello_staging_onboarding_base')
+                  AND NOT (item.relation_name IN ('applications','application_dispatch_policy')
+                           AND policyname IN ('delivery_base_access','delivery_application_scope'))) THEN
             RAISE EXCEPTION 'unexpected row policy for %',item.relation_name;
         END IF;
         EXECUTE format('ALTER TABLE public.%I ENABLE ROW LEVEL SECURITY',item.relation_name);
+        IF item.relation_name NOT IN ('applications','application_dispatch_policy') THEN
+            EXECUTE format('DROP POLICY IF EXISTS hello_staging_onboarding_base ON public.%I',item.relation_name);
+            EXECUTE format('CREATE POLICY hello_staging_onboarding_base ON public.%I USING (true)',item.relation_name);
+        END IF;
         EXECUTE format('DROP POLICY IF EXISTS hello_staging_onboarding_scope ON public.%I',item.relation_name);
         EXECUTE format(
-            'CREATE POLICY hello_staging_onboarding_scope ON public.%I USING
+            'CREATE POLICY hello_staging_onboarding_scope ON public.%I AS RESTRICTIVE USING
               (NOT COALESCE(pg_has_role(current_user,to_regrole(''hello_onboarding_verifier''),''USAGE''),false)
                OR hello_staging_onboarding.owns_verification_scope(%I))',
             item.relation_name,item.application_column);
