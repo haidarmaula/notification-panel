@@ -21,7 +21,7 @@ the VM makes outbound, read-only HTTPS Git fetches.
    An annotated `staging-ready/<sha>` tag carries this canonical signed metadata.
 4. The VM's minutely CD job fetches main and readiness tags. It verifies the tag
    target and signature against a separately pinned public key. It accepts only
-   the configured repository and clean schema 41. The committed migration maximum
+   the configured repository and clean schema 61. The committed migration maximum
    must match that reviewed schema on both publisher and receiver. It suppresses stale completions
    and cannot replace a newer deployment with an older CI authorization.
 5. The existing image gate builds/checks that exact committed source. Immediately
@@ -80,9 +80,27 @@ staging environment secret `STAGING_CD_SIGNING_KEY`. The VM receives only
 environment policies that would need weakening. Rotate keys through a reviewed
 procedure; do not overwrite trust files casually.
 
-`STAGING_SCHEMA_VERSION=41` is an environment variable, not a migration command.
-A schema change requires separately reviewed migration, grants and receiver
-compatibility updates. Production is not configured by this workflow.
+`STAGING_SCHEMA_VERSION=61` is an environment assertion against the clean staging
+database, not a migration command. The publisher and VM receiver both pin this
+reviewed compatibility version; the receiver also checks the exact migration
+maximum and live database version before deployment. Schema migrations and grants
+remain separately reviewed operations. Production is not configured by this
+workflow.
+
+For the existing schema-61 staging VM, validate a fresh sealed restore first,
+install the updated trusted receiver, then synchronize its reviewed scope.
+Update the GitHub staging environment variable after the receiver accepts it.
+
+```sh
+python3 deploy/staging/staging.py restore-check
+python3 deploy/staging/staging.py install
+python3 deploy/staging/staging.py sync-cd-schema
+gh variable set STAGING_SCHEMA_VERSION --env staging --body 61
+```
+
+Scope synchronization preserves the existing verification key and CD enable
+flag. It requires a clean matching database and a sealed, isolated restore
+check from the last 24 hours.
 
 Trusted agent updates are explicit through `staging.py install`; fetched code
 cannot replace the CD receiver itself. To pause CD, set `enabled` to `false` in

@@ -3,8 +3,11 @@
 This controller targets only `ssh kafka-vps` (`haidar@10.1.16.109:10022`).
 Run commands from the backend checkout on the office network/VPN. It does not
 require a sudo password; the existing deployment account controls Docker.
-The current database is migration **41**, clean. Schema migrations and policy
-changes remain separate reviewed operations.
+On 2026-11-23, the live database was at clean migration **61** and the server,
+dashboard, scheduler, admission worker and delivery worker were ready. The
+workstation controller can use the configured SSH key's passphrase from macOS
+Keychain while keeping host-key verification and non-interactive authentication.
+Schema migrations and policy changes remain separate reviewed operations.
 
 ## Commands
 
@@ -17,7 +20,7 @@ python3 deploy/staging/staging.py diagnostics
 python3 deploy/staging/staging.py schedule
 
 # Build/check an immutable committed source and deploy it in one command.
-python3 deploy/staging/staging.py deploy --ref HEAD --schema 41
+python3 deploy/staging/staging.py deploy --ref HEAD --schema 61
 
 # Roll back the most recent deployment, keeping the current compatible schema.
 python3 deploy/staging/staging.py rollback
@@ -32,14 +35,14 @@ python3 deploy/staging/staging.py restore-check
 ```
 
 `deploy --ref` rejects uncommitted runtime source changes. It archives the
-specified commit, builds and checks all six hardened images with the existing
+specified commit, builds and checks the hardened images with the existing
 `scripts/check-images.py`, and records immutable image IDs and source SHA-256.
 The explicit schema value is an operator compatibility assertion against the
 already installed database; the command never applies or reverses migrations.
 It does not include unrelated uncommitted files, generated credentials or local
 `.env`. Repository CI remains required independently; image checks are not a
-substitute for unit, integration or vulnerability gates. Hosted CI evidence was
-not available to this workstation's unauthenticated GitHub CLI.
+substitute for unit, integration or vulnerability gates. Verify the exact
+candidate SHA in hosted Backend CI before deployment.
 
 The `install` command uploads a complete immutable operations-code directory
 and atomically activates it under a lock. A stable launcher resolves that
@@ -70,7 +73,7 @@ the complete original hold/lineage/schema/dispatch policy state. It refuses to
 clear an unrelated incident or operator hold. Inspect the protected journal
 and incident state if recovery refuses; never unset a hold blindly.
 
-The controller is deliberately limited to the four known staging roles and
+The controller is deliberately limited to the known staging roles and
 known policy volumes. Changes to role commands, mounts, schema compatibility
 or runtime security require review. Old rollback containers/images are retained
 for recovery; inspect and prune obsolete releases deliberately, not blindly.
@@ -82,7 +85,7 @@ journal; rerunning `diagnostics` recovers an interrupted setup first.
 The VM creates an encrypted DB/config backup hourly at minute 07. It retains
 48 newest snapshots plus one daily snapshot for up to fourteen days. The bundle
 contains a consistent `pg_dump` custom archive, count/row-digest evidence from
-the same exported database snapshot, four role-policy snapshots, `/etc/hello`
+the same exported database snapshot, role-policy snapshots, `/etc/hello`
 credential/TLS material and the management client material. The envelope uses
 OpenSSL CMS AES-256-GCM under a dedicated backup recipient certificate
 ([OpenSSL CMS cipher reference](https://docs.openssl.org/3.0/man1/openssl-cms/#encryption-and-decryption-options)).
@@ -111,6 +114,16 @@ in `finally`. Production/staging data, Kafka and staff sessions are not rewound.
 Restoring a backup into active service requires a separate reconciliation of
 revocations, external sends, high-water marks and lineage; this drill never
 activates a restored database.
+
+On 2026-11-23, a fresh encrypted schema-61 backup was verified off-host.
+The isolated PostgreSQL restore verified 69 tables and nine archive members
+in 7.12 seconds and finished sealed with migration hold set. This measures
+the restore check through sealing, before service reconciliation or reopening.
+
+The staging gateway also passed the API-key challenge, staff login, refresh
+rotation, and logout revocation checks. The staging Firebase service account
+passed OAuth for the Firebase Messaging scope. Keep that result separate from
+FCM validation for a target, delivery, and a receipt reported by the phone.
 
 ## Local health and alerts
 

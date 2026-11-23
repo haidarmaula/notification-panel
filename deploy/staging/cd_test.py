@@ -5,7 +5,8 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from cd_protocol import REPOSITORY, REQUIRED_JOBS, checked_run, signed_message, verify_message, checked_schema
+from unittest.mock import patch
+from cd_protocol import REPOSITORY, STAGING_SCHEMA_VERSION, REQUIRED_JOBS, checked_run, signed_message, verify_message, checked_schema
 
 SHA='a'*40
 
@@ -20,9 +21,9 @@ class CDProtocolTests(unittest.TestCase):
         for jobs in [self.jobs()[:-1],[*self.jobs(),self.jobs()[0]],[{**j,'conclusion':'skipped'} if i==0 else j for i,j in enumerate(self.jobs())]]:
             with self.assertRaises(ValueError):checked_run(self.run_info(),jobs,SHA)
     def test_pending_or_missing_migrations_require_explicit_target_review(self):
-        checked_schema(['db/migrations/000001_first.up.sql','db/migrations/000041_guard.up.sql'],41)
-        for paths in [[],['db/migrations/000040_old.up.sql'],['db/migrations/000041_guard.up.sql','db/migrations/000042_new.up.sql']]:
-            with self.assertRaises(ValueError):checked_schema(paths,41)
+        checked_schema(['db/migrations/000001_first.up.sql','db/migrations/000061_pilot_routes.up.sql'],STAGING_SCHEMA_VERSION)
+        for paths,schema in [([],61),(['db/migrations/000060_old.up.sql'],61),(['db/migrations/000061_pilot_routes.up.sql','db/migrations/000062_new.up.sql'],61),(['db/migrations/000061_pilot_routes.up.sql'],60),(['db/migrations/000061_pilot_routes.up.sql'],62)]:
+            with self.assertRaises(ValueError):checked_schema(paths,schema)
 
     def test_signed_marker_rejects_tampering_wrong_scope_and_wrong_key(self):
         with tempfile.TemporaryDirectory() as d:
@@ -30,17 +31,45 @@ class CDProtocolTests(unittest.TestCase):
             for name in ['trusted','wrong']:
                 subprocess.run(['openssl','genpkey','-algorithm','ED25519','-out',str(d/(name+'.key'))],check=True,capture_output=True)
                 subprocess.run(['openssl','pkey','-in',str(d/(name+'.key')),'-pubout','-out',str(d/(name+'.pub'))],check=True,capture_output=True)
-            payload={'version':1,'repository':REPOSITORY,'sha':SHA,'schema':41,'ci_run_id':123,'ci_run_attempt':1}
+            payload={'version':1,'repository':REPOSITORY,'sha':SHA,'schema':STAGING_SCHEMA_VERSION,'ci_run_id':123,'ci_run_attempt':1}
             message=signed_message(payload,d/'trusted.key')
-            self.assertEqual(verify_message(message,d/'trusted.pub',SHA,41),payload)
-            with self.assertRaises(ValueError):verify_message(message,d/'wrong.pub',SHA,41)
-            with self.assertRaises(ValueError):verify_message(message,d/'trusted.pub','b'*40,41)
-            with self.assertRaises(ValueError):verify_message(message,d/'trusted.pub',SHA,42)
-            obj=json.loads(message);raw=json.loads(base64.b64decode(obj['payload']));raw['schema']=42
+            self.assertEqual(verify_message(message,d/'trusted.pub',SHA,STAGING_SCHEMA_VERSION),payload)
+            with self.assertRaises(ValueError):verify_message(message,d/'wrong.pub',SHA,STAGING_SCHEMA_VERSION)
+            with self.assertRaises(ValueError):verify_message(message,d/'trusted.pub','b'*40,STAGING_SCHEMA_VERSION)
+            with self.assertRaises(ValueError):verify_message(message,d/'trusted.pub',SHA,STAGING_SCHEMA_VERSION+1)
+            obj=json.loads(message);raw=json.loads(base64.b64decode(obj['payload']));raw['schema']=STAGING_SCHEMA_VERSION+1
             obj['payload']=base64.b64encode(json.dumps(raw).encode()).decode()
-            with self.assertRaises(ValueError):verify_message(json.dumps(obj),d/'trusted.pub',SHA,42)
+            with self.assertRaises(ValueError):verify_message(json.dumps(obj),d/'trusted.pub',SHA,STAGING_SCHEMA_VERSION+1)
 
 
+
+
+class CDSchemaSyncTests(unittest.TestCase):
+    def test_updates_only_scope_after_a_clean_sealed_restore(self):
+        import ops_cd
+        with tempfile.TemporaryDirectory() as directory:
+            root=Path(directory)
+            folder=root/'cd'
+            folder.mkdir()
+            config=folder/'config.json'
+            config.write_text(json.dumps({'repository':REPOSITORY,'schema':41,'enabled':False}))
+            key=folder/'verification.pem'
+            key.write_text('pinned verification key')
+            (root/'deployment.json').write_text('{"phase":"committed"}')
+            live={'version':STAGING_SCHEMA_VERSION,'dirty':False}
+            restore={'schema':live,'sealed':True,'migration_hold':True,'network':'none','completed':1000}
+            report=root/'last-restore-drill.json'
+            with patch.object(ops_cd,'ROOT',root),patch.object(ops_cd,'state',return_value={'schema':live}),patch.object(ops_cd.time,'time',return_value=1100):
+                for change in ({'sealed':False},{'schema':{'version':41,'dirty':False}},{'completed':-86400}):
+                    report.write_text(json.dumps({**restore,**change}))
+                    with self.assertRaisesRegex(RuntimeError,'fresh sealed restore'):
+                        ops_cd.sync_schema()
+                    self.assertEqual(json.loads(config.read_text())['schema'],41)
+                report.write_text(json.dumps(restore))
+                ops_cd.sync_schema()
+                ops_cd.sync_schema()
+            self.assertEqual(json.loads(config.read_text()),{'repository':REPOSITORY,'schema':STAGING_SCHEMA_VERSION,'enabled':False})
+            self.assertEqual(key.read_text(),'pinned verification key')
 
 
 class CDPollTests(unittest.TestCase):
@@ -51,11 +80,11 @@ class CDPollTests(unittest.TestCase):
         import ops
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);folder=root/'cd';(folder/'repository.git').mkdir(parents=True)
-            (folder/'config.json').write_text(json.dumps({'repository':REPOSITORY,'schema':41,'enabled':True}))
+            (folder/'config.json').write_text(json.dumps({'repository':REPOSITORY,'schema':STAGING_SCHEMA_VERSION,'enabled':True}))
             private=folder/'private'
             subprocess.run(['openssl','genpkey','-algorithm','ED25519','-out',str(private)],check=True,capture_output=True)
             subprocess.run(['openssl','pkey','-in',str(private),'-pubout','-out',str(folder/'verification.pem')],check=True,capture_output=True)
-            payload={'version':1,'repository':REPOSITORY,'sha':SHA,'schema':41,'ci_run_id':123,'ci_run_attempt':1}
+            payload={'version':1,'repository':REPOSITORY,'sha':SHA,'schema':STAGING_SCHEMA_VERSION,'ci_run_id':123,'ci_run_attempt':1}
             message=signed_message(payload,private)
             if tamper:message=message.replace('signature','changed')
             tag='object '+SHA+'\ntype commit\ntag staging-ready/'+SHA+'\n\n'+message+'\n'
@@ -64,7 +93,7 @@ class CDPollTests(unittest.TestCase):
                 if args[0]=='rev-parse':return SHA.encode()
                 if args[0]=='cat-file':return tag.encode()
                 if args[0]=='archive':return b'archive'
-                if args[0]=='ls-tree':return b'db/migrations/000041_guard.up.sql\n'
+                if args[0]=='ls-tree':return b'db/migrations/000061_onboarding_pilot_routes.up.sql\n'
                 raise AssertionError(args)
             def prepare(release,sha,schema,archive=None):
                 p=root/'releases'/release;p.mkdir(parents=True)
@@ -73,10 +102,10 @@ class CDPollTests(unittest.TestCase):
             incident=Mock()
             @contextlib.contextmanager
             def lock(**kwargs):
-                if paused and not kwargs:(folder/'config.json').write_text(json.dumps({'repository':REPOSITORY,'schema':41,'enabled':False}))
+                if paused and not kwargs:(folder/'config.json').write_text(json.dumps({'repository':REPOSITORY,'schema':STAGING_SCHEMA_VERSION,'enabled':False}))
                 yield
             with patch.multiple(cd,ROOT=root,ROLES=dict(cd.ROLES),git=git,current_remote_sha=lambda:'b'*40 if stale else SHA,lock=lock,
-                state=lambda:{'schema':{'version':41,'dirty':False}},backup=Mock(),deploy=deployed,run=Mock(),db=incident,rollback=Mock(side_effect=RuntimeError('pending deliveries')),health=lambda:{'roles':{'server':'unready' if blocked else 'ready'},'alerts':[]}),patch.object(ops,'prepare',prepare):
+                state=lambda:{'schema':{'version':STAGING_SCHEMA_VERSION,'dirty':False}},backup=Mock(),deploy=deployed,run=Mock(),db=incident,rollback=Mock(side_effect=RuntimeError('pending deliveries')),health=lambda:{'roles':{'server':'unready' if blocked else 'ready'},'alerts':[]}),patch.object(ops,'prepare',prepare):
                 if tamper:
                     with self.assertRaises(ValueError):cd.poll()
                     deployed.assert_not_called();return

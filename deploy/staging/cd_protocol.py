@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 
 REPOSITORY='haidarmaula/notification-panel'
+STAGING_SCHEMA_VERSION=61
 REQUIRED_JOBS={
  'Skill integrity, format, build, unit race tests and vet',
  'Isolated worker, PostgreSQL, Kafka and simulated provider',
@@ -32,7 +33,7 @@ def checked_schema(paths,schema):
         match=re.fullmatch(r'([0-9]{6})_.+\.up\.sql',name)
         if not match:raise ValueError('Malformed committed migration filename.')
         versions.append(int(match[1]))
-    if type(schema) is not int or not versions or max(versions)!=schema:
+    if type(schema) is not int or schema!=STAGING_SCHEMA_VERSION or not versions or max(versions)!=schema:
         raise ValueError('Committed migrations differ from reviewed staging schema; migrate/review separately.')
 
 

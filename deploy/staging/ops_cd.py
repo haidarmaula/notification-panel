@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 import subprocess
 import time
-from cd_protocol import REPOSITORY, verify_message, checked_schema
+from cd_protocol import REPOSITORY, STAGING_SCHEMA_VERSION, verify_message, checked_schema
 from ops_common import ROOT, ROLES, atomic, lock, run, save, state, inspect, db
 from ops_backup import backup
 from ops_health import health
@@ -26,9 +26,34 @@ def current_remote_sha():
     return data[0]
 
 
+def sync_schema():
+    """Advance the existing receiver scope after a verified staging upgrade."""
+    folder=ROOT/'cd'
+    config_path=folder/'config.json'
+    config=json.loads(config_path.read_text())
+    if (set(config)!={'repository','schema','enabled'} or config['repository']!=REPOSITORY
+            or config['schema'] not in (41,STAGING_SCHEMA_VERSION) or type(config['enabled']) is not bool
+            or not (folder/'verification.pem').is_file()):
+        raise RuntimeError('Expected the existing staging receiver and pinned verification key.')
+    expected={'version':STAGING_SCHEMA_VERSION,'dirty':False}
+    if state()['schema']!=expected:
+        raise RuntimeError('Live database schema does not match the reviewed CD version.')
+    journal=json.loads((ROOT/'deployment.json').read_text())
+    if journal['phase'] not in ('committed','rolled-back','baseline'):
+        raise RuntimeError('Recover the staging deployment journal before changing CD scope.')
+    restore=json.loads((ROOT/'last-restore-drill.json').read_text())
+    if (restore['schema']!=expected or restore.get('sealed') is not True
+            or restore.get('migration_hold') is not True or restore.get('network')!='none'
+            or not 0<=time.time()-restore['completed']<=86400):
+        raise RuntimeError('Run a fresh sealed restore check of the reviewed staging schema.')
+    if config['schema']!=STAGING_SCHEMA_VERSION:
+        save(config_path,{**config,'schema':STAGING_SCHEMA_VERSION})
+    return {'schema':STAGING_SCHEMA_VERSION,'enabled':config['enabled'],'restored_schema_verified':True}
+
+
 def poll():
     folder=ROOT/'cd';config=json.loads((folder/'config.json').read_text())
-    if set(config)!={'repository','schema','enabled'} or config['repository']!=REPOSITORY or config['schema']!=41 or type(config['enabled']) is not bool:raise RuntimeError('Unreviewed staging CD scope/schema; inspect config.')
+    if set(config)!={'repository','schema','enabled'} or config['repository']!=REPOSITORY or config['schema']!=STAGING_SCHEMA_VERSION or type(config['enabled']) is not bool:raise RuntimeError('Unreviewed staging CD scope/schema; inspect config.')
     if not config['enabled']:return {'phase':'disabled'}
     repository=folder/'repository.git'
     if not repository.exists():

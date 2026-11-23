@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 import shlex
 import subprocess
-from cd_protocol import REPOSITORY
+from cd_protocol import REPOSITORY, STAGING_SCHEMA_VERSION
 
 LOCAL=Path.home()/'.config/hello/staging/cd'
 REMOTE='/home/haidar/hello-staging-ops'
@@ -36,7 +36,7 @@ def main():
     public.write_bytes(derived)
     check="from pathlib import Path; import hashlib,json; p=Path('/home/haidar/hello-staging-ops/cd'); print(json.dumps({'key':hashlib.sha256((p/'verification.pem').read_bytes()).hexdigest() if (p/'verification.pem').exists() else None,'config':json.loads((p/'config.json').read_text()) if (p/'config.json').exists() else None}))"
     pinned=json.loads(run(['ssh','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','kafka-vps',shlex.join(['python3','-c',check])]))
-    if pinned['key'] not in [None,hashlib.sha256(derived).hexdigest()] or pinned['config'] not in [None,{'repository':REPOSITORY,'schema':41,'enabled':True}]:raise RuntimeError('Existing VM trust or scope differs; refuse GitHub secret mutation.')
+    if pinned['key'] not in [None,hashlib.sha256(derived).hexdigest()] or pinned['config'] not in [None,{'repository':REPOSITORY,'schema':STAGING_SCHEMA_VERSION,'enabled':True}]:raise RuntimeError('Existing VM trust or scope differs; refuse GitHub secret mutation.')
     result=subprocess.run(['gh','api','repos/'+REPOSITORY+'/environments/staging'],capture_output=True)
     policy={'protected_branches':False,'custom_branch_policies':True}
     if result.returncode==0:
@@ -52,8 +52,8 @@ def main():
         run(['gh','api','repos/'+REPOSITORY+'/environments/staging/deployment-branch-policies','--method','POST','--input','-'],b'{"name":"main","type":"branch"}')
     variables=api('environments/staging/variables')['variables']
     existing=next((v for v in variables if v['name']=='STAGING_SCHEMA_VERSION'),None)
-    if existing and existing['value']!='41':raise RuntimeError('Existing schema compatibility differs; inspect first.')
-    if not existing:run(['gh','api','repos/'+REPOSITORY+'/environments/staging/variables','--method','POST','--input','-'],b'{"name":"STAGING_SCHEMA_VERSION","value":"41"}')
+    if existing and existing['value']!=str(STAGING_SCHEMA_VERSION):raise RuntimeError('Existing schema compatibility differs; inspect first.')
+    if not existing:run(['gh','api','repos/'+REPOSITORY+'/environments/staging/variables','--method','POST','--input','-'],json.dumps({'name':'STAGING_SCHEMA_VERSION','value':str(STAGING_SCHEMA_VERSION)}).encode())
     run(['gh','secret','set','STAGING_CD_SIGNING_KEY','--repo',REPOSITORY,'--env','staging'],private.read_bytes())
     script="""from pathlib import Path
 import hashlib,json,os,sys
@@ -62,11 +62,11 @@ pub=root/'verification.pem';data=sys.stdin.buffer.read()
 if pub.exists() and pub.read_bytes()!=data:raise RuntimeError('Existing VM CD trust key differs; refuse rotation')
 pub.write_bytes(data)
 config=root/'config.json'
-expected={'repository':'haidarmaula/notification-panel','schema':41,'enabled':True}
+expected={'repository':'haidarmaula/notification-panel','schema':STAGING_SCHEMA_VERSION,'enabled':True}
 if config.exists() and json.loads(config.read_text())!=expected:raise RuntimeError('Existing CD scope differs')
 config.write_text(json.dumps(expected)+'\\n')
 print('Staging verification key pinned; no GitHub credential installed on VM.')
-"""
+""".replace('STAGING_SCHEMA_VERSION',str(STAGING_SCHEMA_VERSION))
     output=run(['ssh','-o','BatchMode=yes','-o','StrictHostKeyChecking=yes','kafka-vps',shlex.join(['python3','-c',script])],public.read_bytes())
     print(output.decode().strip());print('Staging environment limited to main; signing secret installed only in GitHub staging.')
 

@@ -60,12 +60,12 @@ def prepare(name,revision,schema,archive=None):
 def main():
     os.umask(0o077)
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','cd','docs-gateway','dashboard-bootstrap'])
+    parser.add_argument('command',choices=['diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','cd','sync-cd-schema','docs-gateway','dashboard-bootstrap'])
     parser.add_argument('--release');parser.add_argument('--revision');parser.add_argument('--schema',type=int);parser.add_argument('--cron',action='store_true')
     args=parser.parse_args()
     if args.command in ['capture','prepare','deploy'] and (not args.release or not re.fullmatch('[a-z0-9][a-z0-9-]{0,63}',args.release)):raise SystemExit('Valid --release is required.')
     try:
-        with lock(nonblocking=args.cron and args.command!='backup',name='cd.lock' if args.command in ['cd','dashboard-bootstrap'] else 'build.lock' if args.command=='prepare' else 'operations.lock',timeout=300 if args.cron and args.command=='backup' else None):
+        with lock(nonblocking=args.cron and args.command!='backup',name='cd.lock' if args.command in ['cd','dashboard-bootstrap','sync-cd-schema'] else 'build.lock' if args.command=='prepare' else 'operations.lock',timeout=300 if args.cron and args.command=='backup' else None):
             refresh_inventory()
             if args.command=='dashboard-bootstrap':
                 from ops_dashboard import configure
@@ -78,6 +78,9 @@ def main():
                 result=poll()
                 if result['phase']!='retry-paused':(ROOT/'cd/last-error.json').unlink(missing_ok=True)
                 if args.cron and result['phase'] in ['unchanged','waiting-for-successful-ci','retry-paused','disabled']:return
+            elif args.command=='sync-cd-schema':
+                from ops_cd import sync_schema
+                with lock():result=sync_schema()
             elif args.command=='diagnostics':result=diagnostics()
             elif args.command=='schedule':result=schedule()
             elif args.command=='health-drill':

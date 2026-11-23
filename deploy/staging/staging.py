@@ -17,7 +17,10 @@ HERE=Path(__file__).resolve().parent
 REPO=HERE.parent.parent
 LOCAL=Path.home()/'.config/hello/staging/operations'
 REMOTE='/home/haidar/hello-staging-ops'
-SSH=['ssh','-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes','kafka-vps']
+SSH_OPTIONS=['-o','BatchMode=yes','-o','ConnectTimeout=10','-o','StrictHostKeyChecking=yes']
+if sys.platform=='darwin':
+    SSH_OPTIONS+=['-o','UseKeychain=yes']
+SSH=['ssh',*SSH_OPTIONS,'kafka-vps']
 
 
 def call(args,data=None,timeout=120):
@@ -69,7 +72,7 @@ with (root/'operations.lock').open('a') as lock:
     fingerprint=hashlib.sha256(cert.read_bytes()).hexdigest()
     check=call(SSH+[shlex.join(['python3','-c',"from pathlib import Path; import hashlib; p=Path('"+REMOTE+"/backup-recipient.crt'); print(hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else 'missing')"])]).decode().strip()
     if check not in ['missing',fingerprint]:raise RuntimeError('Remote backup recipient differs; do not rotate without recovery review.')
-    call(['scp','-q',str(cert),'kafka-vps:'+REMOTE+'/backup-recipient.crt'])
+    call(['scp','-q',*SSH_OPTIONS,str(cert),'kafka-vps:'+REMOTE+'/backup-recipient.crt'])
     print('Operations installed. Backup private key stays only on this workstation.')
 
 
@@ -79,7 +82,7 @@ def fetch_backup():
     if not re.fullmatch(r'[0-9]{8}T[0-9]{6}Z-[a-f0-9]{8}',name):raise RuntimeError('Unexpected backup identifier.')
     folder=LOCAL/'backups';folder.mkdir(mode=0o700,parents=True,exist_ok=True)
     target=folder/(name+'.cms')
-    call(['scp','-q','kafka-vps:'+REMOTE+'/backups/'+name+'.cms',str(target)])
+    call(['scp','-q',*SSH_OPTIONS,'kafka-vps:'+REMOTE+'/backups/'+name+'.cms',str(target)])
     os.chmod(target,0o600)
     if hashlib.sha256(target.read_bytes()).hexdigest()!=result['sha256']:raise RuntimeError('Off-host ciphertext checksum mismatch.')
     (folder/(name+'.json')).write_text(json.dumps(result,indent=2)+'\n')
@@ -90,7 +93,7 @@ def fetch_backup():
 def main():
     os.umask(0o077)
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('command',choices=['install','diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','docs-gateway','dashboard-bootstrap'])
+    p.add_argument('command',choices=['install','diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','sync-cd-schema','docs-gateway','dashboard-bootstrap'])
     p.add_argument('--release');p.add_argument('--ref');p.add_argument('--schema',type=int)
     a=p.parse_args()
     if a.command=='install':install();return
