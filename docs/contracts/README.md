@@ -5,13 +5,13 @@
 | Staff application registry and grants | [OpenAPI](application-registry.openapi.json) |
 | Staff sessions, administration and scoped business resources | [OpenAPI](staff-business.openapi.json) |
 | Installation lifecycle, mobile reports, staff send/schedule and campaign statistics | [OpenAPI](mobile-delivery.openapi.json) |
-| Optional application onboarding setup (eight implemented operations) | [OpenAPI](application-onboarding.openapi.json) · [API guide](../api/application-onboarding-api.md) |
+| Optional application onboarding and release | [OpenAPI](application-onboarding.openapi.json) · [API guide](../api/application-onboarding-api.md) |
 | Admission consumer | [Scoped send v1 JSON Schema](send-requested-v1.schema.json) |
 | Delivery analytics or projection consumer | [Scoped update v2 JSON Schema](delivery-updated-v2.schema.json) |
 
 The generated local/staging API reference intentionally bundles only the first
 three OpenAPI guides through `scripts/api_docs.py`; it is not an exhaustive API
-inventory. The onboarding setup contract describes an implemented optional
+inventory. The onboarding contract describes an implemented optional
 capability, unmounted by default. The [local tutorial](../local-development.md#try-onboarding-in-the-dashboard)
 uses an explicitly enabled synthetic runtime; it does not authorize deployment
 policy changes or additional staging endpoints. The broader

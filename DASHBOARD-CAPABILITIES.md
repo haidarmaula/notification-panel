@@ -39,7 +39,7 @@ Mobile layouts must preserve essential workflows without horizontal page overflo
 | campaign-acceptance      | Explicit immediate-send or schedule confirmation, stable idempotency and conflict handling                                            | campaign-drafts                                                                              |
 | delivery-results         | Per-campaign statistics and paginated delivery/read history                                                                           | application-workspace                                                                        |
 | dashboard-administration | Staff account management, managed application registry, explicit grants and scoped operational reads                                  | staff-session, application-workspace                                                         |
-| application-setup        | Optional registry-linked profile configuration, FCM candidate staging, OAuth verification and dispatch hold; no activation or release | dashboard-administration, protected onboarding policy and verifier scope                     |
+| application-setup        | Optional registry-linked profile setup, candidate verification, reviewed activation, device dry-run and dispatch release               | dashboard-administration, protected onboarding policy and verifier scope                     |
 | frontend-release         | Repeatable builds, CI, private staging deployment, health checks and rollback                                                         | staff-session, application-workspace, campaign-drafts, campaign-acceptance, delivery-results |
 
 Build order: staff-session -> application-workspace -> campaign-drafts ->
@@ -106,15 +106,18 @@ data visible as if access remains valid.
 - Global cross-application analytics or invented dashboard metrics.
 - Application setup now supports configured enrollment profiles/platform mappings,
   FCM candidate upload and OAuth verification from registry detail, plus readiness,
-  operation/approval metadata and dispatch hold. This optional protected capability
+  operation/approval metadata and dispatch hold. It also supports requesting
+  reviewed enrollment activation, a test-cohort dry-run, and PILOT or FULL release.
+  This optional protected capability
   is unmounted by default; it requires server policy, a credential provisioner,
   approved profiles and per-application verifier scope. See the
   [onboarding API](docs/api/application-onboarding-api.md) and
   [local walkthrough](docs/local-development.md#try-onboarding-in-the-dashboard).
-  Saving setup or passing OAuth does not promote credentials, activate an
-  application, enroll a device, prove target-project IAM/delivery, or release
-  dispatch. Activation, device enrollment/testing, cohort creation and full
-  delivery release are not provided by this setup screen.
+  Saving setup or passing OAuth leaves activation and release gated on reviewed
+  runtime and cohort evidence. Devices enroll through the mobile API.
+- The [local Test Devices screen](docs/local-development.md#real-fcm-on-an-android-device)
+  provides the standalone Android APK, pairing, and one-device FCM testing for
+  the isolated development profile.
 - Campaign cancellation remains unsupported because the backend has no
   cancellation API.
 - Bulk imports, user mutation and a rich visual message builder. The subsequent

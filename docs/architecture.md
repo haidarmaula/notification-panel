@@ -57,9 +57,21 @@ The React/Astryx UI calls `/bff/session`, `/bff/login` and allowlisted `/bff/api
 
 ### Optional onboarding runtime
 
-The optional [setup API](api/application-onboarding-api.md) connects registry/enrollment-profile setup to FCM candidate staging and OAuth verification. [`cmd/provisioner`](../cmd/provisioner/main.go) accepts reserved credential stages over private mTLS; [`cmd/controlplane`](../cmd/controlplane/main.go) processes app-scoped verification work with fenced database completion. Neither activates an application, enrolls devices, sends a test push or releases dispatch. OAuth verification does not prove target-project IAM permission or device delivery.
+The optional [setup API](api/application-onboarding-api.md) connects enrollment
+profiles, FCM credential staging and verification to a reviewed release
+workflow. [`cmd/provisioner`](../cmd/provisioner/main.go) accepts reserved
+credential stages over private mTLS. App-scoped
+[`cmd/controlplane`](../cmd/controlplane/main.go) commands process verification,
+prepare runtime reservations, and approve or apply lifecycle transitions under
+separate database roles. Mobile clients enroll through the mobile API. The
+controlled cohort dry-run records device-level outcomes before dispatch approval.
+OAuth verification only confirms token issuance.
 
-This implemented scoped control-plane runtime is not the proposed full runtime allocator. The [runtime preparation subset](design/application-onboarding-runtime.md) produces constrained plans, not Docker deployment, capacity reservations, policy publication or runtime-readiness acknowledgements. For a safe exercise, use the [existing local dashboard onboarding tutorial](local-development.md#try-onboarding-in-the-dashboard); activation, grants and release remain separate gates.
+Runtime acknowledgements are scoped to a reviewed reservation and runtime
+operation. The local fixture exercises the protected sequence; production
+allocation, verifier provisioning, credential rotation, and recovery require
+separate evidence. See the [runtime design](design/application-onboarding-runtime.md)
+and [local setup tutorial](local-development.md#try-onboarding-in-the-dashboard).
 
 ## Why these boundaries exist
 
@@ -110,8 +122,23 @@ For acknowledgement mechanics see [admission consumer](../internal/dispatch/cons
 
 Local server/bootstrap commands can load environment configuration. Protected deployment has separate configuration loaders. Worker and scheduler commands require protected per-component policy; copying `.env.example` does not activate them. Their startup verifies database and approved broker/source identity before starting work.
 
-The canonical [`./dev` environment](local-development.md) runs the React/Astryx frontend, Go BFF, API, PostgreSQL, Kafka, admission and delivery workers, and scheduler, plus local onboarding provisioner/verifier support. External OAuth/FCM is simulated; this isolated full stack is not a production topology or provider-acceptance evidence. Production access, source registration, credentials, grants, dispatch policy, and acceptance evidence remain separate operator responsibilities. See [development guide](development-guide.md) for the safe starting point and [production readiness](analysis/production-readiness-plan.md) for current gates.
+The default [`./dev` environment](local-development.md) runs the React/Astryx
+frontend, Go BFF, API, PostgreSQL, Kafka, workers, scheduler, and local onboarding
+services with simulated OAuth and FCM. The separate
+[`--real-fcm` profile](local-development.md#real-fcm-on-an-android-device) adds a
+loopback Test Devices dashboard and a mobile-only HTTPS ingress on private Wi-Fi.
+Test Devices enrolls multiple Android phones and selects one binding for real
+FCM. Each test push uses the normal campaign and delivery pipeline.
+
+[Staging](../deploy/staging/OPERATIONS.md) has its own deployment controller and
+isolated test pilot. The [production readiness plan](analysis/production-readiness-plan.md)
+tracks environment provisioning, mobile and consumer acceptance, capacity,
+security, recovery, and operational release gates.
 
 ## How to interpret older design material
 
-ADRs preserve decisions and proposals, including descriptions of older implementations. A proposed ADR is not evidence that a feature is absent or deployed. The [target diagram](diagrams/README.md) is a dated design snapshot. Use executable wiring and current SQL for implemented behavior, API contracts for request/response details, and the readiness register for deployment evidence.
+ADRs and [architecture diagrams](diagrams/README.md) preserve design decisions
+and dated checkpoints. The [Floorplan source](../floorplan/architecture.json)
+maps current code and environment boundaries. Use executable wiring and SQL
+for runtime behavior, API contracts for request/response details, and the
+readiness register for deployment evidence.

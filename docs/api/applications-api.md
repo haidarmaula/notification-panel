@@ -71,11 +71,13 @@ Mutations and allowlisted audit snapshots commit together. The service rechecks
 authority inside its transaction; this is statement-time authority, not a promise
 to cancel an already in-flight operation after revocation.
 
-Before deployment apply migration 000016 and its audit-label preflight described
-in [database documentation](../database.md). No activation or second-application
-business data is permitted until M03b scopes or retires the legacy APIs, worker,
-scheduler and fanout. Production deployment, provider/device delivery, performance
-and infrastructure resilience remain separate release gates.
+Migration 000016 introduced the registry and its audit-label preflight. Apply
+the current reviewed migration sequence for a new deployment. The
+[application lifecycle runbook](../runbooks/application-lifecycle.md) and
+[onboarding API](application-onboarding-api.md) govern activation and reviewed
+access for additional applications. See the
+[production readiness plan](../analysis/production-readiness-plan.md) for target
+deployment and delivery evidence.
 
 Scoped campaign send and scheduling use the separate
 [durable acceptance contract](campaign-acceptance-api.md).

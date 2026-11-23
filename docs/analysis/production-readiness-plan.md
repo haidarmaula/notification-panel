@@ -1,10 +1,10 @@
 # Backend production readiness plan
 
-Updated 2026-11-11 (Asia/Jakarta). Step 23 is complete. The current phase is pre-production acceptance. Production dispatch remains on hold.
+Updated 2026-11-23 (Asia/Jakarta). Step 23 is complete. The current phase is pre-production acceptance. Production dispatch remains on hold.
 
 The first unchecked roadmap item is Step 05. The project owner approved initial numeric objectives on 2026-11-09. A user-provided Cloud Console screenshot shows a 600,000/min FCM send quota and 0 current usage; recent peak/headroom, failure scenarios, operational ownership, feasibility and target-environment evidence remain open. Independent implementation and verification may proceed in parallel. Step 40 remains the staging device gate, and Step 41 capacity evidence informs the Step 05 decisions.
 
-The [cutover evidence register](cutover-readiness.md) records the outstanding device, provider, operations and approval gates. The [capacity report](delivery-load.md) records the measured results for the current authorization path.
+The [cutover evidence register](cutover-readiness.md) records the outstanding device, provider, operations and approval gates. The [capacity report](delivery-load.md) records the measured results for the current authorization path. Since the prior update, staging recorded a one-device Android enrollment, pilot, receipt and bounded-outage smoke; this is partial staging acceptance, not production readiness. The committed onboarding work verified setup/OAuth and simulated delivery in local fixtures; it did not activate a production application or demonstrate real Firebase/device onboarding. See the [onboarding implementation checkpoint](application-onboarding-implementation.md) and [staging record](../../deploy/staging/README.md).
 
 This document indexes the latest work and requirements. ADRs remain
 `proposed` until decisions and reviews are complete. Implementation checklist items
@@ -111,6 +111,31 @@ The [Step 40 staging prerequisites](../runbooks/delivery-worker.md#step-40-stagi
 remain the operator setup checklist. Repository fixtures cannot demonstrate
 staging identity provisioning, signed client builds, Firebase/APNs access or
 real-device behavior. Do not mark Steps 05, 06 or 40 complete on this preflight.
+
+### Subsequent staging and onboarding evidence (2026-11-23)
+
+The staging README records a real one-device Android smoke, kept separate from
+the local synthetic-device checks above. The owner-approved staging pilot sent
+campaign 1 once and confirmed foreground display. Follow-up staging campaigns
+recorded OPENED/DELIVERED observations, background and recent-apps dismissal
+behavior, and receipt retry after a short-lived session expired or a narrowly
+scoped API path outage. Campaign 9 was accepted by FCM but had no device
+observation; it remains SENT. These observations cover one staging debug app and
+phone only; they do not establish signed release behavior, iOS/APNs, force-stop,
+reboot recovery, broad offline behavior, capacity, or production acceptance.
+
+Staging operations also recorded checked immutable images, guarded deploy and
+rollback/redeploy, four-role readiness, encrypted backup and a sealed networkless
+restore comparison. The runbook explicitly records that scheduled backups remain
+on the VM unless fetched, automatic independent-storage delivery and an external
+alert receiver are absent, and this setup is not production deployment.
+
+The committed onboarding checkpoint separately reports local setup/OAuth,
+synthetic provider/device services-fixture, BFF and browser evidence. It also
+states that live Google target IAM, real device observation for a newly onboarded
+application, production backup/restore and combined production verifier/runtime
+allocation remain open. Do not combine these local fixture results with the
+recorded staging smoke or treat either as production onboarding acceptance.
 
 ### Local Android FCM smoke evidence (2026-11-10)
 
@@ -371,7 +396,7 @@ work on unchecked rows has started, as noted.
 
 ### Phase 7 — production evidence
 
-- [ ] 40. Staging end-to-end tests with real Android/iOS devices and relevant application states. Provision the isolated backend, Firebase and Apple identities, Laravel and origin broker, and signed client builds using the [staging prerequisites](../runbooks/delivery-worker.md#step-40-staging-prerequisites). Local synthetic Android testing on 2026-11-10 confirmed foreground app receipts (campaigns 1 and 3), a user-confirmed background notification/tap-to-open (campaign 4), process-absent FCM sends (campaigns 5–8), and a cold-start response with title/body in `Last push` after a local Expo response fallback was added (campaign 8). Campaign 5 was cleared before tap; campaign 6 initially opened on a Metro bundle error; campaign 7 opened but did not update `Last push`. The app's test source passed lint/typecheck after the fallback. Campaign 2's one attempt failed `unregistered` and the old binding was replaced. Campaigns 1 and 3–8 each used one `SENT` attempt except campaign 2; no campaign was retried. This does not complete Step 40 staging acceptance: signed staging builds, iOS/APNs, Laravel/origin broker, force-stop behavior and target operational evidence remain open.
+- [ ] 40. Staging end-to-end tests with real Android/iOS devices and relevant application states. Provision the isolated backend, Firebase and Apple identities, Laravel and origin broker, and signed client builds using the [staging prerequisites](../runbooks/delivery-worker.md#step-40-staging-prerequisites). Local synthetic Android testing on 2026-11-10 confirmed foreground, background/tap and process-absent behavior; see [local smoke evidence](local-fcm-smoke-handoff.md). Separate recorded staging evidence now covers one Android phone: foreground display, notification-open observations, recent-apps dismissal/process death, and receipt retry after session expiry or a narrow API outage. Campaign 9 remained SENT with no observed device callback. The staging app is a debug smoke app, and the standing pilot is one device. Step 40 remains open: signed release builds, iOS/APNs, production React Native/Laravel integration, Settings Force stop, reboot/offline recovery, broader ownership/cohort coverage and operational acceptance remain unverified.
 - [ ] 41. [Measured synthetic 20,000-device trials, quota holds and multi-campaign bursts](delivery-load.md). Isolated 20,000-device trials recorded all results in 49.424 s and 51.450 s. Five-campaign/100,000-device bursts completed all provider outcomes in 360.177 s at 400/s and 222.242 s at 1,000/s; each verified all Kafka IDs. A new 1,000/s rerun reported each 20,000-device campaign's last durable result in 213.082–214.969 s and verified all 100,000 Kafka IDs. All measurements are local synthetic evidence; target storage, network, provider quota and agreed burst/headroom/soak profile remain open.
 - [ ] 42. Local failure drills cover controller/broker elections, lost ISR, monitored full broker loss, gaps, DB rollback, ambiguous publication, expired leases, duplicate/replay and provider timeout/429/503. The three-controller/three-broker drill passed locally on 2026-11-09: controller replacement through verified canaries and quorum took 21 s; broker recovery restored full ISR, canaries and checkpoints in 11 s. Repeat in the approved failure domains with independent monitoring.
 - [ ] 43. Logical and physical recovery, post-backup revocations, missing WAL and guarded downgrade refusal pass locally. The [worker rollback drill](../runbooks/sealed-restore.md#worker-rollback-on-the-current-schema) and full race-enabled isolated integration suite passed on 2026-11-09; it builds the reviewed prior worker and verifies it resumes held work on the current schema without duplicate Kafka outcomes or an extra provider send. Target restore, compatible image rollback, off-site recovery keys and cutover rehearsal remain open.

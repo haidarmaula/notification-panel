@@ -1,8 +1,12 @@
 # Local mobile test issuer
 
-This loopback-only tool issues a short-lived mobile JWT and bounded, fresh
-one-use enrollment assertions for an isolated Android smoke test. It is not a production issuer,
-Laravel replacement, app-origin verifier, or platform attestation broker.
+This test tool issues short-lived mobile JWTs and one-use enrollment assertions
+for the isolated Android smoke app. Use the
+[Test Devices dashboard](../../docs/local-development.md#real-fcm-on-an-android-device)
+for normal Wi-Fi pairing. The dashboard manages the private HTTPS listener and
+issues fresh QR codes over a local Unix socket. The manual commands below cover
+loopback pairing over ADB. Production mobile identity and origin verification
+use separately approved services.
 
 ## Prerequisites
 

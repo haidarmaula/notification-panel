@@ -1,6 +1,8 @@
 # Application onboarding delivery plan
 
-Date: 2026-11-14. Status: **implementation in progress; setup/OAuth slices implemented locally**.
+Plan origin: 2026-11-14. Status updated 2026-11-23: **setup, OAuth, activation,
+cohort dry-run, release requests, and the local synthetic end-to-end fixture are
+implemented; credential promotion and production acceptance remain open**.
 See the [checkpoint](../analysis/application-onboarding-implementation.md) for exact
 implemented boundaries and remaining work. Staging has not been changed.
 [Spec](../specs/application-onboarding.md) · [ADR-13](../adr/adr-13-application-onboarding.md) ·
@@ -38,22 +40,25 @@ completed setup work from the remaining privileged/runtime/UI slices.
 - [x] Separate coding prerequisites from live production acceptance inputs.
 
 These checkmarks mean documented, not implemented or verified in production.
-The following sections describe future work; use the task inventory for execution.
+Sections B–E below are the original implementation inventory; completed local
+items are checked, while unchecked items describe remaining work. The
+implementation checkpoint records evidence and its limits. Production gates
+remain separate from local implementation status.
 
 ## B. Candidate configuration and safe readiness
 
-- [ ] Add paired migrations for scoped setup/configuration/operation/check metadata,
+- [x] Add paired migrations for scoped setup/configuration/operation/check metadata,
       constraints, indexes, audit allowlists and durable reconciliation work.
-- [ ] Add SQL/repositories, then regenerate sqlc and affected mocks using pinned
+- [x] Add SQL/repositories, then regenerate sqlc and affected mocks using pinned
       tooling. Keep immutable credential versions and setup revisions distinct.
-- [ ] Add protected-file provisioner with per-app/environment/version isolation,
+- [x] Add protected-file provisioner with per-app/environment/version isolation,
       root-owned 0640 files, trusted ancestry, atomic publication, provisional
       references and cleanup. API receives no root/Docker access.
-- [ ] Ensure upload material never enters persistent jobs, logs or unprotected
+- [x] Ensure upload material never enters persistent jobs, logs or unprotected
       proxy buffers; jobs contain opaque references only.
-- [ ] Add authenticated candidate upload, safe readiness reads, strong conditions
-      and durable idempotency. Keep activation and sending disabled.
-- [ ] Exercise rollback between secret creation and DB commit, duplicate requests,
+- [x] Add authenticated candidate upload, safe readiness reads, strong conditions
+      and durable idempotency; activation and dispatch remain separate gated flows.
+- [x] Exercise rollback between secret creation and DB commit, duplicate requests,
       cross-app access, authorization revocation and accidental secret logging.
 
 Likely locations: `internal/features/applications/`, `internal/database/repository/`,
@@ -65,13 +70,13 @@ boundaries, with redacted reads/audit and recoverable orphan handling.
 
 ## C. Bounded verification
 
-- [ ] Reuse `fcm.NewFile` and `deployment.ReadSecret` for verifier/worker scoped
+- [x] Reuse `fcm.NewFile` and `deployment.ReadSecret` for verifier/worker scoped
       read-only mounts, preserving current file and transport/token protections.
-- [ ] Implement leased verification jobs, scope/version evidence, safe error codes,
+- [x] Implement leased verification jobs, scope/version evidence, safe error codes,
       rate limits, freshness and provider failure classification.
-- [ ] Test simulated OAuth rejection, timeout, cancellation, retry bounds, invalid
+- [x] Test simulated OAuth rejection, timeout, cancellation, retry bounds, invalid
       keys, superseded work and app/project swaps with synthetic credentials.
-- [ ] Add dry-run permission checking after scoped test enrollment is available;
+- [x] Add dry-run permission checking after scoped test enrollment is available;
       keep missing-device checks pending, not false failures or successes.
 
 Exit evidence: PROVISIONING readiness accurately distinguishes local/OAuth
@@ -83,10 +88,10 @@ verification from pending target permission and delivery checks.
       resource limits and version/epoch-bound acknowledgements.
 - [ ] Provision platform enrollment/receipt/address keys and source policies;
       verify Kafka, admission, scheduler and delivery composition.
-- [ ] Add narrow DB-delegated greenfield activation and real role-denial tests;
+- [x] Add narrow DB-delegated greenfield activation and real role-denial tests;
       retain the existing offline path for imported projects.
-- [ ] Add asynchronous activation API and crash/retry/supersession recovery.
-- [ ] Demonstrate ACTIVE with dispatch HELD and zero devices, followed by normal
+- [x] Add asynchronous activation API and crash/retry/supersession recovery.
+- [x] Demonstrate ACTIVE with dispatch HELD and zero devices, followed by normal
       enrollment; creator still needs explicit staff business grant.
 
 Likely locations: new control-plane process/package, `internal/daemon/`,
@@ -100,17 +105,19 @@ revisions/epochs and revoked actors prevent unauthorized completion.
 
 ## E. Guided pilot, full release and dashboard integration
 
-- [ ] Expose reviewed route/cohort/consent/quota prerequisites and pending actions.
-- [ ] Implement approved pilot/full delegation and APIs under separate capabilities.
-- [ ] Integrate test notification as an existing scoped campaign under PILOT;
+- [x] Expose reviewed route/cohort/consent/quota prerequisites and pending actions.
+- [x] Implement approved pilot/full delegation and APIs under separate capabilities.
+- [x] Integrate test notification as an existing scoped campaign under PILOT;
       never bypass acceptance, audience or physical-attempt authorization.
-- [ ] Build dashboard steps: create → configure → activate enrollment → enroll/test
+- [x] Build dashboard steps: create → configure → activate enrollment → enroll/test
       → release. Show ACTIVE and delivery-held as distinct facts.
-- [ ] Redact secret input across browser, BFF, tracing, proxies and error telemetry;
+- [x] Redact secret input across browser, BFF, tracing, proxies and error telemetry;
       discard input after submission, support replacement without revealing it.
 
-Exit evidence: two-app simulated end-to-end flow proves isolated device enrollment,
-permission verification, pilot test and full release, including a failed setup path.
+Local exit evidence: the synthetic services fixture proves isolated device
+enrollment, permission verification, pilot delivery and full release, including
+rejection when required evidence is missing. This does not establish production
+acceptance or physical-device/provider behavior.
 
 ## F. Rotation, recovery and rollout
 
@@ -123,7 +130,7 @@ permission verification, pilot test and full release, including a failed setup p
 - [ ] Demonstrate all six production gates in spec section 9.1, including active
       storage encryption, file-access audit and independent off-host restore.
 - [ ] Extend local development with two synthetic apps and simulated OAuth/FCM.
-- [ ] Update API/database/architecture/dashboard docs and lifecycle/dispatch/secret
+- [x] Update API/database/architecture/dashboard docs and lifecycle/dispatch/secret
       runbooks when implementation actually replaces the stated behavior.
 - [ ] Roll out behind an explicit disabled-by-default deployment capability;
       pilot one provably greenfield app, then a second before wider enablement.

@@ -79,7 +79,9 @@ It builds/checks committed-source images, replaces four roles under a guarded
 maintenance fence, retains rollback containers and refuses automatic schema
 changes. The same controller handles encrypted DB/config backups, isolated sealed
 restore validation and private management checks. This staging evidence does not
-replace the repository's release-readiness gates or production recovery review.
+replace the repository's [release-readiness gates](../analysis/production-readiness-plan.md)
+or production recovery review. The plan distinguishes staging observations from
+outstanding production acceptance.
 
 Automated staging deployment uses the [signed main-only CD authorization](../../deploy/staging/CD.md)
 and the existing guarded maintenance, readiness and rollback controller.

@@ -160,6 +160,11 @@ Kafka volumes, generated settings, and credentials. Do not delete those files as
 a way to stop the application. See [full local development](local-development.md)
 for watcher, smoke-check, and data-lifecycle details.
 
+For physical Android testing, follow the separate
+[real-FCM setup](local-development.md#real-fcm-on-an-android-device). It needs
+a Firebase test project and the companion smoke-app checkout. The default
+setup above can run without either.
+
 ## Troubleshooting
 
 - **`./dev` cannot find Bash or Python:** if Bash is missing, install it with

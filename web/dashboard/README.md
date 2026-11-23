@@ -141,7 +141,9 @@ Registry detail links to **Notification setup** at
 blockers, setup revision, operation status and safe approval metadata. It lets an
 authorized administrator select a configured enrollment profile and platform
 identifiers, upload an FCM service-account candidate, request OAuth verification,
-poll its result, and hold dispatch. It does not enroll devices.
+poll its result, and hold dispatch. It also exposes lifecycle requests for
+reviewed enrollment activation, a device dry-run, and PILOT or FULL release.
+The screen shows cohort outcomes and review availability as they change.
 
 This is an optional protected capability, not a consequence of creating an app
 or building the dashboard. Default server configuration leaves the routes
@@ -162,11 +164,19 @@ with a fresh key. Uploaded credential material stays in component memory, not
 browser storage or query caches, and is cleared after definitive upload success
 or navigation.
 
-Saving a profile or candidate does not grant business access or activate an app.
-OAuth success does not prove target-project IAM permission, device reachability
-or delivery. Candidate promotion, activation, device enrollment/testing, cohorts
-and full dispatch release are not provided by this setup screen. The full local
-walkthrough uses a simulator; it is not real-provider or production evidence.
+Saving a profile or candidate leaves the app in provisioning. Distinct scoped
+operator steps prepare and review runtime readiness and apply approved lifecycle
+changes. Devices enroll through the mobile API. OAuth success confirms token
+issuance; the local walkthrough uses the simulated provider.
+
+## Android Test Devices
+
+The local `./dev up --real-fcm` profile prints a direct link to **Test Devices**.
+Use it to download the standalone APK, generate one-use pairing QRs, label
+enrollments, and send through the campaign API to one selected installation.
+The screen reports queued, provider-accepted, and observed-on-device evidence
+separately. See the [real-FCM guide](../../docs/local-development.md#real-fcm-on-an-android-device)
+for private network and APK requirements.
 
 ## Release boundaries
 
@@ -211,5 +221,4 @@ readiness.
 Production theme choices are limited to Stone (default), Y2K, and Matcha.
 The separate preview retains all seven themes in `preview/astryx-themes.ts`.
 
-The login photograph is bundled locally from `src/assets/login-team.jpg` and
-comes from the [official Astryx Login Split template asset](https://astryx.atmeta.com/template-assets/light-working-vertical-1.png).
+The login photograph is bundled locally from `src/assets/autumn.jpg`.

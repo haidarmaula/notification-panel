@@ -1,9 +1,12 @@
 # Full local development environment
 
-This runs the actual API, BFF, PostgreSQL, Kafka, admission worker, delivery
-worker and scheduler, plus the React/Astryx/Vite frontend. Only external OAuth/FCM is
-simulated. It is independent of office Wi-Fi, VPN and staging. The repository
-`.env` and staging credentials are never loaded by this runner.
+The default `./dev up` runs the API, BFF, PostgreSQL, Kafka, admission worker,
+delivery worker, scheduler, and React/Astryx/Vite frontend. It simulates external
+OAuth and FCM and works independently of office Wi-Fi, VPN, and staging. The
+runner keeps its settings separate from the repository `.env`.
+
+Use the [real FCM profile](#real-fcm-on-an-android-device) to enroll an Android
+test device and send a live push from a separate local stack.
 
 ## Start
 
@@ -113,8 +116,8 @@ canonical contracts in `docs/contracts/`, with bundled Swagger UI assets and
 no external validator. Reading the reference requires no credentials.
 
 The three-guide reference is intentionally not exhaustive. The optional
-[application onboarding setup API](api/application-onboarding-api.md) and its
-[implemented eight-operation OpenAPI contract](contracts/application-onboarding.openapi.json)
+[application onboarding API](api/application-onboarding-api.md) and its
+[implemented OpenAPI contract](contracts/application-onboarding.openapi.json)
 are linked from the [contracts index](contracts/README.md) but are not bundled
 by `scripts/api_docs.py`. The local runner explicitly enables this protected
 capability; ordinary server defaults and staging deployment policy do not.
@@ -174,6 +177,10 @@ sends to a real phone. `test-seed` uses a separate temporary database inside thi
 private PostgreSQL instance, injects an initial seed failure, verifies rollback,
 then retries without duplicate data; it removes only that test database.
 
+`browser.mjs` signs in to the local dashboard, checks seven workspace screens,
+saves campaign and settings screenshots under `tmp/local-dev/screenshots/`, and
+signs out.
+
 `check-onboarding` exercises the setup API through the real BFF using a dedicated
 synthetic PROVISIONING application. It selects the local enrollment profile,
 uploads the generated service account, checks immutable upload replay, waits for
@@ -193,20 +200,24 @@ IAM, device delivery or production readiness.
 
 1. Run `./dev up`, open `http://127.0.0.1:5173/login`, and use `./dev credentials`
    to find the local login.
-2. Open **Registry aplikasi**, create an application, then select
-   **Konfigurasi notifikasi** on its detail page.
+2. Open **Application registry**, register an application, then select
+   **Notification setup** on its detail page.
 3. Choose **Hello Local synthetic Android**, enable Android, and enter
    `com.hello.local.onboarding` as its application ID. Save the profile.
 4. Select **Staging** and upload the generated synthetic file
    `tmp/local-dev/tls/service-account.json`. Save the credentials.
-5. Wait briefly for the verifier and select **Verifikasi FCM**. The result should
-   report OAuth success; the app remains **Disiapkan** and distribution **Ditahan**.
+5. Wait for **Verify FCM** to become available, then run it. The result should
+   report OAuth success. The app stays **Provisioning** with dispatch **Held**.
 
-The local provider is a simulator; this flow uses the generated synthetic service
-account. Device enrollment, activation and general delivery release are not yet
-available from this setup screen. The `Uji onboarding dashboard` app created by
-the browser check can be reused instead of consuming another verifier slot.
-Select **Ubah profil pendaftaran** when editing a previously saved profile.
+This setup uses the generated synthetic service account with the local simulator.
+The same screen also supports requesting enrollment activation, preparing and
+queueing an approved device dry-run, and requesting PILOT or FULL dispatch
+release. Those steps need separate operator actions and current readiness or
+approval evidence as described in the [onboarding API guide](api/application-onboarding-api.md).
+The tutorial ends at OAuth verification.
+
+To reuse a verifier slot, open the `Uji onboarding dashboard` app created by the
+browser check. Select **Change enrollment profile** to edit its saved profile.
 
 For an automated real-browser check, run:
 
@@ -214,23 +225,99 @@ For an automated real-browser check, run:
 node scripts/local-dev/onboarding_browser.mjs
 ```
 
-Use Node 22.13+ (for example `nvm use 22.23.4`). The check creates or reuses one
-test app, performs setup through the actual dashboard/BFF/provisioner/verifier,
-checks that credential material is absent from browser storage and rendered text,
-and captures light desktop/mobile and dark mobile screens under
-`tmp/local-dev/screenshots/`. It enables no request tracing and sends no message.
-The browser check signs in, visits seven actual local screens, signs out and
-writes screenshots under `tmp/local-dev/screenshots/` without tracing credentials.
+Use Node 22.13+ (for example `nvm use 22.23.4`). The check signs in, creates or
+reuses one test app, saves its profile and synthetic FCM candidate through the
+dashboard and BFF, and waits for the scoped OAuth verifier. It confirms the app
+stays `PROVISIONING` with dispatch `HELD` and checks that credential material is
+absent from rendered text and browser storage. It captures light desktop, light
+mobile, and dark mobile screenshots under `tmp/local-dev/screenshots/`, then
+signs out. The check sends no notifications and runs without request tracing.
 
 Fast orchestration/security checks without Docker:
 
 ```bash
 python3 -B -m unittest discover -s scripts -p test_local_dev.py
 go test -race scripts/integration-provider.go scripts/integration_provider_test.go
-go test scripts/local-dev/setup.go
+go test scripts/local-dev/setup.go scripts/local-dev/setup_test.go
 ```
 
-## Boundaries and limitations
+## Real FCM on an Android device
+
+Use a Firebase test project with an Android app registered as
+`com.example.hellofcmsmoke`. The Android client needs that project's
+`google-services.json` in `hello-fcm-smoke/secrets/`. The backend needs a separate
+service-account JSON authorized to send FCM messages to the test project.
+Keep the service-account file private on the backend host. The worker uses the
+host's public CA bundle to verify Google's HTTPS endpoints.
+
+Start the profile from the backend repository root with the Firebase test
+project ID and the absolute path to its service-account JSON.
+
+```bash
+export HELLO_LOCAL_FCM_PROJECT_ID='your-firebase-test-project'
+export HELLO_LOCAL_FCM_SERVICE_ACCOUNT_FILE='/absolute/path/to/service-account.json'
+chmod 600 "$HELLO_LOCAL_FCM_SERVICE_ACCOUNT_FILE"
+./dev up --real-fcm
+./dev credentials --real-fcm
+```
+
+Open the **Test Devices** link printed by `up` and sign in using the credentials
+from the command above. A browser visit to `127.0.0.1:5273` redirects to the
+canonical `localhost` origin. The two local profiles use separate DB and Kafka
+data, application credentials, and browser sessions.
+
+1. Keep the Mac and Android phones on the same private Wi-Fi. In **Test
+   Devices**, build the Android development APK if prompted, then download and
+   transfer it to each phone. The build uses the sibling `hello-fcm-smoke`
+   checkout with Node, Java 17, and the Android SDK. Install the APK once per
+   phone. Use **Rebuild APK** when the smoke app source changes, then install the
+   new build over the existing APK. The APK
+   includes the JavaScript bundle and trusts the public CA from this Mac.
+2. Click **Create pairing QR** and scan it from the installed app. Generate a
+   fresh QR for each phone or to reconnect after the Mac's IP changes. Use the
+   same APK for the same Mac CA. This flow uses neither ADB nor Metro.
+3. In **Test Devices**, rename devices for easy identification and select one
+   as the test target. Other phones stay enrolled. Use **Forget** only when
+   removing an enrollment. Then click **Send test push** to create and dispatch
+   a campaign through the normal backend and FCM path.
+4. Check the latest test timeline for campaign and provider status and check the
+   notification on the selected phone. Provider acceptance and device receipt
+   are separate. Use staging for the HTTPS receipt-ingestion acceptance test.
+
+The dashboard identifies Wi-Fi and APK problems under **Diagnostics**. On a
+private network where automatic detection chooses the wrong interface, set
+`HELLO_LOCAL_FCM_LAN_HOST` to the Mac's private IPv4 address before running
+`./dev up --real-fcm`. The mobile HTTPS ingress uses port `8443`; the dashboard
+and staff API stay on loopback. If port `8443` is busy, stop any terminal running
+manual LAN pairing. Check `./dev status --real-fcm` for enrolled installations
+and `./dev logs --real-fcm` for services. `./dev down --real-fcm` stops the
+stack. On the next `up`, phones stay enrolled and dispatch starts on hold until
+a target is selected again.
+
+### Optional ADB and Metro workflow
+
+For active development of the smoke app, connect an authorized Android device
+over ADB, then forward the mobile API and issuer.
+
+```bash
+adb reverse tcp:8082 tcp:8082
+adb reverse tcp:8181 tcp:8181
+
+cd "$HOME/projects/hello-fcm-smoke"
+nvm use
+npm ci
+HELLO_STAGING_BUILD=0 npx expo prebuild --platform android
+HELLO_STAGING_BUILD=0 npx expo run:android --no-bundler
+npm run start:local
+```
+
+Open the development build using the Metro QR. From the backend checkout, run
+`./dev pair --real-fcm` and scan its pairing QR inside the smoke app. This
+terminal also prints a manual code. The dashboard can select the test target.
+For terminal-only use, pass the selected UUID from `./dev status --real-fcm`
+to `./dev release-pilot --real-fcm --installation-id <uuid>`.
+
+## Simulator boundaries and limitations
 
 The provider and delivery worker have only an internal Docker network. The
 synthetic provider owns private DNS aliases for the fixed SDK Google hostnames;

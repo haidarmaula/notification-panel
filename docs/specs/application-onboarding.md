@@ -1,11 +1,15 @@
 # Application onboarding and FCM configuration
 
-Date: 2026-11-14. Status: **partially implemented: setup and OAuth; lifecycle/release remain planned**.
+Spec origin: 2026-11-14. Status updated 2026-11-23: **setup, OAuth, activation,
+cohort dry-run, release requests and the local dashboard flow are implemented;
+production enablement remains gated**.
 [Implementation checkpoint](../analysis/application-onboarding-implementation.md).
 User-approved decisions and engineering defaults are distinguished in section 10.
 Module id: `application-onboarding`.
 
-This is the entry point for the proposed onboarding work. Companion documents:
+This is the entry point for the proposed full onboarding target. The current
+implementation covers a subset; the checkpoint describes implemented behavior,
+while the production gates below remain acceptance requirements. Companion documents:
 [credential/control-plane ADR](../adr/adr-13-application-onboarding.md) and
 [delivery plan](../plans/application-onboarding.md),
 [implementation design](../design/application-onboarding.md) and

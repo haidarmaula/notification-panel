@@ -2,8 +2,10 @@
 
 This slice prepares a modern accepted campaign in PostgreSQL. It performs no
 Kafka offset commit, provider call, payload publication or capability signing.
-Serial Kafka consumption, source-aware quarantine and recovery scans remain
-separate M05 slices. The dispatcher and consumer binaries remain unwired.
+Serial Kafka consumption, source-aware quarantine, and recovery scans are
+separate M05 slices. The protected worker calls this preparer for Kafka
+admission, and the scheduler calls it for queued recovery. See the
+[runtime composition](m04-m05-runtime-composition.md).
 
 Prepare validates the version-1 envelope, then uses a bounded 30-second
 REPEATABLE READ transaction. Lock deployment control FOR SHARE, project control,

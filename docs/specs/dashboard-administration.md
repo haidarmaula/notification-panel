@@ -66,10 +66,10 @@ ETags/idempotency, with explicit stale-version review and same-request retry for
 unknown outcomes. Credential material is not persisted in browser storage or
 query caches.
 
-Saving setup does not promote the candidate, grant business access, activate the
-application or release dispatch. OAuth verification does not prove target-project
-IAM permission or device delivery. Device enrollment/testing, cohort creation and
-full release are not available here. See the
+The screen can request reviewed activation, queue an approved test-cohort
+dry-run, and request PILOT or FULL dispatch. Separate operator roles review
+and apply lifecycle changes. Devices enroll through the mobile API. OAuth
+verification confirms token issuance. See the
 [onboarding API](../api/application-onboarding-api.md),
 [technical guide](../../web/dashboard/README.md#optional-application-setup) and
 [synthetic local walkthrough](../local-development.md#try-onboarding-in-the-dashboard).

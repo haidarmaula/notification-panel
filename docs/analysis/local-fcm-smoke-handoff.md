@@ -1,6 +1,10 @@
 # Local Android FCM smoke handoff
 
-Updated 2026-11-10. Continue this work.
+Historical record of the 2026-11-10 run. The retired local Compose overlay and
+runtime seed are preserved in Git history at `8367ac0`. The supported
+[real-FCM profile](../local-development.md#real-fcm-on-an-android-device) now
+uses Test Devices for the bundled APK, one-use QR, and target selection. The
+steps below record the original run.
 
 ## Roadmap position
 

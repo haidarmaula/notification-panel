@@ -26,6 +26,12 @@ account and the successful check output.
 The local OpenAPI reference is available at <http://127.0.0.1:5173/docs/>;
 see [local API documentation](docs/local-development.md#local-api-reference).
 
+To send a real FCM test to Android, use the separate
+[real-FCM profile](docs/local-development.md#real-fcm-on-an-android-device).
+`./dev up --real-fcm` prints the **Test Devices** link. The dashboard supplies
+the standalone test APK and pairing QR and lets you select one enrolled phone
+for a test push.
+
 ## Start here
 
 Read in this order; each page answers a different question.
@@ -101,12 +107,16 @@ and scheduler are real; external FCM is an isolated simulator. See
 | Integrate mobile installation and receipts | [Installation API](docs/api/mobile-installations-api.md), [receipt API](docs/api/mobile-receipts.md) |
 | Change persistence | [Database documentation](docs/database.md), [queries](db/queries), [migrations](db/migrations); generated sqlc is not hand-edited |
 | Configure or troubleshoot delivery | [Delivery-worker runbook](docs/runbooks/delivery-worker.md), [monitoring](docs/runbooks/monitoring.md) |
+| Explore code and deployment boundaries | [Architecture](docs/architecture.md), [Floorplan source](floorplan/architecture.json) |
 | Investigate restricted replay or maintenance | [Replay runbook](docs/runbooks/operator-replay.md), [retention runbook](docs/runbooks/retention.md) |
 | Check release status | [Production readiness and evidence](docs/analysis/production-readiness-plan.md) |
 
 ## Current scope and documentation rules
 
-Production dispatch remains on hold; local tests and recorded Android smoke evidence are not staging or production acceptance. The [readiness plan](docs/analysis/production-readiness-plan.md) is the live register of open gates, not this introductory page.
+The release plan keeps production dispatch on hold pending target acceptance.
+Staging recorded one-device Android smoke and receipt results. Review the
+[readiness plan](docs/analysis/production-readiness-plan.md) for the remaining
+client, infrastructure, capacity, and recovery gates.
 
 Retired global feature packages have been removed. Historical API contracts,
 database references and ADRs remain for context; they do not establish current

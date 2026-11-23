@@ -47,7 +47,10 @@ supports profile configuration, file upload and OAuth polling, with explicit
 review after a stale version and same-request retry after an unknown outcome.
 Credentials remain in component memory only and are cleared after definitive
 upload success or navigation; they are not stored in browser storage or query
-caches. The existing dashboard screen still covers the setup steps only.
+caches. The dashboard also supports enrollment activation requests, test cohort
+selection and dry-run review, and PILOT and FULL release requests. The operation
+and readiness responses determine which actions are available and distinguish
+queued requests from completed changes.
 
 Every route uses the existing API key and staff bearer authentication chain and
 the current database-backed `applications.manage` guard (SUPER_ADMIN). A token

@@ -7,6 +7,16 @@
 **Scope:** Full codebase audit conducted during the Godoc documentation pass  
 **Coverage:** `cmd/`, `internal/`, `pkg/` — every non-test, non-generated `.go` file
 
+## Local Android pairing and target selection — 2026-11-23
+
+The LAN setup previously depended on a Metro development client, and real FCM
+release rejected a second installation even when the developer selected a single
+target. Test Devices now provides a bundled Android APK and one-use pairing QRs.
+The local runner keeps multiple enrollments and permits dispatch to one selected
+binding at a time. The isolated dashboard test exercised two enrollments,
+switching targets, removing one enrollment, and queuing a campaign with the
+delivery worker stopped. Physical Android delivery requires a separate check.
+
 ## Legacy feature and provider retirement — 2026-11-14
 
 The unmounted global notification, mobile, users, and segments feature graph was

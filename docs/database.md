@@ -786,7 +786,7 @@ production gates. See [quarantine contract](specs/m05-source-quarantine.md).
 
 ### Operator replay persistence (M05)
 
-Migration 000025 adds three unwired replay tables. Request headers are immutable
+Migration 000025 adds three replay tables. Request headers are immutable
 and unique per application/request UUID; their 32-byte fingerprint binds the
 complete normalized selection, actor/grant and change reference. An operational
 grant UUID records provenance only: it is not an authorization check.
@@ -818,8 +818,10 @@ atomic header/audit transaction and evaluates expiry/freshness with database tim
 
 A grant row alone is insufficient: the service also verifies the dedicated
 step-up signature and current DB send authority/explicit app membership. This
-remains an unwired library; per-position replay and real issuer integration are
-open. See [registration verification](analysis/m05-replay-registration-verification.md).
+authority is required by the [restricted replay command](runbooks/operator-replay.md).
+Target issuer approval and rollout remain open. See the
+[registration verification](analysis/m05-replay-registration-verification.md)
+for the earlier library evidence.
 
 ### Replay claim dispositions (M05)
 
@@ -829,9 +831,9 @@ another broker publication. Down refuses retained rows using this disposition.
 Claim/control/attempt audit commit together; an uncertain commit returns no new
 execution proof. [Claim verification](analysis/m05-replay-claim-verification.md)
 describes the claim boundary. [Publication/recovery verification](analysis/m05-replay-execution-verification.md)
-now covers the unwired execution libraries: outcome/control/audit commit together,
+records the initial execution-library evidence: outcome/control/audit commit together,
 expired cleanup releases only the exact token, and no evidence is deleted.
-Runtime/CLI/source lifecycle gates remain open.
+Target source incarnation and operational approval remain deployment gates.
 
 ### Scoped receipt requests and facts (M07)
 

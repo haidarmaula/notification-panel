@@ -1,8 +1,9 @@
 # Application onboarding implementation design
 
-Date: 2026-11-14. Status: implementation in progress. Setup/OAuth are implemented locally;
-[checkpoint](../analysis/application-onboarding-implementation.md) records the
-remaining lifecycle/runtime/UI work. User-approved choices: enrollment before general delivery,
+Design origin: 2026-11-14. Status updated 2026-11-23: setup, OAuth, activation,
+cohort dry-run, release requests and their dashboard flow are implemented locally.
+The [checkpoint](../analysis/application-onboarding-implementation.md) records
+the remaining production and runtime work. User-approved choices: enrollment before general delivery,
 SUPER_ADMIN release after testing, on-premises Docker, protected credential files.
 Other values below are engineering defaults, not additional user approvals.
 
@@ -21,8 +22,8 @@ Use three separate control-plane responsibilities:
 | Process | Authority | Explicit limits |
 | --- | --- | --- |
 | Existing HTTP server | Current staff authz, setup metadata, submit bounded commands | No root, Docker socket, secret readback, lifecycle/dispatch issuer rights |
-| `cmd/controlplane` (OAuth verification implemented; remaining execution planned) | Reconcile DB operations; separate scoped DB issuer/executor connections; verifier job orchestration | No arbitrary SQL/RPC instructions from HTTP input; never own schema |
-| `cmd/provisioner` host service (credential staging implemented; runtime execution planned) | Root-controlled file publication and allowlisted Docker lifecycle commands | Fixed local interface, approved images/mounts/resources only; no shell execution from requests |
+| `cmd/controlplane` (OAuth verification and scoped lifecycle commands implemented; broader reconciliation remains planned) | Reconcile DB operations; separate scoped DB issuer/executor connections; verifier job orchestration | No arbitrary SQL/RPC instructions from HTTP input; never own schema |
+| `cmd/provisioner` host service (credential staging and bounded runtime preparation implemented; full runtime execution planned) | Root-controlled file publication and allowlisted Docker lifecycle commands | Fixed local interface, approved images/mounts/resources only; no shell execution from requests |
 
 The provisioner uses a fixed private endpoint with mutual TLS, pinned CA and
 separate ingestion/reconciler client identities. Bind only to a host-private

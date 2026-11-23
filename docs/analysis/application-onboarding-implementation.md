@@ -1,7 +1,10 @@
 # Application onboarding implementation checkpoint
 
-Date: 2026-11-18. Status: setup and OAuth verification implemented locally;
-end-to-end onboarding and production enablement remain incomplete.
+Checkpoint history starts on 2026-11-18. Updated: 2026-11-23. Status: the
+optional dashboard flow now includes setup, activation, cohort dry-run, and
+PILOT/FULL release requests. A synthetic services fixture exercises the
+onboarding-to-delivery path. Production enablement and real-device/provider
+acceptance remain incomplete.
 
 ## Implemented boundary
 
@@ -36,11 +39,11 @@ end-to-end onboarding and production enablement remain incomplete.
   paths plus a restricted per-app LOGIN to reserve/check capacity before a
   stopped Docker allocation. It does not start workers, acknowledge readiness,
   perform lifecycle transitions, approve routes or execute dispatch release.
-- Eight optional setup routes are wired only when the protected server onboarding
-  policy exists. [Implemented API](../api/application-onboarding-api.md). No new
+- Optional setup and lifecycle routes are wired only when the protected server
+  onboarding policy exists. [Implemented API](../api/application-onboarding-api.md). No new
   environment toggle or permission fallback enables them by accident.
-- The BFF now forwards the same eight setup endpoints, with concurrency and replay
-  headers, bounded retry delays and same-app operation locations. Query strings
+- The BFF forwards the optional setup and lifecycle endpoints, with concurrency
+  and replay headers, bounded retry delays and same-app operation locations. Query strings
   and duplicate concurrency headers are rejected; the larger upload limit applies
   only to FCM candidate staging. Local startup can explicitly select
   `--local-onboarding` with a fixed protected policy file; ordinary local and
@@ -50,6 +53,10 @@ end-to-end onboarding and production enablement remain incomplete.
   Unknown writes retain their original idempotency key and ETag for explicit
   retry; a stale revision blocks writes until explicit review. Credential material
   is held only in component memory, never query/browser storage or a text preview.
+- The dashboard lifecycle section also queues activation, selects approved test
+  installations, submits cohort dry-runs, displays target outcomes, and queues
+  PILOT/FULL release requests from valid approvals. These are queued requests;
+  privileged transitions still require protected operator commands.
 - The synthetic local fixture has three additional fixed verifier slots for new
   staging apps. A trusted local-only allocator binds each role once and publishes
   a scoped policy, without a Docker socket or privileged HTTP command. It accepts
@@ -143,7 +150,8 @@ During the earlier M45 slice, vulnerability scanning failed fetching
 Python validators failed resolving PyPI, including outside the sandbox. JSON
 syntax, required-property references and local OpenAPI references were checked;
 these are not substitutes for the full validator. Navigation/safe-example checks
-pass. No new full-flow, device or production acceptance is claimed.
+passed for that earlier slice. At that point, no full-flow, device or production
+acceptance was claimed; later synthetic services fixture evidence is recorded above.
 
 Focused Go tests cover strict JSON limits, malformed input, current DB authority,
 scoped identifiers, safe errors, request/response redaction, submission snapshots,
@@ -230,9 +238,11 @@ sequence. Treat each recorded test result as evidence only for the stages it
 actually reached.
 
 ONB-10 still covers credential promotion, drain, rollback and reference-checked
-file cleanup. ONB-11 covers the separate frontend work. ONB-12 covers production
-runtime and verifier allocation, real Firebase and device evidence, encrypted
-backup and restore drills, and operational rollout.
+file cleanup. The dashboard lifecycle work previously tracked under ONB-11 is
+implemented locally; its queueing UI does not replace operator approval or
+application of privileged transitions. Remaining production work includes
+per-app runtime and verifier provisioning, real Firebase IAM/send and physical
+device evidence, encrypted backup and restore drills, and operational rollout.
 
 The production verifier scope registry is installed by the trusted DB owner for a
 restricted per-app verifier LOGIN. The local synthetic allocator does not provide

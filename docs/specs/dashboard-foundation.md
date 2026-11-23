@@ -32,7 +32,8 @@ boundaries rather than duplicating the operating manual.
   data stays application-scoped and in browser memory; disposed editors must not
   navigate after delayed responses. Unsaved changes require explicit handling.
 - The optional registry-linked setup screen configures profiles, stages FCM
-  candidates and requests OAuth verification. Its protected server policy and
+  candidates and requests OAuth verification. It also exposes reviewed
+  activation, dry-run and dispatch release requests. Its protected server policy and
   per-application verifier scope are not enabled by building the frontend. Setup
   success is not credential promotion, application activation, device enrollment
   or dispatch release. See the [setup API](../api/application-onboarding-api.md)

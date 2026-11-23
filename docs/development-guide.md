@@ -61,13 +61,22 @@ Docker volumes; it does not load the repository `.env` or staging credentials.
 Follow its prerequisites, startup, login, checks and stop instructions before
 using infrastructure-dependent examples.
 
+Use the [real-FCM profile](local-development.md#real-fcm-on-an-android-device)
+when you need an Android phone to receive a real push. Its dashboard, database,
+Kafka state, and Firebase test credentials are separate from the simulator.
+
 The Makefile remains for migration authoring and SQL code generation. Its
 targets include `.env`; see [`.env.example`](../.env.example) for the values
 used by host migration commands. `make help` does not start the runtime.
 
 ### Why a new application cannot immediately send
 
-Registry creation produces `PROVISIONING` without a staff grant. The implemented [setup API](api/application-onboarding-api.md) adds enrollment-profile configuration, FCM candidate staging and OAuth verification; follow the [local dashboard tutorial](local-development.md#try-onboarding-in-the-dashboard) to try that path with simulated credentials. OAuth verification is not device enrollment, target-project IAM proof, activation or dispatch release.
+Registry creation produces `PROVISIONING` without a staff grant. The
+[setup API](api/application-onboarding-api.md) supports enrollment-profile
+configuration, FCM candidate staging and OAuth verification before reviewed
+activation, a device dry-run, and dispatch release. The
+[local tutorial](local-development.md#try-onboarding-in-the-dashboard) walks
+through the synthetic OAuth stage. OAuth success only confirms token issuance.
 
 Even SUPER_ADMIN needs an explicit grant for project business data. Application activation, identity mappings, approved bindings/routes, runtime policy and coverage, broker source registration/checkpoints, and protected workers are separate setup. Bypassing those gates is not a shorter onboarding path. Follow the [application lifecycle](runbooks/application-lifecycle.md) and [delivery-worker](runbooks/delivery-worker.md) runbooks with the environment owner.
 

@@ -139,7 +139,7 @@ rich media, badges, grouping, or A/B testing were in use on the client side.
 | ID | Gap | Evidence | Impact | Severity |
 |---|---|---|---|---|
 | G19 | **No metrics, no distributed tracing, no alerting.** M38, confirmed: `go.mod` has zero direct metrics/OTel dependencies (OTel entries are transitive via Firebase, `go.mod:82-90`); all output is `log.Printf`. | `go.mod`, `AGENTS.md` (M38) | No SLOs, no alerting on worker death/lag, no throughput or failure-rate visibility — the primary risk of a push system is silent under-delivery | High |
-| G20 | **Unstructured logging; no request ID; no panic recovery.** `middleware/logger.go` uses `fmt.Println` and logs method+path only (M35/M36); no recover wrapper (M37); worker logs are unstructured lines. | `internal/middleware/logger.go` (M35-M37), `cmd/worker/main.go` log lines | Requests cannot be correlated across middleware → handler → Kafka → worker; a handler panic reaches `net/http`'s default recovery | Medium |
+| G20 | **Historical finding:** The retired HTTP logger emitted only method/path. Current HTTP access logging adds bounded request IDs and panic outcomes. | [Current access logging](../../internal/observability/http.go) · [Monitoring](../runbooks/monitoring.md) | Target cross-service correlation remains a separate verification item. | Medium |
 | G21 | **No Kafka or provider visibility.** No consumer-lag, queue-depth, provider-latency, or batch-size signal anywhere (none found). | `cmd/worker/main.go`, `cmd/scheduler/main.go` | G8/G9-style strandings have zero observable symptom until a user complains | Medium |
 
 ### D. Data lifecycle

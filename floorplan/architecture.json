@@ -1,0 +1,949 @@
+{
+  "$schema": "floorplan/architecture@1",
+  "project": {
+    "name": "hello",
+    "summary": "Staff draft and send push campaigns from a web dashboard. Background workers prepare the audience, deliver through Firebase Cloud Messaging, and record results that staff can review.",
+    "entrypoints": [
+      "web/dashboard/src/main.tsx",
+      "cmd/dashboard/main.go",
+      "cmd/server/main.go",
+      "cmd/scheduler/main.go",
+      "cmd/worker/main.go"
+    ]
+  },
+  "include": [
+    "code",
+    "config"
+  ],
+  "ignore": [
+    ".agents/**",
+    ".claude/**",
+    ".codex/**",
+    ".opencode/**",
+    "anti-slop/**",
+    "opencode.json",
+    "**/node_modules/**",
+    "**/vendor/**",
+    "**/testdata/**",
+    "**/dist/**",
+    "internal/database/sqlc/**",
+    "**/mocks/mock_*.go",
+    "**/mocks/Mock*.go",
+    "web/dashboard/fonts/**",
+    "web/dashboard/preview/**",
+    "**/*.lock",
+    "**/pnpm-lock.yaml"
+  ],
+  "nodes": [
+    {
+      "id": "dashboard",
+      "label": "Staff dashboard",
+      "kind": "ui",
+      "summary": "Gives staff one place to sign in, manage their applications, and follow push campaigns.",
+      "paths": [
+        "web/dashboard",
+        "web/api-docs",
+        "cmd/dashboard",
+        "internal/dashboard"
+      ],
+      "exclude": [
+        "**/*_test.go",
+        "**/*.test.{ts,tsx,js,cjs}",
+        "**/*.spec.{ts,tsx}",
+        "tests/**",
+        "web/dashboard/e2e/**",
+        "scripts/test_*.py"
+      ]
+    },
+    {
+      "id": "dashboard.session",
+      "label": "Sign-in and navigation",
+      "kind": "feature",
+      "summary": "Opens the local staff session and routes staff to the selected application and screen.",
+      "parent": "dashboard",
+      "paths": [
+        "web/dashboard/src/app",
+        "web/dashboard/src/main.tsx",
+        "web/dashboard/src/features/Login.tsx",
+        "web/dashboard/src/features/Workspace.tsx"
+      ]
+    },
+    {
+      "id": "dashboard.campaigns",
+      "label": "Campaign workspace",
+      "kind": "feature",
+      "summary": "Lets staff compose, preview, send, or schedule a draft and watch its status.",
+      "parent": "dashboard",
+      "paths": [
+        "web/dashboard/src/features/campaigns"
+      ]
+    },
+    {
+      "id": "dashboard.results",
+      "label": "Campaign results",
+      "kind": "feature",
+      "summary": "Shows campaign statistics, recorded delivery attempts, and read activity.",
+      "parent": "dashboard",
+      "paths": [
+        "web/dashboard/src/features/results"
+      ]
+    },
+    {
+      "id": "dashboard.manage",
+      "label": "Audience and settings",
+      "kind": "feature",
+      "summary": "Shows app users, segments, templates, activity, and staff settings.",
+      "parent": "dashboard",
+      "paths": [
+        "web/dashboard/src/features/management"
+      ]
+    },
+    {
+      "id": "dashboard.admin",
+      "label": "Staff and registry",
+      "kind": "feature",
+      "summary": "Lets authorized staff manage registry entries, grants, staff accounts, and onboarding.",
+      "parent": "dashboard",
+      "paths": [
+        "web/dashboard/src/features/admin"
+      ]
+    },
+    {
+      "id": "dashboard.test-devices",
+      "label": "Local Android Test Devices",
+      "kind": "feature",
+      "parent": "dashboard",
+      "summary": "Downloads the standalone test APK, pairs Android phones over private HTTPS, and sends a campaign through the ordinary pipeline to one selected phone.",
+      "paths": [
+        "web/dashboard/src/features/TestDevices.tsx",
+        "web/dashboard/src/app/local-test-devices.ts",
+        "scripts/local-dev/real_fcm_dashboard.py",
+        "scripts/local-dev/build_real_fcm_apk.py",
+        "devtools/local-mobile-issuer",
+        "compose.local-real-fcm.yml"
+      ]
+    },
+    {
+      "id": "dashboard.design",
+      "label": "Shared screen components",
+      "kind": "library",
+      "summary": "Provides common page controls, feedback, and display themes.",
+      "parent": "dashboard",
+      "paths": [
+        "web/dashboard/src/components",
+        "web/dashboard/src/astryx-themes.ts"
+      ]
+    },
+    {
+      "id": "dashboard.client",
+      "label": "Browser request client",
+      "kind": "library",
+      "summary": "Sends dashboard requests to the same-origin dashboard server and parses responses.",
+      "parent": "dashboard",
+      "paths": [
+        "web/dashboard/src/lib/api"
+      ]
+    },
+    {
+      "id": "dashboard.gateway",
+      "label": "Dashboard server",
+      "kind": "service",
+      "summary": "Serves the dashboard, keeps staff credentials server-side, and forwards allowed requests to the main server.",
+      "parent": "dashboard",
+      "paths": [
+        "cmd/dashboard",
+        "internal/dashboard"
+      ]
+    },
+    {
+      "id": "dashboard.docs",
+      "label": "Request reference",
+      "kind": "ui",
+      "summary": "Shows how to call the main server and what responses to expect.",
+      "parent": "dashboard",
+      "paths": [
+        "web/api-docs"
+      ]
+    },
+    {
+      "id": "api",
+      "label": "Main server",
+      "kind": "service",
+      "summary": "Checks current access and handles campaign, audience, staff, and mobile requests.",
+      "paths": [
+        "cmd/server",
+        "internal/features",
+        "internal/{audit,authz,httprequest,ingress,installation,jsonobject,middleware,pushpayload,ratelimit,receipt,stafffields,staffmutation,token}",
+        "pkg/response"
+      ],
+      "exclude": [
+        "**/*_test.go",
+        "**/*.test.{ts,tsx,js,cjs}",
+        "**/*.spec.{ts,tsx}",
+        "tests/**",
+        "web/dashboard/e2e/**",
+        "scripts/test_*.py"
+      ]
+    },
+    {
+      "id": "api.identity",
+      "label": "Staff identity and access",
+      "kind": "feature",
+      "summary": "Signs staff in, manages their accounts, and checks current staff authority and application grants.",
+      "parent": "api",
+      "paths": [
+        "internal/features/{auth,staff,profile}",
+        "internal/{authz,middleware,stafffields,staffmutation,token}"
+      ]
+    },
+    {
+      "id": "api.apps",
+      "label": "Application registry and grants",
+      "kind": "feature",
+      "summary": "Finds the apps a staff account can access and lets authorized staff manage registry records and grants.",
+      "parent": "api",
+      "paths": [
+        "internal/features/applications/{module,handler,model,service,staff_write}.go"
+      ]
+    },
+    {
+      "id": "api.campaigns",
+      "label": "Campaign drafts and history",
+      "kind": "feature",
+      "summary": "Stores drafts and templates and answers questions about campaign history, deliveries, and reads.",
+      "parent": "api",
+      "paths": [
+        "internal/features/applications/{campaign_*,templates,upload_audit_reads}.go",
+        "internal/pushpayload"
+      ]
+    },
+    {
+      "id": "api.acceptance",
+      "label": "Send and schedule requests",
+      "kind": "feature",
+      "summary": "Validates send and schedule requests and records the durable work that the delivery system can act on.",
+      "parent": "api",
+      "paths": [
+        "internal/features/applications/{acceptance,schedule_poll,schedule_promotion}.go"
+      ]
+    },
+    {
+      "id": "api.audience",
+      "label": "Audience and segments",
+      "kind": "feature",
+      "summary": "Lists app users and devices and manages the segments that campaigns can target.",
+      "parent": "api",
+      "paths": [
+        "internal/features/applications/{segment_reads,segment_writes,user_reads}.go"
+      ]
+    },
+    {
+      "id": "api.mobile",
+      "label": "Mobile installations and receipts",
+      "kind": "feature",
+      "summary": "Manages mobile installation identity and records delivery or read observations from the app.",
+      "parent": "api",
+      "paths": [
+        "internal/features/applications/mobile_*.go",
+        "internal/{installation,receipt}"
+      ]
+    },
+    {
+      "id": "api.onboarding",
+      "label": "Application setup",
+      "kind": "feature",
+      "summary": "Handles scoped enrollment profiles, credential staging, and reviewed activation, cohort dry-run, and dispatch release requests.",
+      "parent": "api",
+      "paths": [
+        "internal/features/applications/onboarding_*.go"
+      ]
+    },
+    {
+      "id": "api.http",
+      "label": "Request and audit support",
+      "kind": "library",
+      "summary": "Validates requests, returns consistent responses, and records staff actions.",
+      "parent": "api",
+      "paths": [
+        "internal/{audit,httprequest,ingress,jsonobject,ratelimit}",
+        "pkg/response"
+      ]
+    },
+    {
+      "id": "pipeline",
+      "label": "Delivery pipeline",
+      "kind": "worker",
+      "summary": "Turns accepted campaigns into durable delivery work and records what happened during sending.",
+      "paths": [
+        "cmd/{scheduler,worker}",
+        "internal/{daemon,dispatch,fcm,kafka,scheduler}"
+      ],
+      "exclude": [
+        "**/*_test.go",
+        "**/*.test.{ts,tsx,js,cjs}",
+        "**/*.spec.{ts,tsx}",
+        "tests/**",
+        "web/dashboard/e2e/**",
+        "scripts/test_*.py"
+      ]
+    },
+    {
+      "id": "pipeline.scheduler",
+      "label": "Scheduler and queued recovery",
+      "kind": "worker",
+      "summary": "Promotes due schedules, publishes send requests, recovers queued campaigns, and cleans up expired replay claims.",
+      "parent": "pipeline",
+      "paths": [
+        "cmd/scheduler",
+        "internal/scheduler",
+        "internal/dispatch/{outbox,recovery}.go"
+      ]
+    },
+    {
+      "id": "pipeline.admission",
+      "label": "Audience preparation",
+      "kind": "worker",
+      "summary": "Checks the queued send, takes a snapshot of its audience, and creates delivery work for each eligible device.",
+      "parent": "pipeline",
+      "paths": [
+        "internal/dispatch/{consumer,kafka_admission,preparation,quarantine,source}.go"
+      ]
+    },
+    {
+      "id": "pipeline.delivery",
+      "label": "Delivery worker",
+      "kind": "worker",
+      "summary": "Claims app-scoped delivery work, submits to the provider, and recovers interrupted work from stored state.",
+      "parent": "pipeline",
+      "paths": [
+        "cmd/worker",
+        "internal/daemon/delivery*.go",
+        "internal/dispatch/{delivery_poller,execution,execution_discovery,recover_delivery,submission}.go"
+      ]
+    },
+    {
+      "id": "pipeline.results",
+      "label": "Delivery results and updates",
+      "kind": "feature",
+      "summary": "Records attempt evidence, finalizes campaigns, and publishes delivery updates for downstream consumers.",
+      "parent": "pipeline",
+      "paths": [
+        "internal/dispatch/{finalize_campaign,observations,results,update_outbox}.go"
+      ]
+    },
+    {
+      "id": "pipeline.transport",
+      "label": "Provider and queue connections",
+      "kind": "library",
+      "summary": "Connects the workers to Kafka and Firebase Cloud Messaging using scoped configuration.",
+      "parent": "pipeline",
+      "paths": [
+        "internal/{fcm,kafka}"
+      ]
+    },
+    {
+      "id": "pipeline.runtime",
+      "label": "Worker runtime and replay",
+      "kind": "library",
+      "summary": "Starts the configured worker mode and supports approved reprocessing of send records.",
+      "parent": "pipeline",
+      "paths": [
+        "internal/daemon",
+        "internal/dispatch/replay_*.go"
+      ]
+    },
+    {
+      "id": "data",
+      "label": "Data definitions and access",
+      "kind": "data",
+      "summary": "Defines how PostgreSQL stores business records and how the services read and update them.",
+      "paths": [
+        "db",
+        "internal/database"
+      ],
+      "exclude": [
+        "**/*_test.go",
+        "**/*.test.{ts,tsx,js,cjs}",
+        "**/*.spec.{ts,tsx}",
+        "tests/**",
+        "web/dashboard/e2e/**",
+        "scripts/test_*.py"
+      ]
+    },
+    {
+      "id": "data.schema",
+      "label": "Storage changes",
+      "kind": "data",
+      "summary": "Applies changes to how campaigns, identities, permissions, and delivery work are stored.",
+      "parent": "data",
+      "paths": [
+        "db/migrations"
+      ]
+    },
+    {
+      "id": "data.queries",
+      "label": "Database queries",
+      "kind": "data",
+      "summary": "Defines the named SQL operations used by the main server and background jobs.",
+      "parent": "data",
+      "paths": [
+        "db/queries",
+        "db/sqlc.yaml"
+      ]
+    },
+    {
+      "id": "data.access",
+      "label": "Database connections and repositories",
+      "kind": "library",
+      "summary": "Opens PostgreSQL connections and adapts queries for callers that use repository interfaces.",
+      "parent": "data",
+      "paths": [
+        "internal/database"
+      ]
+    },
+    {
+      "id": "ops",
+      "label": "Setup and operations",
+      "kind": "infra",
+      "summary": "Sets up, releases, verifies, and maintains the server and its background processes.",
+      "paths": [
+        "cmd/{bootstrap,controlplane,provisioner,requeue,retention}",
+        "internal/{bootstrap,config,cryptokey,deployment,observability,onboarding,provisioning,requeue,runloop}",
+        "deploy",
+        "scripts",
+        "devtools",
+        "postman",
+        "tests",
+        ".github",
+        ".env.example",
+        ".mockery.yml",
+        "go.mod",
+        "compose*.yml",
+        "Dockerfile*",
+        "Makefile"
+      ]
+    },
+    {
+      "id": "ops.onboarding",
+      "label": "Credential staging and verification",
+      "kind": "service",
+      "summary": "Stages reserved Firebase credentials through a private connection and verifies OAuth access for the selected application.",
+      "parent": "ops",
+      "paths": [
+        "cmd/{controlplane,provisioner}",
+        "internal/{onboarding,provisioning}"
+      ]
+    },
+    {
+      "id": "ops.maintenance",
+      "label": "Bootstrap, replay, and retention",
+      "kind": "script",
+      "summary": "Creates the first super-admin and provides restricted commands for reprocessing and retention.",
+      "parent": "ops",
+      "paths": [
+        "cmd/{bootstrap,requeue,retention}",
+        "internal/{bootstrap,requeue}",
+        "scripts/sql"
+      ]
+    },
+    {
+      "id": "ops.deploy",
+      "label": "Build and release",
+      "kind": "infra",
+      "summary": "Builds services and defines runtime policies, database and broker settings, and local stack composition.",
+      "parent": "ops",
+      "paths": [
+        "deploy",
+        ".github",
+        "compose*.yml",
+        "Dockerfile*",
+        "Makefile",
+        "go.mod",
+        "internal/{config,cryptokey,deployment,runloop}",
+        ".env.example"
+      ]
+    },
+    {
+      "id": "ops.observe",
+      "label": "Service health and signals",
+      "kind": "infra",
+      "summary": "Reports worker progress, backlog, provider outcomes, and health for operators.",
+      "parent": "ops",
+      "paths": [
+        "internal/observability",
+        "deploy/observability"
+      ]
+    },
+    {
+      "id": "ops.tools",
+      "label": "Development and verification tools",
+      "kind": "script",
+      "summary": "Runs local workflows, verifies contracts, and provides fixtures for dependencies in development.",
+      "parent": "ops",
+      "paths": [
+        "devtools",
+        "scripts",
+        "postman",
+        "web/dashboard/{scripts,playwright.config.ts}"
+      ]
+    },
+    {
+      "id": "ops.tests",
+      "label": "Automated tests",
+      "kind": "test",
+      "summary": "Checks feature behavior and exercises the dashboard, storage, broker, and delivery boundaries.",
+      "parent": "ops",
+      "paths": [
+        "**/*_test.go",
+        "**/*.test.{ts,tsx,js,cjs}",
+        "**/*.spec.{ts,tsx}",
+        "tests/**",
+        "web/dashboard/e2e/**",
+        "scripts/test_*.py"
+      ]
+    },
+    {
+      "id": "ops.environments",
+      "label": "Environment boundaries and release gates",
+      "kind": "infra",
+      "summary": "Keeps the ./dev stack isolated from shared staging and production. Staging has recorded single-device Android smoke and receipt results, but end-to-end acceptance remains open; production dispatch is on hold pending target evidence and release approval.",
+      "parent": "ops",
+      "paths": [
+        "README.md",
+        "docs/local-development.md",
+        "docs/analysis/production-readiness-plan.md",
+        "docs/analysis/cutover-readiness.md",
+        "dev",
+        "deploy/staging",
+        "compose*.yml"
+      ]
+    },
+    {
+      "id": "postgres",
+      "label": "PostgreSQL",
+      "kind": "external",
+      "summary": "Stores campaign state, permissions, audiences, delivery attempts, receipts, and pending publications."
+    },
+    {
+      "id": "kafka",
+      "label": "Kafka",
+      "kind": "external",
+      "summary": "Carries accepted send requests to admission and delivery updates to downstream consumers."
+    },
+    {
+      "id": "fcm",
+      "label": "Firebase Cloud Messaging",
+      "kind": "external",
+      "summary": "Receives push requests from the delivery worker and handles transport to mobile devices."
+    },
+    {
+      "id": "mobile",
+      "label": "Mobile apps",
+      "kind": "external",
+      "summary": "Register installations, receive push notifications, and can report receipt or read activity."
+    }
+  ],
+  "edges": [
+    {
+      "from": "web/dashboard/src/features/campaigns/Detail.tsx",
+      "to": "internal/dashboard/server.go",
+      "kind": "http",
+      "label": "Send or schedule a campaign",
+      "description": "The campaign page builds a same-origin dashboard URL at runtime and sends the staff action with its current CSRF token."
+    },
+    {
+      "from": "web/dashboard/src/lib/api/client.ts",
+      "to": "internal/dashboard/server.go",
+      "kind": "http",
+      "label": "Dashboard requests",
+      "description": "The shared client sends browser requests under /bff for the dashboard session or allowlisted application data."
+    },
+    {
+      "from": "internal/dashboard/server.go",
+      "to": "cmd/server/main.go",
+      "kind": "http",
+      "label": "Forward permitted API requests",
+      "description": "The dashboard server calls the configured API and holds the API key and staff tokens on the server."
+    },
+    {
+      "from": "internal/dashboard/server.go",
+      "to": "internal/features/applications/acceptance.go",
+      "kind": "http",
+      "label": "Forward send and schedule requests",
+      "description": "The dashboard forwards app-scoped send and schedule actions to the matching main server handlers."
+    },
+    {
+      "from": "web/dashboard/src/features/results/Results.tsx",
+      "to": "internal/dashboard/server.go",
+      "kind": "http",
+      "label": "Load campaign reporting",
+      "description": "The results screen requests stored statistics, delivery attempts, and reads through the dashboard server."
+    },
+    {
+      "from": "internal/dashboard/server.go",
+      "to": "internal/features/applications/campaign_statistics.go",
+      "kind": "http",
+      "label": "Read campaign reporting",
+      "description": "The dashboard forwards allowed campaign reporting requests to the main server."
+    },
+    {
+      "from": "internal/features/applications/acceptance.go",
+      "to": "postgres",
+      "kind": "data",
+      "label": "Commit a schedule or send request",
+      "description": "A send transaction stores the campaign, acceptance data, audit record, and send outbox entry together."
+    },
+    {
+      "from": "cmd/server/main.go",
+      "to": "postgres",
+      "kind": "data",
+      "label": "Read and write application records",
+      "description": "The API uses its own database connection pool for staff, campaign, application, and mobile requests."
+    },
+    {
+      "from": "postgres",
+      "to": "internal/scheduler/runtime.go",
+      "kind": "data",
+      "label": "Find due schedules and pending work",
+      "description": "Independent scheduler tasks read due schedules, unsent outbox rows, and recoverable queued campaigns."
+    },
+    {
+      "from": "internal/dispatch/outbox.go",
+      "to": "kafka",
+      "kind": "queue",
+      "label": "Publish a send request",
+      "description": "The scheduler publishes a committed send request to its configured Kafka stream."
+    },
+    {
+      "from": "kafka",
+      "to": "internal/dispatch/kafka_admission.go",
+      "kind": "queue",
+      "label": "Consume a send request",
+      "description": "The admission worker validates the event source and processes each accepted send at its checkpoint."
+    },
+    {
+      "from": "internal/scheduler/runtime.go",
+      "to": "internal/dispatch/preparation.go",
+      "kind": "call",
+      "label": "Recover an eligible queued campaign",
+      "description": "Scheduler recovery invokes the same preparer used by admission and can prepare the campaign before Kafka consumption."
+    },
+    {
+      "from": "internal/dispatch/preparation.go",
+      "to": "postgres",
+      "kind": "data",
+      "label": "Store audience and device work",
+      "description": "Preparation writes the audience snapshot and eligible device work as durable database records."
+    },
+    {
+      "from": "postgres",
+      "to": "internal/dispatch/delivery_poller.go",
+      "kind": "data",
+      "label": "Poll app-scoped delivery work",
+      "description": "Delivery discovers and claims actionable work for its configured application from PostgreSQL."
+    },
+    {
+      "from": "internal/dispatch/submission.go",
+      "to": "fcm",
+      "kind": "http",
+      "label": "Submit an authorized push",
+      "description": "The delivery path calls the provider after claiming the attempt and rechecking its authority."
+    },
+    {
+      "from": "internal/dispatch/results.go",
+      "to": "postgres",
+      "kind": "data",
+      "label": "Record delivery evidence",
+      "description": "The worker persists provider attempt evidence and checks that the result belongs to the current attempt."
+    },
+    {
+      "from": "internal/dispatch/update_outbox.go",
+      "to": "kafka",
+      "kind": "event",
+      "label": "Publish delivery updates",
+      "description": "The delivery worker publishes versioned updates for downstream consumers on a separate stream."
+    },
+    {
+      "from": "fcm",
+      "to": "mobile",
+      "kind": "event",
+      "label": "Transport push notification",
+      "description": "Firebase Cloud Messaging handles transport to the target mobile installation."
+    },
+    {
+      "from": "mobile",
+      "to": "internal/features/applications/mobile_lifecycle.go",
+      "kind": "http",
+      "label": "Manage a mobile installation",
+      "description": "The optional mobile API supports registration, refresh, logout, account switch, and state queries."
+    },
+    {
+      "from": "mobile",
+      "to": "internal/features/applications/mobile_receipt.go",
+      "kind": "http",
+      "label": "Report receipt or read activity",
+      "description": "The mobile app may submit a capability-authorized observation for an installation and campaign."
+    },
+    {
+      "from": "internal/features/applications/mobile_receipt.go",
+      "to": "postgres",
+      "kind": "data",
+      "label": "Store a mobile observation",
+      "description": "The API records accepted observations alongside delivery data for later reporting."
+    },
+    {
+      "from": "internal/features/applications/campaign_statistics.go",
+      "to": "postgres",
+      "kind": "data",
+      "label": "Read campaign statistics",
+      "description": "The results endpoint reads the latest campaign statistics from stored data."
+    },
+    {
+      "from": "internal/features/applications/onboarding_service.go",
+      "to": "cmd/provisioner/main.go",
+      "kind": "rpc",
+      "label": "Request reserved credential staging",
+      "description": "The optional setup service calls the configured provisioner over mutually authenticated TLS."
+    },
+    {
+      "from": "cmd/controlplane/main.go",
+      "to": "postgres",
+      "kind": "data",
+      "label": "Claim and record verification work",
+      "description": "The control plane uses app-scoped verification jobs and accepts completion only from the current owner."
+    },
+    {
+      "from": "cmd/bootstrap/main.go",
+      "to": "postgres",
+      "kind": "data",
+      "label": "Create the first super-admin",
+      "description": "The one-shot command uses the SUPER_ADMIN role already seeded by the schema."
+    },
+    {
+      "from": "web/dashboard/src/features/TestDevices.tsx",
+      "to": "scripts/local-dev/real_fcm_dashboard.py",
+      "kind": "http",
+      "label": "Manage local test devices",
+      "description": "The loopback dashboard proxies authenticated device actions and sends to the local helper."
+    },
+    {
+      "from": "scripts/local-dev/real_fcm_dashboard.py",
+      "to": "devtools/local-mobile-issuer/dashboard_control.go",
+      "kind": "http",
+      "label": "Issue one-use pairing QR",
+      "description": "The helper fetches a fresh QR on an owner-only Unix socket. Android uses the separate mobile HTTPS listener."
+    },
+    {
+      "from": "scripts/local-dev/real_fcm_dashboard.py",
+      "to": "internal/dashboard/server.go",
+      "kind": "http",
+      "label": "Create and send a test campaign",
+      "description": "The helper reuses the signed-in BFF session and ordinary application campaign routes."
+    }
+  ],
+  "annotations": [
+    {
+      "path": "internal/features/applications/acceptance.go",
+      "note": "The acceptance transaction commits campaign state and its send outbox entry together. An authorized retry with the retained key returns the existing acceptance.",
+      "tags": [
+        "acceptance"
+      ]
+    },
+    {
+      "path": "internal/scheduler/runtime.go",
+      "note": "The outbox publisher and queued recovery run independently. Recovery and Kafka admission share one audience preparer.",
+      "tags": [
+        "recovery"
+      ]
+    },
+    {
+      "path": "internal/dispatch/submission.go",
+      "note": "A provider call and a database write happen separately. Persist the original attempt evidence if the provider outcome is uncertain.",
+      "tags": [
+        "delivery"
+      ]
+    }
+  ],
+  "flows": [
+    {
+      "id": "send",
+      "title": "Send a campaign",
+      "description": "Follow a staff member's send request from the campaign page to Firebase Cloud Messaging.",
+      "steps": [
+        {
+          "node": "web/dashboard/src/features/campaigns/Detail.tsx",
+          "note": "Staff confirm Send on a draft. The page passes the same request key if this send is retried."
+        },
+        {
+          "node": "internal/dashboard/server.go",
+          "note": "The dashboard server checks the session and forwards the allowed request."
+        },
+        {
+          "node": "internal/features/applications/acceptance.go",
+          "note": "The API checks application access and commits the campaign as QUEUED with a pending send message."
+        },
+        {
+          "node": "postgres",
+          "note": "PostgreSQL keeps the campaign and its pending send message even if the broker is unavailable."
+        },
+        {
+          "node": "pipeline.scheduler",
+          "note": "The scheduler publishes the stored send request to Kafka."
+        },
+        {
+          "node": "kafka",
+          "note": "Kafka carries the request to the admission worker."
+        },
+        {
+          "node": "pipeline.admission",
+          "note": "Admission verifies the source and resolves the campaign audience."
+        },
+        {
+          "node": "postgres",
+          "note": "The saved audience snapshot and device work are ready for the delivery worker."
+        },
+        {
+          "node": "pipeline.delivery",
+          "note": "Delivery polls PostgreSQL, claims eligible device attempts, and submits them to Firebase."
+        },
+        {
+          "node": "fcm",
+          "note": "Firebase handles transport to the target mobile installation."
+        }
+      ]
+    },
+    {
+      "id": "schedule-recovery",
+      "title": "Schedule a send and recover queued work",
+      "description": "See how the scheduler prepares a due campaign even when Kafka admission has yet to run.",
+      "steps": [
+        {
+          "node": "dashboard.campaigns",
+          "note": "Staff choose a future send time on the campaign page."
+        },
+        {
+          "node": "dashboard.gateway",
+          "note": "The dashboard server forwards the permitted schedule request."
+        },
+        {
+          "node": "api.acceptance",
+          "note": "The API validates the schedule and saves it with the campaign."
+        },
+        {
+          "node": "postgres",
+          "note": "The stored schedule gives the scheduler a durable record to revisit when it becomes due."
+        },
+        {
+          "node": "internal/scheduler/runtime.go",
+          "note": "Promotion queues the due campaign. The independent recovery task can find the queued campaign and prepare it from the database."
+        },
+        {
+          "node": "internal/dispatch/preparation.go",
+          "note": "The shared preparer resolves the audience and stores the delivery work once."
+        },
+        {
+          "node": "postgres",
+          "note": "The delivery worker can pick up the saved device work on a later poll."
+        }
+      ]
+    },
+    {
+      "id": "results-receipt",
+      "title": "Track a push and its receipt",
+      "description": "See where provider results and mobile observations originate and how they reach campaign reporting.",
+      "steps": [
+        {
+          "node": "pipeline.delivery",
+          "note": "The delivery worker submits a scoped attempt and receives evidence about the provider outcome."
+        },
+        {
+          "node": "fcm",
+          "note": "Firebase may transport the push to the target installation after accepting the request."
+        },
+        {
+          "node": "mobile",
+          "note": "The app may send an observation of receipt or a read action."
+        },
+        {
+          "node": "internal/features/applications/mobile_receipt.go",
+          "note": "The receipt endpoint checks the capability and records the observation."
+        },
+        {
+          "node": "postgres",
+          "note": "PostgreSQL stores the mobile observation alongside the separate evidence recorded by the delivery worker."
+        },
+        {
+          "node": "api.campaigns",
+          "note": "The campaign reporting endpoints read recorded attempts and mobile activity from PostgreSQL."
+        },
+        {
+          "node": "dashboard.gateway",
+          "note": "The dashboard server returns the allowed reporting response."
+        },
+        {
+          "node": "dashboard.results",
+          "note": "Staff can inspect delivery attempts and reads while reviewing a campaign."
+        }
+      ]
+    },
+    {
+      "id": "local-android-test",
+      "title": "Pair an Android phone and send a test push",
+      "description": "The isolated real-FCM profile enrolls test phones on private Wi-Fi and directs each test campaign to one selected installation.",
+      "steps": [
+        {
+          "node": "dashboard.test-devices",
+          "note": "Open the dashboard link printed by ./dev up --real-fcm and download the standalone test APK."
+        },
+        {
+          "node": "scripts/local-dev/real_fcm_dashboard.py",
+          "note": "Create a one-use pairing QR for each phone. The helper requests the QR over its private Unix socket."
+        },
+        {
+          "node": "api.mobile",
+          "note": "Scanning the QR opens a short-lived mobile session and enrolls the installation over private HTTPS."
+        },
+        {
+          "node": "dashboard.test-devices",
+          "note": "Select one enrolled phone and submit a test push using the normal dashboard and API path."
+        },
+        {
+          "node": "pipeline.delivery",
+          "note": "The worker submits the claimed delivery to the configured Firebase test project."
+        }
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "node": "dashboard",
+      "title": "Start where staff work",
+      "note": "The dashboard is where staff draft a campaign, choose an audience, and review the outcome."
+    },
+    {
+      "node": "api",
+      "title": "Check who can do what",
+      "note": "The API checks current staff authority and application grants before changing a campaign."
+    },
+    {
+      "node": "postgres",
+      "title": "Keep a durable record",
+      "note": "PostgreSQL holds the campaign, who it targets, and work that still needs to run."
+    },
+    {
+      "node": "pipeline",
+      "title": "Prepare and send in the background",
+      "note": "The scheduler hands off pending work, admission prepares the audience, and the delivery worker calls Firebase."
+    },
+    {
+      "node": "web/dashboard/src/features/campaigns/Detail.tsx",
+      "title": "Open the campaign screen",
+      "note": "This is where staff send or schedule a draft and follow its progress."
+    },
+    {
+      "node": "ops.environments",
+      "title": "Trace the environment boundaries",
+      "note": "The simulator, local real-FCM profile, staging pilot, and production readiness gates have separate state and evidence."
+    }
+  ]
+}

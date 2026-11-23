@@ -1,6 +1,6 @@
 # M05 operator reprocessing
 
-Status: implementation in progress, 2026-11-05. Migration 000025 and generated
+Migration 000025 and generated
 persistence primitives implement slice 1; see the
 [verification record](../analysis/m05-replay-persistence-verification.md). The
 [restricted executable](m05-replay-command.md) now implements strict stdin input,
@@ -8,9 +8,10 @@ trusted configuration, serial inspection/execution and safe partial reports, wit
 local PostgreSQL TLS/Kafka mTLS evidence. Operational issuer integration, source
 incarnation approval and production activation remain open.
 [Scoped request registration](../analysis/m05-replay-registration-verification.md)
-is available as an unwired library through migration 000026; per-position replay
-broker execution and expired-claim recovery are now available as unwired libraries;
-see [execution verification](../analysis/m05-replay-execution-verification.md). [Per-position claims](../analysis/m05-replay-claim-verification.md)
+was introduced through migration 000026. The executable uses the replay
+services for per-position execution; the protected scheduler can recover
+expired claims. See [execution verification](../analysis/m05-replay-execution-verification.md)
+for the earlier library tests. [Per-position claims](../analysis/m05-replay-claim-verification.md)
 now commit attempt/control/audit atomically through migration 000027. [Dry-run inspection](../analysis/m05-replay-inspection-verification.md)
 implements advisory eligibility without mutations. It refines [ADR-02 A-4](../adr/adr-02-worker-consumption.md#a-4-operator-replay-and-retention),
 [ADR-11](../adr/adr-11-security-baseline.md) and

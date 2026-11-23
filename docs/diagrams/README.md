@@ -1,8 +1,8 @@
 # Architecture diagrams
 
 The [editable Excalidraw diagram](push-notification-system-design.excalidraw)
-describes the target multi-application push notification backend and its local
-implementation status as of **2026-11-05**.
+describes the multi-application push notification backend and its implementation
+and acceptance status as of **2026-11-23**.
 
 ![Push notification backend target architecture](push-notification-system-design.svg)
 
@@ -37,12 +37,18 @@ the same change. Keep labels and explanatory text in English.
 - The diagram summarizes receipt/update flows; it does not define a new Kafka
   topic, endpoint contract, deployment topology, or delivery guarantee.
 
-The modern worker and scheduler entry points remain intentionally unwired. FCM
-execution, receipt projections, real client/provider verification, infrastructure
-hardening, and production acceptance remain open. Library fixture tests do not
-establish end-to-end delivery or production readiness.
+The server, workers, scheduler, and scoped receipt ingestion are wired. The
+staging test app demonstrated real Android delivery and receipt reporting for
+one device. Release-client acceptance, production capacity, recovery, and
+operational rollout remain open.
 
 ## Sources and maintenance
+
+The interactive map uses [haydenschmitty/floorplan](https://github.com/haydenschmitty/floorplan).
+Edit the checked-in [Floorplan architecture source](../../floorplan/architecture.json)
+for module summaries, flows, and environment boundaries. Refresh the map with
+Floorplan to regenerate the local viewer at `floorplan/index.html`. The
+generated viewer, graph, and cache are workstation files.
 
 Use the [production readiness plan](../analysis/production-readiness-plan.md)
 and [implementation milestones](../analysis/implementation-milestones.md) for

@@ -112,7 +112,7 @@ dispatch policy. Use the matrix to cover the expanded UI, not just campaign list
 
 Local mutation checks require approval for an isolated local fixture; they do not
 authorize shared-staging writes, real credentials or real sends. The optional
-[eight-route setup API](../api/application-onboarding-api.md) being available
+[setup and release API](../api/application-onboarding-api.md) being available
 locally does not imply staging availability or authorize enabling it. Do not send
 a notification as a smoke test. Target-environment interactive UAT and
 accessibility checks remain required for these surfaces; local checks do not

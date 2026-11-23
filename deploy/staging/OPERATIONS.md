@@ -154,7 +154,9 @@ GitHub main-only signed authorization. The public repository does not expose a
 general Actions runner to this VM. CI must pass before a readiness tag can be
 signed; the VM checks its signature, current main SHA and schema before using
 this controller's existing backup, maintenance, readiness and rollback flow.
-Production has no deployment workflow or environment in this setup.
+Production has no deployment workflow or environment in this setup. See the
+[production readiness plan](../../docs/analysis/production-readiness-plan.md)
+for the separate release gates and limits of the recorded staging evidence.
 
 Hourly backups now wait up to five minutes for the operations lock rather than
 silently skipping a run when the minutely health check acquired it first.

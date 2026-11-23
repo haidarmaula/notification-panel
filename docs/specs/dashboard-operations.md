@@ -31,7 +31,8 @@ staff account, role-assignment and application-grant management. Its registry-li
 [optional setup screen](../../web/dashboard/README.md#optional-application-setup)
 configures enrollment profiles/platform identifiers, stages FCM candidates,
 requests and polls OAuth verification, reads readiness/approval metadata and can
-hold dispatch. The default server leaves setup unmounted; protected policy,
+hold dispatch. It also exposes reviewed activation, dry-run, and release
+requests. The default server leaves setup unmounted; protected policy,
 provisioner/profiles/grants and per-app verifier scope govern availability. See
 the [onboarding API](../api/application-onboarding-api.md) and
 [local walkthrough](../local-development.md#try-onboarding-in-the-dashboard).

@@ -23,12 +23,13 @@ target-environment feasibility remain open. Prefer integration with an existing
 company monitoring/logging system after inventory; do not silently require a
 second stack or assume an alert receiver already exists.
 
-Current internal/middleware/logger.go prints method/raw path only. Server has
-no explicit panic wrapper/graceful shutdown; DB.New pings only at startup with
-caller context.Background. Worker/scheduler logs are unstructured. No health,
-metrics or tracing implementation was found in inspected cmd/middleware files;
-go.mod has no direct Prometheus instrumentation dependency. Transitive SDK
-telemetry/logging modules do not establish application observability.
+At the original review, access logging recorded the method and raw path, and
+the inspected processes lacked explicit health and metrics instrumentation.
+Current server access logging lives in
+[`internal/observability/http.go`](../../internal/observability/http.go) and
+records bounded request IDs and outcomes, including panics. The
+[monitoring runbook](../runbooks/monitoring.md) describes current health probes,
+metrics, and alerting. Target receiver and coverage verification remain open.
 
 ADR-01–07 define durable acceptance, per-device work, receipts, migration
 holds and Kafka behavior. Observability diagnoses those contracts; it does
