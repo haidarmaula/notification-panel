@@ -70,8 +70,9 @@ def main():
     parser.add_argument('--firebase-project');parser.add_argument('--android-package');parser.add_argument('--ios-bundle')
     args=parser.parse_args()
     if args.command in ['capture','prepare','deploy'] and (not args.release or not re.fullmatch('[a-z0-9][a-z0-9-]{0,63}',args.release)):raise SystemExit('Valid --release is required.')
+    cron_timeout = {'backup': 300, 'onboarding-reconcile': 30}.get(args.command) if args.cron else None
     try:
-        with lock(nonblocking=args.cron and args.command!='backup',name='cd.lock' if args.command in ['cd','dashboard-bootstrap','sync-cd-schema'] else 'build.lock' if args.command=='prepare' else 'operations.lock',timeout=300 if args.cron and args.command=='backup' else None):
+        with lock(nonblocking=args.cron and cron_timeout is None,name='cd.lock' if args.command in ['cd','dashboard-bootstrap','sync-cd-schema'] else 'build.lock' if args.command=='prepare' else 'operations.lock',timeout=cron_timeout):
             refresh_inventory()
             if args.command=='dashboard-bootstrap':
                 from ops_dashboard import configure

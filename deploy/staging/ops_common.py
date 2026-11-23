@@ -121,6 +121,6 @@ def lock(nonblocking=False,name="operations.lock",timeout=None):
                 try:
                     fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB);break
                 except BlockingIOError:
-                    if time.monotonic()>=deadline:raise TimeoutError('Operations lock wait exceeded backup deadline.')
+                    if time.monotonic()>=deadline:raise TimeoutError('Operations lock wait timed out.')
                     time.sleep(.1)
         yield
