@@ -11,7 +11,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read onboarding readiness */
+        /**
+         * Read onboarding readiness
+         * @description Returns scoped setup readiness and a strong setup ETag. Readiness is a snapshot; it is not proof of live provider permission or device delivery.
+         */
         get: operations["readOnboardingReadiness"];
         put?: never;
         post?: never;
@@ -28,7 +31,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List safe approved enrollment profiles */
+        /**
+         * List safe approved enrollment profiles
+         * @description Returns the operator-approved enrollment profiles configured in the protected server policy.
+         */
         get: operations["listEnrollmentProfiles"];
         put?: never;
         post?: never;
@@ -45,7 +51,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Read an onboarding operation */
+        /**
+         * Read an onboarding operation
+         * @description Returns a sanitized operation scoped to this application. An operation from another application returns 404.
+         */
         get: operations["readOnboardingOperation"];
         put?: never;
         post?: never;
@@ -62,7 +71,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List safe scoped approval evidence */
+        /**
+         * List safe scoped approval evidence
+         * @description Lists existing safe approval metadata. This API has no approval-issuance route.
+         */
         get: operations["listOnboardingApprovals"];
         put?: never;
         post?: never;
@@ -80,7 +92,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Select enrollment profile and platform identifiers */
+        /**
+         * Select enrollment profile and platform identifiers
+         * @description Stores an allowlisted enrollment profile and platform identifiers. This does not activate the application. Writes require If-Match and Idempotency-Key. Enrollment, FCM staging, and hold replay records expire after 24 hours.
+         */
         put: operations["configureEnrollment"];
         post?: never;
         delete?: never;
@@ -99,7 +114,7 @@ export interface paths {
         get?: never;
         /**
          * Store an FCM candidate
-         * @description Service account object is strict and limited to 64 KiB within the 96 KiB request. The private key is write-only and must never appear in a response.
+         * @description Stages a validated FCM service-account candidate through the protected mTLS provisioner and returns metadata only. It does not make the candidate current or prove IAM permission or device delivery. Writes require If-Match and Idempotency-Key. Enrollment, FCM staging, and hold replay records expire after 24 hours. The total JSON body limit is 96 KiB; the nested service-account object limit is 64 KiB.
          */
         put: operations["storeFcmCandidate"];
         post?: never;
@@ -118,7 +133,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Verify an FCM candidate */
+        /**
+         * Verify an FCM candidate
+         * @description Queues OAuth-only verification for a current or candidate configuration. It does not prove Firebase target IAM permission or device delivery. At most five new verification jobs per application are accepted per minute. A valid same-application test_installation_id currently returns 503 until dry-run support is implemented; a foreign installation returns 404. Explicit null is invalid. Other setup write bodies are limited to 64 KiB.
+         */
         post: operations["verifyFcmCandidate"];
         delete?: never;
         options?: never;
@@ -126,7 +144,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/apps/{app_id}/onboarding/activate": {
+    "/api/v1/admin/apps/{app_id}/onboarding/dispatch/hold": {
         parameters: {
             query?: never;
             header?: never;
@@ -136,50 +154,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Activate enrollment
-         * @description Activation holds dispatch. Promotion changes provider configuration without releasing dispatch.
+         * Hold dispatch
+         * @description Synchronously places dispatch in HELD. This does not change application lifecycle status or issue a release. Writes require If-Match and Idempotency-Key. Enrollment, FCM staging, and hold replay records expire after 24 hours.
          */
-        post: operations["activateEnrollment"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/apps/{app_id}/onboarding/fcm/promote": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Promote verified FCM configuration
-         * @description Activation holds dispatch. Promotion changes provider configuration without releasing dispatch.
-         */
-        post: operations["promoteFcmCandidate"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/admin/apps/{app_id}/onboarding/test-cohort": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        /**
-         * Create a test cohort
-         * @description All installation IDs and evidence are scoped to this application; cross-application resources return 404.
-         */
-        put: operations["createTestCohort"];
-        post?: never;
+        post: operations["holdDispatch"];
         delete?: never;
         options?: never;
         head?: never;
@@ -196,17 +174,17 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Release dispatch
-         * @description FULL release requires fresh successful signed DELIVERED or OPENED receipt evidence. This evidence is not required before ACTIVE enrollment or PILOT.
+         * Queue a PILOT or FULL dispatch release
+         * @description Queues PILOT from HELD or FULL from PILOT without changing dispatch. A separate issuer binds a grant and a separate operator executes it. A valid same-mode request with a current ETag and new key supersedes a pending operation whose bound grant expired or was revoked. An unbound or live delegation still conflicts.
          */
-        post: operations["releaseDispatch"];
+        post: operations["queueDispatchRelease"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/admin/apps/{app_id}/onboarding/dispatch/hold": {
+    "/api/v1/admin/apps/{app_id}/onboarding/activate": {
         parameters: {
             query?: never;
             header?: never;
@@ -215,8 +193,71 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Hold dispatch */
-        post: operations["holdDispatch"];
+        /**
+         * Queue enrollment activation
+         * @description Requires a verified candidate and held dispatch policy. A protected executor applies the transition; application enrollment becomes ACTIVE while dispatch remains HELD.
+         */
+        post: operations["queueOnboardingActivation"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/apps/{app_id}/onboarding/test-cohort": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Queue approved test cohort dry-run
+         * @description Requires an approved roster. Poll the operation and its targets for dry-run outcomes.
+         */
+        put: operations["queueOnboardingTestCohort"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/apps/{app_id}/onboarding/test-installations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List eligible test installations
+         * @description List eligible test installations.
+         */
+        get: operations["listOnboardingTestInstallations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/admin/apps/{app_id}/onboarding/operations/{operation_id}/targets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List scoped dry-run target outcomes
+         * @description List scoped dry-run target outcomes.
+         */
+        get: operations["listOnboardingCohortTargets"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -240,6 +281,7 @@ export interface components {
             candidate_configuration_id: string | null;
             enrollment_profile_id: string | null;
             cohort_id: string | null;
+            /** @description Latest evidence for checks_configuration_id. Missing LOCAL_FORMAT, OAUTH, TARGET_PERMISSION and DEVICE_DELIVERY checks are explicitly NOT_CHECKED with null timestamps. OAuth success alone proves neither target permission nor device reception. */
             checks: {
                 code: string;
                 /** @enum {string} */
@@ -250,6 +292,8 @@ export interface components {
             blockers: string[];
             next_actions: string[];
             last_operation: components["schemas"]["Operation"] | null;
+            /** @description Configuration evaluated by checks: candidate when present, otherwise current. Candidate evidence does not attest the active configuration. */
+            checks_configuration_id: string | null;
         };
         Operation: {
             /** Format: uuid */
@@ -290,11 +334,13 @@ export interface components {
             /** Format: date-time */
             expires_at: string;
         };
+        /** @description Strict Google service-account JSON. The credential is write-only and is sent only to the protected provisioner over mTLS; it is never returned by these routes. */
         ServiceAccount: {
             /** @enum {string} */
             type: "service_account";
             project_id: string;
             private_key_id: string;
+            /** @description Write-only key material. Never include a real credential in documentation examples. */
             private_key: string;
             /** Format: email */
             client_email: string;
@@ -325,25 +371,11 @@ export interface components {
         VerifyInput: {
             /** Format: uuid */
             configuration_id: string;
-            test_installation_id?: string | null;
-        };
-        ConfigurationInput: {
-            /** Format: uuid */
-            configuration_id: string;
-        };
-        TestCohortInput: {
-            installation_ids: string[];
-            reason: string;
-            /** Format: uuid */
-            evidence_id: string;
-        };
-        ReleaseInput: {
-            /** @enum {string} */
-            mode: "PILOT" | "FULL";
-            /** Format: uuid */
-            cohort_id: string;
-            /** Format: uuid */
-            evidence_id: string;
+            /**
+             * Format: uuid
+             * @description Optional public installation UUID. Explicit null is invalid. A valid installation owned by this application currently returns 503 because target-permission dry-run is not implemented; a foreign installation returns 404.
+             */
+            test_installation_id?: string;
         };
         HoldInput: {
             reason: string;
@@ -388,13 +420,22 @@ export interface components {
                 items: components["schemas"]["Approval"][];
             };
         };
+        ReleaseInput: {
+            /** @enum {string} */
+            mode: "PILOT" | "FULL";
+            /** Format: uuid */
+            cohort_id: string;
+            /** Format: uuid */
+            evidence_id: string;
+        };
     };
     responses: never;
     parameters: {
         AppID: string;
         OperationID: string;
-        /** @description Strong setup ETag from the latest readiness or candidate response. */
+        /** @description Required strong setup ETag from the latest readiness or mutation response, formatted as "onboarding:{app_id}:{revision}". */
         IfMatch: string;
+        /** @description Required canonical UUID. Same actor/application/operation and payload replays the stored result; a changed payload with the same key conflicts. */
         IdempotencyKey: string;
     };
     requestBodies: never;
@@ -436,14 +477,40 @@ export interface operations {
                      *         "candidate_configuration_id": null,
                      *         "enrollment_profile_id": null,
                      *         "cohort_id": null,
-                     *         "checks": [],
+                     *         "checks": [
+                     *           {
+                     *             "code": "LOCAL_FORMAT",
+                     *             "outcome": "NOT_CHECKED",
+                     *             "checked_at": null,
+                     *             "expires_at": null
+                     *           },
+                     *           {
+                     *             "code": "OAUTH",
+                     *             "outcome": "NOT_CHECKED",
+                     *             "checked_at": null,
+                     *             "expires_at": null
+                     *           },
+                     *           {
+                     *             "code": "TARGET_PERMISSION",
+                     *             "outcome": "NOT_CHECKED",
+                     *             "checked_at": null,
+                     *             "expires_at": null
+                     *           },
+                     *           {
+                     *             "code": "DEVICE_DELIVERY",
+                     *             "outcome": "NOT_CHECKED",
+                     *             "checked_at": null,
+                     *             "expires_at": null
+                     *           }
+                     *         ],
                      *         "blockers": [
                      *           "FCM_NOT_CONFIGURED"
                      *         ],
                      *         "next_actions": [
                      *           "CONFIGURE_FCM"
                      *         ],
-                     *         "last_operation": null
+                     *         "last_operation": null,
+                     *         "checks_configuration_id": null
                      *       }
                      *     }
                      */
@@ -494,57 +561,6 @@ export interface operations {
             409: {
                 headers: {
                     "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            412: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            413: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            415: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            428: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            429: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -639,57 +655,6 @@ export interface operations {
             409: {
                 headers: {
                     "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            412: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            413: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            415: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            428: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            429: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content: {
@@ -792,57 +757,6 @@ export interface operations {
                 };
             };
             /** @description Shared error envelope */
-            412: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            413: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            415: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            428: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            429: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
             500: {
                 headers: {
                     "Cache-Control"?: "no-store";
@@ -937,57 +851,6 @@ export interface operations {
                 };
             };
             /** @description Shared error envelope */
-            412: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            413: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            415: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            428: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            429: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
             500: {
                 headers: {
                     "Cache-Control"?: "no-store";
@@ -1014,8 +877,9 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Strong setup ETag from the latest readiness or candidate response. */
+                /** @description Required strong setup ETag from the latest readiness or mutation response, formatted as "onboarding:{app_id}:{revision}". */
                 "If-Match": components["parameters"]["IfMatch"];
+                /** @description Required canonical UUID. Same actor/application/operation and payload replays the stored result; a changed payload with the same key conflicts. */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -1063,14 +927,40 @@ export interface operations {
                      *         "candidate_configuration_id": null,
                      *         "enrollment_profile_id": "11111111-1111-4111-8111-111111111111",
                      *         "cohort_id": null,
-                     *         "checks": [],
+                     *         "checks": [
+                     *           {
+                     *             "code": "LOCAL_FORMAT",
+                     *             "outcome": "NOT_CHECKED",
+                     *             "checked_at": null,
+                     *             "expires_at": null
+                     *           },
+                     *           {
+                     *             "code": "OAUTH",
+                     *             "outcome": "NOT_CHECKED",
+                     *             "checked_at": null,
+                     *             "expires_at": null
+                     *           },
+                     *           {
+                     *             "code": "TARGET_PERMISSION",
+                     *             "outcome": "NOT_CHECKED",
+                     *             "checked_at": null,
+                     *             "expires_at": null
+                     *           },
+                     *           {
+                     *             "code": "DEVICE_DELIVERY",
+                     *             "outcome": "NOT_CHECKED",
+                     *             "checked_at": null,
+                     *             "expires_at": null
+                     *           }
+                     *         ],
                      *         "blockers": [
                      *           "FCM_NOT_CONFIGURED"
                      *         ],
                      *         "next_actions": [
                      *           "CONFIGURE_FCM"
                      *         ],
-                     *         "last_operation": null
+                     *         "last_operation": null,
+                     *         "checks_configuration_id": null
                      *       }
                      *     }
                      */
@@ -1168,17 +1058,6 @@ export interface operations {
                 };
             };
             /** @description Shared error envelope */
-            429: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
             500: {
                 headers: {
                     "Cache-Control"?: "no-store";
@@ -1205,8 +1084,9 @@ export interface operations {
         parameters: {
             query?: never;
             header: {
-                /** @description Strong setup ETag from the latest readiness or candidate response. */
+                /** @description Required strong setup ETag from the latest readiness or mutation response, formatted as "onboarding:{app_id}:{revision}". */
                 "If-Match": components["parameters"]["IfMatch"];
+                /** @description Required canonical UUID. Same actor/application/operation and payload replays the stored result; a changed payload with the same key conflicts. */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -1323,10 +1203,321 @@ export interface operations {
                 };
             };
             /** @description Shared error envelope */
+            500: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            503: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    verifyFcmCandidate: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required strong setup ETag from the latest readiness or mutation response, formatted as "onboarding:{app_id}:{revision}". */
+                "If-Match": components["parameters"]["IfMatch"];
+                /** @description Required canonical UUID. Same actor/application/operation and payload replays the stored result; a changed payload with the same key conflicts. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                app_id: components["parameters"]["AppID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "configuration_id": "11111111-1111-4111-8111-111111111111"
+                 *     }
+                 */
+                "application/json": components["schemas"]["VerifyInput"];
+            };
+        };
+        responses: {
+            /** @description Verification operation queued; repeated keys return the retained operation. */
+            202: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    ETag?: string;
+                    Location?: string;
+                    "Idempotency-Replayed"?: "true" | "false";
+                    [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "success": true,
+                     *       "message": "ok",
+                     *       "data": {
+                     *         "id": "11111111-1111-4111-8111-111111111111",
+                     *         "kind": "VERIFY",
+                     *         "state": "PENDING",
+                     *         "created_at": "2026-11-14T08:00:00Z",
+                     *         "completed_at": null,
+                     *         "failure_code": null,
+                     *         "resulting_revision": null
+                     *       }
+                     *     }
+                     */
+                    "application/json": components["schemas"]["OperationEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            400: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            401: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            403: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            404: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            409: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            412: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            413: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            415: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            428: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Per-application limit of five new verification jobs per minute; Retry-After is 60 seconds. */
             429: {
                 headers: {
                     "Cache-Control"?: "no-store";
                     "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            500: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Per-application verifier is not configured or same-application target-permission dry-run is not implemented; Retry-After is 5 seconds. */
+            503: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    holdDispatch: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description Required strong setup ETag from the latest readiness or mutation response, formatted as "onboarding:{app_id}:{revision}". */
+                "If-Match": components["parameters"]["IfMatch"];
+                /** @description Required canonical UUID. Same actor/application/operation and payload replays the stored result; a changed payload with the same key conflicts. */
+                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            };
+            path: {
+                app_id: components["parameters"]["AppID"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["HoldInput"];
+            };
+        };
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    ETag?: string;
+                    "Idempotency-Replayed"?: "true" | "false";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReadinessEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            400: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            401: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            403: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            404: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            409: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            412: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            413: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            415: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            428: {
+                headers: {
+                    "Cache-Control"?: "no-store";
                     [name: string]: unknown;
                 };
                 content: {
@@ -1356,12 +1547,13 @@ export interface operations {
             };
         };
     };
-    verifyFcmCandidate: {
+    queueDispatchRelease: {
         parameters: {
             query?: never;
             header: {
-                /** @description Strong setup ETag from the latest readiness or candidate response. */
+                /** @description Required strong setup ETag from the latest readiness or mutation response, formatted as "onboarding:{app_id}:{revision}". */
                 "If-Match": components["parameters"]["IfMatch"];
+                /** @description Required canonical UUID. Same actor/application/operation and payload replays the stored result; a changed payload with the same key conflicts. */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -1373,14 +1565,16 @@ export interface operations {
             content: {
                 /**
                  * @example {
-                 *       "configuration_id": "11111111-1111-4111-8111-111111111111"
+                 *       "mode": "PILOT",
+                 *       "cohort_id": "11111111-1111-4111-8111-111111111111",
+                 *       "evidence_id": "22222222-2222-4222-8222-222222222222"
                  *     }
                  */
-                "application/json": components["schemas"]["VerifyInput"];
+                "application/json": components["schemas"]["ReleaseInput"];
             };
         };
         responses: {
-            /** @description Success */
+            /** @description Release queued or original acceptance replayed. Poll Location for current state. */
             202: {
                 headers: {
                     "Cache-Control"?: "no-store";
@@ -1499,17 +1693,6 @@ export interface operations {
                 };
             };
             /** @description Shared error envelope */
-            429: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
             500: {
                 headers: {
                     "Cache-Control"?: "no-store";
@@ -1519,7 +1702,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Shared error envelope */
+            /** @description Release queue unavailable (for example, runtime sealed or migration held); Retry-After is 5 seconds. */
             503: {
                 headers: {
                     "Cache-Control"?: "no-store";
@@ -1532,12 +1715,13 @@ export interface operations {
             };
         };
     };
-    activateEnrollment: {
+    queueOnboardingActivation: {
         parameters: {
             query?: never;
             header: {
-                /** @description Strong setup ETag from the latest readiness or candidate response. */
+                /** @description Required strong setup ETag from the latest readiness or mutation response, formatted as "onboarding:{app_id}:{revision}". */
                 "If-Match": components["parameters"]["IfMatch"];
+                /** @description Required canonical UUID. Same actor/application/operation and payload replays the stored result; a changed payload with the same key conflicts. */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -1547,11 +1731,14 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ConfigurationInput"];
+                "application/json": {
+                    /** Format: uuid */
+                    configuration_id: string;
+                };
             };
         };
         responses: {
-            /** @description Success */
+            /** @description Release queued or original acceptance replayed. Poll Location for current state. */
             202: {
                 headers: {
                     "Cache-Control"?: "no-store";
@@ -1655,17 +1842,6 @@ export interface operations {
                 };
             };
             /** @description Shared error envelope */
-            429: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
             500: {
                 headers: {
                     "Cache-Control"?: "no-store";
@@ -1675,7 +1851,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Shared error envelope */
+            /** @description Release queue unavailable (for example, runtime sealed or migration held); Retry-After is 5 seconds. */
             503: {
                 headers: {
                     "Cache-Control"?: "no-store";
@@ -1688,12 +1864,13 @@ export interface operations {
             };
         };
     };
-    promoteFcmCandidate: {
+    queueOnboardingTestCohort: {
         parameters: {
             query?: never;
             header: {
-                /** @description Strong setup ETag from the latest readiness or candidate response. */
+                /** @description Required strong setup ETag from the latest readiness or mutation response, formatted as "onboarding:{app_id}:{revision}". */
                 "If-Match": components["parameters"]["IfMatch"];
+                /** @description Required canonical UUID. Same actor/application/operation and payload replays the stored result; a changed payload with the same key conflicts. */
                 "Idempotency-Key": components["parameters"]["IdempotencyKey"];
             };
             path: {
@@ -1703,11 +1880,16 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ConfigurationInput"];
+                "application/json": {
+                    installation_ids: string[];
+                    reason: string;
+                    /** Format: uuid */
+                    evidence_id: string;
+                };
             };
         };
         responses: {
-            /** @description Success */
+            /** @description Release queued or original acceptance replayed. Poll Location for current state. */
             202: {
                 headers: {
                     "Cache-Control"?: "no-store";
@@ -1811,17 +1993,6 @@ export interface operations {
                 };
             };
             /** @description Shared error envelope */
-            429: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
             500: {
                 headers: {
                     "Cache-Control"?: "no-store";
@@ -1831,7 +2002,7 @@ export interface operations {
                     "application/json": components["schemas"]["ErrorEnvelope"];
                 };
             };
-            /** @description Shared error envelope */
+            /** @description Release queue unavailable (for example, runtime sealed or migration held); Retry-After is 5 seconds. */
             503: {
                 headers: {
                     "Cache-Control"?: "no-store";
@@ -1844,354 +2015,40 @@ export interface operations {
             };
         };
     };
-    createTestCohort: {
+    listOnboardingTestInstallations: {
         parameters: {
-            query?: never;
-            header: {
-                /** @description Strong setup ETag from the latest readiness or candidate response. */
-                "If-Match": components["parameters"]["IfMatch"];
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
+            query?: {
+                after?: string;
             };
+            header?: never;
             path: {
                 app_id: components["parameters"]["AppID"];
             };
             cookie?: never;
         };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TestCohortInput"];
-            };
-        };
-        responses: {
-            /** @description Success */
-            202: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    ETag?: string;
-                    Location?: string;
-                    "Idempotency-Replayed"?: "true" | "false";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OperationEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            400: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            401: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            403: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            404: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            409: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            412: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            413: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            415: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            428: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            429: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            500: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            503: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
-    releaseDispatch: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Strong setup ETag from the latest readiness or candidate response. */
-                "If-Match": components["parameters"]["IfMatch"];
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                app_id: components["parameters"]["AppID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                /**
-                 * @example {
-                 *       "mode": "PILOT",
-                 *       "cohort_id": "11111111-1111-4111-8111-111111111111",
-                 *       "evidence_id": "11111111-1111-4111-8111-111111111111"
-                 *     }
-                 */
-                "application/json": components["schemas"]["ReleaseInput"];
-            };
-        };
-        responses: {
-            /** @description Success */
-            202: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    ETag?: string;
-                    Location?: string;
-                    "Idempotency-Replayed"?: "true" | "false";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["OperationEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            400: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            401: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            403: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            404: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            409: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            412: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            413: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            415: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            428: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            429: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            500: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            503: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    "Retry-After"?: number;
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-        };
-    };
-    holdDispatch: {
-        parameters: {
-            query?: never;
-            header: {
-                /** @description Strong setup ETag from the latest readiness or candidate response. */
-                "If-Match": components["parameters"]["IfMatch"];
-                "Idempotency-Key": components["parameters"]["IdempotencyKey"];
-            };
-            path: {
-                app_id: components["parameters"]["AppID"];
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["HoldInput"];
-            };
-        };
+        requestBody?: never;
         responses: {
             /** @description Success */
             200: {
                 headers: {
                     "Cache-Control"?: "no-store";
-                    ETag?: string;
-                    "Idempotency-Replayed"?: "true" | "false";
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ReadinessEnvelope"];
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        message: string;
+                        data: {
+                            installations: {
+                                /** Format: uuid */
+                                installation_id: string;
+                                platform: string;
+                                last_seen_at: string | null;
+                            }[];
+                            next_after: string | null;
+                        };
+                    };
                 };
             };
             /** @description Shared error envelope */
@@ -2245,7 +2102,7 @@ export interface operations {
                 };
             };
             /** @description Shared error envelope */
-            412: {
+            500: {
                 headers: {
                     "Cache-Control"?: "no-store";
                     [name: string]: unknown;
@@ -2255,40 +2112,96 @@ export interface operations {
                 };
             };
             /** @description Shared error envelope */
-            413: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            415: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            428: {
-                headers: {
-                    "Cache-Control"?: "no-store";
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ErrorEnvelope"];
-                };
-            };
-            /** @description Shared error envelope */
-            429: {
+            503: {
                 headers: {
                     "Cache-Control"?: "no-store";
                     "Retry-After"?: number;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+        };
+    };
+    listOnboardingCohortTargets: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                app_id: components["parameters"]["AppID"];
+                operation_id: components["parameters"]["OperationID"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Success */
+            200: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        /** @constant */
+                        success: true;
+                        message: string;
+                        data: {
+                            /** Format: uuid */
+                            installation_id: string;
+                            platform: string;
+                            outcome: ("PASSED" | "FAILED" | "INCONCLUSIVE") | null;
+                            failure_code: string | null;
+                            checked_at: string | null;
+                        }[];
+                    };
+                };
+            };
+            /** @description Shared error envelope */
+            400: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            401: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            403: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            404: {
+                headers: {
+                    "Cache-Control"?: "no-store";
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorEnvelope"];
+                };
+            };
+            /** @description Shared error envelope */
+            409: {
+                headers: {
+                    "Cache-Control"?: "no-store";
                     [name: string]: unknown;
                 };
                 content: {

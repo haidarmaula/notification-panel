@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { installOnboardingLifecycleFixture, lifecycleIDs } from './onboarding-lifecycle-fixture';
 
 // Credential forms must not enter Playwright request traces, even in fixtures.
 test.use({ trace: 'off' });
@@ -43,6 +44,7 @@ async function mockSetup(page: Page, options: { stale?: boolean; lostUpload?: bo
     candidate_configuration_id: stored ? configuration : null,
     enrollment_profile_id: configured ? profile : null,
     cohort_id: null,
+    checks_configuration_id: stored ? configuration : null,
     checks: verified
       ? [
           {
@@ -200,8 +202,8 @@ test('setup keeps credentials out of storage and leaves enrollment and dispatch 
     ),
   ).toBeVisible();
   await expect(
-    page.getByText('Device enrollment is not available yet.', { exact: false }),
-  ).toBeVisible();
+    page.getByRole('button', { name: 'Activate enrollment', exact: true }),
+  ).toBeEnabled();
   expect(await page.locator('body').innerText()).not.toContain(secret);
   const storage = await page.evaluate(() =>
     JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }),
@@ -245,4 +247,172 @@ test('unknown upload outcome retries the same key and original ETag', async ({ p
   ).toBeVisible();
   expect(state.attempts()).toBe(2);
   await expect(page.locator('input[type="file"]')).toHaveValue('');
+});
+
+async function openLifecycle(
+  page: Page,
+  options: Parameters<typeof installOnboardingLifecycleFixture>[1] = {},
+) {
+  const fixture = await installOnboardingLifecycleFixture(page, options);
+  await page.goto('/login');
+  await page.getByLabel('Email', { exact: false }).fill('staff@example.invalid');
+  await page.locator('input[name="password"]').fill('fixture-only');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: 'Choose application' })).toBeVisible();
+  await page.goto(`/apps/admin/applications/${lifecycleIDs.app}/onboarding`);
+  await expect(page.getByRole('heading', { name: 'Notification setup' })).toBeVisible();
+  return fixture;
+}
+
+test('activation queues a protected operation and keeps dispatch held', async ({ page }) => {
+  const fixture = await openLifecycle(page, { initialStatus: 'PROVISIONING', pendingPolls: 2 });
+  await page.getByRole('button', { name: 'Activate enrollment', exact: true }).click();
+  await expect(
+    page.getByText('Enrollment activation is awaiting operator action.', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('Status: Pending.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh status', exact: true })).toBeEnabled();
+  await page.reload();
+  await expect(page.getByText('Status: Pending.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Active', { exact: true })).toBeVisible();
+  await expect(page.getByText('Held', { exact: true })).toBeVisible();
+  const activation = fixture.requests.find((request) => request.path.endsWith('/activate'));
+  expect(activation?.method).toBe('POST');
+  expect(activation?.body).toEqual({ configuration_id: lifecycleIDs.configuration });
+  expect(activation?.key).toMatch(/^[0-9a-f-]{36}$/);
+  expect(activation?.csrf).toBeTruthy();
+  expect(activation?.etag).toContain(':8"');
+  expect(
+    fixture.requests.some((request) =>
+      request.path.endsWith(`/operations/${lifecycleIDs.activation}`),
+    ),
+  ).toBe(true);
+});
+
+test('device roster paginates, dry-run submits the approved selection, and target failures remain per device', async ({
+  page,
+}) => {
+  const fixture = await openLifecycle(page);
+  await page
+    .getByLabel(`Select ANDROID installation ${lifecycleIDs.androidOne}`, { exact: true })
+    .check();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await page.getByLabel(`Select IOS installation ${lifecycleIDs.iosOne}`, { exact: true }).check();
+  await page.getByRole('combobox', { name: 'Test cohort approval', exact: true }).click();
+  await page.getByRole('option', { name: new RegExp(lifecycleIDs.approval) }).click();
+  await page.getByLabel('Dry-run reason', { exact: true }).fill('Fixture cohort check');
+  await page.getByRole('button', { name: 'Queue device dry-run', exact: true }).click();
+  await expect(
+    page.getByRole('heading', { name: 'Per-device outcomes', exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('FAILED', { exact: true })).toBeVisible();
+  await expect(page.getByText('Pending', { exact: true })).toBeVisible();
+  const pages = fixture.requests.filter((request) => request.path.includes('/test-installations'));
+  expect(
+    pages.map((request) => new URLSearchParams(request.path.split('?')[1] ?? '').get('after')),
+  ).toEqual([null, lifecycleIDs.androidTwo]);
+  const dryRun = fixture.requests.find((request) => request.path.endsWith('/test-cohort'));
+  expect(dryRun?.method).toBe('PUT');
+  expect(dryRun?.body).toEqual({
+    installation_ids: [lifecycleIDs.androidOne, lifecycleIDs.iosOne],
+    reason: 'Fixture cohort check',
+    evidence_id: lifecycleIDs.approval,
+  });
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+    ).toBe(true);
+  }
+});
+
+test('PILOT and FULL require their own approvals and queue separate operations', async ({
+  page,
+}) => {
+  const fixture = await openLifecycle(page, { allPassedTargets: true, pendingPolls: 1 });
+  await page
+    .getByLabel(`Select ANDROID installation ${lifecycleIDs.androidOne}`, { exact: true })
+    .check();
+  await page
+    .getByLabel(`Select ANDROID installation ${lifecycleIDs.androidTwo}`, { exact: true })
+    .check();
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await page.getByLabel(`Select IOS installation ${lifecycleIDs.iosOne}`, { exact: true }).check();
+  await page.getByRole('combobox', { name: 'Test cohort approval', exact: true }).click();
+  await page
+    .getByRole('option', { name: new RegExp(lifecycleIDs.approval) })
+    .last()
+    .click();
+  await page.getByLabel('Dry-run reason', { exact: true }).fill('All target checks passed');
+  await page.getByRole('button', { name: 'Queue device dry-run', exact: true }).click();
+  await page.getByRole('combobox', { name: 'PILOT approval', exact: true }).click();
+  await page.getByRole('option', { name: new RegExp(lifecycleIDs.pilotApproval) }).click();
+  await expect(
+    page.getByRole('button', { name: 'Request PILOT release', exact: true }),
+  ).toBeEnabled();
+  await page.getByRole('button', { name: 'Request PILOT release', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'FULL request', exact: true })).toBeVisible();
+  await page.getByRole('combobox', { name: 'FULL approval', exact: true }).click();
+  await page.getByRole('option', { name: new RegExp(lifecycleIDs.fullApproval) }).click();
+  await page.getByRole('button', { name: 'Request FULL release', exact: true }).click();
+  await expect(
+    page.getByText('FULL release is awaiting operator action.', { exact: true }),
+  ).toBeVisible();
+  await expect(page.getByText('FULL', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('FULL', { exact: true })).toBeVisible();
+  const releases = fixture.requests.filter((request) => request.path.endsWith('/dispatch/release'));
+  expect(releases.map((request) => (request.body as { mode: string }).mode)).toEqual([
+    'PILOT',
+    'FULL',
+  ]);
+  expect(releases[0].body).toEqual({
+    mode: 'PILOT',
+    cohort_id: lifecycleIDs.cohort,
+    evidence_id: lifecycleIDs.pilotApproval,
+  });
+  expect(releases[1].body).toEqual({
+    mode: 'FULL',
+    cohort_id: lifecycleIDs.cohort,
+    evidence_id: lifecycleIDs.fullApproval,
+  });
+});
+
+test('stale activation requires review, then failed operation is visible', async ({ page }) => {
+  const fixture = await openLifecycle(page, {
+    initialStatus: 'PROVISIONING',
+    activation: 'FAILED',
+    staleOnce: '/activate',
+  });
+  await page.getByRole('button', { name: 'Activate enrollment', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Reload and review', exact: true })).toBeVisible();
+  const activationBeforeReview = fixture.requests.filter((request) =>
+    request.path.endsWith('/activate'),
+  )[0];
+  await page.getByRole('button', { name: 'Reload and review', exact: true }).click();
+  await page.getByRole('button', { name: 'Activate enrollment', exact: true }).click();
+  await expect(page.getByText('Enrollment activation failed.', { exact: true })).toBeVisible();
+  const activationRequests = fixture.requests.filter((request) =>
+    request.path.endsWith('/activate'),
+  );
+  expect(activationRequests).toHaveLength(2);
+  expect(activationBeforeReview?.key).not.toBe(activationRequests[1].key);
+});
+
+test('unknown activation outcome retries the same key and replays the original operation', async ({
+  page,
+}) => {
+  const replayFixture = await openLifecycle(page, {
+    initialStatus: 'PROVISIONING',
+    replayOnce: '/activate',
+  });
+  await page.getByRole('button', { name: 'Activate enrollment', exact: true }).click();
+  const retry = page.getByRole('button', { name: 'Retry the same request', exact: true });
+  await expect(retry).toBeVisible();
+  await retry.click();
+  await expect(page.getByText('Active', { exact: true })).toBeVisible();
+  const retries = replayFixture.requests.filter((request) => request.path.endsWith('/activate'));
+  expect(retries).toHaveLength(2);
+  expect(retries[0].key).toBe(retries[1].key);
+  expect(retries[0].etag).toBe(retries[1].etag);
+  expect(retries[0].body).toEqual(retries[1].body);
 });

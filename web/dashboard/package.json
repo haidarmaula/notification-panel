@@ -16,7 +16,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "eslint src",
-    "api:generate": "openapi-typescript ../../docs/contracts/staff-business.openapi.json -o src/lib/api/generated/staff.ts && openapi-typescript ../../docs/contracts/application-registry.openapi.json -o src/lib/api/generated/applications.ts && openapi-typescript ../../docs/contracts/proposed/application-onboarding.openapi.json -o src/lib/api/generated/onboarding.ts",
+    "api:generate": "openapi-typescript ../../docs/contracts/staff-business.openapi.json -o src/lib/api/generated/staff.ts && openapi-typescript ../../docs/contracts/application-registry.openapi.json -o src/lib/api/generated/applications.ts && openapi-typescript ../../docs/contracts/application-onboarding.openapi.json -o src/lib/api/generated/onboarding.ts",
     "budget": "node scripts/bundle-budget.mjs",
     "preview:astryx": "vite --config preview/vite.config.ts",
     "build:astryx": "tsc --noEmit -p preview/tsconfig.json && vite build --config preview/vite.config.ts"

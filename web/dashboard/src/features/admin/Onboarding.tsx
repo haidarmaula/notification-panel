@@ -1,4 +1,5 @@
 import { useEffect, useEffectEvent, useRef, useState, type FormEvent } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { VStack, HStack } from '@astryxdesign/core/Stack';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { Section } from '@astryxdesign/core/Section';
@@ -17,8 +18,9 @@ import { SubmitAction } from '../../components/ui/Actions';
 import { useAuth } from '../../app/auth-context';
 import { useUnsaved } from '../../app/unsaved';
 import { ApiError, request } from '../../lib/api/client';
-import type { components } from '../../lib/api/generated/onboarding';
+import type { components, operations } from '../../lib/api/generated/onboarding';
 import type { components as RegistryComponents } from '../../lib/api/generated/applications';
+import OnboardingLifecycle from './OnboardingLifecycle';
 
 type Readiness = components['schemas']['Readiness'];
 type Profile = components['schemas']['Profile'];
@@ -29,20 +31,52 @@ type EnrollmentInput = components['schemas']['EnrollmentInput'];
 type FcmInput = components['schemas']['FcmInput'];
 type VerifyInput = components['schemas']['VerifyInput'];
 type HoldInput = components['schemas']['HoldInput'];
+type TestCohortInput =
+  operations['queueOnboardingTestCohort']['requestBody']['content']['application/json'];
+type ReleaseInput = components['schemas']['ReleaseInput'];
 type Platform = EnrollmentInput['platforms'][number]['platform'];
 type Environment = FcmInput['environment'];
 type Application = RegistryComponents['schemas']['Application'];
 
 type PendingMutation = {
-  kind: 'enrollment' | 'credential' | 'verify' | 'hold';
+  kind: 'enrollment' | 'credential' | 'verify' | 'hold' | 'activate' | 'cohort' | 'release';
   path: string;
   method: 'PUT' | 'POST';
-  body: EnrollmentInput | FcmInput | VerifyInput | HoldInput;
+  body: EnrollmentInput | FcmInput | VerifyInput | HoldInput | TestCohortInput | ReleaseInput;
   etag: string;
   key: string;
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+function isRunning(operation: Operation) {
+  return operation.state === 'PENDING' || operation.state === 'RUNNING';
+}
+
+const queuedOperationKinds = {
+  verify: 'VERIFY',
+  activate: 'ACTIVATE',
+  cohort: 'TEST_COHORT',
+} as const;
+
+const writeNotices: Record<PendingMutation['kind'], string> = {
+  enrollment: 'Enrollment profile saved.',
+  credential: 'Credentials saved as a candidate.',
+  verify: 'OAuth check accepted.',
+  activate: 'Activation request queued.',
+  cohort: 'Device dry-run queued.',
+  release: 'Dispatch release request queued.',
+  hold: 'Dispatch held.',
+};
+
+const operationLabels: Record<Operation['kind'], string> = {
+  VERIFY: 'OAuth check',
+  ACTIVATE: 'Enrollment activation',
+  PROMOTE: 'Credential promotion',
+  TEST_COHORT: 'Device dry-run',
+  RELEASE_PILOT: 'PILOT release',
+  RELEASE_FULL: 'FULL release',
+};
 function validText(value: string, maxBytes: number) {
   return (
     value.length > 0 &&
@@ -73,6 +107,8 @@ function safeError(error: unknown): string {
   if (status === 401) return 'Your session has expired. Sign in to continue.';
   if (status === 403) return 'You do not have access to set up this application.';
   if (status === 404) return 'Setup is unavailable for this application.';
+  if (status === 409)
+    return 'The request conflicts with current setup. Review the latest status and approvals.';
   if (status === 412)
     return 'Setup has changed. Reload and review the latest version before submitting again.';
   if (status === 428) return 'The resource version is unavailable. Reload before trying again.';
@@ -107,7 +143,7 @@ function blockerLabel(code: string) {
     ROUTE_REVIEW_REQUIRED: 'Device routes have not been reviewed.',
     DISPATCH_APPROVAL_REQUIRED: 'Dispatch approval is not available.',
   };
-  return labels[code] ?? 'Additional setup is required.';
+  return labels[code] ?? code;
 }
 
 function checkLabel(code: string) {
@@ -117,7 +153,7 @@ function checkLabel(code: string) {
     TARGET_PERMISSION: 'Delivery permission',
     DEVICE_DELIVERY: 'Device receipt',
   };
-  return labels[code] ?? 'Check';
+  return labels[code] ?? code;
 }
 
 function outcomeLabel(value: string) {
@@ -128,6 +164,17 @@ function outcomeLabel(value: string) {
 }
 
 function operationMessage(operation: Operation) {
+  if (operation.kind !== 'VERIFY') {
+    const label = operationLabels[operation.kind] ?? 'Setup operation';
+    if (operation.state === 'SUCCEEDED') return `${label} succeeded.`;
+    if (operation.state === 'FAILED') return `${label} failed.`;
+    if (operation.state === 'SUPERSEDED') return `${label} was superseded.`;
+    if (operation.kind === 'ACTIVATE' && operation.state === 'PENDING')
+      return 'Enrollment activation is awaiting operator action.';
+    if (operation.kind.startsWith('RELEASE_') && operation.state === 'PENDING')
+      return `${label} is awaiting operator action.`;
+    return `${label} is ${operation.state === 'PENDING' ? 'queued' : 'running'}.`;
+  }
   if (operation.state === 'SUCCEEDED')
     return 'OAuth succeeded. Delivery permissions and device receipt have not been checked.';
   if (operation.failure_code === 'FCM_CREDENTIAL_REJECTED')
@@ -140,7 +187,9 @@ function operationMessage(operation: Operation) {
     return 'The previous check was superseded. Reload setup status.';
   if (operation.state === 'FAILED')
     return 'The OAuth check failed. Check the configuration before trying again.';
-  return 'The OAuth check is running.';
+  return operation.state === 'PENDING'
+    ? 'The OAuth check is queued.'
+    : 'The OAuth check is running.';
 }
 
 function strongETag(value: string | null): value is string {
@@ -169,6 +218,7 @@ function serviceAccount(value: unknown): value is ServiceAccount {
 
 export default function Onboarding(props: { applicationID: string }) {
   const auth = useAuth();
+  const queryClient = useQueryClient();
   const setDirty = useUnsaved();
   const applicationIDValid = () => uuidPattern.test(props.applicationID);
   const base = () => `/admin/apps/${encodeURIComponent(props.applicationID)}/onboarding`;
@@ -192,6 +242,7 @@ export default function Onboarding(props: { applicationID: string }) {
   );
   const [pendingMutation, setPendingMutation] = useState<PendingMutation>();
   const [retryAfter, setRetryAfter] = useState('');
+  const [retryBlocked, setRetryBlocked] = useState(false);
   const [profileID, setProfileID] = useState('');
   const [editingProfile, setEditingProfile] = useState(false);
   const [profileDirty, setProfileDirty] = useState(false);
@@ -205,18 +256,33 @@ export default function Onboarding(props: { applicationID: string }) {
   const [fileError, setFileError] = useState('');
   const [holdReason, setHoldReason] = useState('');
   const [operation, setOperation] = useState<Operation>();
+  const [cohortOperation, setCohortOperation] = useState<Operation>();
   const [operationError, setOperationError] = useState('');
+  const [settlingOperation, setSettlingOperation] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
   const [credentialFile, setCredentialFile] = useState<File | null>(null);
   const credentialSelection = useRef(0);
   const alive = useRef(true);
   const readinessTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const operationTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const observedOperation = useRef('');
+  const readinessRequest = useRef(0);
   const lifetime = useRef(new AbortController());
   const mutationInFlight = useRef(false);
   useEffect(() => {
     setDirty(profileDirty || !!account || !!pendingMutation || busy || !!holdReason.trim());
   }, [profileDirty, account, pendingMutation, busy, holdReason, setDirty]);
+  useEffect(() => {
+    if (!retryBlocked) return;
+    const timer = setTimeout(
+      () => {
+        setRetryBlocked(false);
+        setRetryAfter('');
+      },
+      Number(retryAfter) * 1000,
+    );
+    return () => clearTimeout(timer);
+  }, [retryAfter, retryBlocked]);
 
   function clearTimers() {
     if (readinessTimer.current) clearTimeout(readinessTimer.current);
@@ -240,6 +306,7 @@ export default function Onboarding(props: { applicationID: string }) {
 
   async function readReadiness(showLoading = false): Promise<Readiness | undefined> {
     const signal = lifetime.current.signal;
+    const sequence = ++readinessRequest.current;
     if (showLoading) setRefreshing(true);
     setLoadError('');
     try {
@@ -255,7 +322,8 @@ export default function Onboarding(props: { applicationID: string }) {
       );
       if (!strongETag(responseETag) || envelope.data.application_id !== props.applicationID)
         throw new ApiError(502, 'Invalid application context');
-      if (!alive.current || signal.aborted) return undefined;
+      if (!alive.current || signal.aborted || sequence !== readinessRequest.current)
+        return undefined;
       setReadiness(envelope.data);
       if (envelope.data.environment) setEnvironment(envelope.data.environment);
       setEtag(responseETag);
@@ -266,12 +334,13 @@ export default function Onboarding(props: { applicationID: string }) {
       }
       return envelope.data;
     } catch (error) {
-      if (!alive.current || signal.aborted) return undefined;
+      if (!alive.current || signal.aborted || sequence !== readinessRequest.current)
+        return undefined;
       handleUnauthorized(error);
       setLoadError(safeError(error));
       return undefined;
     } finally {
-      if (alive.current && !signal.aborted) {
+      if (alive.current && !signal.aborted && sequence === readinessRequest.current) {
         setLoading(false);
         setRefreshing(false);
       }
@@ -347,12 +416,25 @@ export default function Onboarding(props: { applicationID: string }) {
       return;
     }
     setLoading(true);
-    await Promise.all([readApplication(), readReadiness(), readProfiles(), readApprovals()]);
+    const [current] = await Promise.all([
+      readReadiness(),
+      readApplication(),
+      readProfiles(),
+      readApprovals(),
+      queryClient.invalidateQueries({
+        queryKey: ['onboarding-test-installations', props.applicationID],
+      }),
+      queryClient.invalidateQueries({
+        queryKey: ['onboarding-cohort-targets', props.applicationID],
+      }),
+    ]);
+    if (current?.last_operation) observeOperation(current.last_operation);
   }
 
   async function refreshReadinessForReview() {
-    const result = await readReadiness(true);
+    const [result] = await Promise.all([readReadiness(true), readApprovals()]);
     if (result) {
+      if (result.last_operation) observeOperation(result.last_operation);
       setConflict(false);
       setWriteNotice('Latest status loaded. Review the revision and next steps.');
     }
@@ -370,6 +452,8 @@ export default function Onboarding(props: { applicationID: string }) {
       conflict ||
       pendingMutation ||
       mutationInFlight.current ||
+      settlingOperation ||
+      !!loadError ||
       !application ||
       !uuidPattern.test(props.applicationID)
     ) {
@@ -387,7 +471,7 @@ export default function Onboarding(props: { applicationID: string }) {
   }
 
   async function runMutation(mutation: PendingMutation) {
-    if (mutationInFlight.current) return;
+    if (mutationInFlight.current || retryBlocked) return;
     mutationInFlight.current = true;
     setActiveMutationKind(mutation.kind);
     setBusy(true);
@@ -417,7 +501,7 @@ export default function Onboarding(props: { applicationID: string }) {
       if (!alive.current) return;
       setPendingMutation(undefined);
       setConflict(false);
-      if (strongETag(responseETag)) setEtag(responseETag);
+      if (!replayed && strongETag(responseETag)) setEtag(responseETag);
       if (mutation.kind === 'credential') clearCredential();
       if (mutation.kind === 'enrollment') {
         setEditingProfile(false);
@@ -425,47 +509,49 @@ export default function Onboarding(props: { applicationID: string }) {
       }
       if (mutation.kind === 'hold') setHoldReason('');
       setWriteNotice(
-        replayed
-          ? 'The previous request has already been applied.'
-          : mutation.kind === 'verify'
-            ? 'OAuth check accepted.'
-            : mutation.kind === 'credential'
-              ? 'Credentials saved as a candidate.'
-              : mutation.kind === 'enrollment'
-                ? 'Enrollment profile saved.'
-                : 'Dispatch held.',
+        replayed ? 'The previous request has already been applied.' : writeNotices[mutation.kind],
       );
-      if (mutation.kind === 'verify') {
+      const expectedKind =
+        mutation.kind === 'release' && 'mode' in mutation.body
+          ? `RELEASE_${mutation.body.mode}`
+          : mutation.kind in queuedOperationKinds
+            ? queuedOperationKinds[mutation.kind as keyof typeof queuedOperationKinds]
+            : undefined;
+      if (expectedKind) {
         const envelope = response as components['schemas']['OperationEnvelope'];
-        const operationID = envelope?.data?.id;
-        if (!operationID || !uuidPattern.test(operationID)) {
-          setOperationError('Check status is unavailable. Reload to view the result.');
+        const accepted = envelope?.data;
+        const expectedLocation = `/bff/api${base()}/operations/${accepted?.id}`;
+        if (
+          !accepted ||
+          accepted.kind !== expectedKind ||
+          !uuidPattern.test(accepted.id) ||
+          responseLocation !== expectedLocation
+        ) {
+          setOperationError(
+            'The operation location is invalid. Refresh status to recover the request.',
+          );
         } else {
-          setOperationError('');
-          setOperation(envelope.data);
-          const expectedLocation = `/bff/api${base()}/operations/${operationID}`;
-          if (responseLocation && responseLocation !== expectedLocation) {
-            setOperationError(
-              'Unexpected check location. Status will be read from this application.',
-            );
-          }
-          void pollOperation(operationID);
+          observeOperation(accepted, true);
         }
       }
-      void readReadiness();
+      await Promise.all([readReadiness(), readApprovals()]);
     } catch (error) {
       if (!alive.current) return;
       handleUnauthorized(error);
       const status = error instanceof ApiError ? error.status : 0;
       if (status === 412) setConflict(true);
       setWriteError(safeError(error));
-      if (retryHeader && (status === 429 || status === 503)) setRetryAfter(retryHeader);
+      if (retryHeader && (status === 429 || status === 503)) {
+        setRetryAfter(retryHeader);
+        setRetryBlocked(true);
+      }
       if (status === 0 || status === 429 || status === 503 || status >= 500) {
         setPendingMutation(mutation);
       } else {
         setPendingMutation(undefined);
         if (mutation.kind === 'credential') clearCredential();
       }
+      if (status === 409) await refreshAll();
     } finally {
       mutationInFlight.current = false;
       if (alive.current) {
@@ -475,28 +561,65 @@ export default function Onboarding(props: { applicationID: string }) {
     }
   }
 
-  async function pollOperation(operationID: string) {
+  function recordOperation(value: Operation) {
+    setOperation(value);
+    if (value.kind === 'TEST_COHORT') setCohortOperation(value);
+  }
+
+  function observeOperation(value: Operation, force = false) {
+    if (!alive.current || !uuidPattern.test(value.id)) return;
+    if (observedOperation.current === value.id && !force) return;
+    if (operationTimer.current) clearTimeout(operationTimer.current);
+    observedOperation.current = value.id;
+    recordOperation(value);
+    setOperationError('');
+    if (force || isRunning(value)) void pollOperation(value.id, value.kind);
+  }
+
+  async function pollOperation(operationID: string, kind: Operation['kind']) {
     const signal = lifetime.current.signal;
-    if (!alive.current || signal.aborted || !uuidPattern.test(operationID)) return;
+    const current = () =>
+      alive.current && !signal.aborted && observedOperation.current === operationID;
+    if (!current()) return;
+    let retryDelay = 2000;
     try {
       const response = await request<components['schemas']['OperationEnvelope']>(
         `/bff/api${base()}/operations/${operationID}`,
-        { signal },
+        {
+          signal,
+          onHeaders: (headers) => {
+            const seconds = Number(headers.get('Retry-After'));
+            if (Number.isInteger(seconds) && seconds > 0 && seconds <= 3600)
+              retryDelay = seconds * 1000;
+          },
+        },
       );
-      if (!alive.current || signal.aborted) return;
-      setOperation(response.data);
+      if (!current()) return;
+      if (response.data.id !== operationID || response.data.kind !== kind)
+        throw new ApiError(502, 'Invalid operation context');
+      recordOperation(response.data);
       setOperationError('');
-      if (response.data.state === 'PENDING' || response.data.state === 'RUNNING') {
-        operationTimer.current = setTimeout(() => void pollOperation(operationID), 2000);
+      if (isRunning(response.data)) {
+        operationTimer.current = setTimeout(() => void pollOperation(operationID, kind), 2000);
       } else {
         operationTimer.current = undefined;
-        void readReadiness();
+        setSettlingOperation(true);
+        await Promise.all([readReadiness(), readApprovals()]);
+        if (current()) setSettlingOperation(false);
       }
     } catch (error) {
-      if (!alive.current || signal.aborted) return;
+      if (!current()) return;
       handleUnauthorized(error);
       setOperationError(safeError(error));
-      operationTimer.current = setTimeout(() => void pollOperation(operationID), 2000);
+      const status = error instanceof ApiError ? error.status : 0;
+      if (status === 0 || status === 429 || status >= 500) {
+        operationTimer.current = setTimeout(
+          () => void pollOperation(operationID, kind),
+          retryDelay,
+        );
+      } else {
+        observedOperation.current = '';
+      }
     }
   }
 
@@ -608,11 +731,26 @@ export default function Onboarding(props: { applicationID: string }) {
     if (mutation) await runMutation(mutation);
   }
 
+  function submitLifecycle(
+    kind: 'activate' | 'cohort' | 'release',
+    body: { configuration_id: string } | TestCohortInput | ReleaseInput,
+  ) {
+    const routes = {
+      activate: { suffix: '/activate', method: 'POST' },
+      cohort: { suffix: '/test-cohort', method: 'PUT' },
+      release: { suffix: '/dispatch/release', method: 'POST' },
+    } as const;
+    const { suffix, method } = routes[kind];
+    const mutation = makePending(kind, suffix, method, body);
+    if (mutation) void runMutation(mutation);
+  }
+
   const initialize = useEffectEvent(() => {
     void refreshAll();
   });
   useEffect(() => {
     alive.current = true;
+    observedOperation.current = '';
     const selection = credentialSelection;
     const controller = new AbortController();
     lifetime.current = controller;
@@ -629,13 +767,21 @@ export default function Onboarding(props: { applicationID: string }) {
   const verifierReady = () => !readiness?.blockers.includes('VERIFIER_NOT_CONFIGURED');
   const credentialReady = () => !!account && !!environment && !!etag && !conflict && !busy;
 
-  const locked = busy || conflict || !!pendingMutation || !application;
+  const locked =
+    busy ||
+    conflict ||
+    !!pendingMutation ||
+    !application ||
+    !!loadError ||
+    refreshing ||
+    loading ||
+    settlingOperation;
   return (
     <PageFrame
       title="Notification setup"
-      description="Configure enrollment and check the application's Firebase credentials."
+      description="Set up device enrollment, verify delivery readiness, and request dispatch release."
       back={{
-        label: 'Application registry',
+        label: 'Back to application registry',
         href: `/apps/admin/applications/${props.applicationID}`,
       }}
       actions={
@@ -679,10 +825,10 @@ export default function Onboarding(props: { applicationID: string }) {
                 <MetadataListItem label="Application ID">
                   <Text wordBreak="break-word">{props.applicationID}</Text>
                 </MetadataListItem>
-                <MetadataListItem label="Status">
+                <MetadataListItem label="Enrollment status">
                   <Status value={readiness.application_status} />
                 </MetadataListItem>
-                <MetadataListItem label="Dispatch">
+                <MetadataListItem label="Dispatch mode">
                   <Token
                     label={dispatchLabel(readiness.dispatch_mode)}
                     color={readiness.dispatch_mode === 'HELD' ? 'gray' : 'blue'}
@@ -715,6 +861,11 @@ export default function Onboarding(props: { applicationID: string }) {
               {!!readiness.checks.length && (
                 <VStack gap={2}>
                   <Heading level={3}>Checks</Heading>
+                  {readiness.checks_configuration_id && (
+                    <Text color="secondary" wordBreak="break-word">
+                      Evidence for credential {readiness.checks_configuration_id}
+                    </Text>
+                  )}
                   {readiness.checks.map((check) => (
                     <Text key={check.code}>
                       {checkLabel(check.code)}: {outcomeLabel(check.outcome)}
@@ -904,51 +1055,83 @@ export default function Onboarding(props: { applicationID: string }) {
                   The verifier is unavailable. Status will be checked again automatically.
                 </Text>
               )}
-              {operation && (
-                <Banner
-                  status="info"
-                  title={operationMessage(operation)}
-                  description={`Status: ${operationState(operation.state)}. Updated while the check is running.`}
-                />
-              )}
-              {operationError && (
-                <Banner
-                  status="error"
-                  title="Verification status unavailable"
-                  description={operationError}
-                />
-              )}
-              {writeError && (
-                <Banner status="error" title="Request not completed" description={writeError} />
-              )}
-              {retryAfter && <Text>Wait {retryAfter} seconds before trying again.</Text>}
-              {pendingMutation && (
-                <HStack>
-                  <Button
-                    label="Retry the same request"
-                    onClick={() => void runMutation(pendingMutation)}
-                    isLoading={busy && activeMutationKind === pendingMutation.kind}
-                    isDisabled={busy}
-                  />
-                </HStack>
-              )}
-              {conflict && (
-                <Banner
-                  status="warning"
-                  title="Setup revision changed"
-                  description="Review the latest status before submitting new changes."
-                  endContent={
-                    <Button
-                      label="Reload and review"
-                      onClick={() => void refreshReadinessForReview()}
-                      isDisabled={refreshing}
-                    />
-                  }
-                />
-              )}
-              {writeNotice && <Banner status="success" title={writeNotice} />}
             </VStack>
           </Section>
+          {(operation ||
+            operationError ||
+            writeError ||
+            pendingMutation ||
+            conflict ||
+            writeNotice ||
+            retryAfter) && (
+            <Section padding={6} dividers={['bottom']}>
+              <VStack gap={4}>
+                <Heading level={2}>Setup activity</Heading>
+                {operation && (
+                  <Banner
+                    status={operation.state === 'FAILED' ? 'error' : 'info'}
+                    title={operationMessage(operation)}
+                    description={`Status: ${operationState(operation.state)}.${operation.failure_code ? ` Code: ${operation.failure_code}.` : ''}`}
+                  />
+                )}
+                {operationError && (
+                  <Banner
+                    status="error"
+                    title="Operation status unavailable"
+                    description={operationError}
+                  />
+                )}
+                {writeError && (
+                  <Banner status="error" title="Request not completed" description={writeError} />
+                )}
+                {retryAfter && <Text>Wait {retryAfter} seconds before trying again.</Text>}
+                {pendingMutation && (
+                  <HStack>
+                    <Button
+                      label="Retry the same request"
+                      onClick={() => void runMutation(pendingMutation)}
+                      isLoading={busy && activeMutationKind === pendingMutation.kind}
+                      isDisabled={busy || retryBlocked}
+                    />
+                  </HStack>
+                )}
+                {conflict && (
+                  <Banner
+                    status="warning"
+                    title="Setup revision changed"
+                    description="Review the latest status before submitting new changes."
+                    endContent={
+                      <Button
+                        label="Reload and review"
+                        onClick={() => void refreshReadinessForReview()}
+                        isDisabled={refreshing}
+                      />
+                    }
+                  />
+                )}
+                {writeNotice && <Banner status="info" title={writeNotice} />}
+              </VStack>
+            </Section>
+          )}
+          <OnboardingLifecycle
+            applicationID={props.applicationID}
+            readiness={readiness}
+            approvals={approvals}
+            approvalError={approvalError}
+            operation={operation}
+            cohortOperation={cohortOperation}
+            locked={locked || !etag}
+            submitting={
+              activeMutationKind === 'activate' ||
+              activeMutationKind === 'cohort' ||
+              activeMutationKind === 'release'
+                ? activeMutationKind
+                : undefined
+            }
+            onActivate={(configuration_id) => submitLifecycle('activate', { configuration_id })}
+            onCohort={(body) => submitLifecycle('cohort', body)}
+            onRelease={(body) => submitLifecycle('release', body)}
+          />
           {readiness.dispatch_mode !== 'HELD' && (
             <Section padding={6} dividers={['bottom']}>
               <VStack gap={4}>
@@ -983,15 +1166,6 @@ export default function Onboarding(props: { applicationID: string }) {
               </VStack>
             </Section>
           )}
-          <Section padding={6} dividers={['bottom']}>
-            <VStack gap={4}>
-              <Heading level={2}>Device receipt</Heading>
-              <Text>
-                Device enrollment is not available yet. An OAuth check does not establish that a
-                notification was received by a device.
-              </Text>
-            </VStack>
-          </Section>
           <Section padding={6}>
             <VStack gap={4}>
               <Heading level={2}>Approvals</Heading>
@@ -1016,10 +1190,7 @@ export default function Onboarding(props: { applicationID: string }) {
 }
 
 function dispatchLabel(value: Readiness['dispatch_mode']) {
-  return (
-    ({ HELD: 'Held', MANUAL: 'Manual', AUTOMATIC: 'Automatic' } as Record<string, string>)[value] ??
-    value
-  );
+  return ({ HELD: 'Held', PILOT: 'PILOT', FULL: 'FULL' } as Record<string, string>)[value] ?? value;
 }
 function operationState(value: Operation['state']) {
   return (
@@ -1029,24 +1200,25 @@ function operationState(value: Operation['state']) {
         RUNNING: 'Running',
         SUCCEEDED: 'Succeeded',
         FAILED: 'Failed',
-        EXPIRED: 'Expired',
+        SUPERSEDED: 'Superseded',
       } as Record<string, string>
     )[value] ?? value
   );
 }
 function approvalKind(value: Approval['kind']) {
   return (
-    ({ DISPATCH: 'Dispatch', ENROLLMENT: 'Enrollment' } as Record<string, string>)[value] ?? value
+    ({ TEST_COHORT: 'Test cohort', PILOT: 'PILOT', FULL: 'FULL' } as Record<string, string>)[
+      value
+    ] ?? value
   );
 }
 function approvalStatus(value: Approval['status']) {
   return (
     (
       {
-        APPROVED: 'Approved',
-        REJECTED: 'Rejected',
+        VALID: 'Valid',
+        REVOKED: 'Revoked',
         EXPIRED: 'Expired',
-        PENDING: 'Pending',
       } as Record<string, string>
     )[value] ?? value
   );
