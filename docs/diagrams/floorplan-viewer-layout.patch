@@ -1,0 +1,25 @@
+diff --git a/skills/floorplan/assets/viewer.html b/skills/floorplan/assets/viewer.html
+index 0ad2b75..585c59e 100644
+--- a/skills/floorplan/assets/viewer.html
++++ b/skills/floorplan/assets/viewer.html
+@@ -1093,12 +1093,18 @@ const textW = (s, px = 12, w = 500) => { measure.font = `${w} ${px}px Inter, sys
+ async function layout(view) {
+   const deg = new Map();
+   const bump = (id) => deg.set(id, (deg.get(id) || 0) + 1);
+-  for (const e of view.edges) { bump(e.a); bump(e.b); }
++  const sources = new Set();
++  for (const e of view.edges) {
++    bump(e.a);
++    bump(e.b);
++    sources.add(e.a);
++  }
+   const children = [];
+   for (const item of view.visible) {
+     const [w, hh] = SIZES[info(item).type] || SIZES.file;
+     const ext = item.startsWith('n:') && nodes.get(item.slice(2)).kind === 'external';
+-    children.push({ id: item, width: w, height: Math.max(hh + cardExtraH(item) + (answerNote(item) ? NOTE_H : 0), (deg.get(item) || 0) * 7 + 28), ...(ext ? { layoutOptions: { 'elk.layered.layering.layerConstraint': 'LAST' } } : {}) });
++    const terminalExternal = ext && !sources.has(item);
++    children.push({ id: item, width: w, height: Math.max(hh + cardExtraH(item) + (answerNote(item) ? NOTE_H : 0), (deg.get(item) || 0) * 7 + 28), ...(terminalExternal ? { layoutOptions: { 'elk.layered.layering.layerConstraint': 'LAST' } } : {}) });
+   }
+   for (const c of view.connectors) {
+     children.push({ id: c.id, width: clamp(textW(info(c.entity).name, 13) + 84, 150, 320), height: Math.max(42, (deg.get(c.id) || 0) * 7 + 14),

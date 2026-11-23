@@ -55,6 +55,29 @@ routes and Go route wrappers. Use the [API contracts](../contracts/README.md) an
 the [dashboard router](../../web/dashboard/src/app/DashboardApp.tsx) for route
 coverage.
 
+Floorplan 0.11.0 can fail to lay out the map when an external node such as
+**Mobile apps** has an outgoing connection to the API. Apply the
+[viewer patch](floorplan-viewer-layout.patch) to a Floorplan 0.11.0 source
+checkout before regenerating the viewer. From the Hello checkout, run:
+
+```bash
+git -C /path/to/floorplan apply "$PWD/docs/diagrams/floorplan-viewer-layout.patch"
+```
+
+To repair an existing unpatched viewer without regenerating it, apply the
+patch to the generated HTML, recalculate its Content Security Policy hashes,
+and reload the browser.
+
+```bash
+patch floorplan/index.html -i docs/diagrams/floorplan-viewer-layout.patch
+node --input-type=module <<'JS'
+import fs from 'node:fs';
+import { withPolicy } from './floorplan/page-safety.mjs';
+const path = 'floorplan/index.html';
+fs.writeFileSync(path, withPolicy(fs.readFileSync(path, 'utf8'), 'local'));
+JS
+```
+
 Use the [production readiness plan](../analysis/production-readiness-plan.md)
 and [implementation milestones](../analysis/implementation-milestones.md) for
 current progress and release gates. Architectural details are maintained in:
