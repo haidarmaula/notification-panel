@@ -7,6 +7,15 @@ import { join } from 'node:path';
 
 const docsDirectory = process.env.HELLO_LOCAL_DOCS_DIR;
 const tlsDirectory = process.env.HELLO_LOCAL_TLS_DIR;
+const docsUpstream = new URL(process.env.HELLO_LOCAL_API_UPSTREAM ?? 'https://127.0.0.1:18082');
+if (
+  docsDirectory && tlsDirectory &&
+  (docsUpstream.protocol !== 'https:' || docsUpstream.hostname !== '127.0.0.1' ||
+    docsUpstream.username || docsUpstream.password || docsUpstream.pathname !== '/' ||
+    docsUpstream.search || docsUpstream.hash)
+) {
+  throw new Error('Development API reference proxy must be a loopback HTTPS origin');
+}
 const localDocs =
   docsDirectory && tlsDirectory
     ? {
@@ -58,6 +67,23 @@ const localDocs =
     : undefined;
 
 const proxy = process.env.HELLO_DASHBOARD_PROXY ?? 'http://127.0.0.1:8090';
+const localControl = process.env.HELLO_LOCAL_FCM_CONTROL;
+const localDashboard = process.env.HELLO_LOCAL_DASHBOARD_ORIGIN;
+const localDevices = localControl === 'http://127.0.0.1:18191' && localDashboard === 'http://localhost:5273';
+const canonicalLocalDashboard = localDevices ? {
+  name: 'hello-real-fcm-origin',
+  configureServer(server: import('vite').ViteDevServer) {
+    server.middlewares.use((request, response, next) => {
+      if (request.headers.host !== '127.0.0.1:5273' ||
+          (request.method !== 'GET' && request.method !== 'HEAD') ||
+          !request.headers.accept?.includes('text/html')) return next();
+      const path = request.url || '/';
+      if (!path.startsWith('/') || path.startsWith('//') || path.includes('\\')) return next();
+      response.writeHead(302, { Location: `${localDashboard}${path}`, 'Cache-Control': 'no-store' });
+      response.end();
+    });
+  },
+} : undefined;
 const target = new URL(proxy);
 if (
   target.protocol !== 'http:' ||
@@ -72,15 +98,16 @@ if (
 }
 
 export default defineConfig({
-  plugins: [react(), localDocs],
+  plugins: [react(), localDocs, canonicalLocalDashboard],
   resolve: { alias: themeFontAliases },
   server: {
     proxy: {
       '/bff': proxy,
+      ...(localDevices ? { '/__hello_dev/': { target: localControl, changeOrigin: false } } : {}),
       ...(localDocs && tlsDirectory
         ? {
             '/api/v1/': {
-              target: 'https://127.0.0.1:18082',
+              target: docsUpstream.origin,
               agent: new Agent({
                 ca: readFileSync(join(tlsDirectory, 'ca.crt')),
                 cert: readFileSync(join(tlsDirectory, 'client.crt')),

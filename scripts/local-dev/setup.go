@@ -7,9 +7,12 @@ import (
 	"bytes"
 	"context"
 	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -22,6 +25,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -36,6 +40,7 @@ const cluster = "MkU3OEVBNTcwNTJENDM2Qk"
 const namespace = "load-fixture"
 const concurrency = 4
 const onboardingApplicationID = "10000000-0000-4000-8000-000000000002"
+const realFCMApplicationID = "10000000-0000-4000-8000-000000000003"
 const verifierPoolLock int64 = 728194021
 
 const localVerifierSlots = 3
@@ -217,6 +222,401 @@ func (e *experiment) seedOnboardingDemo() {
 		"local onboarding demo is not a scoped provisioning application with held dispatch")
 }
 
+func seedRealFCMPending(ctx context.Context, db *pgxpool.Pool, password string) {
+	var applicationID int64
+	var publicID, status string
+	if err := db.QueryRow(ctx, `SELECT id,public_id::text,status FROM applications WHERE public_id=$1::uuid`, realFCMApplicationID).
+		Scan(&applicationID, &publicID, &status); err != nil || status != "ACTIVE" {
+		log.Fatal("real FCM application is not active")
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	check(err)
+	tx, err := db.Begin(ctx)
+	check(err)
+	defer tx.Rollback(ctx)
+	var staffID int64
+	check(tx.QueryRow(ctx, `INSERT INTO staff_users(role_id,name,email,password_hash)
+		SELECT id,'Local Android Pilot','developer@hello.local',$1 FROM roles WHERE name='SUPER_ADMIN'
+		ON CONFLICT(email) DO UPDATE SET role_id=EXCLUDED.role_id RETURNING id`, string(hash)).Scan(&staffID))
+	_, err = tx.Exec(ctx, `INSERT INTO application_staff_grants(application_id,staff_id)
+		VALUES($1,$2) ON CONFLICT(application_id,staff_id) DO UPDATE SET is_active=true`, applicationID, staffID)
+	check(err)
+	var userID int64
+	err = tx.QueryRow(ctx, `INSERT INTO users(application_id,external_id,name,email)
+		VALUES($1,'local-android-test','Local Android test device','')
+		ON CONFLICT(external_id) DO NOTHING RETURNING id`, applicationID).Scan(&userID)
+	if err == pgx.ErrNoRows {
+		check(tx.QueryRow(ctx, `SELECT id FROM users WHERE application_id=$1 AND external_id='local-android-test' AND status='ACTIVE'`, applicationID).Scan(&userID))
+	} else {
+		check(err)
+	}
+	_, err = tx.Exec(ctx, `INSERT INTO mobile_identities(application_id,identity_namespace,subject,user_id)
+		VALUES($1,'hello-local-mobile-test','local-android-test',$2)
+		ON CONFLICT(application_id,identity_namespace,subject) DO UPDATE SET user_id=EXCLUDED.user_id`, applicationID, userID)
+	check(err)
+	check(tx.Commit(ctx))
+	writeJSON("application.json", map[string]any{"id": publicID, "mobile_subject": "local-android-test"})
+	log.Print("real FCM profile is pending enrollment; no device route, worker, scheduler, or dispatch release was created")
+}
+
+func writeRealFCMPolicy(ctx context.Context, db *pgxpool.Pool, projectID, serviceAccountEmail string) {
+	if len(projectID) < 6 || len(projectID) > 30 || len(serviceAccountEmail) == 0 ||
+		!strings.HasSuffix(serviceAccountEmail, "@"+projectID+".iam.gserviceaccount.com") {
+		log.Fatal("real FCM credential identity rejected")
+	}
+	e := experiment{db: db, ctx: ctx, rate: 1}
+	check(db.QueryRow(ctx, `SELECT id,public_id::text FROM applications WHERE public_id=$1::uuid AND status='ACTIVE'`, realFCMApplicationID).
+		Scan(&e.app, &e.public))
+	_, err := db.Exec(ctx, `INSERT INTO notification_log_sources(id,topic,cluster_identity,topic_incarnation,active)
+		SELECT gen_random_uuid(),$1,$2,'local-real-fcm-v1',true
+		WHERE NOT EXISTS(SELECT FROM notification_log_sources WHERE topic=$1 AND active)`, topic, cluster)
+	check(err)
+	check(e.db.QueryRow(ctx, `SELECT id::text FROM notification_log_sources WHERE topic=$1 AND active`, topic).Scan(&e.source))
+	e.policy()
+
+	var mobile struct {
+		CurrentKeyVersion int32  `json:"current_key_version"`
+		FingerprintKey    []byte `json:"fingerprint_key"`
+		EncryptionKeys    []struct {
+			Version int32  `json:"version"`
+			Key     []byte `json:"key"`
+		} `json:"encryption_keys"`
+		Projects []struct {
+			AppID  string `json:"app_id"`
+			Routes []struct {
+				Platform          string `json:"platform"`
+				AddressType       string `json:"address_type"`
+				ProviderNamespace string `json:"provider_namespace"`
+				ProviderRouteKey  string `json:"provider_route_key"`
+			} `json:"routes"`
+		} `json:"projects"`
+	}
+	check(json.Unmarshal([]byte(readFile("/local-config/generated/mobile-policy.json")), &mobile))
+	verify(len(mobile.Projects) == 1 && mobile.Projects[0].AppID == realFCMApplicationID && len(mobile.Projects[0].Routes) == 1,
+		"local mobile policy does not match real FCM application")
+	route := mobile.Projects[0].Routes[0]
+	verify(route.Platform == "ANDROID" && route.AddressType == "FCM_FID" &&
+		route.ProviderNamespace == "hello-local-fcm" && route.ProviderRouteKey == "android-fid",
+		"local Android FCM route does not match enrolled device policy")
+	var policy map[string]any
+	check(json.Unmarshal([]byte(readFile("/etc/hello/worker.json")), &policy))
+	delivery, ok := policy["delivery"].(map[string]any)
+	verify(ok, "local delivery policy is missing")
+	delivery["environment"] = "real-fcm-local"
+	delivery["project_id"] = projectID
+	delivery["credential_project_id"] = projectID
+	delivery["service_account_email"] = serviceAccountEmail
+	delivery["service_account_file"] = "/etc/hello/service-account.json"
+	delivery["cross_project_approved"] = false
+	delivery["routes"] = []map[string]string{{"namespace": route.ProviderNamespace, "key": route.ProviderRouteKey,
+		"platform": route.Platform, "address_type": route.AddressType}}
+	delivery["current_key_version"] = mobile.CurrentKeyVersion
+	delivery["encryption_keys"] = mobile.EncryptionKeys
+	delivery["fingerprint_key"] = mobile.FingerprintKey
+	delivery["requests_per_second"] = 1
+	delivery["project_requests_per_second"] = 1
+	delivery["replica_count"] = 1
+	delivery["concurrency"] = 1
+	delivery["max_attempts"] = 1
+	policy["topic_incarnation"] = "local-real-fcm-v1"
+
+	seedPath := "/local-config/generated/real-fcm-receipt-seed"
+	seed, err := os.ReadFile(seedPath)
+	if os.IsNotExist(err) {
+		seed = make([]byte, ed25519.SeedSize)
+		_, err = rand.Read(seed)
+		check(err)
+		check(os.WriteFile(seedPath, seed, 0600))
+	} else {
+		check(err)
+	}
+	verify(len(seed) == ed25519.SeedSize, "local receipt signing seed is invalid")
+	delivery["receipt_key_id"] = "local-fcm-receipt-v1"
+	delivery["signing_keys"] = []map[string]any{{"id": "local-fcm-receipt-v1", "key": ed25519.NewKeyFromSeed(seed)}}
+	writeJSON("delivery.json", policy)
+	var sendSource string
+	_, err = db.Exec(ctx, `INSERT INTO notification_log_sources(id,topic,cluster_identity,topic_incarnation,active)
+		SELECT gen_random_uuid(),$1,$2,'local-real-fcm-v1',true
+		WHERE NOT EXISTS(SELECT FROM notification_log_sources WHERE topic=$1 AND active)`, sendTopic, cluster)
+	check(err)
+	check(db.QueryRow(ctx, `SELECT id::text FROM notification_log_sources WHERE topic=$1 AND active`, sendTopic).Scan(&sendSource))
+	delete(policy, "delivery")
+	policy["log_source_id"] = sendSource
+	policy["topic_name"] = sendTopic
+	policy["topic_incarnation"] = "local-real-fcm-v1"
+	policy["mode"] = "admission_only"
+	policy["group_id"] = "hello-local-real-fcm-admission-v1"
+	writeJSON("admission.json", policy)
+	delete(policy, "mode")
+	delete(policy, "group_id")
+	policy["poll_interval_ms"] = 1000
+	policy["page_size"] = 10
+	writeJSON("scheduler.json", policy)
+	log.Print("real FCM worker policy prepared for the isolated application; no provider request was sent")
+}
+
+func releaseRealFCMPilot(ctx context.Context, db *pgxpool.Pool, installationPublicID string) {
+	var installationID pgtype.UUID
+	if installationID.Scan(installationPublicID) != nil || !installationID.Valid || installationID.String() != installationPublicID {
+		log.Fatal("real FCM installation public UUID rejected")
+	}
+	var appID int64
+	var appPublicID string
+	if err := db.QueryRow(ctx, `SELECT id,public_id::text FROM applications WHERE public_id=$1::uuid AND status='ACTIVE'`, realFCMApplicationID).
+		Scan(&appID, &appPublicID); err != nil {
+		log.Fatal("real FCM application is not active")
+	}
+	var runtimeOpen, pending bool
+	check(db.QueryRow(ctx, `SELECT NOT sealed AND NOT migration_hold FROM notification_runtime WHERE singleton`).Scan(&runtimeOpen))
+	check(db.QueryRow(ctx, `SELECT EXISTS(SELECT FROM notifications WHERE application_id=$1 AND status IN ('QUEUED','SCHEDULED','PROCESSING'))
+		OR EXISTS(SELECT FROM notification_delivery_intents WHERE application_id=$1 AND status='PENDING')
+		OR EXISTS(SELECT FROM notification_send_outbox WHERE application_id=$1)`, appID).Scan(&pending))
+	if !runtimeOpen || pending {
+		log.Fatal("real FCM release is held by runtime or pending delivery state")
+	}
+	var dispatchRevision, appRevision int64
+	var dispatchMode string
+	check(db.QueryRow(ctx, `SELECT a.revision,p.dispatch_revision,p.dispatch_mode FROM applications a
+		JOIN application_dispatch_policy p ON p.application_id=a.id WHERE a.id=$1`, appID).
+		Scan(&appRevision, &dispatchRevision, &dispatchMode))
+	if dispatchMode != "HELD" {
+		log.Fatal("real FCM application must be HELD before explicit PILOT release")
+	}
+	var originEpoch, sourceEpoch pgtype.UUID
+	check(db.QueryRow(ctx, `SELECT origin_epoch,source_epoch FROM notification_runtime WHERE singleton`).Scan(&originEpoch, &sourceEpoch))
+	target := loadRealFCMBindings(ctx, db, appID, installationPublicID)
+	cohort, err := applyRealFCMSelection(ctx, db, appID, appPublicID, target, installationID.String(), originEpoch, sourceEpoch)
+	if err != nil {
+		log.Fatal("real FCM installation selection rejected")
+	}
+	issuer := openFixtureLogin(ctx, db, "load_dispatch_reviewer")
+	defer issuer.Close(ctx)
+	operator := openFixtureLogin(ctx, db, "load_dispatch_executor")
+	defer operator.Close(ctx)
+	grantID := uuid.New()
+	evidence := func(value string) []byte { digest := sha256.Sum256([]byte(value)); return digest[:] }
+	_, err = issuer.Exec(ctx, `INSERT INTO application_dispatch_grants
+		(id,project_id,operator_role,application_revision,expected_revision,previous_mode,destination,cohort_id,
+		 origin_epoch,source_epoch,reason,legacy_evidence,consent_evidence,coverage_evidence,quota_evidence,expires_at)
+		VALUES($1,$2::uuid,'load_dispatch_executor'::regrole,$3,$4,'HELD','PILOT',$5::uuid,$6,$7,'pilot',$8,$9,$10,$11,
+		 clock_timestamp()+interval '1 hour')`, grantID, appPublicID, appRevision, dispatchRevision, cohort.String(),
+		originEpoch, sourceEpoch, evidence("isolated local Android app has no legacy writer"),
+		evidence("operator authorized one enrolled Android binding "+installationPublicID),
+		evidence("single active binding PILOT roster "+installationPublicID),
+		evidence("Firebase test project capped at one request per second"))
+	check(err)
+	var applied int64
+	check(operator.QueryRow(ctx, `SELECT apply_application_dispatch($1,$2::uuid)`, grantID, appPublicID).Scan(&applied))
+	verify(applied == dispatchRevision+1, "real FCM PILOT release was not applied")
+	fmt.Printf("{\"selected_installation_id\":%q,\"cohort_id\":%q,\"dispatch_mode\":\"PILOT\"}\n", installationPublicID, cohort.String())
+}
+
+type realFCMBinding struct {
+	id             int64
+	installationID string
+	platform       string
+	addressType    string
+	namespace      string
+	routeKey       string
+	destination    string
+	cohort         pgtype.UUID
+	revision       int64
+}
+
+type realFCMRouteMutation struct {
+	binding     realFCMBinding
+	destination string
+	reason      string
+}
+
+func planRealFCMSelection(bindings []realFCMBinding, selectedID string) (uuid.UUID, []realFCMRouteMutation, error) {
+	selected := findRealFCMBinding(bindings, selectedID)
+	if selected == nil || selected.destination == "RETIRED" {
+		return uuid.Nil, nil, errors.New("selected installation is unavailable")
+	}
+	activeCount := 0
+	for _, binding := range bindings {
+		if binding.destination == "FCM_ACTIVE" {
+			activeCount++
+		}
+	}
+	reuse := activeCount == 1 && selected.destination == "FCM_ACTIVE" && selected.cohort.Valid
+	cohort := uuid.New()
+	if reuse {
+		cohort = uuid.UUID(selected.cohort.Bytes)
+	}
+	mutations := make([]realFCMRouteMutation, 0, activeCount+1)
+	for _, binding := range bindings {
+		if binding.destination == "FCM_ACTIVE" && binding.installationID != selectedID {
+			mutations = append(mutations, realFCMRouteMutation{binding: binding, destination: "HELD", reason: "rollback"})
+		}
+	}
+	if selected.destination == "FCM_ACTIVE" && !reuse {
+		mutations = append(mutations,
+			realFCMRouteMutation{binding: *selected, destination: "HELD", reason: "rollback"},
+			realFCMRouteMutation{binding: realFCMBinding{ // The second grant uses the next route revision.
+				id: selected.id, installationID: selected.installationID, revision: selected.revision + 1,
+			}, destination: "FCM_ACTIVE", reason: "pilot"})
+	} else if selected.destination != "FCM_ACTIVE" {
+		mutations = append(mutations, realFCMRouteMutation{binding: *selected, destination: "FCM_ACTIVE", reason: "pilot"})
+	}
+	return cohort, mutations, nil
+}
+
+func loadRealFCMBindings(ctx context.Context, db *pgxpool.Pool, appID int64, selectedID string) []realFCMBinding {
+	rows, err := db.Query(ctx, `SELECT b.id,i.public_id::text,b.platform,b.address_type,b.provider_namespace,b.provider_route_key,
+		coalesce(r.destination,''),r.cohort_id,coalesce(r.revision,0),u.status,
+		EXISTS(SELECT FROM mobile_identities m WHERE m.application_id=b.application_id AND m.user_id=b.owner_user_id
+		  AND m.identity_namespace='hello-local-mobile-test' AND m.subject='local-android-test')
+		FROM installation_bindings b
+		JOIN mobile_installations i ON (i.application_id,i.id)=(b.application_id,b.installation_id)
+		JOIN users u ON (u.application_id,u.id)=(b.application_id,b.owner_user_id)
+		LEFT JOIN current_binding_routes r ON (r.application_id,r.binding_id)=(b.application_id,b.id)
+		WHERE b.application_id=$1 AND b.retired_at IS NULL ORDER BY b.id`, appID)
+	check(err)
+	defer rows.Close()
+	bindings := make([]realFCMBinding, 0, 4)
+	found := false
+	for rows.Next() {
+		var binding realFCMBinding
+		var userStatus string
+		var mapped bool
+		check(rows.Scan(&binding.id, &binding.installationID, &binding.platform, &binding.addressType,
+			&binding.namespace, &binding.routeKey, &binding.destination, &binding.cohort, &binding.revision,
+			&userStatus, &mapped))
+		if binding.installationID == selectedID {
+			found = true
+		}
+		verify(binding.platform == "ANDROID" && binding.addressType == "FCM_FID" &&
+			binding.namespace == "hello-local-fcm" && binding.routeKey == "android-fid" &&
+			userStatus == "ACTIVE" && mapped,
+			"real FCM profile contains a binding outside its enrolled Android identity policy")
+		bindings = append(bindings, binding)
+	}
+	check(rows.Err())
+	if len(bindings) == 0 || !found {
+		log.Fatal("real FCM installation does not match an active Android binding")
+	}
+	return bindings
+}
+
+func findRealFCMBinding(bindings []realFCMBinding, installationID string) *realFCMBinding {
+	for index := range bindings {
+		if bindings[index].installationID == installationID {
+			return &bindings[index]
+		}
+	}
+	return nil
+}
+
+func applyRealFCMBindingRoute(ctx context.Context, db *pgxpool.Pool, appID int64, appPublicID string,
+	binding realFCMBinding, destination string, cohort uuid.UUID, reason string,
+	originEpoch, sourceEpoch pgtype.UUID) {
+	if destination != "FCM_ACTIVE" && destination != "HELD" && destination != "RETIRED" {
+		log.Fatal("real FCM route transition rejected")
+	}
+	issuer := openFixtureLogin(ctx, db, "load_binding_reviewer")
+	defer issuer.Close(ctx)
+	operator := openFixtureLogin(ctx, db, "load_binding_executor")
+	defer operator.Close(ctx)
+	grantID, evidenceID := uuid.New(), uuid.New()
+	_, err := issuer.Exec(ctx, `INSERT INTO binding_route_grants
+		(id,application_id,binding_id,operator_role,origin_epoch,source_epoch,expected_revision,destination,
+		 cohort_id,evidence_id,reason,expires_at)
+		VALUES($1,$2,$3,'load_binding_executor'::regrole,$4,$5,$6,$7,$8,$9,$10,clock_timestamp()+interval '1 hour')`,
+		grantID, appID, binding.id, originEpoch, sourceEpoch, binding.revision, destination, cohort, evidenceID, reason)
+	check(err)
+	var applied int64
+	check(operator.QueryRow(ctx, `SELECT apply_binding_route($1,$2::uuid)`, grantID, appPublicID).Scan(&applied))
+	verify(applied == binding.revision+1, "real FCM route approval was not applied")
+}
+
+func applyRealFCMSelection(ctx context.Context, db *pgxpool.Pool, appID int64, appPublicID string,
+	bindings []realFCMBinding, selectedID string, originEpoch, sourceEpoch pgtype.UUID) (uuid.UUID, error) {
+	cohort, mutations, err := planRealFCMSelection(bindings, selectedID)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	for _, mutation := range mutations {
+		applyRealFCMBindingRoute(ctx, db, appID, appPublicID, mutation.binding, mutation.destination,
+			cohort, mutation.reason, originEpoch, sourceEpoch)
+	}
+	return cohort, nil
+}
+
+func forgetRealFCMInstallation(ctx context.Context, db *pgxpool.Pool, installationPublicID string) {
+	var installationID pgtype.UUID
+	if installationID.Scan(installationPublicID) != nil || !installationID.Valid || installationID.String() != installationPublicID {
+		log.Fatal("real FCM installation UUID rejected")
+	}
+	var appID int64
+	var appPublicID string
+	if err := db.QueryRow(ctx, `SELECT id,public_id::text FROM applications WHERE public_id=$1::uuid AND status='ACTIVE'`, realFCMApplicationID).
+		Scan(&appID, &appPublicID); err != nil {
+		log.Fatal("real FCM application is not active")
+	}
+	var held bool
+	check(db.QueryRow(ctx, `SELECT p.dispatch_mode='HELD' AND p.hold_new FROM application_dispatch_policy p WHERE p.application_id=$1`, appID).Scan(&held))
+	if !held {
+		log.Fatal("real FCM forget requires dispatch HELD")
+	}
+	var pending bool
+	check(db.QueryRow(ctx, `SELECT EXISTS(SELECT FROM notifications WHERE application_id=$1 AND status IN ('QUEUED','SCHEDULED','PROCESSING'))
+		OR EXISTS(SELECT FROM notification_delivery_intents WHERE application_id=$1 AND status='PENDING')
+		OR EXISTS(SELECT FROM notification_send_outbox WHERE application_id=$1)`, appID).Scan(&pending))
+	if pending {
+		log.Fatal("real FCM forget is held by pending delivery state")
+	}
+	var binding realFCMBinding
+	var userStatus string
+	var mapped bool
+	err := db.QueryRow(ctx, `SELECT b.id,i.public_id::text,b.platform,b.address_type,b.provider_namespace,b.provider_route_key,
+		coalesce(r.destination,''),r.cohort_id,coalesce(r.revision,0),u.status,
+		EXISTS(SELECT FROM mobile_identities m WHERE m.application_id=b.application_id AND m.user_id=b.owner_user_id
+		  AND m.identity_namespace='hello-local-mobile-test' AND m.subject='local-android-test')
+		FROM installation_bindings b JOIN mobile_installations i ON (i.application_id,i.id)=(b.application_id,b.installation_id)
+		JOIN users u ON (u.application_id,u.id)=(b.application_id,b.owner_user_id)
+		LEFT JOIN current_binding_routes r ON (r.application_id,r.binding_id)=(b.application_id,b.id)
+		WHERE b.application_id=$1 AND i.public_id=$2::uuid AND b.retired_at IS NULL`, appID, installationPublicID).
+		Scan(&binding.id, &binding.installationID, &binding.platform, &binding.addressType, &binding.namespace,
+			&binding.routeKey, &binding.destination, &binding.cohort, &binding.revision, &userStatus, &mapped)
+	if err == pgx.ErrNoRows {
+		var belongs bool
+		check(db.QueryRow(ctx, `SELECT EXISTS(SELECT FROM mobile_installations WHERE application_id=$1 AND public_id=$2::uuid)`,
+			appID, installationPublicID).Scan(&belongs))
+		if !belongs {
+			log.Fatal("real FCM forget target does not belong to the isolated application")
+		}
+		fmt.Printf("{\"forgotten_installation_id\":%q,\"binding_retired\":true,\"history_preserved\":true}\n", installationPublicID)
+		return
+	}
+	check(err)
+	verify(binding.platform == "ANDROID" && binding.addressType == "FCM_FID" && binding.namespace == "hello-local-fcm" &&
+		binding.routeKey == "android-fid" && userStatus == "ACTIVE" && mapped,
+		"real FCM forget target does not match the enrolled Android identity policy")
+	var originEpoch, sourceEpoch pgtype.UUID
+	check(db.QueryRow(ctx, `SELECT origin_epoch,source_epoch FROM notification_runtime WHERE singleton`).Scan(&originEpoch, &sourceEpoch))
+	if binding.destination != "RETIRED" {
+		cohort := uuid.New()
+		if binding.cohort.Valid {
+			cohort = uuid.UUID(binding.cohort.Bytes)
+		}
+		applyRealFCMBindingRoute(ctx, db, appID, appPublicID, binding, "RETIRED", cohort, "retirement", originEpoch, sourceEpoch)
+	}
+	_, err = db.Exec(ctx, `UPDATE installation_bindings SET retired_at=clock_timestamp()
+		WHERE application_id=$1 AND id=$2 AND retired_at IS NULL`, appID, binding.id)
+	check(err)
+	fmt.Printf("{\"forgotten_installation_id\":%q,\"binding_retired\":true,\"history_preserved\":true}\n", installationPublicID)
+}
+
+func openFixtureLogin(ctx context.Context, db *pgxpool.Pool, name string) *pgx.Conn {
+	cfg := db.Config().ConnConfig.Copy()
+	cfg.User, cfg.Password = name, "fixture-only"
+	conn, err := pgx.ConnectConfig(ctx, cfg)
+	check(err)
+	return conn
+}
+
 func runVerifierPool(ctx context.Context, db *pgxpool.Pool) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -381,13 +781,17 @@ func writeJSON(name string, value any) {
 	check(os.WriteFile("/local-config/generated/"+name, raw, 0600))
 }
 func main() {
-	if len(os.Args) == 2 && os.Args[1] == "gateway" {
-		gateway()
+	if len(os.Args) == 2 && (os.Args[1] == "gateway" || os.Args[1] == "real-fcm-gateway") {
+		gateway(os.Args[1] == "real-fcm-gateway")
 		return
 	}
 	testSeed := len(os.Args) == 2 && os.Args[1] == "--test-seed-recovery"
+	realFCMPending := len(os.Args) == 2 && os.Args[1] == "real-fcm-pending"
+	realFCMPolicy := len(os.Args) == 4 && os.Args[1] == "real-fcm-policy"
+	realFCMRelease := len(os.Args) == 3 && os.Args[1] == "real-fcm-release"
+	realFCMForget := len(os.Args) == 3 && os.Args[1] == "real-fcm-forget"
 	verifierPool := len(os.Args) == 2 && os.Args[1] == "verifier-pool"
-	if len(os.Args) != 1 && !testSeed && !verifierPool {
+	if len(os.Args) != 1 && !testSeed && !verifierPool && !realFCMPending && !realFCMPolicy && !realFCMRelease && !realFCMForget {
 		log.Fatal("invalid local setup command")
 	}
 	if verifierPool {
@@ -415,6 +819,22 @@ func main() {
 	check(json.Unmarshal([]byte(readFile("/local-config/settings.json")), &settings))
 	if len(settings.Password) < 16 {
 		log.Fatal("local configuration missing")
+	}
+	if realFCMPending {
+		seedRealFCMPending(ctx, db, settings.Password)
+		return
+	}
+	if realFCMPolicy {
+		writeRealFCMPolicy(ctx, db, os.Args[2], os.Args[3])
+		return
+	}
+	if realFCMRelease {
+		releaseRealFCMPilot(ctx, db, os.Args[2])
+		return
+	}
+	if realFCMForget {
+		forgetRealFCMInstallation(ctx, db, os.Args[2])
+		return
 	}
 	if testSeed {
 		e.exec("CREATE TABLE local_dev_seed(singleton boolean PRIMARY KEY CHECK(singleton),staff_id bigint NOT NULL)")
@@ -483,12 +903,25 @@ func main() {
 	writeJSON("application.json", map[string]any{"id": e.public, "onboarding_id": onboardingApplicationID})
 	log.Print("local application and daemon policies ready; no notification sent")
 }
-func gateway() {
+func gateway(mobileEnabled bool) {
 	roots := x509.NewCertPool()
 	verify(roots.AppendCertsFromPEM([]byte(readFile("/local-tls/ca.crt"))), "invalid local CA")
 	destination, err := url.Parse("http://server:8080")
 	check(err)
 	proxy := httputil.NewSingleHostReverseProxy(destination)
+	if mobileEnabled {
+		mobile := http.NewServeMux()
+		prefix := "POST /api/v1/apps/" + realFCMApplicationID + "/mobile/installations"
+		mobile.Handle(prefix, proxy)
+		for _, action := range []string{"refresh", "logout", "switch", "state"} {
+			mobile.Handle(prefix+"/{installation_id}/"+action, proxy)
+		}
+		server := http.Server{
+			Addr: ":8083", Handler: mobile, ReadHeaderTimeout: 5 * time.Second,
+			ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second,
+		}
+		go func() { check(server.ListenAndServe()) }()
+	}
 	server := http.Server{Addr: ":8082", Handler: proxy, ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 15 * time.Second, WriteTimeout: 30 * time.Second, IdleTimeout: 60 * time.Second,
 		TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, ClientAuth: tls.RequireAndVerifyClientCert, ClientCAs: roots}}
 	check(server.ListenAndServeTLS("/local-tls/server.crt", "/local-tls/server.key"))

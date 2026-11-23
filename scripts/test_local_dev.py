@@ -3,9 +3,10 @@
 import importlib.util
 import json
 from pathlib import Path
+import socket
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 spec = importlib.util.spec_from_file_location("local_dev", Path(__file__).parent / "local-dev/dev.py")
 dev = importlib.util.module_from_spec(spec)
@@ -35,6 +36,45 @@ def configuration():
 
 
 class LocalDevelopmentTests(unittest.TestCase):
+    def test_real_fcm_credentials_require_explicit_project_and_private_regular_file(self):
+        with tempfile.TemporaryDirectory() as directory:
+            credential = Path(directory) / "account.json"
+            credential.write_text(json.dumps({
+                "type": "service_account", "project_id": "android-pilot",
+                "client_email": "sender@android-pilot.iam.gserviceaccount.com",
+            }))
+            credential.chmod(0o600)
+            self.assertEqual(dev.real_fcm_credential_identity(credential, "android-pilot"),
+                             (credential.resolve(), "android-pilot", "sender@android-pilot.iam.gserviceaccount.com"))
+            with self.assertRaisesRegex(RuntimeError, "explicitly approved"):
+                dev.real_fcm_credential_identity(credential, "other-project")
+            credential.chmod(0o640)
+            with self.assertRaisesRegex(RuntimeError, "owner-only"):
+                dev.real_fcm_credential_identity(credential, "android-pilot")
+
+    def test_real_fcm_credentials_reject_duplicate_identity_fields_and_symlinks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            credential = Path(directory) / "account.json"
+            credential.write_text('{"type":"service_account","project_id":"android-pilot",'
+                                  '"project_id":"other","client_email":"sender@android-pilot.iam.gserviceaccount.com"}')
+            credential.chmod(0o600)
+            with self.assertRaisesRegex(RuntimeError, "unavailable or invalid"):
+                dev.real_fcm_credential_identity(credential, "android-pilot")
+            alias = Path(directory) / "alias.json"
+            alias.symlink_to(credential)
+            with self.assertRaisesRegex(RuntimeError, "owner-only"):
+                dev.real_fcm_credential_identity(alias, "android-pilot")
+
+    def test_real_fcm_profile_uses_independent_state_and_compose_project(self):
+        default_state = dev.STATE
+        default_project = dev.PROJECT
+        dev.select_profile(True)
+        self.assertEqual(dev.STATE, dev.ROOT / "tmp/local-fcm")
+        self.assertEqual(dev.PROJECT, "hello-local-real-fcm")
+        dev.select_profile(False)
+        self.assertEqual(dev.STATE, default_state)
+        self.assertEqual(dev.PROJECT, default_project)
+
     def test_docs_build_uses_local_release_and_replaces_previous_output(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)
@@ -227,6 +267,16 @@ class LocalDevelopmentTests(unittest.TestCase):
                 dev.configure()
             self.assertNotIn("mobile", json.loads((config / "settings.json").read_text()))
 
+    def test_port_check_reuses_closed_connections_and_checks_for_a_listener(self):
+        with patch.object(dev.socket, "socket") as factory:
+            probe = factory.return_value.__enter__.return_value
+            dev.check_host_port(5173)
+            self.assertEqual(probe.method_calls, [
+                call.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1),
+                call.bind(("127.0.0.1", 5173)),
+                call.listen(),
+            ])
+
     def test_stale_supervisor_pid_never_terminates_unrelated_process(self):
         with tempfile.TemporaryDirectory() as directory:
             state = Path(directory)
@@ -234,6 +284,34 @@ class LocalDevelopmentTests(unittest.TestCase):
             with patch.object(dev, "STATE", state), patch.object(dev.subprocess, "check_output", return_value="unrelated-worker"), patch.object(dev.os, "kill") as kill:
                 dev.stop_host()
                 kill.assert_not_called()
+
+    def test_stale_real_fcm_supervisor_pid_never_stops_the_simulator(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            (state / "supervisor.pid").write_text("1234")
+            simulator = f"python3 {Path(dev.__file__).resolve()} _serve"
+            with patch.object(dev, "STATE", state), patch.object(dev, "REAL_FCM", True), \
+                    patch.object(dev.subprocess, "check_output", return_value=simulator), patch.object(dev.os, "kill") as kill:
+                dev.stop_host()
+                kill.assert_not_called()
+
+    def test_real_fcm_release_rejection_does_not_start_daemons(self):
+        with tempfile.TemporaryDirectory() as directory:
+            state = Path(directory)
+            (state / "enabled").touch()
+            (state / "offset-initialized").touch()
+            def compose(*args, **kwargs):
+                if "real-fcm-release" in args:
+                    raise RuntimeError("installation is outside the pilot cohort")
+            with patch.object(dev, "STATE", state), patch.object(dev, "validate_real_fcm_compose"), \
+                    patch.object(dev, "install_real_fcm_public_roots"), \
+                    patch.object(dev, "current_real_fcm_target", return_value=None), patch.object(dev, "sql", return_value="t"), \
+                    patch.object(dev, "ensure_real_fcm_idle"), patch.object(dev, "pause_real_fcm_workers"), \
+                    patch.object(dev, "real_fcm_compose_identity", return_value=(state / "account.json", "test-firebase", "fixture@example.com")), \
+                    patch.object(dev, "compose", side_effect=compose) as command:
+                with self.assertRaisesRegex(RuntimeError, "outside the pilot cohort"):
+                    dev.release_real_fcm_pilot("20000000-0000-4000-8000-000000000001")
+                self.assertEqual([call.args[4] for call in command.call_args_list], ["real-fcm-policy", "real-fcm-release"])
 
     def test_watcher_cannot_resurrect_a_stopped_stack(self):
         with tempfile.TemporaryDirectory() as directory:

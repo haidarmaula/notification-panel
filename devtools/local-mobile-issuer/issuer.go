@@ -128,6 +128,13 @@ type issuerServer struct {
 	credential     string
 	credentialExp  time.Time
 	originCount    int
+	managed        bool
+	sessions       map[[sha256.Size]byte]issuerSession
+}
+
+type issuerSession struct {
+	expires time.Time
+	origins int
 }
 
 func createFiles(directory, appID, namespace, subject, providerNamespace, providerRouteKey string) error {
@@ -294,15 +301,23 @@ func loopbackAddress(value string) bool {
 	return err == nil && address.IsLoopback()
 }
 
-func runServer(cfg issuerConfig, address string) error {
+func runServer(cfg issuerConfig, address, qrAPI string) error {
+	return runPairingServer(cfg, address, qrAPI, nil)
+}
+
+func runPairingServer(cfg issuerConfig, address, qrAPI string, lan *lanPairing) error {
 	codeBytes := make([]byte, 32)
 	if _, err := rand.Read(codeBytes); err != nil {
 		return err
 	}
 	code := base64.RawURLEncoding.EncodeToString(codeBytes)
 	api := &issuerServer{cfg: cfg, pairingCode: code, pairingExpires: time.Now().Add(pairingLifetime)}
+	handler := api.handler()
+	if lan != nil {
+		handler = lan.handler(api)
+	}
 	server := &http.Server{
-		Addr: address, Handler: api.handler(), ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second,
+		Addr: address, Handler: handler, ReadHeaderTimeout: 2 * time.Second, ReadTimeout: 5 * time.Second,
 		WriteTimeout: 5 * time.Second, IdleTimeout: 30 * time.Second, MaxHeaderBytes: 8 * 1024,
 		ErrorLog: log.New(io.Discard, "", 0),
 	}
@@ -310,14 +325,44 @@ func runServer(cfg issuerConfig, address string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := fmt.Fprintf(os.Stdout, "Local issuer ready at http://%s\nOne-use pairing code (expires in 10 minutes): %s\n", address, code); err != nil {
-		return err
+	defer listener.Close()
+	issuer := "http://" + listener.Addr().String()
+	if lan != nil {
+		server.TLSConfig = lan.tls
+		issuer = "https://" + listener.Addr().String()
+		qrAPI = issuer
+	}
+	if lan != nil && lan.control != "" {
+		api.managed = true
+		api.sessions = make(map[[sha256.Size]byte]issuerSession)
+		api.pairingUsed = true
+		closeControl, err := api.startDashboardControl(lan.control, issuer)
+		if err != nil {
+			return err
+		}
+		defer closeControl()
+	} else {
+		if _, err := fmt.Fprintf(os.Stdout, "Local issuer ready at %s\nOne-use pairing code (expires in 10 minutes): %s\n", issuer, code); err != nil {
+			return err
+		}
+		if qrAPI != "" {
+			link := pairingLink(qrAPI, issuer, cfg.AppID, code)
+			if err := writePairingQR(os.Stdout, link); err != nil {
+				return err
+			}
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	serverErr := make(chan error, 1)
-	go func() { serverErr <- server.Serve(listener) }()
+	go func() {
+		if lan != nil {
+			serverErr <- server.ServeTLS(listener, "", "")
+			return
+		}
+		serverErr <- server.Serve(listener)
+	}()
 	select {
 	case err := <-serverErr:
 		if errors.Is(err, http.ErrServerClosed) {
@@ -368,6 +413,9 @@ func (s *issuerServer) handleSession(w http.ResponseWriter, r *http.Request) {
 	}
 	s.credential = credential
 	s.credentialExp = expires
+	if s.managed {
+		s.sessions[sha256.Sum256([]byte(credential))] = issuerSession{expires: expires}
+	}
 	s.pairingUsed = true
 	writeJSON(w, http.StatusOK, apiEnvelope{Success: true, Data: sessionResponse{Credential: credential}})
 }
@@ -381,6 +429,10 @@ func (s *issuerServer) handleOrigin(w http.ResponseWriter, r *http.Request) {
 	bearer := bearerToken(r)
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.managed {
+		s.handleDashboardOrigin(w, input.AppID, bearer)
+		return
+	}
 	if input.AppID != s.cfg.AppID || bearer == "" || s.credential == "" || s.originCount >= maxOriginAssertions ||
 		!time.Now().Before(s.credentialExp) || subtle.ConstantTimeCompare([]byte(bearer), []byte(s.credential)) != 1 {
 		writeJSON(w, http.StatusUnauthorized, apiEnvelope{Success: false, Message: "invalid mobile credential"})

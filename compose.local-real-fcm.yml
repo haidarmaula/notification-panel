@@ -1,0 +1,50 @@
+# Explicit real-provider profile. Only the delivery worker receives the caller's
+# owner-only key file; the profile remains on loopback and gets a separate project.
+services:
+  server:
+    command:
+      - |
+        install -d -m 0750 /etc/hello
+        install -m 0640 /policy-input/onboarding.json /etc/hello/onboarding.json
+        install -m 0640 /policy-input/mobile-policy.json /etc/hello/mobile-policy.json
+        exec /fixture-bin/server --local-onboarding
+    environment:
+      MOBILE_POLICY_FILE: /etc/hello/mobile-policy.json
+    volumes:
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/generated/mobile-policy.json:/policy-input/mobile-policy.json:ro'
+  api-tls:
+    entrypoint: [/fixture-bin/setup, real-fcm-gateway]
+    ports: !override ['127.0.0.1:18182:8082', '127.0.0.1:8082:8083']
+
+  provider-fixture:
+    profiles: [synthetic-only]
+
+  delivery-worker:
+    entrypoint:
+      - bash
+      - -ec
+      - >-
+        install -d -m 0750 /etc/hello;
+        install -m 0640 /input/delivery.json /etc/hello/worker.json;
+        install -m 0600 /run/real-fcm/service-account.json /etc/hello/service-account.json;
+        install -m 0644 /tls/ca.crt /etc/hello/ca.crt;
+        install -m 0644 /tls/provider-ca.pem /etc/ssl/certs/ca-certificates.crt;
+        exec env -i PATH=/usr/bin:/bin /fixture-bin/worker
+    volumes: !override
+      - '${HELLO_INTEGRATION_BIN_DIR:?local binaries required}:/fixture-bin:ro'
+      - '${HELLO_LOCAL_CONFIG_DIR:?local config required}/generated:/input:ro'
+      - '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/ca.crt:/tls/ca.crt:ro'
+      - type: bind
+        source: '${HELLO_INTEGRATION_CERTS_DIR:?local certificates required}/provider-ca.pem'
+        target: /tls/provider-ca.pem
+        read_only: true
+        bind:
+          create_host_path: false
+      - '${HELLO_LOCAL_FCM_CREDENTIAL_FILE:?real Firebase credential required}:/run/real-fcm/service-account.json:ro'
+    networks: !override [delivery, provider-egress]
+
+networks:
+  delivery:
+    internal: true
+  provider-egress:
+    driver: bridge

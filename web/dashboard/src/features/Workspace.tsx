@@ -32,9 +32,11 @@ import {
   SunIcon,
   ViewColumnsIcon,
   ChevronUpDownIcon,
+  DevicePhoneMobileIcon,
 } from '@heroicons/react/24/outline';
 import { isThemeSlug, themeLabels, useAppearance } from '../app/appearance-context';
 import { useAuth } from '../app/auth-context';
+import { isLocalTestDevicesPath, localTestDevicesPath } from '../app/local-test-devices';
 import { data, errorMessage } from '../lib/api/client';
 import type { Application } from '../lib/api/types';
 import { Failure, Loading, Status } from '../components/ui/Feedback';
@@ -86,8 +88,14 @@ export function Workspace() {
   if (auth.session.isPending) return <Loading />;
   if (auth.session.isError)
     return <Failure error={auth.session.error} retry={() => void auth.session.refetch()} />;
-  if (!auth.authenticated()) return <Navigate to="/login" replace />;
+  if (!auth.authenticated()) {
+    const state = isLocalTestDevicesPath(location.pathname)
+      ? { returnTo: location.pathname }
+      : undefined;
+    return <Navigate to="/login" state={state} replace />;
+  }
   const appBase = `/apps/${params.appId}`;
+  const showRealFCMTools = isLocalTestDevicesPath(`${appBase}/test-devices`);
   const routes = [
     { label: 'Overview', path: `${appBase}/overview`, icon: ChartBarIcon },
     { label: 'Campaigns', path: `${appBase}/campaigns`, icon: PaperAirplaneIcon },
@@ -97,6 +105,9 @@ export function Workspace() {
     { label: 'Segments', path: `${appBase}/segments`, icon: UserGroupIcon },
     { label: 'Upload history', path: `${appBase}/uploads`, icon: DocumentDuplicateIcon },
     { label: 'Application settings', path: `${appBase}/settings`, icon: Cog6ToothIcon },
+    ...(showRealFCMTools
+      ? [{ label: 'Test Devices', path: localTestDevicesPath, icon: DevicePhoneMobileIcon }]
+      : []),
   ];
   const nav = (
     <SideNav

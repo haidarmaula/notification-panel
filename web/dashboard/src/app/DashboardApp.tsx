@@ -50,6 +50,7 @@ const UploadRows = lazy(() =>
 const AuditLog = lazy(() =>
   import('../features/management/Activity').then((module) => ({ default: module.AuditLog })),
 );
+const TestDevices = lazy(() => import('../features/TestDevices'));
 class RenderBoundary extends Component<PropsWithChildren, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() {
@@ -109,6 +110,7 @@ const router = createBrowserRouter([
             [':appId/segments/:segmentId', SegmentEditor],
             [':appId/audience', Audience],
             [':appId/audience/:userId', UserDetail],
+            [':appId/test-devices', TestDevices],
             [':appId/campaigns', Campaigns],
             [':appId/campaigns/new', Editor],
             [':appId/campaigns/:campaignId', Detail],

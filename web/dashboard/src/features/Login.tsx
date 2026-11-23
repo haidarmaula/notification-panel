@@ -1,5 +1,5 @@
 import { useRef, useState, type FormEvent } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Card } from '@astryxdesign/core/Card';
 import { Center } from '@astryxdesign/core/Center';
 import { Grid } from '@astryxdesign/core/Grid';
@@ -16,13 +16,18 @@ import { Icon } from '@astryxdesign/core/Icon';
 import { BellIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
 import loginTeamImage from '../assets/autumn.jpg';
 import { useAuth } from '../app/auth-context';
+import { isLocalTestDevicesPath, localTestDevicesPath } from '../app/local-test-devices';
 import { ApiError } from '../lib/api/client';
 import { Failure, Loading } from '../components/ui/Feedback';
 
 export default function Login() {
   const isMobile = useMediaQuery('(width < 768px)');
   const auth = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
+  const destination = isLocalTestDevicesPath(location.state?.returnTo)
+    ? localTestDevicesPath
+    : '/apps';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -38,7 +43,7 @@ export default function Login() {
     try {
       await auth.login(email, password);
       setPassword('');
-      navigate('/apps', { replace: true });
+      navigate(destination, { replace: true });
     } catch (cause) {
       setError(
         cause instanceof ApiError && cause.status === 401
@@ -51,7 +56,7 @@ export default function Login() {
     }
   }
   if (auth.session.isPending) return <Loading />;
-  if (auth.authenticated()) return <Navigate to="/apps" replace />;
+  if (auth.authenticated()) return <Navigate to={destination} replace />;
   return (
     <Center minHeight="100dvh" padding={6}>
       <VStack width="100%" maxWidth={1000}>

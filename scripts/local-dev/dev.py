@@ -5,24 +5,29 @@ import argparse
 import base64
 import contextlib
 from datetime import datetime, timedelta, timezone
+import errno
 import fcntl
 import hashlib
 import http.cookiejar
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import shutil
 import signal
 import socket
+import ssl
 import subprocess
 import sys
 import time
 import urllib.error
 import urllib.request
+import uuid
 
 ROOT = Path(__file__).resolve().parents[2]
-STATE = ROOT / "tmp/local-dev"
+DEFAULT_STATE = ROOT / "tmp/local-dev"
+STATE = DEFAULT_STATE
 CONFIG = STATE / "config"
 TLS = STATE / "tls"
 BIN = STATE / "bin"
@@ -30,12 +35,40 @@ LOGS = STATE / "logs"
 PROJECT = "hello-local"
 SERVICES = ["server", "api-tls", "admission", "delivery-worker", "scheduler", "provisioner", "controlplane",
             "verifier-pool", "controlplane-slot-1", "controlplane-slot-2", "controlplane-slot-3"]
+REAL_FCM = False
+REAL_FCM_APP_ID = "10000000-0000-4000-8000-000000000003"
+REAL_FCM_API_PORT = 18182
+REAL_FCM_MOBILE_PORT = 8082
+REAL_FCM_PAIR_PORT = 8181
+REAL_FCM_LAN_PORT = 8443
+REAL_FCM_CONTROL_PORT = 18191
+REAL_FCM_DASHBOARD_PORT = 5273
+REAL_FCM_BFF_PORT = 18190
+REAL_FCM_DAEMONS = ("admission", "delivery-worker", "scheduler")
+REAL_FCM_GROUP = "hello-local-real-fcm-admission-v1"
 ONBOARDING_APP_ID = "10000000-0000-4000-8000-000000000002"
 ONBOARDING_PROFILE_ID = "80000000-0000-4000-8000-000000000001"
 ONBOARDING_IDENTIFIER = "com.hello.local.onboarding"
 ONBOARDING_CLIENT_IDENTITY = "spiffe://hello/local/server"
 CREDENTIAL_ROOT = "/var/lib/hello/credentials"
 TOPICS = ["notification.send.requested", "notification.delivery.updated"]
+
+
+def select_profile(real_fcm):
+    """Select isolated state and service names before taking the profile lock."""
+    global REAL_FCM, STATE, CONFIG, TLS, BIN, LOGS, PROJECT, SERVICES
+    REAL_FCM = real_fcm
+    if REAL_FCM:
+        STATE = ROOT / "tmp/local-fcm"
+        PROJECT = "hello-local-real-fcm"
+        SERVICES = ["server", "api-tls", "provisioner", "controlplane", "verifier-pool",
+                    "controlplane-slot-1", "controlplane-slot-2", "controlplane-slot-3"]
+    else:
+        STATE = DEFAULT_STATE
+        PROJECT = "hello-local"
+        SERVICES = ["server", "api-tls", "admission", "delivery-worker", "scheduler", "provisioner", "controlplane",
+                    "verifier-pool", "controlplane-slot-1", "controlplane-slot-2", "controlplane-slot-3"]
+    CONFIG, TLS, BIN, LOGS = (STATE / "config", STATE / "tls", STATE / "bin", STATE / "logs")
 
 
 def run(args, *, data=None, capture=False, timeout=180, env=None, cwd=ROOT):
@@ -57,9 +90,77 @@ def private_json(path, value):
     temporary.replace(path)
 
 
+def real_fcm_credential_identity(path=None, project_id=None):
+    """Validate the explicit, private Google identity before real-profile startup."""
+    path = path or os.environ.get("HELLO_LOCAL_FCM_SERVICE_ACCOUNT_FILE", "")
+    project_id = project_id or os.environ.get("HELLO_LOCAL_FCM_PROJECT_ID", "")
+    if (not path or not Path(path).is_absolute() or
+            not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", project_id)):
+        raise RuntimeError("Real FCM requires HELLO_LOCAL_FCM_SERVICE_ACCOUNT_FILE and HELLO_LOCAL_FCM_PROJECT_ID")
+    try:
+        supplied = Path(path)
+        info = supplied.lstat()
+        credential = supplied.resolve(strict=True)
+        if (not credential.is_file() or supplied.is_symlink() or info.st_mode & 0o077 or
+                info.st_uid != os.getuid() or info.st_size > 64 * 1024):
+            raise RuntimeError("Real FCM credential must be an owner-only regular file of at most 64 KiB")
+        def unique_object(pairs):
+            result = {}
+            for key, value in pairs:
+                if key in result:
+                    raise ValueError("duplicate field")
+                result[key] = value
+            return result
+        document = json.loads(credential.read_text(), object_pairs_hook=unique_object)
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        raise RuntimeError("Real FCM credential file is unavailable or invalid") from error
+    if (not isinstance(document, dict) or document.get("type") != "service_account" or
+            document.get("project_id") != project_id or
+            not isinstance(document.get("client_email"), str) or
+            not document["client_email"].endswith("@" + project_id + ".iam.gserviceaccount.com")):
+        raise RuntimeError("Real FCM credential does not match the explicitly approved Firebase project")
+    return credential, project_id, document["client_email"]
+
+
+def real_fcm_compose_identity(validate_file=False):
+    """Pin the credential path/project to this isolated profile for safe teardown."""
+    metadata = CONFIG / "real-fcm-credential.json"
+    supplied_path = os.environ.get("HELLO_LOCAL_FCM_SERVICE_ACCOUNT_FILE")
+    supplied_project = os.environ.get("HELLO_LOCAL_FCM_PROJECT_ID")
+    if validate_file and (supplied_path or supplied_project or not metadata.exists()):
+        if not supplied_path or not Path(supplied_path).is_absolute() or not re.fullmatch(
+                r"[a-z][a-z0-9-]{4,28}[a-z0-9]", supplied_project or ""):
+            raise RuntimeError("Real FCM requires an absolute credential path and valid project ID")
+        if validate_file:
+            credential, project_id, email = real_fcm_credential_identity(supplied_path, supplied_project)
+        else:
+            credential, project_id, email = Path(os.path.abspath(supplied_path)), supplied_project, ""
+        if metadata.exists():
+            pinned = json.loads(metadata.read_text())
+            if pinned != {"credential_file": str(credential), "project_id": project_id}:
+                raise RuntimeError("Real FCM credential identity is pinned to existing state; use a fresh profile")
+        else:
+            private_json(metadata, {"credential_file": str(credential), "project_id": project_id})
+        return credential, project_id, email if validate_file else ""
+    if not metadata.exists():
+        raise RuntimeError("Real FCM profile is not initialized; set its credential path and project ID")
+    pinned = json.loads(metadata.read_text())
+    credential = Path(pinned.get("credential_file", ""))
+    project_id = pinned.get("project_id", "")
+    if not credential.is_absolute() or not re.fullmatch(r"[a-z][a-z0-9-]{4,28}[a-z0-9]", project_id):
+        raise RuntimeError("Real FCM profile credential identity is invalid")
+    if validate_file:
+        return real_fcm_credential_identity(str(credential), project_id)
+    return credential, project_id, ""
+
+
 def require_owner():
     owner = STATE / "owner.json"
-    if not owner.exists() or json.loads(owner.read_text()) != {"repository": str(ROOT), "scope": "synthetic-local-v1"}:
+    expected = {"repository": str(ROOT), "scope": "real-fcm-local-v1" if REAL_FCM else "synthetic-local-v1"}
+    if REAL_FCM:
+        _, project_id, _ = real_fcm_compose_identity()
+        expected.update(project_id=project_id, application_id=REAL_FCM_APP_ID)
+    if not owner.exists() or json.loads(owner.read_text()) != expected:
         raise RuntimeError("Local environment is not initialized for this checkout; run ./dev up first")
 
 
@@ -67,8 +168,14 @@ def compose(*args, **kwargs):
     env = os.environ.copy()
     env.update(HELLO_INTEGRATION_CERTS_DIR=str(TLS), HELLO_INTEGRATION_BIN_DIR=str(BIN),
                HELLO_LOCAL_CONFIG_DIR=str(CONFIG))
+    files = ["-f", "compose.integration.yml", "-f", "compose.local.yml"]
+    if REAL_FCM:
+        credential, project_id, _ = real_fcm_compose_identity()
+        env.update(HELLO_LOCAL_FCM_CREDENTIAL_FILE=str(credential),
+                   HELLO_LOCAL_FCM_PROJECT_ID=project_id)
+        files.extend(["-f", "compose.local-real-fcm.yml"])
     return run(["docker", "compose", "--env-file", "/dev/null", "-p", PROJECT,
-                "-f", "compose.integration.yml", "-f", "compose.local.yml", *args], env=env, **kwargs)
+                *files, *args], env=env, **kwargs)
 
 
 def sql(statement, login="integration"):
@@ -152,6 +259,10 @@ def build(architecture):
     temporary = BIN / "dashboard.new"
     run(["go", "build", "-o", str(temporary), "./cmd/dashboard"])
     temporary.replace(BIN / "dashboard")
+    if REAL_FCM:
+        temporary = BIN / "mobile-issuer.new"
+        run(["go", "build", "-o", str(temporary), "./devtools/local-mobile-issuer"])
+        temporary.replace(BIN / "mobile-issuer")
 
 
 def configure():
@@ -172,10 +283,25 @@ def configure():
     (CONFIG / "server.env").chmod(0o600)
     (CONFIG / "api-key").write_text(values["api_key"])
     (CONFIG / "api-key").chmod(0o600)
-    private_json(CONFIG / "dashboard.json", {"origin": "http://127.0.0.1:5173", "upstream": "https://127.0.0.1:18082",
+    bff_port = REAL_FCM_BFF_PORT if REAL_FCM else 18090
+    private_json(CONFIG / "dashboard.json", {"origin": dashboard_origin(), "upstream": api_upstream(),
                  "api_key_file": str(CONFIG / "api-key"), "upstream_ca_file": str(TLS / "ca.crt"),
                  "upstream_cert_file": str(TLS / "client.crt"), "upstream_key_file": str(TLS / "client.key"),
-                 "listen_address": "127.0.0.1:18090", "assets_directory": "", "development": True, "max_sessions": 100})
+                 "listen_address": f"127.0.0.1:{bff_port}", "assets_directory": "", "development": True, "max_sessions": 100})
+
+
+def dashboard_origin():
+    return f"http://localhost:{REAL_FCM_DASHBOARD_PORT}" if REAL_FCM else "http://127.0.0.1:5173"
+
+
+def dashboard_proxy():
+    port = REAL_FCM_BFF_PORT if REAL_FCM else 18090
+    return f"http://127.0.0.1:{port}"
+
+
+def api_upstream():
+    port = REAL_FCM_API_PORT if REAL_FCM else 18082
+    return f"https://127.0.0.1:{port}"
 
 
 def configure_onboarding():
@@ -265,14 +391,14 @@ def migrate(execute=None):
         execute("BEGIN;\n" + path.read_text() + f"\nINSERT INTO local_dev_migrations VALUES('{path.name}','{digest}');\nCOMMIT;")
 
 
-def prepare_application(execute=None):
+def prepare_application(execute=None, activate_fixture=True):
     execute = execute or sql
     execute((ROOT / "scripts/local-dev/bootstrap.sql").read_text())
     for name in ("scripts/sql/finalize-application-ownership.sql", "scripts/sql/install-application-lifecycle.sql",
                  "deploy/postgres/application-lifecycle-grants.sql", "deploy/postgres/dispatch-policy-grants.sql",
                  "scripts/local-dev/onboarding-bootstrap.sql", "deploy/postgres/onboarding-grants.sql"):
         execute((ROOT / name).read_text())
-    if execute("SELECT status FROM applications WHERE key='load-fixture';") == "PROVISIONING":
+    if activate_fixture and execute("SELECT status FROM applications WHERE key='load-fixture';") == "PROVISIONING":
         grant = execute("SELECT id FROM application_lifecycle_grants WHERE project_id='10000000-0000-4000-8000-000000000001' AND applied_at IS NULL AND revoked_at IS NULL AND expires_at>clock_timestamp()+interval '1 minute' AND destination='ACTIVE' ORDER BY issued_at DESC LIMIT 1;")
         if not grant:
             grant = execute("SELECT gen_random_uuid();")
@@ -285,6 +411,38 @@ def prepare_application(execute=None):
             execute(issue+(ROOT/"scripts/sql/issue-application-lifecycle.sql").read_text(),login="load_reviewer")
         apply = r"\set project '10000000-0000-4000-8000-000000000001'" + "\n" + rf"\set grant_id '{grant}'" + "\n"
         execute(apply+(ROOT/"scripts/sql/apply-application-lifecycle.sql").read_text(),login="load_executor")
+
+
+def prepare_real_fcm_application():
+    prepare_application(activate_fixture=False)
+    execute = sql
+    execute(f"""INSERT INTO applications(public_id,key,name)
+        VALUES('{REAL_FCM_APP_ID}'::uuid,'local-fcm-pilot','Hello Local Android Pilot')
+        ON CONFLICT(public_id) DO NOTHING;""")
+    execute(f"""INSERT INTO application_dispatch_policy(application_id,push_ttl_seconds,key_ttl_seconds)
+        SELECT id,3600,86400 FROM applications WHERE public_id='{REAL_FCM_APP_ID}'::uuid
+        ON CONFLICT(application_id) DO NOTHING;""")
+    status, revision = execute(f"SELECT status,revision FROM applications WHERE public_id='{REAL_FCM_APP_ID}'::uuid;").split("|")
+    if status == "PROVISIONING":
+        grant = execute("SELECT gen_random_uuid();")
+        origin, source, expiry, digest = execute("SELECT origin_epoch,source_epoch,(clock_timestamp()+interval '1 hour')::text,encode(sha256('isolated local FCM app'),'hex') FROM notification_runtime WHERE singleton;").split("|")
+        variables = {"project": REAL_FCM_APP_ID, "grant_id": grant, "executor": "load_executor",
+                     "origin": origin, "source": source, "revision": revision, "from_status": "PROVISIONING",
+                     "destination": "ACTIVE", "ownership_sha256": digest, "writers_sha256": digest,
+                     "cohorts_sha256": digest, "retired_roles": "{load_retired_writer}", "expires_utc": expiry}
+        issue = "".join(rf"\set {key} '{value}'" + "\n" for key, value in variables.items())
+        execute(issue+(ROOT/"scripts/sql/issue-application-lifecycle.sql").read_text(), login="load_reviewer")
+        apply = rf"\set project '{REAL_FCM_APP_ID}'" + "\n" + rf"\set grant_id '{grant}'" + "\n"
+        execute(apply+(ROOT/"scripts/sql/apply-application-lifecycle.sql").read_text(), login="load_executor")
+    elif status != "ACTIVE":
+        raise RuntimeError("Real FCM application is in an unexpected lifecycle state")
+    counts = execute(f"""WITH app AS (SELECT id FROM applications WHERE public_id='{REAL_FCM_APP_ID}'::uuid)
+        SELECT (SELECT count(*) FROM users WHERE application_id=(SELECT id FROM app)),
+               (SELECT count(*) FROM users WHERE application_id=(SELECT id FROM app) AND external_id='local-android-test'),
+               (SELECT count(*) FROM mobile_identities WHERE application_id=(SELECT id FROM app)
+                  AND identity_namespace='hello-local-mobile-test' AND subject='local-android-test');""").split("|")
+    if counts not in (["0", "0", "0"], ["1", "1", "1"]):
+        raise RuntimeError("Real FCM application identity state is unexpected; use a fresh isolated profile")
 
 
 def seed_application():
@@ -332,7 +490,8 @@ def supervisor_pid():
     try:
         pid = int((STATE / "supervisor.pid").read_text())
         command = subprocess.check_output(["ps", "-p", str(pid), "-o", "command="], text=True)
-        return pid if str(Path(__file__).resolve()) in command and "_serve" in command else None
+        return pid if (str(Path(__file__).resolve()) in command and "_serve" in command and
+                       ("--real-fcm" in command.split()) == REAL_FCM) else None
     except (FileNotFoundError, ValueError, subprocess.CalledProcessError):
         return None
 
@@ -400,11 +559,19 @@ def serve():
     signal.signal(signal.SIGINT, terminate)
     env = os.environ.copy()
     env["HELLO_DASHBOARD_CONFIG"] = str(CONFIG / "dashboard.json")
-    env["HELLO_DASHBOARD_PROXY"] = "http://127.0.0.1:18090"
+    env["HELLO_DASHBOARD_PROXY"] = dashboard_proxy()
     env["HELLO_LOCAL_DOCS_DIR"] = str(STATE / "api-docs")
     env["HELLO_LOCAL_TLS_DIR"] = str(TLS)
-    for name, args, cwd in (("bff", [str(BIN / "dashboard")], ROOT),
-                            ("frontend", ["pnpm", "dev", "--port", "5173", "--strictPort"], ROOT / "web/dashboard")):
+    env["HELLO_LOCAL_API_UPSTREAM"] = api_upstream()
+    ui_port = REAL_FCM_DASHBOARD_PORT if REAL_FCM else 5173
+    services = [("bff", [str(BIN / "dashboard")], ROOT),
+                ("frontend", ["pnpm", "dev", "--port", str(ui_port), "--strictPort"], ROOT / "web/dashboard")]
+    if REAL_FCM:
+        env["VITE_HELLO_REAL_FCM"] = "1"
+        env["HELLO_LOCAL_FCM_CONTROL"] = f"http://127.0.0.1:{REAL_FCM_CONTROL_PORT}"
+        env["HELLO_LOCAL_DASHBOARD_ORIGIN"] = dashboard_origin()
+        services.append(("real-fcm-control", [sys.executable, str(Path(__file__).resolve()), "_control", "--real-fcm"], ROOT))
+    for name, args, cwd in services:
         with (LOGS / f"{name}.log").open("ab") as log:
             children.append(subprocess.Popen(args, cwd=cwd, env=env, stdout=log, stderr=log, start_new_session=True))
     while all(child.poll() is None for child in children):
@@ -412,20 +579,36 @@ def serve():
     terminate()
 
 
+def check_host_port(port):
+    with socket.socket() as check:
+        # Match Vite and Go listener behavior when connections remain in TIME_WAIT.
+        check.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        try:
+            check.bind(("127.0.0.1", port))
+            check.listen()
+        except OSError as error:
+            if error.errno == errno.EADDRINUSE:
+                raise RuntimeError(f"Port {port} is occupied; stop its owner and retry ./dev up") from error
+            raise RuntimeError(f"Could not check port {port}: {error}") from error
+
+
 def start_host():
-    for port in (5173, 18090):
-        with socket.socket() as check:
-            try:
-                check.bind(("127.0.0.1", port))
-            except OSError as error:
-                raise RuntimeError(f"Port {port} is occupied; stop its owner or choose another environment") from error
+    ui_port = REAL_FCM_DASHBOARD_PORT if REAL_FCM else 5173
+    bff_port = REAL_FCM_BFF_PORT if REAL_FCM else 18090
+    for port in (ui_port, bff_port):
+        check_host_port(port)
+    if REAL_FCM:
+        check_host_port(REAL_FCM_CONTROL_PORT)
+    args = [sys.executable, str(Path(__file__).resolve()), "_serve"]
+    if REAL_FCM:
+        args.append("--real-fcm")
     with (LOGS / "supervisor.log").open("ab") as log:
-        process = subprocess.Popen([sys.executable, str(Path(__file__).resolve()), "_serve"], cwd=ROOT,
+        process = subprocess.Popen(args, cwd=ROOT,
                                    stdout=log, stderr=log, start_new_session=True)
     (STATE / "supervisor.pid").write_text(str(process.pid))
-    wait_url("http://127.0.0.1:18090/bff/session")
-    wait_url("http://127.0.0.1:5173/login")
-    wait_url("http://127.0.0.1:5173/docs/")
+    wait_url(dashboard_proxy() + "/bff/session")
+    wait_url(dashboard_origin() + "/login")
+    wait_url(dashboard_origin() + "/docs/")
 
 
 def session_client():
@@ -433,11 +616,11 @@ def session_client():
     client = urllib.request.build_opener(urllib.request.ProxyHandler({}), urllib.request.HTTPCookieProcessor(cookies))
     csrf = ""
     def request(path, method="GET", body=None, key=None):
-        headers = {"Origin": "http://127.0.0.1:5173", "Content-Type": "application/json", "X-CSRF-Token": csrf}
+        headers = {"Origin": dashboard_origin(), "Content-Type": "application/json", "X-CSRF-Token": csrf}
         if key:
             headers["Idempotency-Key"] = key
         payload = json.dumps(body).encode() if body is not None else None
-        req = urllib.request.Request("http://127.0.0.1:18090/bff/" + path, data=payload, method=method, headers=headers)
+        req = urllib.request.Request(dashboard_proxy() + "/bff/" + path, data=payload, method=method, headers=headers)
         try:
             with client.open(req, timeout=15) as response:
                 return json.load(response) if response.status != 204 else None
@@ -487,6 +670,9 @@ def verify(send=False):
 
 
 def up():
+    if REAL_FCM:
+        up_real_fcm()
+        return
     architecture = docker_ready()
     owner = STATE / "owner.json"
     if owner.exists():
@@ -533,10 +719,268 @@ def up():
     print(f"Local dashboard: http://127.0.0.1:5173/login\nLocal API docs: http://127.0.0.1:5173/docs/\nLocal credentials: {CONFIG / 'settings.json'}\nLogs: {LOGS}")
 
 
+def configure_real_fcm_mobile_issuer():
+    issuer_dir = CONFIG / "mobile-issuer"
+    issuer = issuer_dir / "issuer.json"
+    mobile_policy = issuer_dir / "mobile-policy.json"
+    if not issuer.exists() or not mobile_policy.exists():
+        run(["go", "run", "./devtools/local-mobile-issuer", "init", "--dir", str(issuer_dir),
+             "--app-id", REAL_FCM_APP_ID, "--namespace", "hello-local-mobile-test",
+             "--subject", "local-android-test", "--provider-namespace", "hello-local-fcm",
+             "--provider-route-key", "android-fid"], timeout=120)
+    try:
+        issuer_config = json.loads(issuer.read_text())
+        policy = json.loads(mobile_policy.read_text())
+        projects = policy.get("projects", [])
+        if issuer_config.get("app_id") != REAL_FCM_APP_ID or len(projects) != 1 or projects[0].get("app_id") != REAL_FCM_APP_ID:
+            raise RuntimeError("Local mobile issuer belongs to another application; use fresh real FCM state")
+    except (OSError, ValueError, KeyError) as error:
+        raise RuntimeError("Local mobile issuer state is invalid") from error
+    private_json(CONFIG / "generated/mobile-policy.json", policy)
+
+
+def validate_real_fcm_compose():
+    config = json.loads(compose("config", "--format", "json", capture=True))
+    networks = config["networks"]
+    if networks.get("delivery", {}).get("internal") is not True:
+        raise RuntimeError("Real FCM profile must keep its service network internal")
+    egress = networks.get("provider-egress")
+    services = config["services"]
+    if not egress or egress.get("internal") or egress.get("external") or "provider-fixture" in services:
+        raise RuntimeError("Real FCM requires a dedicated egress network without the simulator")
+    required = {"server", "api-tls", "delivery-worker", "admission", "scheduler", "provisioner"}
+    if not required <= services.keys():
+        raise RuntimeError("Real FCM Compose configuration is missing runtime services")
+    expected_gateway_ports = {("127.0.0.1", REAL_FCM_API_PORT, 8082, "tcp"),
+                              ("127.0.0.1", REAL_FCM_MOBILE_PORT, 8083, "tcp")}
+    key_path, _, _ = real_fcm_compose_identity()
+    for name, service in services.items():
+        expected = {"delivery"}
+        if name == "api-tls":
+            expected.add("ingress")
+        elif name == "delivery-worker":
+            expected.add("provider-egress")
+        elif name == "provisioner":
+            expected.clear()
+        namespace = "service:server" if name == "provisioner" else None
+        if set(service.get("networks", {})) != expected or service.get("network_mode") != namespace:
+            raise RuntimeError(f"Unexpected real FCM network on {name}")
+        listeners = {(port.get("host_ip"), int(port["published"]), port["target"], port.get("protocol", "tcp"))
+                     for port in service.get("ports", [])}
+        expected_listeners = expected_gateway_ports if name == "api-tls" else set()
+        if listeners != expected_listeners:
+            raise RuntimeError(f"Unexpected real FCM listener on {name}")
+        key_mounts = [volume for volume in service.get("volumes", []) if volume.get("source") == str(key_path)]
+        if name == "delivery-worker":
+            if len(key_mounts) != 1 or key_mounts[0].get("target") != "/run/real-fcm/service-account.json" or not key_mounts[0].get("read_only"):
+                raise RuntimeError("Real FCM service account must be mounted read-only into its delivery worker")
+        elif key_mounts:
+            raise RuntimeError(f"Unexpected real FCM service-account mount on {name}")
+
+
+def open_real_fcm_runtime():
+    compose("exec", "-T", "postgres", "psql", "-Xq", "-v", "ON_ERROR_STOP=1", "-U", "integration",
+            "-d", "notification_integration", data=(ROOT / "scripts/local-dev/real-fcm-open-runtime.sql").read_bytes())
+
+
+def hold_real_fcm_dispatch():
+    sql(f"""UPDATE application_dispatch_policy SET hold_new=true WHERE NOT hold_new
+        AND application_id=(SELECT id FROM applications WHERE public_id='{REAL_FCM_APP_ID}'::uuid);""")
+
+
+def real_fcm_status():
+    if not compose("ps", "--status", "running", "-q", "postgres", capture=True).strip():
+        return
+    mode = sql(f"""SELECT p.dispatch_mode FROM application_dispatch_policy p
+        JOIN applications a ON a.id=p.application_id WHERE a.public_id='{REAL_FCM_APP_ID}'::uuid;""")
+    print(f"Real FCM dispatch: {mode or 'initializing'}")
+    installations = sql(f"""SELECT i.public_id FROM mobile_installations i
+        JOIN applications a ON a.id=i.application_id
+        JOIN installation_bindings b ON b.installation_id=i.id AND b.retired_at IS NULL
+        WHERE a.public_id='{REAL_FCM_APP_ID}'::uuid AND b.platform='ANDROID'
+          AND b.provider_namespace='hello-local-fcm' AND b.provider_route_key='android-fid'
+          AND b.address_type='FCM_FID' ORDER BY i.public_id;""").splitlines()
+    for identifier in installations:
+        print(f"Enrolled Android installation: {identifier}")
+    if not installations:
+        print("No Android installation is enrolled.")
+
+
+class LocalFCMActionError(RuntimeError):
+    pass
+
+
+def current_real_fcm_target():
+    ids = sql(f"""SELECT i.public_id FROM applications a
+        JOIN application_dispatch_policy p ON p.application_id=a.id AND p.dispatch_mode='PILOT'
+        JOIN installation_bindings b ON b.application_id=a.id AND b.retired_at IS NULL
+        JOIN mobile_installations i ON (i.application_id,i.id)=(b.application_id,b.installation_id)
+        JOIN current_binding_routes r ON (r.application_id,r.binding_id)=(b.application_id,b.id)
+        WHERE a.public_id='{REAL_FCM_APP_ID}'::uuid AND r.destination='FCM_ACTIVE'
+          AND (r.cohort_id,r.origin_epoch,r.source_epoch)=(p.dispatch_cohort,p.dispatch_origin_epoch,p.dispatch_source_epoch);""").splitlines()
+    return ids[0] if len(ids) == 1 else None
+
+
+def ensure_real_fcm_idle():
+    pending = sql(f"""WITH app AS (SELECT id FROM applications WHERE public_id='{REAL_FCM_APP_ID}'::uuid)
+        SELECT EXISTS(SELECT FROM notifications WHERE application_id=(SELECT id FROM app) AND status IN ('QUEUED','SCHEDULED','PROCESSING'))
+           OR EXISTS(SELECT FROM notification_delivery_intents WHERE application_id=(SELECT id FROM app) AND status='PENDING')
+           OR EXISTS(SELECT FROM notification_send_outbox WHERE application_id=(SELECT id FROM app));""")
+    if pending != "f":
+        raise LocalFCMActionError("The test app has a campaign in progress. Wait for it to finish before changing the target or sending another test.")
+
+
+def pause_real_fcm_workers():
+    hold_real_fcm_dispatch()
+    compose("stop", *REAL_FCM_DAEMONS, timeout=60)
+
+
+def release_real_fcm_pilot(installation_id):
+    try:
+        identifier = str(uuid.UUID(installation_id))
+    except (ValueError, AttributeError) as error:
+        raise RuntimeError("Use the enrolled installation UUID printed by ./dev status --real-fcm") from error
+    if identifier != installation_id or not (STATE / "enabled").exists():
+        raise RuntimeError("Start the real FCM stack and supply the enrolled Android installation UUID")
+    previous = current_real_fcm_target()
+    if previous == identifier and all(compose("ps", "--status", "running", "-q", service, capture=True).strip()
+                                      for service in REAL_FCM_DAEMONS):
+        print("This device is already the active test target.")
+        return
+    valid = sql(f"""SELECT EXISTS(SELECT FROM applications a
+        JOIN mobile_installations i ON i.application_id=a.id JOIN installation_bindings b ON (b.application_id,b.installation_id)=(i.application_id,i.id)
+        WHERE a.public_id='{REAL_FCM_APP_ID}'::uuid AND i.public_id='{identifier}'::uuid AND b.retired_at IS NULL);""")
+    if valid != "t":
+        raise LocalFCMActionError("That installation is no longer enrolled. Refresh the device list or pair the phone again.")
+    ensure_real_fcm_idle()
+    _, project_id, email = real_fcm_compose_identity(validate_file=True)
+    validate_real_fcm_compose()
+    install_real_fcm_public_roots()
+    setup = ("exec", "-T", "worker-fixture", "/fixture-bin/setup")
+    compose(*setup, "real-fcm-policy", project_id, email)
+    offset = STATE / "offset-initialized"
+    if not offset.exists():
+        compose("exec", "-T", "kafka", "/opt/kafka/bin/kafka-consumer-groups.sh", "--bootstrap-server", "kafka:9094",
+                "--group", REAL_FCM_GROUP, "--topic", TOPICS[0], "--reset-offsets", "--to-earliest", "--execute")
+        offset.touch()
+    pause_real_fcm_workers()
+    compose(*setup, "real-fcm-release", identifier)
+    try:
+        compose("up", "-d", "--wait", "--wait-timeout", "30", *REAL_FCM_DAEMONS)
+        for service in REAL_FCM_DAEMONS:
+            if not compose("ps", "--status", "running", "-q", service, capture=True).strip():
+                raise RuntimeError(f"Real FCM service did not start: {service}")
+    except (RuntimeError, subprocess.TimeoutExpired, KeyboardInterrupt):
+        try:
+            hold_real_fcm_dispatch()
+        finally:
+            compose("stop", *REAL_FCM_DAEMONS, timeout=60)
+        raise
+    print("One-device FCM pilot is enabled. Send a fresh test campaign from the dashboard.")
+
+
+def forget_real_fcm_device(installation_id):
+    try:
+        identifier = str(uuid.UUID(installation_id))
+    except (ValueError, AttributeError, TypeError) as error:
+        raise LocalFCMActionError("Choose a valid test device.") from error
+    ensure_real_fcm_idle()
+    selected = current_real_fcm_target()
+    pause_real_fcm_workers()
+    compose("exec", "-T", "worker-fixture", "/fixture-bin/setup", "real-fcm-forget", identifier)
+    if selected and selected != identifier:
+        release_real_fcm_pilot(selected)
+
+
+def install_real_fcm_public_roots():
+    bundles = (Path("/etc/ssl/certs/ca-certificates.crt"), Path("/etc/ssl/cert.pem"),
+               Path("/etc/pki/tls/certs/ca-bundle.crt"))
+    for bundle in bundles:
+        if bundle.is_file():
+            context = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+            try:
+                context.load_verify_locations(cafile=str(bundle))
+            except ssl.SSLError:
+                continue
+            shutil.copyfile(bundle, TLS / "provider-ca.pem")
+            return
+    raise RuntimeError("The real FCM delivery worker requires a host public CA bundle")
+
+
+def up_real_fcm():
+    architecture = docker_ready()
+    STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
+    _, project_id, _ = real_fcm_compose_identity(validate_file=True)
+    expected_owner = {"repository": str(ROOT), "scope": "real-fcm-local-v1",
+                      "project_id": project_id, "application_id": REAL_FCM_APP_ID}
+    owner = STATE / "owner.json"
+    if owner.exists():
+        if json.loads(owner.read_text()) != expected_owner:
+            raise RuntimeError("Real FCM state is pinned to a different project; use a fresh isolated profile")
+    configure()
+    if not owner.exists():
+        if compose("ps", "-aq", capture=True).strip():
+            raise RuntimeError("Existing real FCM resources have no ownership marker; refusing reuse")
+        private_json(owner, expected_owner)
+    (STATE / "enabled").unlink(missing_ok=True)
+    validate_real_fcm_compose()
+    stop_host()
+    compose("stop", timeout=60)
+    for port in (REAL_FCM_MOBILE_PORT, REAL_FCM_API_PORT):
+        check_host_port(port)
+    build(architecture)
+    build_docs()
+    fresh_tls = STATE / "tls-new"
+    if fresh_tls.exists():
+        shutil.rmtree(fresh_tls)
+    run(["go", "run", "./scripts/integration-certs.go", str(fresh_tls), "--local-dev"])
+    shutil.rmtree(TLS, ignore_errors=True)
+    fresh_tls.replace(TLS)
+    for path in TLS.glob("*.key"):
+        path.chmod(0o600)
+    configure_onboarding()
+    compose("up", "-d", "--wait", "--wait-timeout", "120", "postgres", "kafka", "worker-fixture")
+    migrate()
+    for topic in TOPICS:
+        compose("exec", "-T", "kafka", "/opt/kafka/bin/kafka-topics.sh", "--bootstrap-server", "kafka:9094",
+                "--create", "--if-not-exists", "--topic", topic, "--partitions", "1", "--replication-factor", "1")
+    prepare_real_fcm_application()
+    hold_real_fcm_dispatch()
+    configure_real_fcm_mobile_issuer()
+    open_real_fcm_runtime()
+    compose("exec", "-T", "worker-fixture", "/fixture-bin/setup", "real-fcm-pending")
+    settings = json.loads((CONFIG / "settings.json").read_text())
+    settings["email"] = sql("SELECT email FROM staff_users WHERE email='developer@hello.local';")
+    private_json(CONFIG / "settings.json", settings)
+    compose("up", "-d", "--wait", "--wait-timeout", "120", "server", "provisioner", "api-tls")
+    run(["pnpm", "install", "--frozen-lockfile"], cwd=ROOT / "web/dashboard", timeout=240)
+    start_host()
+    request = session_client()
+    if not any(item["id"] == REAL_FCM_APP_ID for item in request("api/apps")["data"]["items"]):
+        raise RuntimeError("Real FCM dashboard is missing the local pilot application grant")
+    request("logout", "POST", {})
+    (STATE / "enabled").touch()
+    print(f"Real FCM test devices: {dashboard_origin()}/apps/{REAL_FCM_APP_ID}/test-devices\n"
+          "Sign in with ./dev credentials --real-fcm, then pair or select a test device.\n"
+          f"Logs: {LOGS}")
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("command", choices=["up", "down", "status", "logs", "watch", "check", "check-onboarding", "smoke", "test-seed", "credentials", "_serve"])
+    parser.add_argument("command", choices=["up", "down", "status", "logs", "watch", "check", "check-onboarding", "smoke", "test-seed", "credentials", "pair", "release-pilot", "forget", "_serve", "_control"])
+    parser.add_argument("--real-fcm", action="store_true", help="select the isolated one-device Firebase profile")
+    parser.add_argument("--installation-id", help="enrolled Android installation UUID for guarded PILOT release")
+    parser.add_argument("--lan", metavar="MAC_IPV4", help="serve mobile pairing and API over HTTPS on a private Mac IPv4 address")
     args = parser.parse_args()
+    if args.installation_id and args.command not in ("release-pilot", "forget"):
+        parser.error("--installation-id only applies to release-pilot and forget")
+    if args.lan and (args.command != "pair" or not args.real_fcm):
+        parser.error("--lan only applies to pair --real-fcm")
+    select_profile(args.real_fcm)
+    if args.command in ("pair", "release-pilot", "forget") and not REAL_FCM:
+        raise RuntimeError(f"{args.command} requires --real-fcm")
+    if REAL_FCM and args.command in ("check", "check-onboarding", "smoke", "test-seed", "watch"):
+        raise RuntimeError(f"{args.command} is unavailable in the real FCM profile")
     if args.command == "credentials":
         require_owner()
         settings = json.loads((CONFIG / "settings.json").read_text())
@@ -547,8 +991,31 @@ def main():
         require_owner()
     if args.command == "_serve":
         serve()
+    elif args.command == "_control":
+        if not REAL_FCM:
+            raise RuntimeError("Device dashboard requires the real FCM profile")
+        import real_fcm_dashboard
+        real_fcm_dashboard.serve(sys.modules[__name__])
     elif args.command == "up":
         up()
+    elif args.command == "pair":
+        issuer = ["go", "run", "./devtools/local-mobile-issuer", "serve", "--config",
+                  str(CONFIG / "mobile-issuer/issuer.json"), "--listen", f"127.0.0.1:{REAL_FCM_PAIR_PORT}",
+                  "--qr-api", f"http://127.0.0.1:{REAL_FCM_MOBILE_PORT}"]
+        if args.lan:
+            if not (STATE / "enabled").exists():
+                raise RuntimeError("Start the real FCM stack before opening LAN pairing")
+            issuer.extend(["--lan", f"{args.lan}:{REAL_FCM_LAN_PORT}", "--lan-tls-dir", str(CONFIG / "lan-tls")])
+        run(issuer, timeout=None)
+    elif args.command == "release-pilot":
+        require_owner()
+        if not args.installation_id:
+            raise RuntimeError("release-pilot requires --installation-id from ./dev status --real-fcm")
+        release_real_fcm_pilot(args.installation_id)
+    elif args.command == "forget":
+        if not args.installation_id:
+            raise RuntimeError("forget requires --installation-id from ./dev status --real-fcm")
+        forget_real_fcm_device(args.installation_id)
     elif args.command == "down":
         (STATE / "enabled").unlink(missing_ok=True)
         stop_host()
@@ -557,12 +1024,14 @@ def main():
     elif args.command == "status":
         compose("ps", "-a")
         print(f"Frontend/BFF supervisor: {'running' if supervisor_pid() else 'stopped'}")
+        if REAL_FCM:
+            real_fcm_status()
     elif args.command == "test-seed":
         test_seed_recovery()
     elif args.command in ("check", "smoke"):
         verify(send=args.command == "smoke")
     elif args.command == "logs":
-        compose("logs", "--tail", "80", *SERVICES)
+        compose("logs", "--tail", "80", *(SERVICES + list(REAL_FCM_DAEMONS) if REAL_FCM else SERVICES))
         print(f"Frontend/BFF logs: {LOGS}")
     elif args.command == "check-onboarding":
         run(["python3", str(ROOT / "scripts/local-dev/onboarding_check.py")], timeout=180)
@@ -591,9 +1060,10 @@ def main():
 
 if __name__ == "__main__":
     try:
+        select_profile("--real-fcm" in sys.argv[1:])
         STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
         with (STATE / "command.lock").open("w") as lock:
-            if any(command in sys.argv[1:] for command in ("up", "down", "smoke", "test-seed")):
+            if any(command in sys.argv[1:] for command in ("up", "down", "smoke", "test-seed", "release-pilot", "forget")):
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
             main()
     except KeyboardInterrupt:

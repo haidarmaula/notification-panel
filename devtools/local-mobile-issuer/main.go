@@ -1,4 +1,4 @@
-// Command local-mobile-issuer runs a loopback-only issuer for a physical-device
+// Command local-mobile-issuer runs a local issuer for a physical-device
 // smoke test. It is not a production identity or platform-attestation service.
 package main
 
@@ -64,17 +64,33 @@ func serve(args []string) error {
 	flags := flag.NewFlagSet("serve", flag.ContinueOnError)
 	configPath := flags.String("config", "", "private issuer configuration file")
 	listenAddress := flags.String("listen", "127.0.0.1:8081", "loopback listen address")
+	qrAPI := flags.String("qr-api", "", "loopback backend origin to encode in a pairing QR")
+	lan := flags.String("lan", "", "private IPv4 address and port for HTTPS pairing")
+	lanTLS := flags.String("lan-tls-dir", "", "private local certificate directory")
+	control := flags.String("control-socket", "", "private local dashboard control socket")
 	if err := flags.Parse(args); err != nil {
 		return errors.New("invalid serve options")
 	}
 	if flags.NArg() != 0 || *configPath == "" || !loopbackAddress(*listenAddress) {
 		return errors.New("serve requires --config and a loopback --listen address")
 	}
+	if *qrAPI != "" && !loopbackHTTPOrigin(*qrAPI) {
+		return errors.New("--qr-api requires a loopback HTTP origin with a port")
+	}
+	if (*lan == "") != (*lanTLS == "") || (*lan != "" && *qrAPI == "") {
+		return errors.New("LAN pairing requires --lan, --lan-tls-dir and --qr-api")
+	}
+	if *control != "" && (*lan == "" || !filepath.IsAbs(*control)) {
+		return errors.New("--control-socket requires a LAN issuer and an absolute path")
+	}
 	cfg, err := readConfig(*configPath)
 	if err != nil {
 		return errors.New("local issuer configuration rejected")
 	}
-	if err := runServer(cfg, *listenAddress); err != nil {
+	if *lan != "" {
+		return runLANServer(cfg, *lan, *lanTLS, *qrAPI, *control)
+	}
+	if err := runServer(cfg, *listenAddress, *qrAPI); err != nil {
 		return errors.New("local issuer stopped")
 	}
 	return nil
