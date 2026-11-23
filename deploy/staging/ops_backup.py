@@ -52,7 +52,7 @@ def backup():
     if (ROOT/'onboarding'/'material.json').is_file():
         files['onboarding-material.json']=(ROOT/'onboarding'/'material.json').read_bytes()
         for volume in ['hello-staging-provisioner-policy','hello-staging-onboarding-credentials',*run(
-                ['docker','volume','ls','--filter','label=hello.purpose=protected-staging-policy','--format','{{.Name}}']).decode().splitlines()]:
+                ['docker','volume','ls','--filter','label=hello.purpose=staging-onboarding-verifier-policy','--format','{{.Name}}']).decode().splitlines()]:
             if not re.fullmatch(r'hello-staging-(?:provisioner-policy|onboarding-credentials|onboarding-verifier-[a-f0-9]+-policy)',volume):
                 raise RuntimeError('Unexpected staging onboarding backup volume.')
             if subprocess.run(['docker','volume','inspect',volume],capture_output=True).returncode==0:

@@ -71,7 +71,7 @@ def _write_policy_volume(name, configuration_uuid, files):
     import io
     import tarfile
     if _inspect_exists('volume', name) is None:
-        run(['docker', 'volume', 'create', '--label', 'hello.purpose=protected-staging-policy', name])
+        run(['docker', 'volume', 'create', '--label', 'hello.purpose=staging-onboarding-verifier-policy', name])
     archive = io.BytesIO()
     with tarfile.open(fileobj=archive, mode='w') as tar:
         # Docker needs the nested bind target before mounting the policy volume read-only.
