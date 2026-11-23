@@ -30,6 +30,14 @@ FROM runtime AS controlplane
 COPY --from=build /out/controlplane /controlplane
 ENTRYPOINT ["/controlplane"]
 
+# The host provisioner publishes protected credential files and needs root.
+FROM scratch AS provisioner
+COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+COPY --from=build /out/provisioner /provisioner
+USER 0:0
+STOPSIGNAL SIGTERM
+ENTRYPOINT ["/provisioner"]
+
 FROM runtime AS scheduler
 COPY --from=build /out/scheduler /scheduler
 ENTRYPOINT ["/scheduler"]

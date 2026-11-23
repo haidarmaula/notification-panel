@@ -103,6 +103,30 @@ func TestServiceBoundsAndRejectsMalformedRequests(t *testing.T) {
 	}
 }
 
+func TestServiceRejectsForeignDeploymentBeforeCheckingReservation(t *testing.T) {
+	verifier, store := &verifierStub{}, &storeStub{}
+	service, err := NewService(testIngressIdentity, verifier, store)
+	if err != nil {
+		t.Fatal(err)
+	}
+	service.environment = "staging"
+	service.targetProject = validRequest().TargetProject
+	for _, change := range []func(*StageRequest){
+		func(request *StageRequest) { request.Environment = "production" },
+		func(request *StageRequest) { request.TargetProject = "foreign-project" },
+	} {
+		input := validRequest()
+		change(&input)
+		response := serveStage(service, encodedRequest(t, input), tlsState(testIngressIdentity), "application/json")
+		if response.Code != http.StatusForbidden {
+			t.Fatalf("status=%d, want %d", response.Code, http.StatusForbidden)
+		}
+	}
+	if verifier.calls != 0 || store.calls != 0 {
+		t.Fatal("foreign deployment reached verifier or credential store")
+	}
+}
+
 func TestServiceMapsStoreFailureAndExposesOnlyStageRoute(t *testing.T) {
 	verifier, store := &verifierStub{}, &storeStub{err: errors.New("private key details")}
 	service, err := NewService(testIngressIdentity, verifier, store)

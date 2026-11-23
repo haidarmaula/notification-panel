@@ -50,6 +50,42 @@ version before importing modules; cron and active commands cannot mix versions.
 The backup recipient certificate is pinned on repeat installs. Never overwrite
 its private key or rotate recipients without an independent recovery plan.
 
+## Android smoke onboarding
+
+Run onboarding setup only after the signed staging release has deployed on
+clean schema 61. Install its operations package first. The enable command
+takes an encrypted backup, installs the restricted database grants, starts
+the loopback mTLS provisioner, and reloads the server while dispatch is held.
+
+```sh
+python3 deploy/staging/staging.py install
+python3 deploy/staging/staging.py onboarding-enable
+```
+
+In the staff dashboard, create a staging test registry entry. In **Notification
+setup**, choose **Hello staging Android smoke** and the package
+`com.example.hellofcmsmoke`. Upload the approved test Firebase project
+credential with environment **Staging**. The provisioner accepts only the
+configured staging Firebase project. The staging smoke store uses root-owned
+directories and `0640` credential files. The off-host encrypted backup includes
+these files and their policies. Production still requires verified encryption
+at rest and separate key custody.
+
+Start the scoped verifier for the resulting candidate before requesting OAuth
+verification. Use the setup revision displayed in readiness.
+
+```sh
+python3 deploy/staging/staging.py onboarding-verifier \
+  --application "$APP_UUID" --configuration "$CONFIG_UUID" \
+  --setup-revision "$SETUP_REVISION"
+```
+
+The verifier binds a dedicated database login to that app and reads only its
+credential version. An OAuth pass proves token issuance. Runtime allocation,
+platform identity and enrollment, a cohort dry-run, and release remain separately
+reviewed lifecycle operations. See the
+[onboarding contract](../../docs/api/application-onboarding-api.md).
+
 ## Deployment and rollback safety
 
 The controller first takes an encrypted backup, checks schema compatibility,

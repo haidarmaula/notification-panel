@@ -43,9 +43,11 @@ type CredentialStore interface {
 
 // Service exposes the single authenticated POST /v1/stages operation.
 type Service struct {
-	identity string
-	verifier ReservationVerifier
-	store    CredentialStore
+	identity      string
+	environment   string
+	targetProject string
+	verifier      ReservationVerifier
+	store         CredentialStore
 }
 
 // NewService requires the exact URI identity expected on the ingress client
@@ -105,6 +107,11 @@ func (s *Service) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}) != nil || !canonicalUUID(request.AppID) || !canonicalUUID(request.ReservationID) || !canonicalUUID(request.ConfigID) ||
 		(request.Environment != "staging" && request.Environment != "production") || len(request.ServiceAccount) == 0 || len(request.ServiceAccount) > maxCredentialSize {
 		writeServiceError(w, http.StatusBadRequest, "invalid request")
+		return
+	}
+	if (s.environment != "" && request.Environment != s.environment) ||
+		(s.targetProject != "" && request.TargetProject != s.targetProject) {
+		writeServiceError(w, http.StatusForbidden, "forbidden")
 		return
 	}
 	if err := s.verifier.VerifyStage(r.Context(), request.AppID, request.ReservationID, request.ConfigID,

@@ -30,7 +30,7 @@ def prepare(name,revision,schema,archive=None):
         for member in tar.getmembers():
             if not (member.isfile() or member.isdir()) or member.name.startswith('/') or '..' in Path(member.name).parts:raise RuntimeError('Unsafe source archive member.')
         tar.extractall(source,filter='data')
-    # The existing image gate builds/checks all seven targets, with isolated synthetic policies.
+    # The image gate checks active roles plus the separately staged provisioner candidate.
     with (directory/'image-check.log').open('wb') as log:
         r=subprocess.run([sys.executable,'scripts/check-images.py'],cwd=source,stdout=log,stderr=subprocess.STDOUT,timeout=1800)
     if r.returncode:raise RuntimeError('Image gate failed; inspect '+str(directory/'image-check.log'))
@@ -41,8 +41,12 @@ def prepare(name,revision,schema,archive=None):
         target='worker' if role in ['admission','delivery'] else role
         obj=json.loads(run(['docker','image','inspect','hello-'+target+':local-verify']))[0]
         images[role]=obj['Id']
+    candidate_images={
+        role:json.loads(run(['docker','image','inspect',f'hello-{role}:local-verify']))[0]['Id']
+        for role in ('provisioner','controlplane')
+    }
     manifest={'release':name,'revision':revision,'schema':current['schema'],'images':images,'source_sha256':hashlib.sha256(archive).hexdigest(),
-        'created':time.time(),'checks':['seven offline hardened image gates'],'hosted_ci':'not asserted; verify repository CI separately','scope':'staging only'}
+        'candidate_images':candidate_images,'created':time.time(),'checks':['offline hardened production image gates'],'hosted_ci':'not asserted; verify repository CI separately','scope':'staging only'}
     docs_source=source/'scripts/api_docs.py'
     if docs_source.exists():
         run([sys.executable,str(docs_source),'--output',str(directory/'api-docs'),'--release',name])
@@ -60,8 +64,9 @@ def prepare(name,revision,schema,archive=None):
 def main():
     os.umask(0o077)
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command',choices=['diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','cd','sync-cd-schema','docs-gateway','dashboard-bootstrap'])
+    parser.add_argument('command',choices=['diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','cd','sync-cd-schema','docs-gateway','dashboard-bootstrap','onboarding-enable','onboarding-verifier'])
     parser.add_argument('--release');parser.add_argument('--revision');parser.add_argument('--schema',type=int);parser.add_argument('--cron',action='store_true')
+    parser.add_argument('--application');parser.add_argument('--configuration');parser.add_argument('--setup-revision',type=int)
     args=parser.parse_args()
     if args.command in ['capture','prepare','deploy'] and (not args.release or not re.fullmatch('[a-z0-9][a-z0-9-]{0,63}',args.release)):raise SystemExit('Valid --release is required.')
     try:
@@ -81,6 +86,14 @@ def main():
             elif args.command=='sync-cd-schema':
                 from ops_cd import sync_schema
                 with lock():result=sync_schema()
+            elif args.command=='onboarding-enable':
+                from ops_onboarding import enable
+                result=enable()
+            elif args.command=='onboarding-verifier':
+                from ops_onboarding import release
+                from ops_onboarding_verifier import start_verifier
+                _, manifest=release()
+                result=start_verifier(args.application,args.setup_revision,manifest['candidate_images']['controlplane'],args.configuration)
             elif args.command=='diagnostics':result=diagnostics()
             elif args.command=='schedule':result=schedule()
             elif args.command=='health-drill':

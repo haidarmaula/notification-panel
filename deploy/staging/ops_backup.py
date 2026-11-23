@@ -49,6 +49,16 @@ def backup():
     files={'database.dump':dump}
     for role in ROLES:
         files['policy-'+role+'.tar']=run(['docker','cp','hello-staging-'+role+':/etc/hello','-'])
+    if (ROOT/'onboarding'/'material.json').is_file():
+        files['onboarding-material.json']=(ROOT/'onboarding'/'material.json').read_bytes()
+        for volume in ['hello-staging-provisioner-policy','hello-staging-onboarding-credentials',*run(
+                ['docker','volume','ls','--filter','label=hello.purpose=protected-staging-policy','--format','{{.Name}}']).decode().splitlines()]:
+            if not re.fullmatch(r'hello-staging-(?:provisioner-policy|onboarding-credentials|onboarding-verifier-[a-f0-9]+-policy)',volume):
+                raise RuntimeError('Unexpected staging onboarding backup volume.')
+            if subprocess.run(['docker','volume','inspect',volume],capture_output=True).returncode==0:
+                files[volume+'.tar']=run(['docker','run','--rm','--network','none','--read-only','--user','0:0',
+                    '--cap-drop','ALL','--security-opt','no-new-privileges','--mount',f'type=volume,src={volume},dst=/source,readonly',
+                    '--entrypoint','tar',SEED,'-cpf','-','-C','/source','.'])
     files['host-etc-hello.tar']=run(['docker','run','--rm','--network','none','--read-only','--user','0:0','--cap-drop','ALL','--security-opt','no-new-privileges',
         '--mount','type=bind,src=/etc/hello,dst=/source,readonly','--entrypoint','tar',SEED,'-cpf','-','-C','/source','.'])
     manifest={'started':started,'completed':time.time(),'database_sha256':hashlib.sha256(dump).hexdigest(),'tables':facts,

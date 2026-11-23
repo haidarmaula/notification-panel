@@ -44,7 +44,7 @@ def install():
         os.chmod(key,0o600);os.chmod(cert,0o600)
     if key.is_symlink() or key.stat().st_mode&0o077:raise RuntimeError('Backup private key must be a private regular file.')
     call(SSH+['umask 077; mkdir -p '+REMOTE])
-    files={name:(HERE/name).read_bytes() for name in ['ops.py','ops_common.py','ops_backup.py','ops_health.py','ops_release.py','ops_setup.py','ops_cd.py','cd_protocol.py','ops_docs.py','ops_gateway_docs.py','ops_dashboard.py']}
+    files={name:(HERE/name).read_bytes() for name in ['ops.py','ops_common.py','ops_backup.py','ops_health.py','ops_release.py','ops_setup.py','ops_cd.py','cd_protocol.py','ops_docs.py','ops_gateway_docs.py','ops_dashboard.py','ops_onboarding.py','ops_onboarding_verifier.py']}
     version=hashlib.sha256(b''.join(name.encode()+files[name] for name in sorted(files))).hexdigest()[:20]
     payload=io.BytesIO()
     with tarfile.open(fileobj=payload,mode='w') as tar:
@@ -93,8 +93,9 @@ def fetch_backup():
 def main():
     os.umask(0o077)
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument('command',choices=['install','diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','sync-cd-schema','docs-gateway','dashboard-bootstrap'])
+    p.add_argument('command',choices=['install','diagnostics','schedule','health','backup','restore-check','capture','prepare','deploy','rollback','recover','status','health-drill','sync-cd-schema','docs-gateway','dashboard-bootstrap','onboarding-enable','onboarding-verifier'])
     p.add_argument('--release');p.add_argument('--ref');p.add_argument('--schema',type=int)
+    p.add_argument('--application');p.add_argument('--configuration');p.add_argument('--setup-revision',type=int)
     a=p.parse_args()
     if a.command=='install':install();return
     if a.command=='backup':fetch_backup();return
@@ -115,6 +116,10 @@ def main():
         if a.command=='prepare':return
         print(remote('deploy','--release',release,timeout=300).decode());return
     args=[]
+    if a.command=='onboarding-verifier':
+        if not a.application or not a.configuration or not a.setup_revision:
+            p.error('onboarding-verifier requires --application, --configuration and --setup-revision')
+        args=['--application',a.application,'--configuration',a.configuration,'--setup-revision',str(a.setup_revision)]
     if a.command in ['capture','deploy']:
         if not a.release:raise RuntimeError('--release or deploy --ref required.')
         if not re.fullmatch('[a-z0-9][a-z0-9-]{0,63}',a.release):raise RuntimeError('Invalid release name.')

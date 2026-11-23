@@ -29,6 +29,8 @@ var errProvisionerUnavailable = errors.New("provisioner unavailable")
 type Policy struct {
 	listenAddress string
 	identity      string
+	environment   string
+	targetProject string
 	database      *pgxpool.Config
 	tls           *tls.Config
 	store         *FileStore
@@ -44,12 +46,14 @@ func LoadPolicy(data []byte) (*Policy, error) {
 	if err != nil || !jsonobject.UniqueLowercaseFields(bounded) {
 		return nil, errProvisionerPolicy
 	}
-	var address, credentialRoot, databaseURL, identity, caPEM, certificatePEM, privateKeyPEM string
-	if jsonobject.Decode(bounded, map[string]any{
+	var address, credentialRoot, databaseURL, identity, environment, targetProject, caPEM, certificatePEM, privateKeyPEM string
+	if jsonobject.DecodeOptional(bounded, map[string]any{
 		"listen_address": &address, "credential_root": &credentialRoot, "database_url": &databaseURL,
 		"ingress_identity": &identity, "ca_pem": &caPEM,
 		"server_certificate_pem": &certificatePEM, "server_private_key_pem": &privateKeyPEM,
-	}) != nil {
+	}, map[string]any{"environment": &environment, "target_project_id": &targetProject}) != nil ||
+		(environment != "" && environment != "staging" && environment != "production") ||
+		(targetProject != "" && (len(targetProject) > 128 || strings.TrimSpace(targetProject) != targetProject)) {
 		return nil, errProvisionerPolicy
 	}
 	listenAddress, err := privateListenAddress(address)
@@ -87,6 +91,8 @@ func LoadPolicy(data []byte) (*Policy, error) {
 	return &Policy{
 		listenAddress: listenAddress,
 		identity:      identity,
+		environment:   environment,
+		targetProject: targetProject,
 		database:      databaseConfig,
 		tls: &tls.Config{
 			MinVersion:   tls.VersionTLS13,
@@ -128,6 +134,8 @@ func (p *Policy) Run(ctx context.Context) error {
 		pool.Close()
 		return errProvisionerUnavailable
 	}
+	service.environment = p.environment
+	service.targetProject = p.targetProject
 	var listenConfig net.ListenConfig
 	listener, err := listenConfig.Listen(startup, "tcp", p.listenAddress)
 	if err != nil {

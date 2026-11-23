@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build and exercise all seven production entrypoints with disposable offline policies."""
+"""Build and exercise production entrypoints with disposable offline policies."""
 
 import base64
 import io
@@ -16,6 +16,7 @@ import time
 ROOT = Path(__file__).resolve().parents[1]
 SEED = "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d"
 ROLES = ("server", "bootstrap", "worker", "scheduler", "requeue", "retention", "dashboard", "controlplane")
+PROVISIONER = "provisioner"
 OFFLINE = ["--rm", "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"]
 
 
@@ -52,7 +53,11 @@ def policies(directory):
                 "upstream_ca_pem": cert.read_text(), "upstream_client_certificate_pem": cert.read_text(), "upstream_client_key_pem": key.read_text(),
                 "upstream_server_name": "localhost", "max_sessions": 10,
                 "ingress": {"endpoint": endpoint, "gateway_ips": ["127.0.0.1"], "ip_per_minute": 120, "auth_ip_per_minute": 8, "auth_total_per_minute": 60, "concurrent_requests": 4},
-                "monitoring": {**endpoint, "listen": "127.0.0.1:19105"}}}
+                "monitoring": {**endpoint, "listen": "127.0.0.1:19105"}},
+            "provisioner.json": {"listen_address": "127.0.0.1:18443", "credential_root": "/var/lib/hello/credentials",
+                "database_url": closed_db, "ingress_identity": "spiffe://fixture.local/provisioner/client",
+                "ca_pem": cert.read_text(), "server_certificate_pem": cert.read_text(),
+                "server_private_key_pem": key.read_text()}}
 
 
 def mount_policies(volume, bundle, mode):
@@ -86,17 +91,30 @@ def main():
         if metadata["Config"]["User"] != "65532:65532" or metadata["Config"]["Entrypoint"] != entrypoint:
             raise RuntimeError(f"{role}: unexpected production identity or entrypoint")
         images[role] = metadata["Id"]
+    tag = f"hello-{PROVISIONER}:local-verify"
+    docker("build", "--target", PROVISIONER, "--tag", tag, ".")
+    metadata = json.loads(docker("image", "inspect", tag, capture_output=True).stdout)[0]
+    if metadata["Config"]["User"] != "0:0" or metadata["Config"]["Entrypoint"] != ["/provisioner"]:
+        raise RuntimeError("provisioner: unexpected production identity or entrypoint")
+    images[PROVISIONER] = metadata["Id"]
     volume = docker("volume", "create", "--label", "hello.fixture=image-smoke", capture_output=True, text=True).stdout.strip()
+    credential_volume = None
     try:
         flags = [*OFFLINE, "-v", volume + ":/etc/hello:ro"]
+        credential_volume = docker("volume", "create", "--label", "hello.fixture=image-smoke", capture_output=True, text=True).stdout.strip()
         with tempfile.TemporaryDirectory(prefix="hello-image-smoke-") as tmp:
             bundle = policies(Path(tmp))
             mount_policies(volume, bundle, 0o640)
+            docker("run", "--rm", "--network", "none", "-v", credential_volume + ":/credentials",
+                   "--entrypoint", "sh", SEED, "-c", "mkdir -p /credentials && chown 0:65532 /credentials && chmod 0750 /credentials")
             for role, image in images.items():
                 if role in ("server", "bootstrap"):
                     expect_denial(flags, image, role + " database startup failed")
                 elif role == "controlplane":
                     expect_denial(flags,image,"control-plane database unavailable")
+                elif role == PROVISIONER:
+                    provisioner_flags = [*flags, "--cap-add", "CHOWN", "-v", credential_volume + ":/var/lib/hello/credentials"]
+                    expect_denial(provisioner_flags, image, "provisioner unavailable")
                 elif role == "dashboard":
                     container = docker("run", "-d", *[f for f in flags if f != "--rm"], image, capture_output=True, text=True).stdout.strip()
                     try:
@@ -111,11 +129,14 @@ def main():
                     docker("run", *OFFLINE, image, "--help", timeout=30)
                 print(f"{role} {image} passed offline startup", flush=True)
             mount_policies(volume, bundle, 0o660)
-            for role in ("server", "bootstrap", "dashboard", "controlplane"):
-                expect_denial(flags, images[role], "invalid protected dashboard configuration" if role == "dashboard" else "invalid control-plane configuration" if role == "controlplane" else "invalid " + role + " configuration")
+            for role in ("server", "bootstrap", "dashboard", "controlplane", PROVISIONER):
+                reason = "invalid protected dashboard configuration" if role == "dashboard" else "invalid control-plane configuration" if role == "controlplane" else "invalid provisioner configuration" if role == PROVISIONER else "invalid " + role + " configuration"
+                expect_denial(flags, images[role], reason)
     finally:
         docker("volume", "rm", volume)
-    print(f"All {len(ROLES)} images passed. Group-writable deployed policies were rejected.")
+        if credential_volume:
+            docker("volume", "rm", credential_volume)
+    print(f"All {len(images)} images passed. Group-writable deployed policies were rejected.")
 
 
 if __name__ == "__main__":
