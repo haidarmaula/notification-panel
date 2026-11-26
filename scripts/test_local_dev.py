@@ -7,10 +7,14 @@ import socket
 import tempfile
 import unittest
 from unittest.mock import call, patch
+from zipfile import ZipFile
 
 spec = importlib.util.spec_from_file_location("local_dev", Path(__file__).parent / "local-dev/dev.py")
 dev = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(dev)
+apk_spec = importlib.util.spec_from_file_location("build_real_fcm_apk", Path(__file__).parent / "local-dev/build_real_fcm_apk.py")
+apk_build = importlib.util.module_from_spec(apk_spec)
+apk_spec.loader.exec_module(apk_build)
 
 
 def configuration():
@@ -36,6 +40,18 @@ def configuration():
 
 
 class LocalDevelopmentTests(unittest.TestCase):
+    def test_standalone_apk_rejects_expo_launcher_even_with_embedded_bundle(self):
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / "hello-fcm-smoke-lan.apk"
+            with ZipFile(artifact, "w") as apk:
+                apk.writestr("assets/index.android.bundle", b"bundle")
+                apk.writestr("classes.dex", b"Lcom/example/hellofcmsmoke/MainActivity;")
+            apk_build.check_standalone_apk(artifact)
+            with ZipFile(artifact, "a") as apk:
+                apk.writestr("classes2.dex", b"Lexpo/modules/devlauncher/DevLauncherController;")
+            with self.assertRaisesRegex(RuntimeError, "Expo development launcher"):
+                apk_build.check_standalone_apk(artifact)
+
     def test_real_fcm_credentials_require_explicit_project_and_private_regular_file(self):
         with tempfile.TemporaryDirectory() as directory:
             credential = Path(directory) / "account.json"

@@ -2,7 +2,6 @@
 
 import contextlib
 import fcntl
-import hashlib
 import hmac
 import http.client
 import http.server
@@ -21,6 +20,8 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+
+from build_real_fcm_apk import apk_cache_key
 
 PREFIX = "/__hello_dev"
 PRIVATE_NETWORKS = tuple(ipaddress.ip_network(cidr) for cidr in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
@@ -176,7 +177,7 @@ class Dashboard:
         if self.apk_build is not None and self.apk_build.poll() is None:
             return "building"
         if self.apk.is_file() and self.apk_ca.is_file() and self.ca.is_file():
-            if self.apk_ca.read_text().strip() == hashlib.sha256(self.ca.read_bytes()).hexdigest():
+            if self.apk_ca.read_text().strip() == apk_cache_key(self.ca):
                 return "ready"
         if self.apk_build is not None and self.apk_build.returncode:
             return "failed"

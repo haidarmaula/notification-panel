@@ -16,6 +16,9 @@ The local runner keeps multiple enrollments and permits dispatch to one selected
 binding at a time. The isolated dashboard test exercised two enrollments,
 switching targets, removing one enrollment, and queuing a campaign with the
 delivery worker stopped. Physical Android delivery requires a separate check.
+The download previously included Expo's development launcher alongside the
+embedded bundle. The dashboard APK build now excludes the launcher, disables
+React Native development support, and checks the APK before publishing it.
 
 ## Legacy feature and provider retirement — 2026-11-14
 

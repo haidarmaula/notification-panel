@@ -272,7 +272,8 @@ data, application credentials, and browser sessions.
    checkout with Node, Java 17, and the Android SDK. Install the APK once per
    phone. Use **Rebuild APK** when the smoke app source changes, then install the
    new build over the existing APK. The APK
-   includes the JavaScript bundle and trusts the public CA from this Mac.
+   opens directly to Hello FCM Smoke using its embedded JavaScript bundle and
+   trusts the public CA from this Mac.
 2. Click **Create pairing QR** and scan it from the installed app. Generate a
    fresh QR for each phone or to reconnect after the Mac's IP changes. Use the
    same APK for the same Mac CA. This flow uses neither ADB nor Metro.
