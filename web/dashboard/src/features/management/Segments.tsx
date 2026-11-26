@@ -1,4 +1,5 @@
 import { CreateAction, SubmitAction } from '../../components/ui/Actions';
+import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { Button } from '@astryxdesign/core/Button';
 import { Heading, Text } from '@astryxdesign/core/Text';
 import { Link } from '@astryxdesign/core/Link';
@@ -83,6 +84,7 @@ export function SegmentEditor() {
   const setDirty = useUnsaved();
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const loaded = useRef(false);
   const query = useQuery({
     queryKey: ['segment', appId, segmentId],
@@ -119,13 +121,12 @@ export function SegmentEditor() {
     }
   }
   async function remove() {
-    if (!window.confirm(`Delete segment “${name}”? This will also remove its membership records.`))
-      return;
     const origin = window.location.pathname;
     const result = await operation.write<{ success: boolean }>(
       `${destination}/${segmentId}`,
       'DELETE',
     );
+    setConfirmingDelete(false);
     if (result) {
       setDirty(false);
       await client.invalidateQueries({ queryKey: ['directory', destination] });
@@ -169,7 +170,7 @@ export function SegmentEditor() {
                     label="Delete segment"
                     type="button"
                     variant="destructive"
-                    onClick={() => void remove()}
+                    onClick={() => setConfirmingDelete(true)}
                     isDisabled={operation.blocked()}
                   />
                 )}
@@ -179,6 +180,17 @@ export function SegmentEditor() {
         </Section>
         {segmentId && <SegmentMembers />}
       </QueryState>
+      <AlertDialog
+        isOpen={confirmingDelete}
+        onOpenChange={(open) => {
+          if (!open) setConfirmingDelete(false);
+        }}
+        title={`Delete segment “${name}”?`}
+        description="This cannot be undone. A segment that still has members or is targeted by a campaign cannot be deleted."
+        actionLabel="Delete segment"
+        isActionLoading={operation.pending()}
+        onAction={() => void remove()}
+      />
     </PageFrame>
   );
 }
@@ -187,25 +199,40 @@ function SegmentMembers() {
   const operation = useWrite();
   const client = useQueryClient();
   const [adding, setAdding] = useState(false);
+  const [removing, setRemoving] = useState<Member | null>(null);
   const path = `/apps/${appId}/segments/${segmentId}/members`;
   const members = usePage<Member>(path);
-  const users = usePage<User>(`/apps/${appId}/users`);
+  const users = usePage<User>(`/apps/${appId}/users`, { enabled: adding });
   async function change(id: string, add: boolean) {
-    if (!add && !window.confirm('Remove this user from the segment?')) return;
     const result = await operation.write<{ success: boolean }>(
       `${path}/${id}`,
       add ? 'PUT' : 'DELETE',
     );
-    if (result) await client.invalidateQueries({ queryKey: ['directory', path] });
+    if (result) {
+      await client.invalidateQueries({ queryKey: ['directory', path] });
+      if (add) {
+        requestAnimationFrame(() => {
+          const picker = document.getElementById('segment-member-picker');
+          const next = picker?.querySelector<HTMLButtonElement>('button:not([disabled])');
+          (next ?? document.getElementById('segment-picker-toggle'))?.focus();
+        });
+      }
+    }
+  }
+  async function removeMember(member: Member) {
+    await change(member.user_id, false);
+    setRemoving(null);
   }
   return (
     <Section padding={6}>
-      <Stack gap={3}>
+      <Stack gap={4}>
         <Stack direction="horizontal" gap={2} wrap="wrap" align="center">
           <Heading level={2}>Segment members</Heading>
           <Button
+            id="segment-picker-toggle"
             label={adding ? 'Close picker' : 'Add member'}
             aria-expanded={adding}
+            aria-controls="segment-member-picker"
             onClick={() => setAdding((value) => !value)}
           />
         </Stack>
@@ -235,7 +262,7 @@ function SegmentMembers() {
                         variant="secondary"
                         size="sm"
                         isDisabled={operation.blocked()}
-                        onClick={() => void change(item.user_id, false)}
+                        onClick={() => setRemoving(item)}
                       />
                     </TableCell>
                   </TableRow>
@@ -252,12 +279,14 @@ function SegmentMembers() {
           <Pager page={members} />
         </QueryState>
         {adding && (
-          <Section variant="muted" padding={6}>
+          <Section variant="muted" padding={6} id="segment-member-picker">
             <Stack gap={2}>
               <Heading level={3}>Select a user from this application</Heading>
               <QueryState query={users.query}>
                 {users.query.data?.items.length ? (
                   users.query.data.items.map((user) => {
+                    // Intentionally page-local: the server is authoritative for
+                    // membership across pages; cross-page duplicates surface as its 409 banner.
                     const alreadyMember =
                       members.query.data?.items.some((member) => member.user_id === user.id) ??
                       false;
@@ -294,6 +323,23 @@ function SegmentMembers() {
           </Section>
         )}
       </Stack>
+      <AlertDialog
+        isOpen={removing !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemoving(null);
+        }}
+        title={
+          removing
+            ? `Remove ${removing.name || `User #${removing.user_id}`} from this segment?`
+            : 'Remove member'
+        }
+        description="The user stays in the application; only this segment membership is removed."
+        actionLabel="Remove member"
+        isActionLoading={operation.pending()}
+        onAction={() => {
+          if (removing) void removeMember(removing);
+        }}
+      />
     </Section>
   );
 }

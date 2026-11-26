@@ -8,6 +8,7 @@ import {
 import { Icon } from '@astryxdesign/core/Icon';
 import { HStack, VStack } from '@astryxdesign/core/Stack';
 import { Text } from '@astryxdesign/core/Text';
+import '../../../fonts/roboto.css';
 import styles from './AndroidNotificationPreview.module.css';
 
 type AndroidNotificationPreviewProps = {

@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../app/auth-context';
 import { ApiError, data, errorMessage, request, type WriteConditions } from '../../lib/api/client';
 import type { Page } from '../../lib/api/types';
-export function usePage<T>(path: string) {
+export function usePage<T>(path: string, options: { enabled?: boolean } = {}) {
   const [cursors, setCursors] = useState<string[]>([]);
   const query = useQuery({
     queryKey: ['directory', path, cursors.at(-1) ?? ''],
@@ -12,6 +12,8 @@ export function usePage<T>(path: string) {
         `${path}?limit=20${cursors.length ? `&after_id=${encodeURIComponent(cursors.at(-1)!)}` : ''}`,
         signal,
       ),
+    enabled: options.enabled ?? true,
+    placeholderData: keepPreviousData,
   });
   return { query, cursors: () => cursors, setCursors };
 }
@@ -81,9 +83,11 @@ export function useWrite() {
     blocked: () => inFlight.current || uncertainResult.current,
   };
 }
+const dateFormatter = new Intl.DateTimeFormat('en-GB', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
 export function date(value?: string | null) {
   if (!value || !Number.isFinite(new Date(value).getTime())) return '—';
-  return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(
-    new Date(value),
-  );
+  return dateFormatter.format(new Date(value));
 }

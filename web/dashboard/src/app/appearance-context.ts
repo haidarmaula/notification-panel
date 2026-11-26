@@ -1,5 +1,5 @@
 import { createContext, useContext, useState } from 'react';
-import { themes, defaultThemeSlug, type ThemeSlug } from '../astryx-themes';
+import { themes, defaultThemeSlug, type ThemeSlug } from './design-themes';
 export type Appearance = 'light' | 'dark' | 'system';
 export const themeLabels: Record<ThemeSlug, string> = {
   stone: 'Stone',
@@ -24,6 +24,8 @@ export function isThemeSlug(value: string): value is ThemeSlug {
   return Object.hasOwn(themes, value);
 }
 export function usePreferences() {
+  // Key naming is intentional and persisted: 'hello.theme' stores light/dark
+  // appearance, 'hello.design-theme' stores the visual theme. Do not rename.
   const [appearance, updateAppearance] = useState<Appearance>(() => {
     const value = read('hello.theme');
     return value === 'light' || value === 'dark' ? value : 'system';

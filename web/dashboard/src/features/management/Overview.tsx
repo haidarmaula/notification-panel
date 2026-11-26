@@ -43,7 +43,7 @@ export default function Overview() {
     >
       <Stack gap={6}>
         <Section padding={6}>
-          <Stack gap={3}>
+          <Stack gap={4}>
             <Stack direction="horizontal" gap={2} align="center" justify="between" wrap="wrap">
               <Heading level={2}>Recent campaigns</Heading>
               <Link href={`/apps/${appId}/campaigns`}>View all campaigns</Link>

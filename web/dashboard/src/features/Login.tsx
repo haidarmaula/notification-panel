@@ -2,6 +2,7 @@ import { useRef, useState, type FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Card } from '@astryxdesign/core/Card';
 import { Center } from '@astryxdesign/core/Center';
+import { LayoutContent } from '@astryxdesign/core/Layout';
 import { Grid } from '@astryxdesign/core/Grid';
 import { AspectRatio } from '@astryxdesign/core/AspectRatio';
 import { useMediaQuery } from '@astryxdesign/core/hooks';
@@ -20,8 +21,10 @@ import { useAuth } from '../app/auth-context';
 import { isLocalTestDevicesPath, localTestDevicesPath } from '../app/local-test-devices';
 import { ApiError } from '../lib/api/client';
 import { Failure, Loading } from '../components/ui/Feedback';
+import { usePageFocus } from '../components/ui/usePageFocus';
 
 export default function Login() {
+  usePageFocus();
   const isMobile = useMediaQuery('(width < 768px)');
   const auth = useAuth();
   const location = useLocation();
@@ -59,106 +62,113 @@ export default function Login() {
   if (auth.session.isPending) return <Loading />;
   if (auth.authenticated()) return <Navigate to={destination} replace />;
   return (
-    <Center minHeight="100dvh" padding={6}>
-      <VStack width="100%" maxWidth={1000}>
-        <Card padding={isMobile ? 6 : 8} width="100%">
-          <Grid columns={isMobile ? 1 : 2} gap={8} align="stretch">
-            <VStack gap={8} height="100%">
-              <HStack gap={2} vAlign="center">
-                <Icon icon={BellIcon} size="lg" />
-                <Text weight="bold" size="lg">
-                  hello.
-                </Text>
-              </HStack>
-              <StackItem size="fill">
-                <Center axis="vertical" height="100%">
-                  <VStack gap={4} width="100%">
-                    <VStack gap={1}>
-                      <Heading level={2} accessibilityLevel={1}>
-                        Welcome back
-                      </Heading>
-                      <Text color="secondary" size="sm">
-                        Sign in to your notification workspace.
-                      </Text>
-                    </VStack>
-                    {auth.session.isError && (
-                      <Failure
-                        error={auth.session.error}
-                        retry={() => void auth.session.refetch()}
-                      />
-                    )}
-                    <VStack as="form" gap={4} onSubmit={(event) => void submit(event)}>
-                      <TextInput
-                        label="Email"
-                        size="lg"
-                        placeholder="you@example.com"
-                        type="email"
-                        htmlName="email"
-                        autoComplete="username"
-                        value={email}
-                        onChange={setEmail}
-                        isRequired
-                        isDisabled={pending}
-                      />
-                      <InputGroup label="Password" size="lg" isRequired isDisabled={pending}>
+    <LayoutContent role="main">
+      <Center minHeight="100dvh" padding={6}>
+        <VStack width="100%" maxWidth={1000}>
+          <Card padding={isMobile ? 6 : 8} width="100%">
+            <Grid columns={isMobile ? 1 : 2} gap={8} align="stretch">
+              <VStack gap={8} height="100%">
+                <HStack gap={2} vAlign="center">
+                  <Icon icon={BellIcon} size="lg" />
+                  <Text weight="bold" size="lg">
+                    hello.
+                  </Text>
+                </HStack>
+                <StackItem size="fill">
+                  <Center axis="vertical" height="100%">
+                    <VStack gap={4} width="100%">
+                      <VStack gap={1}>
+                        <Heading level={2} accessibilityLevel={1}>
+                          Welcome back
+                        </Heading>
+                        <Text color="secondary" size="sm">
+                          Sign in to your notification workspace.
+                        </Text>
+                      </VStack>
+                      {auth.session.isError && (
+                        <Failure
+                          error={auth.session.error}
+                          retry={() => void auth.session.refetch()}
+                        />
+                      )}
+                      <VStack as="form" gap={4} onSubmit={(event) => void submit(event)}>
                         <TextInput
-                          label="Password"
-                          isLabelHidden
+                          label="Email"
                           size="lg"
-                          placeholder="Enter your password"
-                          type={showPassword ? 'text' : 'password'}
-                          htmlName="password"
-                          autoComplete="current-password"
-                          value={password}
-                          onChange={setPassword}
+                          placeholder="you@example.com"
+                          type="email"
+                          htmlName="email"
+                          autoComplete="username"
+                          value={email}
+                          onChange={setEmail}
                           isRequired
                           isDisabled={pending}
                         />
-                        <InputGroupText>
-                          <IconButton
-                            label={showPassword ? 'Hide password' : 'Show password'}
-                            icon={<Icon icon={showPassword ? EyeSlashIcon : EyeIcon} size="sm" />}
-                            variant="ghost"
+                        <InputGroup label="Password" size="lg" isRequired isDisabled={pending}>
+                          <TextInput
+                            label="Password"
+                            isLabelHidden
                             size="lg"
+                            placeholder="Enter your password"
+                            type={showPassword ? 'text' : 'password'}
+                            htmlName="password"
+                            autoComplete="current-password"
+                            value={password}
+                            onChange={setPassword}
+                            isRequired
                             isDisabled={pending}
-                            onClick={() => setShowPassword((value) => !value)}
                           />
-                        </InputGroupText>
-                      </InputGroup>
-                      {error && (
-                        <Banner status="error" title="Sign-in failed" description={error} />
-                      )}
-                      <Button
-                        label={pending ? 'Signing in…' : 'Sign in'}
-                        type="submit"
-                        variant="primary"
-                        size="lg"
-                        isDisabled={pending || !auth.csrf()}
-                        isLoading={pending}
-                      />
+                          <InputGroupText>
+                            <IconButton
+                              label={showPassword ? 'Hide password' : 'Show password'}
+                              icon={<Icon icon={showPassword ? EyeSlashIcon : EyeIcon} size="sm" />}
+                              variant="ghost"
+                              size="lg"
+                              isDisabled={pending}
+                              onClick={() => setShowPassword((value) => !value)}
+                            />
+                          </InputGroupText>
+                        </InputGroup>
+                        {error && (
+                          <Banner
+                            status="error"
+                            role="alert"
+                            title="Sign-in failed"
+                            description={error}
+                          />
+                        )}
+                        <Button
+                          label={pending ? 'Signing in…' : 'Sign in'}
+                          type="submit"
+                          variant="primary"
+                          size="lg"
+                          isDisabled={pending || !auth.csrf()}
+                          isLoading={pending}
+                        />
+                      </VStack>
                     </VStack>
-                  </VStack>
-                </Center>
-              </StackItem>
-              <Text type="supporting" color="secondary">
-                Need access? Contact your administrator.
-              </Text>
-            </VStack>
-            {!isMobile && (
-              <AspectRatio ratio={3 / 4} fit="cover">
-                <img
-                  src={autumn600}
-                  srcSet={`${autumn600} 600w, ${autumn1000} 1000w`}
-                  sizes="(min-width: 1048px) 452px, calc(50vw - 72px)"
-                  alt=""
-                  width={600}
-                  height={900}
-                />
-              </AspectRatio>
-            )}
-          </Grid>
-        </Card>
-      </VStack>
-    </Center>
+                  </Center>
+                </StackItem>
+                <Text type="supporting" color="secondary">
+                  Need access? Contact your administrator.
+                </Text>
+              </VStack>
+              {!isMobile && (
+                <AspectRatio ratio={3 / 4} fit="cover">
+                  <img
+                    src={autumn600}
+                    srcSet={`${autumn600} 600w, ${autumn1000} 1000w`}
+                    sizes="(min-width: 1048px) 452px, calc(50vw - 72px)"
+                    alt=""
+                    width={600}
+                    height={900}
+                  />
+                </AspectRatio>
+              )}
+            </Grid>
+          </Card>
+        </VStack>
+      </Center>
+    </LayoutContent>
   );
 }

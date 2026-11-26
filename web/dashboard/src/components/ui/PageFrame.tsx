@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { BackAction } from './Actions';
+import { usePageFocus } from './usePageFocus';
 import { Layout, LayoutContent, LayoutHeader, LayoutFooter } from '@astryxdesign/core/Layout';
 import { HStack, VStack } from '@astryxdesign/core/Stack';
 import { Heading, Text } from '@astryxdesign/core/Text';
@@ -21,6 +22,7 @@ export function PageFrame({
   contentWidth?: number;
   footer?: ReactNode;
 }) {
+  usePageFocus();
   return (
     <Layout
       padding={6}

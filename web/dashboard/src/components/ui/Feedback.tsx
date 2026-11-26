@@ -47,6 +47,7 @@ export function Failure({ error, retry }: { error: unknown; retry?: () => void }
   return (
     <Banner
       status="error"
+      role="alert"
       title="Unable to complete this request"
       description={errorMessage(error)}
       endContent={retry ? <Button label="Retry" onClick={retry} /> : undefined}

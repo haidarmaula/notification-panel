@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { Banner } from '@astryxdesign/core/Banner';
 import { Button } from '@astryxdesign/core/Button';
+import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
 import { FormLayout } from '@astryxdesign/core/FormLayout';
 import { MetadataList, MetadataListItem } from '@astryxdesign/core/MetadataList';
@@ -60,7 +62,6 @@ export default function Registry() {
   const [filterInput, setFilterInput] = useState('');
   const [key, setKey] = useState('');
   const [name, setName] = useState('');
-  const [created, setCreated] = useState(false);
   const [formError, setFormError] = useState('');
   const list = useQuery({
     queryKey: ['managed-applications', page, keyFilter],
@@ -74,7 +75,6 @@ export default function Registry() {
   async function createApp(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError('');
-    setCreated(false);
     const cleanKey = key;
     const cleanName = name.trim();
     if (!/^[a-z][a-z0-9-]{1,61}[a-z0-9]$/.test(cleanKey)) {
@@ -98,8 +98,7 @@ export default function Registry() {
     await client.invalidateQueries({ queryKey: ['managed-applications'] });
     setKey('');
     setName('');
-    setCreated(true);
-    navigate(`/apps/admin/applications/${result.data.id}`);
+    navigate(`/apps/admin/applications/${result.data.id}`, { state: { registered: true } });
   }
 
   return (
@@ -172,7 +171,9 @@ export default function Registry() {
                     header: 'Application',
                     width: proportional(2, { minWidth: 200 }),
                     renderCell: (app) => (
-                      <Link href={`/apps/admin/applications/${app.id}`}>{app.name}</Link>
+                      <Link href={`/apps/admin/applications/${app.id}`}>
+                        {app.name}
+                      </Link>
                     ),
                   },
                   {
@@ -199,8 +200,14 @@ export default function Registry() {
               />
             ) : (
               <EmptyState
-                title="No applications registered"
-                description="Create an application registry below to begin managing it."
+                title={
+                  keyFilter ? 'No applications match this filter' : 'No applications registered'
+                }
+                description={
+                  keyFilter
+                    ? 'Clear the filter to see every registered application.'
+                    : 'Create an application registry below to begin managing it.'
+                }
               />
             )}
           </QueryState>
@@ -241,14 +248,6 @@ export default function Registry() {
                   />
                 )}
                 <WriteFeedback operation={operation} />
-                {created && (
-                  <Banner
-                    status="success"
-                    title="Application registry created"
-                    description="The application is ready for setup."
-                    role="status"
-                  />
-                )}
                 <HStack gap={2} wrap="wrap" justify="start">
                   <SubmitAction
                     label={operation.pending() ? 'Registering…' : 'Register application'}
@@ -267,10 +266,15 @@ export default function Registry() {
 
 export function RegistryDetail() {
   const params = useParams();
+  const location = useLocation();
+  const registered = location.state?.registered === true;
   const client = useQueryClient();
   const operation = useWrite();
   const [writeTarget, setWriteTarget] = useState<'name' | 'grant'>('name');
   const [pendingAction, setPendingAction] = useState<'rename' | 'grant' | 'revoke' | null>(null);
+  const [confirmingGrant, setConfirmingGrant] = useState(false);
+  const [confirmingReload, setConfirmingReload] = useState(false);
+  const [revoking, setRevoking] = useState<Versioned<Grant> | null>(null);
   const [renameError, setRenameError] = useState('');
   const setDirty = useUnsaved();
   const [name, setName] = useState('');
@@ -353,7 +357,6 @@ export function RegistryDetail() {
   }
 
   async function refreshApp() {
-    if (nameDirty && !window.confirm('Reload and replace the unsaved application name?')) return;
     const result = await app.refetch();
     if (result.data) {
       setName(result.data.data.name);
@@ -397,7 +400,7 @@ export function RegistryDetail() {
       return;
     const existing = grantLookup.data;
     const id = lookupID;
-    if (!id || !window.confirm(`Grant application access to staff #${id}?`)) return;
+    if (!id) return;
     setGrantError('');
     setGrantNotice('');
     setGrantConflict(false);
@@ -431,7 +434,6 @@ export function RegistryDetail() {
   async function revokeGrant(grant: Versioned<Grant>) {
     if (operation.blocked() || grantConflict || grantLookup.isFetching) return;
     const id = grant.data.staff_id;
-    if (!window.confirm(`Revoke application access from staff #${id}?`)) return;
     setGrantError('');
     setGrantNotice('');
     setGrantConflict(false);
@@ -468,6 +470,14 @@ export function RegistryDetail() {
       back={{ label: 'Back to application registry', href: '/apps/admin/applications' }}
       contentWidth={1120}
     >
+      {registered && (
+        <Banner
+          status="success"
+          role="status"
+          title="Application registry created"
+          description="The application is ready for setup."
+        />
+      )}
       <QueryState query={app}>
         <VStack gap={4}>
           <Section padding={6}>
@@ -543,7 +553,13 @@ export function RegistryDetail() {
                           role="alert"
                         />
                         <HStack>
-                          <Button label="Reload application" onClick={() => void refreshApp()} />
+                          <Button
+                            label="Reload application"
+                            onClick={() => {
+                              if (nameDirty) setConfirmingReload(true);
+                              else void refreshApp();
+                            }}
+                          />
                         </HStack>
                       </VStack>
                     )}
@@ -638,7 +654,7 @@ export function RegistryDetail() {
                           grantConflict ||
                           grantLookup.isFetching
                         }
-                        onClick={() => void enableGrant()}
+                        onClick={() => setConfirmingGrant(true)}
                       />
                       {grantLookup.data?.data.is_active && (
                         <Button
@@ -647,7 +663,7 @@ export function RegistryDetail() {
                           isDisabled={
                             operation.blocked() || grantConflict || grantLookup.isFetching
                           }
-                          onClick={() => void revokeGrant(grantLookup.data!)}
+                          onClick={() => setRevoking(grantLookup.data!)}
                         />
                       )}
                     </HStack>
@@ -737,6 +753,65 @@ export function RegistryDetail() {
           </Section>
         </VStack>
       </QueryState>
+      <Dialog
+        isOpen={confirmingGrant}
+        onOpenChange={(open) => {
+          if (!open && pendingAction !== 'grant') setConfirmingGrant(false);
+        }}
+        purpose="required"
+      >
+        <VStack gap={4}>
+          <DialogHeader title={`Grant application access to staff #${lookupID}?`} />
+          <Text>
+            The staff member gains this application's workspace according to their account role.
+          </Text>
+          <HStack gap={2} hAlign="end">
+            <Button
+              label="Back"
+              variant="secondary"
+              isDisabled={pendingAction === 'grant'}
+              onClick={() => setConfirmingGrant(false)}
+            />
+            <Button
+              label="Grant access"
+              variant="primary"
+              isLoading={pendingAction === 'grant'}
+              onClick={() => {
+                setConfirmingGrant(false);
+                void enableGrant();
+              }}
+            />
+          </HStack>
+        </VStack>
+      </Dialog>
+      <AlertDialog
+        isOpen={confirmingReload}
+        onOpenChange={(open) => {
+          if (!open) setConfirmingReload(false);
+        }}
+        title="Reload and replace the unsaved application name?"
+        description="The unsaved name is discarded and the latest server value is loaded for review."
+        actionLabel="Reload application"
+        onAction={() => {
+          setConfirmingReload(false);
+          void refreshApp();
+        }}
+      />
+      <AlertDialog
+        isOpen={revoking !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevoking(null);
+        }}
+        title={`Revoke application access from staff #${revoking?.data.staff_id}?`}
+        description="The staff member loses this application's workspace immediately."
+        actionLabel="Revoke access"
+        isActionLoading={pendingAction === 'revoke'}
+        onAction={() => {
+          const grant = revoking;
+          setRevoking(null);
+          if (grant) void revokeGrant(grant);
+        }}
+      />
     </PageFrame>
   );
 }

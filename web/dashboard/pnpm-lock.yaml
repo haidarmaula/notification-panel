@@ -68,6 +68,9 @@ importers:
       '@fontsource/poppins':
         specifier: ^5.3.0
         version: 5.3.0
+      '@fontsource/roboto':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@fontsource/sarina':
         specifier: ^5.3.0
         version: 5.3.0
@@ -499,6 +502,9 @@ packages:
 
   '@fontsource/poppins@5.3.0':
     resolution: {integrity: sha512-cms1nM7U6SN8epIV1WMVOV8VsA645aSm3wHfzIQnkk188U341ThbJGSl2Sv54V29gnDbT2arMPfLzvVIIVCceQ==}
+
+  '@fontsource/roboto@5.3.0':
+    resolution: {integrity: sha512-BapRJOWYP+LZ21zp+wBQjfpPYKRoxc4LspJ/RLuI+HSMBD5u/X4O+ESDrSvEqDSy0rAl7GwBJ+09mdc16cVQ1Q==}
 
   '@fontsource/sarina@5.3.0':
     resolution: {integrity: sha512-49c4H1EUor4TewQxCVHFa2t3zRK/GEOXnq/xM1egt11dzsBegWrSh9OhXWd/R2p0PMVKYpurvSBLgFVC8rpxuw==}
@@ -2323,6 +2329,8 @@ snapshots:
   '@fontsource/playwrite-us-trad@5.3.0': {}
 
   '@fontsource/poppins@5.3.0': {}
+
+  '@fontsource/roboto@5.3.0': {}
 
   '@fontsource/sarina@5.3.0': {}
 

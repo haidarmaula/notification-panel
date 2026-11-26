@@ -91,7 +91,7 @@ export function UserDetail() {
     >
       <QueryState query={user}>
         <Section padding={6}>
-          <Stack gap={3}>
+          <Stack gap={4}>
             <MetadataList label={{ position: 'start' }}>
               <MetadataListItem label="Email">
                 {user.data?.email || 'Email unavailable'}

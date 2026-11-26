@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { Banner } from '@astryxdesign/core/Banner';
 import { Button } from '@astryxdesign/core/Button';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
@@ -55,7 +56,11 @@ function passwordBytes(value: string) {
 }
 
 function StaffLink({ id, children }: { id: string; children: React.ReactNode }) {
-  return <Link href={`/apps/admin/staff/${id}`}>{children}</Link>;
+  return (
+    <Link href={`/apps/admin/staff/${id}`}>
+      {children}
+    </Link>
+  );
 }
 
 export default function Staff() {
@@ -246,6 +251,7 @@ export function StaffEditor() {
   const [profileError, setProfileError] = useState('');
   const [passwordValidationError, setPasswordValidationError] = useState('');
   const [pendingAction, setPendingAction] = useState<'profile' | 'status' | 'delete' | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [resetSuccess, setResetSuccess] = useState(false);
   const loadedId = useRef('');
   const createPasswordRef = useRef<HTMLInputElement>(null);
@@ -363,17 +369,12 @@ export function StaffEditor() {
       if (currentPasswordRef.current) currentPasswordRef.current.value = '';
       if (newPasswordRef.current) newPasswordRef.current.value = '';
       setResetSuccess(true);
+      setDirty(false);
     }
   }
 
   async function remove() {
     if (!staff.data || !profileKnown || self || operation.blocked()) return;
-    if (
-      !window.confirm(
-        `Delete staff account ${staff.data.name} (${staff.data.email})? This cannot be undone.`,
-      )
-    )
-      return;
     setPendingAction('delete');
     let result: Envelope<null> | undefined;
     try {
@@ -533,7 +534,10 @@ export function StaffEditor() {
                       Confirm with your current password before setting a new password.
                     </Text>
                     {profileKnown && !self ? (
-                      <form onSubmit={(event) => void resetTargetPassword(event)}>
+                      <form
+                        onInput={() => setDirty(true)}
+                        onSubmit={(event) => void resetTargetPassword(event)}
+                      >
                         <VStack gap={3} maxWidth={720} width="100%">
                           <FormLayout>
                             <TextInput
@@ -610,7 +614,7 @@ export function StaffEditor() {
                         variant="destructive"
                         isLoading={pendingAction === 'delete'}
                         isDisabled={operation.blocked() || selfSensitiveBlocked}
-                        onClick={() => void remove()}
+                        onClick={() => setConfirmingDelete(true)}
                       />
                     </HStack>
                     {self && (
@@ -630,6 +634,20 @@ export function StaffEditor() {
           role="alert"
         />
       )}
+      <AlertDialog
+        isOpen={confirmingDelete}
+        onOpenChange={(open) => {
+          if (!open) setConfirmingDelete(false);
+        }}
+        title={`Delete staff account ${staff.data?.name} (${staff.data?.email})?`}
+        description="This cannot be undone. The account loses access immediately."
+        actionLabel="Delete staff account"
+        isActionLoading={pendingAction === 'delete'}
+        onAction={() => {
+          setConfirmingDelete(false);
+          void remove();
+        }}
+      />
     </PageFrame>
   );
 }

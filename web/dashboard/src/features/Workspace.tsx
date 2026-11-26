@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Navigate, Outlet, useLocation, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { useMediaQuery } from '@astryxdesign/core/hooks';
@@ -141,7 +141,11 @@ export function Workspace() {
                 aria-controls={
                   triggerProps['aria-expanded'] ? triggerProps['aria-controls'] : undefined
                 }
-                label="Account menu"
+                label={
+                  sidebarCollapsed
+                    ? 'Account menu'
+                    : `Account menu: ${profile.data?.name ?? 'Staff'} ${profile.data?.email ?? ''}`.trim()
+                }
                 tooltip={sidebarCollapsed ? (profile.data?.name ?? 'My account') : undefined}
                 variant="ghost"
                 width="100%"
@@ -180,7 +184,7 @@ export function Workspace() {
             ]}
           />
           {logoutError && (
-            <Banner status="error" title="Sign-out failed" description={logoutError} />
+            <Banner status="error" role="alert" title="Sign-out failed" description={logoutError} />
           )}
         </VStack>
       }
@@ -201,6 +205,7 @@ export function Workspace() {
                 label={item.label}
                 icon={item.icon}
                 isSelected={location.pathname.startsWith(item.path)}
+                isDisabled={application.data ? application.data.status !== 'ACTIVE' : false}
                 href={item.path}
                 onClick={() => setMobileOpen(false)}
               />
@@ -212,6 +217,7 @@ export function Workspace() {
                 label="Activity audit"
                 icon={QueueListIcon}
                 isSelected={location.pathname === `${appBase}/audit`}
+                isDisabled={application.data ? application.data.status !== 'ACTIVE' : false}
                 href={`${appBase}/audit`}
                 onClick={() => setMobileOpen(false)}
               />
@@ -311,7 +317,7 @@ export function Workspace() {
       ) : params.appId && application.data?.status !== 'ACTIVE' ? (
         <PageFrame title="Application unavailable">
           <EmptyState
-            title="Application unavailable"
+            title={`${application.data?.name ?? 'This application'} is not active`}
             description="Campaigns are available when the application is active."
             actions={
               <Button
@@ -323,7 +329,9 @@ export function Workspace() {
           />
         </PageFrame>
       ) : (
-        <Outlet key={location.pathname} />
+        <Suspense fallback={<Loading />}>
+          <Outlet key={location.pathname} />
+        </Suspense>
       )}
     </AppShell>
   );

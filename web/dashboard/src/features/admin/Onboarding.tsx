@@ -795,7 +795,7 @@ export default function Onboarding(props: { applicationID: string }) {
     >
       {loadError && (
         <Banner
-          status="error"
+          status="error" role="alert"
           title="Unable to load setup"
           description={loadError}
           endContent={<Button label="Retry loading" onClick={() => void refreshAll()} />}
@@ -803,7 +803,7 @@ export default function Onboarding(props: { applicationID: string }) {
       )}
       {applicationError && (
         <Banner
-          status="error"
+          status="error" role="alert"
           title="Application context unavailable"
           description={applicationError}
         />
@@ -890,7 +890,7 @@ export default function Onboarding(props: { applicationID: string }) {
                 identifiers.
               </Text>
               {profileError && (
-                <Banner status="error" title="Profiles unavailable" description={profileError} />
+                <Banner status="error" role="alert" title="Profiles unavailable" description={profileError} />
               )}
               {!readiness.enrollment_profile_id || editingProfile ? (
                 <VStack
@@ -1008,7 +1008,7 @@ export default function Onboarding(props: { applicationID: string }) {
                   />
                   {fileError && (
                     <Banner
-                      status="error"
+                      status="error" role="alert"
                       title="Invalid credential file"
                       description={fileError}
                     />
@@ -1076,13 +1076,13 @@ export default function Onboarding(props: { applicationID: string }) {
                 )}
                 {operationError && (
                   <Banner
-                    status="error"
+                    status="error" role="alert"
                     title="Operation status unavailable"
                     description={operationError}
                   />
                 )}
                 {writeError && (
-                  <Banner status="error" title="Request not completed" description={writeError} />
+                  <Banner status="error" role="alert" title="Request not completed" description={writeError} />
                 )}
                 {retryAfter && <Text>Wait {retryAfter} seconds before trying again.</Text>}
                 {pendingMutation && (

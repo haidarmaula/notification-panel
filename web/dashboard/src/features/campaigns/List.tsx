@@ -203,7 +203,7 @@ export default function Campaigns({ results = false }: { results?: boolean }) {
                   header: 'Open',
                   renderCell: (item) => (
                     <Link href={destination(item.id)} label={`Open ${item.title}`}>
-                      <Icon icon={ArrowRightIcon} size="sm" />
+                      <Icon icon={ArrowRightIcon} size="lg" />
                     </Link>
                   ),
                 },

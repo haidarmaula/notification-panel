@@ -53,7 +53,7 @@ export function useAuthState() {
       client.setQueryData<Session>(['session'], result);
     },
     async logout() {
-      if (!confirmUnsavedChanges()) return false;
+      if (!(await confirmUnsavedChanges())) return false;
       await request('/bff/logout', {
         method: 'POST',
         csrf: session.data?.csrfToken ?? '',

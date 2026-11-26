@@ -1,5 +1,5 @@
 import { AndroidNotificationPreview } from './AndroidNotificationPreview';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -11,7 +11,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { Button } from '@astryxdesign/core/Button';
 import { Card } from '@astryxdesign/core/Card';
-import { Dialog } from '@astryxdesign/core/Dialog';
+import { Dialog, DialogHeader } from '@astryxdesign/core/Dialog';
 import { Grid } from '@astryxdesign/core/Grid';
 import { Heading } from '@astryxdesign/core/Heading';
 import { Icon } from '@astryxdesign/core/Icon';
@@ -46,7 +46,9 @@ export default function Detail() {
   const [accepted, setAccepted] = useState(false);
   const [uncertain, setUncertain] = useState(false);
   const currentIdentity = useRef({ appId, campaignId });
-  currentIdentity.current = { appId, campaignId };
+  useEffect(() => {
+    currentIdentity.current = { appId, campaignId };
+  }, [appId, campaignId]);
   const path = `/apps/${appId}/campaigns/${campaignId}`;
   const query = useQuery({
     queryKey: ['campaign', appId, campaignId],
@@ -138,6 +140,7 @@ export default function Detail() {
         ) : undefined
       }
       back={{ label: 'Back to campaigns', href: `/apps/${appId}/campaigns` }}
+      contentWidth={1120}
       actions={
         campaign ? (
           campaign.status === 'DRAFT' && !accepted && !uncertain ? (
@@ -236,7 +239,7 @@ export default function Detail() {
               </VStack>
             </Section>
           </Grid>
-          <HStack gap={3} wrap="wrap" hAlign="between">
+          <HStack gap={2} wrap="wrap" hAlign="between">
             <Link href={`${path}/results`}>
               Campaign history and results <Icon icon={ArrowTopRightOnSquareIcon} size="sm" />
             </Link>
@@ -259,13 +262,15 @@ export default function Detail() {
         purpose="form"
       >
         <VStack gap={4}>
-          <Heading level={2}>
-            {action === 'delete'
-              ? 'Delete this draft?'
-              : action === 'schedule'
-                ? 'Schedule campaign'
-                : 'Review before sending'}
-          </Heading>
+          <DialogHeader
+            title={
+              action === 'delete'
+                ? 'Delete this draft?'
+                : action === 'schedule'
+                  ? 'Schedule campaign'
+                  : 'Review before sending'
+            }
+          />
           <Text>
             {action === 'delete'
               ? 'A deleted draft cannot be restored from the dashboard.'
@@ -288,12 +293,15 @@ export default function Detail() {
           </Card>
           {action === 'schedule' && (
             <DateTimeInput
-              label="Delivery time"
+              label="Delivery"
+              timeLabel="Delivery time"
+              aria-label="Delivery date"
               presentation="native"
               value={scheduled ? (scheduled as ISODateTimeString) : undefined}
               onChange={(value) => setScheduled(value ?? '')}
               isRequired
               isDisabled={pending || uncertain || accepted}
+              status={error ? { type: 'error', message: error } : undefined}
             />
           )}
           {action === 'schedule' && (
@@ -307,7 +315,7 @@ export default function Detail() {
               apply.
             </Text>
           )}
-          {error && <Text role="alert">{error}</Text>}
+          {error && action !== 'schedule' && <Text role="alert">{error}</Text>}
           <HStack gap={2} hAlign="end">
             <Button
               label="Back"

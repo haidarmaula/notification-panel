@@ -7,7 +7,6 @@ import { Banner } from '@astryxdesign/core/Banner';
 import { Card } from '@astryxdesign/core/Card';
 import { Collapsible } from '@astryxdesign/core/Collapsible';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
-import { Heading } from '@astryxdesign/core/Heading';
 import { Icon } from '@astryxdesign/core/Icon';
 import { Link } from '@astryxdesign/core/Link';
 import { Grid } from '@astryxdesign/core/Grid';
@@ -38,12 +37,15 @@ type Delivery = {
 type Read = { id: string; user_id: string; read_at: string };
 type HistoryRow = Record<string, unknown> & { id: string; user_id: string };
 
+const timestampFormatter = new Intl.DateTimeFormat('en-GB', {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+});
+
 function timestamp(value: string | null | undefined) {
   if (!value) return '—';
   const date = new Date(value);
-  return Number.isFinite(date.getTime())
-    ? new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' }).format(date)
-    : '—';
+  return Number.isFinite(date.getTime()) ? timestampFormatter.format(date) : '—';
 }
 function count(value: number | undefined) {
   return value !== undefined && Number.isSafeInteger(value) && value >= 0
@@ -91,6 +93,33 @@ export default function Results() {
   ];
   const items = (history.data?.items ?? []) as HistoryRow[];
 
+  const historyFooter =
+    !history.isPending &&
+    !history.isError &&
+    (!!history.data?.items.length || cursors.length > 0) ? (
+      <HStack gap={3} wrap="wrap" hAlign="between" vAlign="center">
+        <Text>Page {cursors.length + 1}</Text>
+        <HStack gap={2}>
+          <Button
+            label="Previous"
+            variant="secondary"
+            size="sm"
+            isDisabled={!cursors.length || history.isFetching}
+            onClick={() => setCursors((current) => current.slice(0, -1))}
+          />
+          <Button
+            label="Next"
+            variant="secondary"
+            size="sm"
+            isDisabled={!history.data?.next_after_id || history.isFetching}
+            onClick={() => {
+              const next = history.data?.next_after_id;
+              if (next) setCursors((current) => [...current, next]);
+            }}
+          />
+        </HStack>
+      </HStack>
+    ) : undefined;
   return (
     <PageFrame
       title="Delivery results"
@@ -100,6 +129,7 @@ export default function Results() {
           : 'Provider acceptance, device reports, and opens are recorded separately.'
       }
       back={{ label: 'Back to campaign details', href: path }}
+      footer={historyFooter}
       actions={
         <Button
           label="Refresh"
@@ -173,7 +203,9 @@ export default function Results() {
                   <Card key={metric.key}>
                     <VStack gap={1}>
                       <Text>{metric.label}</Text>
-                      <Heading level={2}>{count(statistics.data.counts?.[metric.key])}</Heading>
+                      <Text size="2xl" weight="bold">
+                        {count(statistics.data.counts?.[metric.key])}
+                      </Text>
                       <Text color="secondary">{metric.note}</Text>
                     </VStack>
                   </Card>
@@ -226,10 +258,10 @@ export default function Results() {
                         header: 'User',
                         width: proportional(1, { minWidth: 140 }),
                         renderCell: (item) => (
-                          <>
-                            #{item.user_id}
+                          <VStack gap={0}>
+                            <Text>#{item.user_id}</Text>
                             <Text color="secondary">Record #{item.id}</Text>
-                          </>
+                          </VStack>
                         ),
                       },
                       {
@@ -257,10 +289,10 @@ export default function Results() {
                         header: 'User',
                         width: proportional(1, { minWidth: 140 }),
                         renderCell: (item) => (
-                          <>
-                            #{item.user_id}
+                          <VStack gap={0}>
+                            <Text>#{item.user_id}</Text>
                             <Text color="secondary">Record #{item.id}</Text>
-                          </>
+                          </VStack>
                         ),
                       },
                       {
@@ -273,32 +305,6 @@ export default function Results() {
               }
             />
           )}
-          {!history.isPending &&
-            !history.isError &&
-            (!!history.data?.items.length || cursors.length > 0) && (
-              <HStack gap={3} wrap="wrap" hAlign="between" vAlign="center">
-                <Text>Page {cursors.length + 1}</Text>
-                <HStack gap={2}>
-                  <Button
-                    label="Previous"
-                    variant="secondary"
-                    size="sm"
-                    isDisabled={!cursors.length || history.isFetching}
-                    onClick={() => setCursors((current) => current.slice(0, -1))}
-                  />
-                  <Button
-                    label="Next"
-                    variant="secondary"
-                    size="sm"
-                    isDisabled={!history.data?.next_after_id || history.isFetching}
-                    onClick={() => {
-                      const next = history.data?.next_after_id;
-                      if (next) setCursors((current) => [...current, next]);
-                    }}
-                  />
-                </HStack>
-              </HStack>
-            )}
         </VStack>
       )}
     </PageFrame>

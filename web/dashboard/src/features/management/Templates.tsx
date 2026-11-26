@@ -18,7 +18,7 @@ import {
 } from '@astryxdesign/core/Table';
 import { TextArea } from '@astryxdesign/core/TextArea';
 import { TextInput } from '@astryxdesign/core/TextInput';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { data } from '../../lib/api/client';
@@ -30,6 +30,20 @@ import { useUnsaved } from '../../app/unsaved';
 import { PageFrame } from '../../components/ui/PageFrame';
 import { Status } from '../../components/ui/Feedback';
 type Template = components['schemas']['Template'];
+const byteLength = (value: string) => new TextEncoder().encode(value).length;
+// Truncate on code point boundaries so a multibyte character is never split.
+function truncateToBytes(value: string, maxBytes: number) {
+  if (byteLength(value) <= maxBytes) return value;
+  let result = '';
+  let used = 0;
+  for (const character of value) {
+    const size = byteLength(character);
+    if (used + size > maxBytes) break;
+    result += character;
+    used += size;
+  }
+  return result;
+}
 export default function Templates() {
   const { appId = '' } = useParams();
   const page = usePage<Template>(`/apps/${appId}/templates`);
@@ -100,6 +114,9 @@ export function TemplateEditor() {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [active, setActive] = useState(true);
+  const nameBytes = useMemo(() => byteLength(name), [name]);
+  const titleBytes = useMemo(() => byteLength(title), [title]);
+  const bodyBytes = useMemo(() => byteLength(body), [body]);
   const loaded = useRef(false);
   const query = useQuery({
     queryKey: ['template', appId, templateId],
@@ -151,14 +168,16 @@ export function TemplateEditor() {
                 label="Template name"
                 isRequired
                 value={name}
-                onChange={(value) => setName(value.slice(0, 255))}
+                onChange={(value) => setName(truncateToBytes(value, 255))}
+                description={`${nameBytes}/255 bytes`}
                 isDisabled={operation.blocked()}
               />
               <TextInput
                 label="Notification title"
                 isRequired
                 value={title}
-                onChange={setTitle}
+                onChange={(value) => setTitle(truncateToBytes(value, 255))}
+                description={`${titleBytes}/255 bytes`}
                 isDisabled={operation.blocked()}
               />
               <TextArea
@@ -166,7 +185,8 @@ export function TemplateEditor() {
                 isRequired
                 rows={6}
                 value={body}
-                onChange={setBody}
+                onChange={(value) => setBody(truncateToBytes(value, 4096))}
+                description={`${bodyBytes}/4096 bytes`}
                 isDisabled={operation.blocked()}
               />
               <CheckboxInput

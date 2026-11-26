@@ -2,9 +2,37 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useBlocker } from 'react-router-dom';
 
 const forms = new Map<symbol, { isDirty: () => boolean; clear: () => void }>();
-const message = 'You have unsaved changes. Leave this page?';
-export function confirmUnsavedChanges() {
-  return !Array.from(forms.values()).some((form) => form.isDirty()) || window.confirm(message);
+
+let pending: ((value: boolean) => void) | null = null;
+const listeners = new Set<() => void>();
+function emit() {
+  for (const listener of listeners) listener();
+}
+export function subscribeUnsavedConfirm(listener: () => void) {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+export function unsavedConfirmPending() {
+  return pending !== null;
+}
+export function resolveUnsavedConfirm(value: boolean) {
+  const resolve = pending;
+  pending = null;
+  emit();
+  resolve?.(value);
+}
+function requestUnsavedConfirm(): Promise<boolean> {
+  if (pending) return Promise.resolve(false);
+  return new Promise((resolve) => {
+    pending = resolve;
+    emit();
+  });
+}
+export async function confirmUnsavedChanges() {
+  if (!Array.from(forms.values()).some((form) => form.isDirty())) return true;
+  return requestUnsavedConfirm();
 }
 export function discardUnsavedChanges() {
   for (const form of forms.values()) form.clear();
@@ -19,8 +47,10 @@ export function useUnsaved() {
   );
   useEffect(() => {
     if (blocker.state !== 'blocked') return;
-    if (window.confirm(message)) blocker.proceed();
-    else blocker.reset();
+    void requestUnsavedConfirm().then((leave) => {
+      if (leave) blocker.proceed();
+      else blocker.reset();
+    });
   }, [blocker]);
   useEffect(() => {
     const identity = Symbol('form');

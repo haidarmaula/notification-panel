@@ -69,7 +69,9 @@ export default function Editor() {
   const targetsRef = useRef<HTMLInputElement>(null);
   const alive = useRef(true);
   const currentIdentity = useRef({ appId, campaignId });
-  currentIdentity.current = { appId, campaignId };
+  useEffect(() => {
+    currentIdentity.current = { appId, campaignId };
+  }, [appId, campaignId]);
   const template = useQuery({
     queryKey: ['template', appId, selectedTemplate],
     queryFn: ({ signal }) =>
@@ -379,6 +381,7 @@ export default function Editor() {
                           <HStack gap={2}>
                             <Button
                               label="Users"
+                              aria-pressed={kind === 'INDIVIDUAL'}
                               variant={kind === 'INDIVIDUAL' ? 'primary' : 'secondary'}
                               onClick={() => {
                                 setKind('INDIVIDUAL');
@@ -387,6 +390,7 @@ export default function Editor() {
                             />
                             <Button
                               label="Segments"
+                              aria-pressed={kind === 'SEGMENT'}
                               variant={kind === 'SEGMENT' ? 'primary' : 'secondary'}
                               onClick={() => {
                                 setKind('SEGMENT');

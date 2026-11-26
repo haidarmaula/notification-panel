@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertDialog } from '@astryxdesign/core/AlertDialog';
 import { Banner } from '@astryxdesign/core/Banner';
 import { Button } from '@astryxdesign/core/Button';
 import { EmptyState } from '@astryxdesign/core/EmptyState';
@@ -50,6 +51,17 @@ type TestDeviceStatus = {
 };
 type PairingResult = { qr_svg: string; expires_at: string };
 type SendResult = { campaign_id: string; status: string };
+
+// Issue strings can repeat; suffix duplicates by occurrence so keys derive
+// from content instead of list position.
+function keyedIssues(issues: string[]) {
+  const seen = new Map<string, number>();
+  return issues.map((issue) => {
+    const occurrence = (seen.get(issue) ?? 0) + 1;
+    seen.set(issue, occurrence);
+    return { issue, key: occurrence === 1 ? issue : `${issue}#${occurrence}` };
+  });
+}
 
 class HelperError extends Error {
   constructor(
@@ -125,6 +137,7 @@ export default function TestDevices() {
   const [notice, setNotice] = useState('');
   const [failure, setFailure] = useState('');
   const [sendUncertain, setSendUncertain] = useState(false);
+  const [forgetting, setForgetting] = useState<Device | null>(null);
   const key = ['hello-dev-test-devices'];
   const status = useQuery({
     queryKey: key,
@@ -197,7 +210,6 @@ export default function TestDevices() {
   }
 
   function forget(device: Device) {
-    if (!window.confirm(`Forget ${device.name}? This phone can pair again with a new QR.`)) return;
     run('/__hello_dev/forget', { installation_id: device.installation_id });
   }
 
@@ -234,7 +246,7 @@ export default function TestDevices() {
           description="Open the development dashboard at localhost:5273 with VITE_HELLO_REAL_FCM=1."
         />
       )}
-      {failure && <Banner status="error" title="Local test request failed" description={failure} />}
+      {failure && <Banner status="error" role="alert" title="Local test request failed" description={failure} />}
       {sendUncertain && (
         <Banner
           status="warning"
@@ -252,7 +264,7 @@ export default function TestDevices() {
       {notice && <Banner status="info" title="Test device update" description={notice} />}
       {status.isError && enabled && (
         <Banner
-          status="error"
+          status="error" role="alert"
           title="Helper status unavailable"
           description={
             status.error instanceof Error ? status.error.message : 'Unable to read helper status.'
@@ -274,8 +286,8 @@ export default function TestDevices() {
               <Stack gap={4}>
                 <Heading level={2}>Diagnostics</Heading>
                 <Stack gap={2}>
-                  {status.data.issues.map((issue, index) => (
-                    <Text key={`${index}-${issue}`}>{issue}</Text>
+                  {keyedIssues(status.data.issues).map(({ issue, key }) => (
+                    <Text key={key}>{issue}</Text>
                   ))}
                 </Stack>
               </Stack>
@@ -445,7 +457,7 @@ export default function TestDevices() {
                               <Button
                                 label="Forget"
                                 variant="destructive"
-                                onClick={() => forget(device)}
+                                onClick={() => setForgetting(device)}
                                 isDisabled={mutation.isPending}
                               />
                             </Stack>
@@ -544,6 +556,21 @@ export default function TestDevices() {
           </Section>
         </>
       )}
+      <AlertDialog
+        isOpen={forgetting !== null}
+        onOpenChange={(open) => {
+          if (!open) setForgetting(null);
+        }}
+        title={`Forget ${forgetting?.name}?`}
+        description="This phone can pair again with a new QR."
+        actionLabel="Forget device"
+        isActionLoading={mutation.isPending}
+        onAction={() => {
+          const device = forgetting;
+          setForgetting(null);
+          if (device) forget(device);
+        }}
+      />
     </PageFrame>
   );
 }
