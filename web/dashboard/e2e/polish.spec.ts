@@ -25,29 +25,26 @@ for (const [route, field] of [
     page.on('request', (request) => {
       if (request.url().endsWith('/bff/logout')) logouts++;
     });
-    page.once('dialog', async (dialog) => {
-      expect(dialog.type()).toBe('confirm');
-      await dialog.dismiss();
-    });
-    const accountMenu = page.getByRole('button', { name: 'Account menu', exact: true });
+    const accountMenu = page.getByRole('button', { name: /Account menu/ });
     await accountMenu.click();
     const logout = page.getByRole('menuitem', { name: 'Sign out', exact: true });
     await logout.click();
+    const unsaved = page.getByRole('alertdialog');
+    await expect(unsaved).toBeVisible();
+    await unsaved.getByRole('button', { name: 'Stay', exact: true }).click();
     await expect(accountMenu).toBeEnabled();
     expect(logouts).toBe(0);
     expect((await (await page.request.get('/bff/session')).json()).authenticated).toBe(true);
     await expect(page.getByLabel(field)).toHaveValue('Unsaved audit value');
-    const dialogs: string[] = [];
-    page.on('dialog', async (dialog) => {
-      dialogs.push(dialog.type());
-      await dialog.accept();
-    });
     await accountMenu.click();
     await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
+    await page
+      .getByRole('alertdialog')
+      .getByRole('button', { name: 'Leave page', exact: true })
+      .click();
     await expect(page).toHaveURL(/\/login$/);
     await expect(page.getByRole('heading', { name: 'Welcome back' })).toBeVisible();
     expect(logouts).toBe(1);
-    expect(dialogs).toEqual(['confirm']);
   });
 }
 
@@ -63,21 +60,24 @@ test('failed logout retains unsaved navigation protection', async ({ page }) => 
     await logoutGate;
     await route.fulfill({ status: 503, contentType: 'application/json', body: '{}' });
   });
-  page.once('dialog', (dialog) => dialog.accept());
-  const accountMenu = page.getByRole('button', { name: 'Account menu', exact: true });
+  const accountMenu = page.getByRole('button', { name: /Account menu/ });
   await accountMenu.click();
   const logoutRequest = page.waitForRequest((request) => request.url().endsWith('/bff/logout'));
   await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Leave page', exact: true })
+    .click();
   await logoutRequest;
   await expect(accountMenu).toBeDisabled();
   releaseLogout();
   await expect(page.getByText('Sign-out failed')).toBeVisible();
   await expect(accountMenu).toBeEnabled();
-  page.once('dialog', (dialog) => dialog.dismiss());
   await page
     .getByRole('region', { name: 'Page header', exact: true })
     .getByRole('link', { name: 'Back to campaigns', exact: true })
     .click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Stay', exact: true }).click();
   await expect(page).toHaveURL(/\/campaigns\/new$/);
   await expect(page.getByLabel('Notification title')).toHaveValue('Keep this draft');
   expect((await (await page.request.get('/bff/session')).json()).authenticated).toBe(true);
@@ -89,8 +89,8 @@ test('schedule remains locked while pending and unlocks after held acceptance', 
   await login(page);
   await page.goto(campaign);
   await page.getByRole('button', { name: 'Schedule delivery', exact: true }).click();
-  const date = page.getByRole('textbox', { name: 'Delivery time Required' });
-  const time = page.getByRole('textbox', { name: 'Delivery time time' });
+  const date = page.getByRole('textbox', { name: /Delivery date/ });
+  const time = page.getByRole('textbox', { name: /Delivery time/ });
   const future = new Date();
   const dateValue = `${future.getFullYear() + 1}-01-15`;
   const timeValue = '10:30';
@@ -202,10 +202,13 @@ for (const theme of ['light', 'dark']) {
         true,
       );
       await page.screenshot({ path: `test-results/polish-editor-${width}-${theme}.png` });
-      page.once('dialog', (dialog) => dialog.accept());
       await page
         .getByRole('region', { name: 'Page header', exact: true })
         .getByRole('link', { name: 'Back to campaigns', exact: true })
+        .click();
+      await page
+        .getByRole('alertdialog')
+        .getByRole('button', { name: 'Leave page', exact: true })
         .click();
       await expect(page).toHaveURL(`/apps/${app}/campaigns`);
       await page.goto(campaign);

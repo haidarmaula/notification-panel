@@ -8,7 +8,7 @@ async function login(page: Page) {
   await expect(page.getByRole('heading', { name: 'Choose application' })).toBeVisible();
 }
 async function selectSignOut(page: Page) {
-  await page.getByRole('button', { name: 'Account menu', exact: true }).click();
+  await page.getByRole('button', { name: /Account menu/ }).click();
   await page.getByRole('menuitem', { name: 'Sign out', exact: true }).click();
 }
 test('logs in through the real BFF, keeps credentials server-side, and logs out', async ({
@@ -27,16 +27,16 @@ test('logs in through the real BFF, keeps credentials server-side, and logs out'
   const sidebar = page.getByRole('navigation', { name: 'Side navigation' });
   await expect(
     sidebar
-      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByRole('button', { name: /Account menu/ })
       .getByText('Staf Pengujian', { exact: true }),
   ).toBeVisible();
   await expect(
     sidebar
-      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByRole('button', { name: /Account menu/ })
       .getByText('staff@example.invalid', { exact: true }),
   ).toBeVisible();
   await expect(sidebar.locator('.astryx-avatar')).toBeVisible();
-  await page.getByRole('button', { name: 'Account menu', exact: true }).click();
+  await page.getByRole('button', { name: /Account menu/ }).click();
   const account = page.getByRole('menuitem', { name: 'My account', exact: true });
   await expect(account).toHaveAttribute('href', '/apps/settings');
   await page.keyboard.press('Escape');
@@ -131,12 +131,12 @@ test('persists appearance and desktop sidebar preference without storing account
   const sidebar = page.getByRole('navigation', { name: 'Side navigation' });
   await expect(
     sidebar
-      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByRole('button', { name: /Account menu/ })
       .getByText('Staf Pengujian', { exact: true }),
   ).toBeVisible();
   await expect(
     sidebar
-      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByRole('button', { name: /Account menu/ })
       .getByText('staff@example.invalid', { exact: true }),
   ).toBeVisible();
   await expect(sidebar.locator('.astryx-avatar')).toBeVisible();
@@ -146,12 +146,12 @@ test('persists appearance and desktop sidebar preference without storing account
   expect((await sidebar.boundingBox())!.width).toBeLessThan(100);
   await expect(
     sidebar
-      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByRole('button', { name: /Account menu/ })
       .getByText('Staf Pengujian', { exact: true }),
   ).toHaveCount(0);
   await expect(
     sidebar
-      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByRole('button', { name: /Account menu/ })
       .getByText('staff@example.invalid', { exact: true }),
   ).toHaveCount(0);
   await expect(sidebar.locator('.astryx-avatar')).toBeVisible();
@@ -164,12 +164,12 @@ test('persists appearance and desktop sidebar preference without storing account
   await expect(page.getByRole('navigation', { name: 'Side navigation' })).toBeVisible();
   await expect(
     sidebar
-      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByRole('button', { name: /Account menu/ })
       .getByText('Staf Pengujian', { exact: true }),
   ).toBeVisible();
   await expect(
     sidebar
-      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByRole('button', { name: /Account menu/ })
       .getByText('staff@example.invalid', { exact: true }),
   ).toBeVisible();
   await expect(sidebar.locator('.astryx-avatar')).toBeVisible();
@@ -224,10 +224,17 @@ test('manages a manual segment and its membership through the real BFF', async (
   await page.getByLabel('Description', { exact: true }).fill('Anggota diperbarui');
   await page.getByRole('button', { name: 'Save segment', exact: true }).click();
   await expect(page.getByLabel('Description', { exact: true })).toHaveValue('Anggota diperbarui');
-  page.on('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Remove Penerima Uji', exact: true }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Remove member', exact: true })
+    .click();
   await expect(page.getByRole('heading', { name: 'No members in this segment' })).toBeVisible();
   await page.getByRole('button', { name: 'Delete segment', exact: true }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Delete segment', exact: true })
+    .click();
   await expect(page.getByRole('heading', { name: 'Segments', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Pilot internal', exact: true })).toHaveCount(0);
 });
@@ -243,7 +250,7 @@ test('opens scoped device registrations and saves the staff profile', async ({ p
   await expect(page.getByText('Profile updated successfully.', { exact: true })).toBeVisible();
   await expect(
     page
-      .getByRole('button', { name: 'Account menu', exact: true })
+      .getByRole('button', { name: /Account menu/ })
       .getByText('Staf Operasional', { exact: true }),
   ).toBeVisible();
 });

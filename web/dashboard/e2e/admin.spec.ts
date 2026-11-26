@@ -56,13 +56,11 @@ test('staff admin creates, edits, changes access, resets a password, and deletes
     page.getByRole('status').filter({ hasText: 'The staff password was updated.' }),
   ).toBeVisible();
 
-  page.once('dialog', async (dialog) => {
-    expect(dialog.type()).toBe('confirm');
-    expect(dialog.message()).toContain('Operator Diperbarui');
-    expect(dialog.message()).toContain('operator-updated@example.invalid');
-    await dialog.accept();
-  });
   await page.getByRole('button', { name: 'Delete staff account', exact: true }).click();
+  const deleteDialog = page.getByRole('alertdialog');
+  await expect(deleteDialog).toContainText('Operator Diperbarui');
+  await expect(deleteDialog).toContainText('operator-updated@example.invalid');
+  await deleteDialog.getByRole('button', { name: 'Delete staff account', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Staff management', exact: true })).toBeVisible();
   await expect(page.getByRole('link', { name: 'Operator Diperbarui', exact: true })).toHaveCount(0);
 });
@@ -76,7 +74,7 @@ test('registry uses strong ETags and requires explicit review after a stale rena
     page.getByRole('heading', { name: 'Application registry', exact: true }),
   ).toBeVisible();
   await page.getByRole('textbox', { name: /^Application key/ }).fill('e2e-registry');
-  await page.getByLabel('Application name', { exact: false }).fill('Aplikasi E2E');
+  await page.getByRole('textbox', { name: /^Application name/ }).fill('Aplikasi E2E');
   await page.getByRole('button', { name: 'Register application', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Aplikasi E2E', exact: true })).toBeVisible();
   await expect(page.getByText('Provisioning', { exact: true })).toBeVisible();
@@ -99,7 +97,7 @@ test('registry uses strong ETags and requires explicit review after a stale rena
     data: { name: 'Seharusnya ditolak' },
   });
   expect(stalePrecondition.status()).toBe(412);
-  await page.getByLabel('Application name', { exact: false }).fill('Aplikasi E2E diperbarui');
+  await page.getByRole('textbox', { name: /^Application name/ }).fill('Aplikasi E2E diperbarui');
   await page.getByRole('button', { name: 'Save name', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Aplikasi E2E diperbarui', exact: true }),
@@ -118,7 +116,7 @@ test('registry uses strong ETags and requires explicit review after a stale rena
       await route.continue();
     }
   });
-  await page.getByLabel('Application name', { exact: false }).fill('Nama yang perlu ditinjau');
+  await page.getByRole('textbox', { name: /^Application name/ }).fill('Nama yang perlu ditinjau');
   await page.getByRole('button', { name: 'Save name', exact: true }).click();
   await expect(page.getByRole('alert').filter({ hasText: 'Application changed' })).toBeVisible();
   await expect(
@@ -128,9 +126,12 @@ test('registry uses strong ETags and requires explicit review after a stale rena
   const saveName = page.getByRole('button', { name: 'Save name', exact: true });
   await expect(saveName).toBeDisabled();
   expect(staleAttempts).toBe(1);
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Reload application', exact: true }).click();
-  await expect(page.getByLabel('Application name', { exact: false })).toHaveValue(
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Reload application', exact: true })
+    .click();
+  await expect(page.getByRole('textbox', { name: /^Application name/ })).toHaveValue(
     'Aplikasi E2E diperbarui',
   );
   await page.unroute(`**/bff/api/admin/apps/${id}`);
@@ -138,8 +139,11 @@ test('registry uses strong ETags and requires explicit review after a stale rena
   await page.getByLabel('Staff ID', { exact: false }).fill('1');
   await page.getByRole('button', { name: 'Inspect access', exact: true }).click();
   await expect(page.getByText(/No access row exists/)).toBeVisible();
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Grant or restore access', exact: true }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Grant access', exact: true })
+    .click();
   await expect(page.getByText('Status:')).toBeVisible();
   await expect(page.getByText('Active', { exact: true }).first()).toBeVisible();
   const missingGrantPrecondition = await page.request.delete(
@@ -159,11 +163,17 @@ test('registry uses strong ETags and requires explicit review after a stale rena
   );
   expect(staleGrantPrecondition.status()).toBe(412);
 
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Revoke access', exact: true }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Revoke access', exact: true })
+    .click();
   await expect(page.getByText('Inactive', { exact: true }).first()).toBeVisible();
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Grant or restore access', exact: true }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Grant access', exact: true })
+    .click();
   await expect(page.getByText('Active', { exact: true }).first()).toBeVisible();
   await expect(page.getByRole('cell', { name: '1', exact: true })).toBeVisible();
 });
@@ -176,14 +186,20 @@ test('self-password rejects an incorrect current password without clearing the s
   await page.getByRole('textbox', { name: /^Current password/ }).fill('incorrect-current');
   await page.getByRole('textbox', { name: /^New password/ }).fill('replacement-pass-8');
   await page.getByRole('textbox', { name: /^Confirm new password/ }).fill('replacement-pass-8');
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Change password', exact: true }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Change password', exact: true })
+    .click();
   await expect(page.getByText('The current password is incorrect.', { exact: true })).toBeVisible();
   expect((await (await page.request.get('/bff/session')).json()).authenticated).toBe(true);
 
   await page.getByRole('textbox', { name: /^Current password/ }).fill('fixture-only');
-  page.once('dialog', (dialog) => dialog.accept());
   await page.getByRole('button', { name: 'Change password', exact: true }).click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Change password', exact: true })
+    .click();
   await expect(page).toHaveURL(/\/login$/);
   await expect(page.getByRole('heading', { name: 'Welcome back', exact: true })).toBeVisible();
   expect((await (await page.request.get('/bff/session')).json()).authenticated).toBe(false);
@@ -204,9 +220,12 @@ test('an unknown grant write result blocks resubmission instead of retrying', as
       await route.continue();
     }
   });
-  page.once('dialog', (dialog) => dialog.accept());
   const enable = page.getByRole('button', { name: 'Grant or restore access', exact: true });
   await enable.click();
+  await page
+    .getByRole('alertdialog')
+    .getByRole('button', { name: 'Grant access', exact: true })
+    .click();
   await expect(enable).toBeDisabled();
   await expect(page.getByText(/outcome is uncertain/i).first()).toBeVisible();
   await page.keyboard.press('Enter');

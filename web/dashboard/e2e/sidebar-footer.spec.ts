@@ -10,7 +10,7 @@ for (const width of [1440, 390]) {
     await expect(page.getByRole('heading', { name: 'Choose application' })).toBeVisible();
     if (width < 768) await page.getByRole('button', { name: 'Open navigation' }).click();
     const sidebar = page.getByRole('navigation', { name: 'Side navigation' });
-    const account = page.getByRole('button', { name: 'Account menu', exact: true });
+    const account = page.getByRole('button', { name: /Account menu/ });
     await expect(account).toHaveAttribute('aria-expanded', 'false');
     expect(await account.getAttribute('aria-controls')).toBeNull();
     await expect(account).toContainText('staff@example.invalid');

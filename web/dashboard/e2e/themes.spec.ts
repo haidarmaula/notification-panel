@@ -29,7 +29,7 @@ test('Stone is the default and explicit theme and appearance choices persist ind
   page,
 }) => {
   await login(page);
-  await expect(page.getByRole('button', { name: 'Account menu', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Account menu/ })).toBeVisible();
   expect(await page.evaluate(() => localStorage.length)).toBe(0);
   await chooseTheme(page, 'Matcha');
   await chooseAppearance(page, 'Dark');
