@@ -14,7 +14,8 @@ import { IconButton } from '@astryxdesign/core/IconButton';
 import { Banner } from '@astryxdesign/core/Banner';
 import { Icon } from '@astryxdesign/core/Icon';
 import { BellIcon, EyeIcon, EyeSlashIcon } from '@heroicons/react/24/outline';
-import loginTeamImage from '../assets/autumn.jpg';
+import autumn600 from '../assets/autumn-600.webp';
+import autumn1000 from '../assets/autumn-1000.webp';
 import { useAuth } from '../app/auth-context';
 import { isLocalTestDevicesPath, localTestDevicesPath } from '../app/local-test-devices';
 import { ApiError } from '../lib/api/client';
@@ -146,9 +147,11 @@ export default function Login() {
             {!isMobile && (
               <AspectRatio ratio={3 / 4} fit="cover">
                 <img
-                  src={loginTeamImage}
-                  alt="Two colleagues working together at a laptop"
-                  width={675}
+                  src={autumn600}
+                  srcSet={`${autumn600} 600w, ${autumn1000} 1000w`}
+                  sizes="(min-width: 1048px) 452px, calc(50vw - 72px)"
+                  alt=""
+                  width={600}
                   height={900}
                 />
               </AspectRatio>

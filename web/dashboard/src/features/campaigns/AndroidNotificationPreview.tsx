@@ -26,10 +26,10 @@ export function AndroidNotificationPreview({
   return (
     <VStack gap={6} paddingBlockStart={4} width="100%">
       <section className={styles.device} aria-label="Android notification preview">
-        <header className={styles.statusBar} aria-label="Android status bar">
+        <header className={styles.statusBar} aria-hidden="true">
           <span className={styles.time}>9:32</span>
-          <span className={styles.camera} aria-hidden="true" />
-          <span className={styles.statusIcons} aria-label="Wi-Fi, mobile signal, battery">
+          <span className={styles.camera} />
+          <span className={styles.statusIcons}>
             <Icon icon={WifiIcon} size="sm" />
             <Icon icon={SignalIcon} size="sm" />
             <Icon icon={Battery50Icon} size="sm" />

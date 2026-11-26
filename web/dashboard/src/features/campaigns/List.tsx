@@ -18,11 +18,15 @@ import { data } from '../../lib/api/client';
 import type { CampaignSummary, Page } from '../../lib/api/types';
 import { Failure, Loading, Status } from '../../components/ui/Feedback';
 
+const campaignIdPattern = /^[1-9][0-9]{0,18}$/;
+const maxCampaignId = 9223372036854775807n;
+
 export default function Campaigns({ results = false }: { results?: boolean }) {
   const { appId = '' } = useParams();
   const navigate = useNavigate();
   const [search, setSearch] = useSearchParams();
   const [lookup, setLookup] = useState('');
+  const [lookupError, setLookupError] = useState('');
   const cursors =
     typeof search.get('pages') === 'string' &&
     (search.get('pages')?.length ?? 0) < 2000 &&
@@ -49,7 +53,20 @@ export default function Campaigns({ results = false }: { results?: boolean }) {
 
   function openCampaign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (/^[1-9][0-9]{0,18}$/.test(lookup)) navigate(destination(lookup));
+    const id = lookup.trim();
+    if (!id) {
+      setLookupError('Enter a campaign ID.');
+      return;
+    }
+    if (!campaignIdPattern.test(id)) {
+      setLookupError('Enter 1 to 19 digits without a leading zero.');
+      return;
+    }
+    if (BigInt(id) > maxCampaignId) {
+      setLookupError(`Enter a campaign ID of ${maxCampaignId} or less.`);
+      return;
+    }
+    navigate(destination(id));
   }
 
   return (
@@ -122,10 +139,15 @@ export default function Campaigns({ results = false }: { results?: boolean }) {
                     label="Open by campaign ID"
                     type="text"
                     inputMode="numeric"
+                    enterKeyHint="go"
                     value={lookup}
-                    onChange={setLookup}
+                    onChange={(value) => {
+                      setLookup(value);
+                      setLookupError('');
+                    }}
                     placeholder="Example: 13"
                     isRequired
+                    status={lookupError ? { type: 'error', message: lookupError } : undefined}
                   />
                   <Button label="Open" variant="secondary" type="submit" />
                 </HStack>

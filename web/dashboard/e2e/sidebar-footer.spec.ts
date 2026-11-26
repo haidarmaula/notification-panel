@@ -11,6 +11,8 @@ for (const width of [1440, 390]) {
     if (width < 768) await page.getByRole('button', { name: 'Open navigation' }).click();
     const sidebar = page.getByRole('navigation', { name: 'Side navigation' });
     const account = page.getByRole('button', { name: 'Account menu', exact: true });
+    await expect(account).toHaveAttribute('aria-expanded', 'false');
+    expect(await account.getAttribute('aria-controls')).toBeNull();
     await expect(account).toContainText('staff@example.invalid');
     await expect(account.getByRole('img')).toBeVisible();
     if (width < 768) await page.keyboard.press('Escape');
@@ -32,6 +34,12 @@ for (const width of [1440, 390]) {
     if (width < 768) await page.getByRole('button', { name: 'Open navigation' }).click();
     await account.click();
     await expect(page.getByRole('menuitem', { name: 'Sign out', exact: true })).toBeVisible();
+    await expect(account).toHaveAttribute('aria-expanded', 'true');
+    expect(
+      await account.evaluate((button) =>
+        Boolean(document.getElementById(button.getAttribute('aria-controls') ?? '')),
+      ),
+    ).toBe(true);
     await page.getByRole('menuitem', { name: 'My account', exact: true }).click();
     await expect(page).toHaveURL('/apps/settings');
     if (width < 768) await expect(sidebar).not.toBeVisible();

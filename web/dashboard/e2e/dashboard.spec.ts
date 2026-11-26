@@ -407,11 +407,19 @@ test('dark login uses the official card composition and supports password visibi
   await expect(page.getByLabel('Email')).toHaveAttribute('type', 'email');
   await expect(page.locator('.astryx-card')).toHaveCount(1);
   await expect(page.getByText('hello.', { exact: true })).toBeVisible();
-  const photograph = page.getByRole('img', { name: 'Two colleagues working together at a laptop' });
+  const photograph = page.locator('img[src*="autumn-600"]');
   await expect(photograph).toBeVisible();
+  await expect(photograph).toHaveAttribute('alt', '');
   await expect
     .poll(() => photograph.evaluate((image: HTMLImageElement) => image.naturalWidth))
     .toBeGreaterThan(0);
+  expect(
+    await photograph.evaluate(
+      (image: HTMLImageElement) =>
+        (performance.getEntriesByName(image.currentSrc)[0] as PerformanceResourceTiming)
+          .encodedBodySize,
+    ),
+  ).toBeLessThan(150 * 1024);
   await page.locator('input[name="password"]').fill('fixture-only');
   await page.getByRole('button', { name: 'Show password' }).click();
   await expect(page.locator('input[name="password"]')).toHaveAttribute('type', 'text');
@@ -419,6 +427,7 @@ test('dark login uses the official card composition and supports password visibi
   await expect(page.locator('input[name="password"]')).toHaveAttribute('type', 'password');
   await page.screenshot({ path: 'test-results/dashboard-login-dark.png', fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
+  await expect(photograph).toHaveCount(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: 'test-results/dashboard-login-mobile-dark.png', fullPage: true });
   await page.getByLabel('Email').fill('staff@example.invalid');
@@ -607,8 +616,20 @@ test('campaign loading and empty states keep the footer stable and ID lookup sec
   expect(Math.abs(after!.y - before!.y)).toBeLessThanOrEqual(1);
   await expect(page.getByLabel('Open by campaign ID')).not.toBeVisible();
   await page.getByRole('button', { name: 'Open by campaign ID' }).click();
-  await expect(page.getByLabel('Open by campaign ID')).toBeVisible();
-  await page.getByLabel('Open by campaign ID').fill('9007199254740993');
+  const campaignId = page.getByLabel('Open by campaign ID');
+  await expect(campaignId).toBeVisible();
+  for (const [invalid, message] of [
+    ['', 'Enter a campaign ID.'],
+    ['0', 'Enter 1 to 19 digits without a leading zero.'],
+    ['9223372036854775808', 'Enter a campaign ID of 9223372036854775807 or less.'],
+  ]) {
+    await campaignId.fill(invalid);
+    await campaignId.press('Enter');
+    await expect(campaignId).toHaveAttribute('aria-invalid', 'true');
+    await expect(campaignId).toHaveAccessibleDescription(message);
+  }
+  await campaignId.fill(' 9007199254740993 ');
+  await expect(campaignId).not.toHaveAttribute('aria-invalid', 'true');
   await page.getByRole('button', { name: 'Open', exact: true }).click();
   await expect(
     page.getByRole('heading', { name: 'Pengingat jadwal layanan', level: 1, exact: true }),

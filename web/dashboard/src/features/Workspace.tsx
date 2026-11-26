@@ -138,6 +138,9 @@ export function Workspace() {
             renderTrigger={(triggerProps) => (
               <Button
                 {...triggerProps}
+                aria-controls={
+                  triggerProps['aria-expanded'] ? triggerProps['aria-controls'] : undefined
+                }
                 label="Account menu"
                 tooltip={sidebarCollapsed ? (profile.data?.name ?? 'My account') : undefined}
                 variant="ghost"
