@@ -6,9 +6,7 @@
       {
         "rule": "overused-font",
         "value": "roboto",
-        "files": [
-          "src/features/campaigns/AndroidNotificationPreview.module.css"
-        ],
+        "files": ["src/features/campaigns/AndroidNotificationPreview.module.css"],
         "createdAt": "2026-11-26T04:08:56.235Z",
         "reason": "Verified false positive: Roboto is the real Android system font for the DESIGN.md-sanctioned OS simulation in this scoped CSS module, self-hosted via fonts/roboto.css"
       }

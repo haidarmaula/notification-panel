@@ -246,7 +246,14 @@ export default function TestDevices() {
           description="Open the development dashboard at localhost:5273 with VITE_HELLO_REAL_FCM=1."
         />
       )}
-      {failure && <Banner status="error" role="alert" title="Local test request failed" description={failure} />}
+      {failure && (
+        <Banner
+          status="error"
+          role="alert"
+          title="Local test request failed"
+          description={failure}
+        />
+      )}
       {sendUncertain && (
         <Banner
           status="warning"
@@ -264,7 +271,8 @@ export default function TestDevices() {
       {notice && <Banner status="info" title="Test device update" description={notice} />}
       {status.isError && enabled && (
         <Banner
-          status="error" role="alert"
+          status="error"
+          role="alert"
           title="Helper status unavailable"
           description={
             status.error instanceof Error ? status.error.message : 'Unable to read helper status.'

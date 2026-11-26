@@ -171,9 +171,7 @@ export default function Registry() {
                     header: 'Application',
                     width: proportional(2, { minWidth: 200 }),
                     renderCell: (app) => (
-                      <Link href={`/apps/admin/applications/${app.id}`}>
-                        {app.name}
-                      </Link>
+                      <Link href={`/apps/admin/applications/${app.id}`}>{app.name}</Link>
                     ),
                   },
                   {

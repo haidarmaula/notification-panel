@@ -56,11 +56,7 @@ function passwordBytes(value: string) {
 }
 
 function StaffLink({ id, children }: { id: string; children: React.ReactNode }) {
-  return (
-    <Link href={`/apps/admin/staff/${id}`}>
-      {children}
-    </Link>
-  );
+  return <Link href={`/apps/admin/staff/${id}`}>{children}</Link>;
 }
 
 export default function Staff() {
