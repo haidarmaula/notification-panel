@@ -7,10 +7,12 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestDashboardNewQRDoesNotRevokePairedDeviceSession(t *testing.T) {
@@ -151,5 +153,128 @@ func TestDashboardPublicQRUsesConfiguredPublicOrigin(t *testing.T) {
 	defer response.Body.Close()
 	if response.StatusCode != http.StatusBadRequest {
 		t.Fatal("public QR must be refused when no public origin is configured")
+	}
+}
+
+func TestLoopbackIssuerWithControlSocketServesPublicEnrollment(t *testing.T) {
+	cfg := testConfig(t)
+	directory, err := os.MkdirTemp("/tmp", "hello-loopback-issuer-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(directory) })
+	socket := filepath.Join(directory, "control.sock")
+	go func() {
+		_ = runPairingServer(cfg, "127.0.0.1:18191", "", nil, socket, "https://api.hello-staging.example")
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(socket); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("loopback control socket never appeared")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", socket)
+	}}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport}
+	response, err := client.Post("http://localhost/pair", "application/json", strings.NewReader(`{"public":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var envelope struct {
+		Data struct {
+			Link   string `json:"link"`
+			Origin string `json:"origin"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil || response.StatusCode != 200 {
+		t.Fatal("expected a public pairing link from the loopback control socket")
+	}
+	if envelope.Data.Origin != "https://api.hello-staging.example" {
+		t.Fatal("public QR origin must be the configured public origin")
+	}
+	link, err := url.Parse(envelope.Data.Link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	code := link.Query().Get("code")
+	session, err := http.Post("http://127.0.0.1:18191/v1/session", "application/json",
+		strings.NewReader(`{"app_id":"`+cfg.AppID+`","pairing_code":"`+code+`"}`))
+	if err != nil || session.StatusCode != 200 {
+		t.Fatal("loopback issuer must redeem the control-socket pairing code")
+	}
+	var issued struct {
+		Data sessionResponse `json:"data"`
+	}
+	if err := json.NewDecoder(session.Body).Decode(&issued); err != nil {
+		t.Fatal(err)
+	}
+	session.Body.Close()
+	request, _ := http.NewRequest("POST", "http://127.0.0.1:18191/v1/origin", strings.NewReader(`{"app_id":"`+cfg.AppID+`"}`))
+	request.Header.Set("Authorization", "Bearer "+issued.Data.Credential)
+	request.Header.Set("Content-Type", "application/json")
+	origin, err := http.DefaultClient.Do(request)
+	if err != nil || origin.StatusCode != 200 {
+		t.Fatal("loopback issuer must assert an enrollment origin for the paired credential")
+	}
+	origin.Body.Close()
+}
+
+func TestServeLoopbackControlFlagWiring(t *testing.T) {
+	cfg := testConfig(t)
+	data, err := json.Marshal(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	directory, err := os.MkdirTemp("/tmp", "hello-serve-flag-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(directory) })
+	config := filepath.Join(directory, "issuer.json")
+	if err := os.WriteFile(config, data, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	socket := filepath.Join(directory, "control.sock")
+	go func() {
+		_ = serve([]string{"--config", config, "--listen", "127.0.0.1:18192",
+			"--control-socket", socket, "--public-origin", "https://api.hello-staging.example"})
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if _, err := os.Stat(socket); err == nil {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("serve --control-socket never created the loopback control socket")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", socket)
+	}}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport}
+	response, err := client.Post("http://localhost/pair", "application/json", strings.NewReader(`{"public":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	var envelope struct {
+		Data struct {
+			Origin string `json:"origin"`
+		} `json:"data"`
+	}
+	if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil || response.StatusCode != 200 {
+		t.Fatal("expected a public pairing from the CLI-wired control socket")
+	}
+	if envelope.Data.Origin != "https://api.hello-staging.example" {
+		t.Fatal("serve must forward --public-origin to the control socket")
 	}
 }

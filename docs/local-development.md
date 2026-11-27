@@ -292,9 +292,10 @@ forbids cleartext. **Create public pairing QR** encodes the public API origin
 `https://api.hello-staging.example`, matching the staging gateway
 `PUBLIC_HOST`). This variant is for the real public domain once infra delivers
 a publicly trusted certificate; until then the phone will reject the
-placeholder certificate. Enrollment against staging additionally requires the
-issuer endpoints (`/v1/session`, `/v1/origin`) to be served at the public
-origin, which is separate staging-side work.
+placeholder certificate. Enrollment against staging is served by the issuer
+container activated with `deploy/staging/enable-public-enrollment.py` (sudo on
+the VM); it rotates the issuer keys, so previously enrolled devices re-enroll
+through a public pairing QR from `deploy/staging/staging-pairing.py`.
 
 The dashboard identifies Wi-Fi and APK problems under **Diagnostics**. On a
 private network where automatic detection chooses the wrong interface, set

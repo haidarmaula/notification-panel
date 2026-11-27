@@ -38,6 +38,12 @@ class GatewayConfigTests(unittest.TestCase):
         self.assertIn('server_name api.notifications.example.org;', text)
         self.assertNotIn(configure.PUBLIC_HOST, text)
 
+    def test_issuer_endpoints_route_to_loopback_on_both_hosts(self):
+        text = configure.gateway_config()
+        self.assertEqual(text.count('location = /v1/session {'), 2)
+        self.assertEqual(text.count('location = /v1/origin {'), 2)
+        self.assertEqual(text.count('proxy_pass http://127.0.0.1:8181;'), 4)
+
 
 class PublicPlaceholderTests(unittest.TestCase):
     def test_placeholder_is_generated_once_with_locked_custody(self):

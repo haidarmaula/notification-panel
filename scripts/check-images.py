@@ -15,7 +15,7 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 SEED = "postgres:17@sha256:a426e44bac0b759c95894d68e1a0ac03ecc20b619f498a91aae373bf06d8508d"
-ROLES = ("server", "bootstrap", "worker", "scheduler", "requeue", "retention", "dashboard", "controlplane")
+ROLES = ("server", "bootstrap", "worker", "scheduler", "requeue", "retention", "dashboard", "controlplane", "issuer")
 PROVISIONER = "provisioner"
 OFFLINE = ["--rm", "--network", "none", "--read-only", "--cap-drop", "ALL", "--security-opt", "no-new-privileges"]
 
@@ -72,10 +72,10 @@ def mount_policies(volume, bundle, mode):
            SEED, "--numeric-owner", "-xpf", "-", "-C", "/policy", input=archive.getvalue())
 
 
-def expect_denial(flags, image, reason):
-    run = subprocess.run(["docker", "run", *flags, image], capture_output=True, timeout=30)
-    if run.returncode != 1 or reason.encode() not in run.stderr:
-        raise RuntimeError(f"{image}: expected exit 1 and {reason!r}; got {run.returncode} and {run.stderr[-500:]!r}")
+def expect_denial(flags, image, reason, code=1, args=()):
+    run = subprocess.run(["docker", "run", *flags, image, *args], capture_output=True, timeout=30)
+    if run.returncode != code or reason.encode() not in run.stderr:
+        raise RuntimeError(f"{image}: expected exit {code} and {reason!r}; got {run.returncode} and {run.stderr[-500:]!r}")
 
 
 def main():
@@ -132,6 +132,20 @@ def main():
             for role in ("server", "bootstrap", "dashboard", "controlplane", PROVISIONER):
                 reason = "invalid protected dashboard configuration" if role == "dashboard" else "invalid control-plane configuration" if role == "controlplane" else "invalid provisioner configuration" if role == PROVISIONER else "invalid " + role + " configuration"
                 expect_denial(flags, images[role], reason)
+            issuer_volume = docker("volume", "create", "--label", "hello.fixture=image-smoke", capture_output=True, text=True).stdout.strip()
+            try:
+                docker("run", "--rm", "--network", "none", "-v", issuer_volume + ":/work",
+                       "--entrypoint", "sh", SEED, "-c", "mkdir -p /work && chown 65532:65532 /work && chmod 0750 /work")
+                docker("run", "--rm", "--network", "none", "-v", issuer_volume + ":/work", images["issuer"],
+                       "init", "--dir", "/work/keys", "--app-id", "8b60b6c6-7ea7-4eab-9ac7-7d10bb8efde1",
+                       "--subject", "fixture-subject", capture_output=True)
+                docker("run", "--rm", "--network", "none", "-v", issuer_volume + ":/work",
+                       "--entrypoint", "sh", SEED, "-c", "chmod 0660 /work/keys/issuer.json")
+                expect_denial([*OFFLINE, "-v", issuer_volume + ":/etc/hello:ro"], images["issuer"],
+                              "local issuer configuration rejected", code=2,
+                              args=("serve", "--config", "/etc/hello/keys/issuer.json"))
+            finally:
+                docker("volume", "rm", issuer_volume)
     finally:
         docker("volume", "rm", volume)
         if credential_volume:

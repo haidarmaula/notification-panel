@@ -27,10 +27,8 @@ import (
 const lanCAName = "hello-lan-ca.crt"
 
 type lanPairing struct {
-	tls          *tls.Config
-	backend      *url.URL
-	control      string
-	publicOrigin string
+	tls     *tls.Config
+	backend *url.URL
 }
 
 // publicPairingOrigin accepts only HTTPS DNS origins; the public APK variant
@@ -89,8 +87,8 @@ func runLANServer(cfg issuerConfig, address, directory, backend, control, public
 		return fmt.Errorf("prepare LAN pairing certificate: %w", err)
 	}
 	fmt.Fprintln(os.Stdout, "Android CA certificate:", filepath.Join(directory, lanCAName))
-	lan := &lanPairing{tls: &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}}, backend: upstream, control: control, publicOrigin: publicOrigin}
-	if err := runPairingServer(cfg, endpoint.String(), "", lan); err != nil {
+	lan := &lanPairing{tls: &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}}, backend: upstream}
+	if err := runPairingServer(cfg, endpoint.String(), "", lan, control, publicOrigin); err != nil {
 		return fmt.Errorf("serve LAN pairing on %s: %w", endpoint, err)
 	}
 	return nil

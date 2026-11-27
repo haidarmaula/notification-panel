@@ -57,7 +57,8 @@ func (s *issuerServer) startDashboardControl(path, origin, publicOrigin string) 
 			return
 		}
 		encoded := base64.RawURLEncoding.EncodeToString(code)
-		svg, err := pairingSVG(pairingLink(linkOrigin, linkOrigin, s.cfg.AppID, encoded))
+		link := pairingLink(linkOrigin, linkOrigin, s.cfg.AppID, encoded)
+		svg, err := pairingSVG(link)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -79,7 +80,7 @@ func (s *issuerServer) startDashboardControl(path, origin, publicOrigin string) 
 		s.pairingUsed, s.failedAttempts = false, 0
 		s.mu.Unlock()
 		writeJSON(w, http.StatusOK, apiEnvelope{Success: true, Data: map[string]any{
-			"qr_svg": svg, "expires_at": expires.UTC(), "origin": linkOrigin,
+			"qr_svg": svg, "expires_at": expires.UTC(), "origin": linkOrigin, "link": link,
 		}})
 	})
 	server := &http.Server{Handler: mux, ReadHeaderTimeout: 2 * time.Second, WriteTimeout: 5 * time.Second}

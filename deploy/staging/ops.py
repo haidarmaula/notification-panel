@@ -43,7 +43,7 @@ def prepare(name,revision,schema,archive=None):
         images[role]=obj['Id']
     candidate_images={
         role:json.loads(run(['docker','image','inspect',f'hello-{role}:local-verify']))[0]['Id']
-        for role in ('provisioner','controlplane')
+        for role in ('provisioner','controlplane','issuer')
     }
     manifest={'release':name,'revision':revision,'schema':current['schema'],'images':images,'source_sha256':hashlib.sha256(archive).hexdigest(),
         'candidate_images':candidate_images,'created':time.time(),'checks':['offline hardened production image gates'],'hosted_ci':'not asserted; verify repository CI separately','scope':'staging only'}

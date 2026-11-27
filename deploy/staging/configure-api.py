@@ -80,6 +80,22 @@ def gateway_config(public_host=PUBLIC_HOST):
       proxy_set_header X-Forwarded-For $remote_addr;
       proxy_connect_timeout 5s;
       proxy_read_timeout 30s;'''
+    issuer = '''    location = /v1/session {
+      proxy_pass http://127.0.0.1:8181;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-Proto https;
+      proxy_set_header X-Forwarded-For $remote_addr;
+      proxy_connect_timeout 5s;
+      proxy_read_timeout 30s;
+    }
+    location = /v1/origin {
+      proxy_pass http://127.0.0.1:8181;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-Proto https;
+      proxy_set_header X-Forwarded-For $remote_addr;
+      proxy_connect_timeout 5s;
+      proxy_read_timeout 30s;
+    }'''
     return f'''worker_processes 1;
 pid /tmp/nginx.pid;
 error_log /dev/stderr warn;
@@ -103,6 +119,7 @@ http {{
     allow 192.168.0.0/16;
     deny all;
     client_max_body_size 2m;
+{issuer}
     location / {{
 {proxy}
     }}
@@ -115,6 +132,7 @@ http {{
     ssl_certificate_key /gateway/public.key;
     ssl_protocols TLSv1.2 TLSv1.3;
     client_max_body_size 2m;
+{issuer}
     location / {{
 {proxy}
     }}

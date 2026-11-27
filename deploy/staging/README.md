@@ -77,6 +77,42 @@ and possibly `listen` changes). API rate limits (`ip_per_minute` 120,
 `concurrent_requests` 16) are staging values and must be revisited before real
 user volume, including many users behind shared NAT addresses.
 
+## Public enrollment (issuer at the gateway)
+
+The mobile enrollment authority (`/v1/session`, `/v1/origin`) is the
+`devtools/local-mobile-issuer` binary, now built as the hardened `issuer`
+image and gated by `scripts/check-images.py`. CD publishes it as a candidate
+image; it is not an auto-deployed role.
+
+`enable-public-enrollment.py` (sudo, after a completed CD deployment whose
+manifest includes the issuer candidate) performs a journaled activation:
+
+1. Generates a fresh issuer identity with the image's `init` in a disposable
+   networkless volume. The previous temporary issuer's private keys are
+   unrecoverable, so rotation is mandatory and was owner-approved on
+   2026-11-27. Identity strings, namespace, routes, receipts and encryption
+   keys are preserved; only `verification_key` and `origin_key` are re-pinned.
+2. Backs up the old mobile policy to a protected volume, installs the patched
+   policy, restarts the API, and verifies readiness.
+3. Runs `hello-staging-issuer` hardened on loopback `127.0.0.1:8181` with an
+   owner-only control socket at `/etc/hello/issuer-control/issuer.sock`.
+4. Inserts the `# HELLO_ISSUER_ROUTES` locations into every live gateway
+   server block, validates with `nginx -t`, reloads, and verifies a real
+   pairing → session → origin round trip through the gateway.
+5. Refuses to commit if the dispatch state changed; any failure rolls back
+   policy, container, volumes and gateway config.
+
+Side effect: the previously enrolled pilot device's mobile credential was
+signed by the old key and will fail refresh. Re-enroll it with a public
+pairing QR, then revalidate the binding/dispatch route through the existing
+routine-pilot procedure; a new binding needs its own valid route approval.
+Dispatch holds, the runtime seal and the application state are untouched.
+
+Operator pairing: `sudo python3 deploy/staging/staging-pairing.py` prints a
+one-use public pairing link (render it as a QR for the phone). The public
+origin stays the placeholder until the infra handover above; the gateway
+routes work against the current IP/staging-CA identity meanwhile.
+
 ## Verified progress on 2026-11-12
 
 The API and gateway are running; direct office-network HTTPS passed with the

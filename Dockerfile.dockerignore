@@ -11,6 +11,9 @@
 !pkg
 !pkg/**/
 !pkg/**/*.go
+!devtools
+!devtools/**/
+!devtools/**/*.go
 **/*_test.go
 !web
 !web/dashboard

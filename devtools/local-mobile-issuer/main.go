@@ -81,11 +81,11 @@ func serve(args []string) error {
 	if (*lan == "") != (*lanTLS == "") || (*lan != "" && *qrAPI == "") {
 		return errors.New("LAN pairing requires --lan, --lan-tls-dir and --qr-api")
 	}
-	if *control != "" && (*lan == "" || !filepath.IsAbs(*control)) {
-		return errors.New("--control-socket requires a LAN issuer and an absolute path")
+	if *control != "" && !filepath.IsAbs(*control) {
+		return errors.New("--control-socket requires an absolute path")
 	}
-	if *publicOrigin != "" && *lan == "" {
-		return errors.New("--public-origin requires a LAN issuer")
+	if *publicOrigin != "" && *lan == "" && *control == "" {
+		return errors.New("--public-origin requires a LAN issuer or a control socket")
 	}
 	cfg, err := readConfig(*configPath)
 	if err != nil {
@@ -93,6 +93,12 @@ func serve(args []string) error {
 	}
 	if *lan != "" {
 		return runLANServer(cfg, *lan, *lanTLS, *qrAPI, *control, *publicOrigin)
+	}
+	if *control != "" {
+		if err := runPairingServer(cfg, *listenAddress, *qrAPI, nil, *control, *publicOrigin); err != nil {
+			return errors.New("local issuer stopped")
+		}
+		return nil
 	}
 	if err := runServer(cfg, *listenAddress, *qrAPI); err != nil {
 		return errors.New("local issuer stopped")

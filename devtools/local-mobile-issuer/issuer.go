@@ -302,10 +302,10 @@ func loopbackAddress(value string) bool {
 }
 
 func runServer(cfg issuerConfig, address, qrAPI string) error {
-	return runPairingServer(cfg, address, qrAPI, nil)
+	return runPairingServer(cfg, address, qrAPI, nil, "", "")
 }
 
-func runPairingServer(cfg issuerConfig, address, qrAPI string, lan *lanPairing) error {
+func runPairingServer(cfg issuerConfig, address, qrAPI string, lan *lanPairing, control, publicOrigin string) error {
 	codeBytes := make([]byte, 32)
 	if _, err := rand.Read(codeBytes); err != nil {
 		return err
@@ -332,11 +332,11 @@ func runPairingServer(cfg issuerConfig, address, qrAPI string, lan *lanPairing) 
 		issuer = "https://" + listener.Addr().String()
 		qrAPI = issuer
 	}
-	if lan != nil && lan.control != "" {
+	if control != "" {
 		api.managed = true
 		api.sessions = make(map[[sha256.Size]byte]issuerSession)
 		api.pairingUsed = true
-		closeControl, err := api.startDashboardControl(lan.control, issuer, lan.publicOrigin)
+		closeControl, err := api.startDashboardControl(control, issuer, publicOrigin)
 		if err != nil {
 			return err
 		}
