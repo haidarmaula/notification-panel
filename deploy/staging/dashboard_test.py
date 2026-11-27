@@ -8,15 +8,38 @@ import ops_dashboard as dashboard
 
 class DashboardTests(unittest.TestCase):
     def test_routes_preserve_docs_and_pin_separate_api_and_bff(self):
-        original=b'''http {\n  server {\n    location /docs/ { return 200; }\n    location / {\n      proxy_pass https://127.0.0.1:8080;\n    }\n  }\n}\n'''
+        original=b'''http {
+  # HELLO_STAFF_SERVER: default for IP clients; office/VPN sources only.
+  server {
+    location /docs/ { return 200; }
+    location / {
+      proxy_pass https://127.0.0.1:8080;
+    }
+  }
+  # HELLO_PUBLIC_SERVER: mobile API; open to all sources, public certificate slot.
+  server {
+    location / {
+      proxy_pass https://127.0.0.1:8080;
+    }
+  }
+}
+'''
         updated=dashboard.routing(original).decode()
         self.assertIn('location /api/v1/ {',updated)
         self.assertIn('location /docs/ { return 200; }',updated)
-        self.assertEqual(updated.count('location / {'),1)
+        self.assertEqual(updated.count('location / {'),2)
         self.assertIn('proxy_pass https://127.0.0.1:18443;',updated)
         self.assertIn('proxy_ssl_verify on;',updated)
         self.assertIn('proxy_set_header X-Forwarded-For $remote_addr;',updated)
+        staff,marker,public=updated.partition('# HELLO_PUBLIC_SERVER')
+        self.assertTrue(marker)
+        self.assertEqual(staff.count('location / {'),1)
+        self.assertEqual(public.count('location / {'),1)
+        self.assertIn('proxy_pass https://127.0.0.1:18443;',staff)
+        self.assertNotIn('18443',public)
+        self.assertIn('proxy_pass https://127.0.0.1:8080;',public)
         with self.assertRaises(RuntimeError):dashboard.routing(updated.encode())
+        with self.assertRaises(RuntimeError):dashboard.routing(b'http {\n  server {\n    location / {\n      proxy_pass https://127.0.0.1:8080;\n    }\n  }\n}\n')
     def test_incomplete_activation_restores_gateway_and_prior_journal(self):
         calls=[]
         with tempfile.TemporaryDirectory() as directory:

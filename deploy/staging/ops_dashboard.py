@@ -71,9 +71,10 @@ def make_material(server_policy):
 
 def routing(config):
     text=config.decode()
-    if MARKER in text or text.count('    location / {')!=1 or 'proxy_pass https://127.0.0.1:8080;' not in text:raise RuntimeError('Unexpected gateway routing layout.')
-    text=text.replace('    location / {','    location /api/v1/ {',1)
-    position=text.rfind('\n  }\n}')
+    head,marker,tail=text.partition('# HELLO_PUBLIC_SERVER')
+    if MARKER in text or not marker or head.count('    location / {')!=1 or 'proxy_pass https://127.0.0.1:8080;' not in head:raise RuntimeError('Unexpected gateway routing layout.')
+    head=head.replace('    location / {','    location /api/v1/ {',1)
+    position=head.rfind('\n  }')
     if position<0:raise RuntimeError('Unexpected gateway server boundary.')
     block='''
     # HELLO_DASHBOARD: authenticated BFF; preserve API and documentation locations.
@@ -91,7 +92,7 @@ def routing(config):
       proxy_connect_timeout 5s;
       proxy_read_timeout 30s;
     }'''
-    return (text[:position]+block+text[position:]).encode()
+    return (head[:position]+block+head[position:]+marker+tail).encode()
 
 
 def gateway_reload():

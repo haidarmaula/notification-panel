@@ -19,6 +19,11 @@ TLS = ROOT / 'staging-tls'
 ASSETS = ROOT / 'server-assets'
 GATEWAY = ROOT / 'gateway-assets'
 REVISION = '4695a2c9730740a9fb88e009fd2c00599edc9ba6'
+# Placeholder until infra issues the real public hostname; swap TLS/public.{crt,key}
+# and refresh the gateway assets when the reviewed certificate arrives.
+PUBLIC_HOST = 'api.hello-staging.example'
+STAFF_MARKER = '# HELLO_STAFF_SERVER'
+PUBLIC_MARKER = '# HELLO_PUBLIC_SERVER'
 
 
 def run(args, **kwargs):
@@ -60,6 +65,86 @@ def dsn(user, password):
     return (f'postgres://{user}:{quote(password, safe="")}@127.0.0.1:5432/hello_staging?'
             + urlencode({'sslmode': 'verify-full', 'sslrootcert': str(ASSETS / 'db-ca.crt'),
                          'connect_timeout': '5'}))
+
+
+def gateway_config(public_host=PUBLIC_HOST):
+    proxy = '''      proxy_pass https://127.0.0.1:8080;
+      proxy_ssl_certificate /gateway/gateway-client.crt;
+      proxy_ssl_certificate_key /gateway/gateway-client.key;
+      proxy_ssl_trusted_certificate /gateway/server-ca.crt;
+      proxy_ssl_verify on;
+      proxy_ssl_server_name on;
+      proxy_ssl_name localhost;
+      proxy_set_header Host $host;
+      proxy_set_header X-Forwarded-Proto https;
+      proxy_set_header X-Forwarded-For $remote_addr;
+      proxy_connect_timeout 5s;
+      proxy_read_timeout 30s;'''
+    return f'''worker_processes 1;
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+events {{ worker_connections 256; }}
+http {{
+  access_log /dev/stdout;
+  client_body_temp_path /tmp/client_body;
+  proxy_temp_path /tmp/proxy;
+  fastcgi_temp_path /tmp/fastcgi;
+  uwsgi_temp_path /tmp/uwsgi;
+  scgi_temp_path /tmp/scgi;
+  {STAFF_MARKER}: default for IP clients; office/VPN sources only.
+  server {{
+    listen 10.1.16.109:8443 ssl default_server;
+    server_name 10.1.16.109;
+    ssl_certificate /gateway/gateway.crt;
+    ssl_certificate_key /gateway/gateway.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    allow 10.0.0.0/8;
+    allow 172.16.0.0/12;
+    allow 192.168.0.0/16;
+    deny all;
+    client_max_body_size 2m;
+    location / {{
+{proxy}
+    }}
+  }}
+  {PUBLIC_MARKER}: mobile API; open to all sources, public certificate slot.
+  server {{
+    listen 10.1.16.109:8443 ssl;
+    server_name {public_host};
+    ssl_certificate /gateway/public.crt;
+    ssl_certificate_key /gateway/public.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 2m;
+    location / {{
+{proxy}
+    }}
+  }}
+}}
+'''
+
+
+def ensure_public_tls(tls=TLS, host=PUBLIC_HOST):
+    crt, key = tls / 'public.crt', tls / 'public.key'
+    if crt.is_symlink() or key.is_symlink():
+        raise SystemExit('Refusing symlink public certificate.')
+    if crt.exists() != key.exists():
+        raise SystemExit('Partial public certificate pair requires inspection.')
+    if not crt.exists():
+        # Placeholder only: browsers/devices will reject it until infra's real
+        # certificate replaces this pair. Never install it in device trust stores.
+        with tempfile.TemporaryDirectory(dir=tls) as directory:
+            work = Path(directory)
+            run(['openssl', 'req', '-x509', '-newkey', 'rsa:3072', '-nodes', '-sha256',
+                 '-days', '90', '-subj', f'/CN={host}',
+                 '-addext', f'subjectAltName=DNS:{host}',
+                 '-keyout', str(work / 'public.key'), '-out', str(work / 'public.crt')])
+            os.chown(work / 'public.key', 0, 0)
+            os.chmod(work / 'public.key', 0o600)
+            os.chown(work / 'public.crt', 0, 65532)
+            os.chmod(work / 'public.crt', 0o640)
+            os.replace(work / 'public.key', key)
+            os.replace(work / 'public.crt', crt)
+    return crt, key
 
 
 def main():
@@ -112,45 +197,10 @@ def main():
         store(policy_path, json.dumps(policy))
     for filename in ('gateway.crt', 'gateway.key', 'gateway-client.crt', 'gateway-client.key', 'server-ca.crt'):
         store(GATEWAY / filename, (TLS / filename).read_text())
-    store(GATEWAY / 'nginx.conf', '''worker_processes 1;
-pid /tmp/nginx.pid;
-error_log /dev/stderr warn;
-events { worker_connections 256; }
-http {
-  access_log /dev/stdout;
-  client_body_temp_path /tmp/client_body;
-  proxy_temp_path /tmp/proxy;
-  fastcgi_temp_path /tmp/fastcgi;
-  uwsgi_temp_path /tmp/uwsgi;
-  scgi_temp_path /tmp/scgi;
-  server {
-    listen 10.1.16.109:8443 ssl;
-    server_name 10.1.16.109;
-    ssl_certificate /gateway/gateway.crt;
-    ssl_certificate_key /gateway/gateway.key;
-    ssl_protocols TLSv1.2 TLSv1.3;
-    allow 10.0.0.0/8;
-    allow 172.16.0.0/12;
-    allow 192.168.0.0/16;
-    deny all;
-    client_max_body_size 2m;
-    location / {
-      proxy_pass https://127.0.0.1:8080;
-      proxy_ssl_certificate /gateway/gateway-client.crt;
-      proxy_ssl_certificate_key /gateway/gateway-client.key;
-      proxy_ssl_trusted_certificate /gateway/server-ca.crt;
-      proxy_ssl_verify on;
-      proxy_ssl_server_name on;
-      proxy_ssl_name localhost;
-      proxy_set_header Host $host;
-      proxy_set_header X-Forwarded-Proto https;
-      proxy_set_header X-Forwarded-For $remote_addr;
-      proxy_connect_timeout 5s;
-      proxy_read_timeout 30s;
-    }
-  }
-}
-''')
+    public_crt, public_key = ensure_public_tls()
+    store(GATEWAY / 'public.crt', public_crt.read_text())
+    store(GATEWAY / 'public.key', public_key.read_text(), group=65532, mode=0o640)
+    store(GATEWAY / 'nginx.conf', gateway_config())
     admin_file = ROOT / 'staging-admin.json'
     if not admin_file.exists():
         store(admin_file, json.dumps({'name': 'Haidar (Staging)',

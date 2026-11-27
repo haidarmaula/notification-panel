@@ -34,6 +34,14 @@ BLOCK='''    # HELLO_API_DOCS: public reference files only, in a separate readon
 '''
 
 
+def routing(config):
+    text=config.decode()
+    head,marker,tail=text.partition('# HELLO_PUBLIC_SERVER')
+    if not marker or head.count('    location / {')!=1 or text.count('http {')!=1:raise RuntimeError('Unexpected gateway configuration layout.')
+    head=head.replace('    location / {',BLOCK+'    location / {',1)
+    return (head+marker+tail).replace('http {','http {\n  include /etc/nginx/mime.types;',1).encode()
+
+
 def write_config(data):
     script="""set -eu
 umask 027
@@ -103,15 +111,13 @@ def configure():
     if MARKER.encode() in config or mounted:raise RuntimeError('Partial/foreign documentation gateway state requires inspection.')
     h=old['HostConfig']
     if h['NetworkMode']!='host' or not h['ReadonlyRootfs'] or h.get('CapDrop')!=['ALL'] or h.get('CapAdd') or old['Config']['User']!='65532:65532' or len(old['Mounts'])!=1 or old['Mounts'][0]['Destination']!='/gateway' or old['Mounts'][0].get('Source')!='/etc/hello/gateway-assets' or old['Mounts'][0]['RW']:raise RuntimeError('Unexpected gateway runtime; refuse replacement.')
-    text=config.decode()
-    if text.count('    location / {')!=1 or text.count('http {')!=1:raise RuntimeError('Unexpected gateway configuration layout.')
-    text=text.replace('http {','http {\n  include /etc/nginx/mime.types;',1).replace('    location / {',BLOCK+'    location / {',1)
+    candidate=routing(config)
     backup='hello-staging-gateway-before-docs'
     if alive(backup):raise RuntimeError('Existing gateway backup requires inspection.')
     atomic(ROOT/'gateway-before-docs.conf',config)
     save(ROOT/'docs-gateway-journal.json',{'phase':'prepared'})
     try:
-        run(['docker','volume','create',VOLUME]);write_config(text.encode())
+        run(['docker','volume','create',VOLUME]);write_config(candidate)
         run(['docker','run','--rm',*gateway_args(old['Image']),'-c','/gateway/nginx.conf','-t'])
         run(['docker','stop','--time','15',name]);run(['docker','rename',name,backup])
         run(['docker','run','-d','--name',name,'--restart','unless-stopped','--log-opt','max-size=10m','--log-opt','max-file=3',*gateway_args(old['Image']),'-c','/gateway/nginx.conf','-g','daemon off;'])

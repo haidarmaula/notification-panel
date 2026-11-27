@@ -27,6 +27,20 @@ class DocsTests(unittest.TestCase):
             self.assertEqual(commands,[['docker','start','hello-staging-gateway']])
             self.assertFalse((root/'docs-gateway-journal.json').exists())
 
+    def test_docs_locations_land_only_in_the_staff_server(self):
+        import ops_gateway_docs as gateway
+        spec=importlib.util.spec_from_file_location('configure_api',Path(__file__).parent/'configure-api.py')
+        configure=importlib.util.module_from_spec(spec);spec.loader.exec_module(configure)
+        updated=gateway.routing(configure.gateway_config().encode()).decode()
+        staff,marker,public=updated.partition('# HELLO_PUBLIC_SERVER')
+        self.assertTrue(marker)
+        self.assertIn('HELLO_API_DOCS',staff)
+        self.assertIn('include /etc/nginx/mime.types;',staff)
+        self.assertNotIn('HELLO_API_DOCS',public)
+        self.assertNotIn('/api-docs/',public)
+        self.assertIn('proxy_pass https://127.0.0.1:8080;',public)
+        with self.assertRaises(RuntimeError):gateway.routing(b'http {\n  server {\n    location / {\n      proxy_pass https://127.0.0.1:8080;\n    }\n  }\n}\n')
+
     def test_capture_preserves_documentation_release(self):
         import ops_release as release
         from types import SimpleNamespace
