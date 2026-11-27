@@ -21,7 +21,7 @@ import urllib.error
 import urllib.request
 import uuid
 
-from build_real_fcm_apk import apk_cache_key
+from build_real_fcm_apk import apk_cache_key, public_cache_key
 
 PREFIX = "/__hello_dev"
 PRIVATE_NETWORKS = tuple(ipaddress.ip_network(cidr) for cidr in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
@@ -60,6 +60,11 @@ def lan_host():
     return str(address) if any(address in net for net in PRIVATE_NETWORKS) else None
 
 
+# Placeholder until infra issues the real public hostname; must match the
+# gateway PUBLIC_HOST in deploy/staging/configure-api.py.
+PUBLIC_ORIGIN = os.environ.get("HELLO_PUBLIC_API_ORIGIN", "https://api.hello-staging.example")
+
+
 class Dashboard:
     def __init__(self, dev):
         self.dev = dev
@@ -67,13 +72,15 @@ class Dashboard:
         self.app = dev.REAL_FCM_APP_ID
         self.opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
         self.actions = threading.Lock()
-        self.issuer = self.apk_build = None
+        self.issuer = self.apk_build = self.apk_public_build = None
         self.issuer_host = None
         self.control_directory = tempfile.TemporaryDirectory(prefix="hello-fcm-", dir="/tmp")
         self.control_socket = Path(self.control_directory.name) / "lan.sock"
         self.ca = dev.CONFIG / "lan-tls/hello-lan-ca.crt"
         self.apk = dev.STATE / "hello-fcm-smoke-lan.apk"
         self.apk_ca = dev.STATE / "hello-fcm-smoke-lan.ca-sha256"
+        self.apk_public = dev.STATE / "hello-fcm-smoke-public.apk"
+        self.apk_public_key = dev.STATE / "hello-fcm-smoke-public.key"
 
     @staticmethod
     def stop(process):
@@ -90,6 +97,7 @@ class Dashboard:
     def close(self):
         self.stop(self.issuer)
         self.stop(self.apk_build)
+        self.stop(self.apk_public_build)
         self.control_directory.cleanup()
 
     def ensure_lan(self):
@@ -106,6 +114,7 @@ class Dashboard:
                     str(dev.BIN / "mobile-issuer"), "serve", "--config", str(dev.CONFIG / "mobile-issuer/issuer.json"),
                     "--lan", f"{host}:{dev.REAL_FCM_LAN_PORT}", "--lan-tls-dir", str(self.ca.parent),
                     "--qr-api", f"http://127.0.0.1:{dev.REAL_FCM_MOBILE_PORT}", "--control-socket", str(self.control_socket),
+                    "--public-origin", PUBLIC_ORIGIN,
                 ], stdout=log, stderr=log, start_new_session=True)
             self.issuer_host = host
             for _ in range(30):
@@ -173,13 +182,18 @@ class Dashboard:
             WHERE a.public_id='{self.app}'::uuid AND n.id={campaign} LIMIT 1;""")
         return json.loads(row) if row else None
 
-    def apk_status(self):
-        if self.apk_build is not None and self.apk_build.poll() is None:
+    def apk_status(self, public=False):
+        build = self.apk_public_build if public else self.apk_build
+        if build is not None and build.poll() is None:
             return "building"
-        if self.apk.is_file() and self.apk_ca.is_file() and self.ca.is_file():
+        if public:
+            if self.apk_public.is_file() and self.apk_public_key.is_file():
+                if self.apk_public_key.read_text().strip() == public_cache_key():
+                    return "ready"
+        elif self.apk.is_file() and self.apk_ca.is_file() and self.ca.is_file():
             if self.apk_ca.read_text().strip() == apk_cache_key(self.ca):
                 return "ready"
-        if self.apk_build is not None and self.apk_build.returncode:
+        if build is not None and build.returncode:
             return "failed"
         return "missing"
 
@@ -193,19 +207,24 @@ class Dashboard:
                 device["name"] = names.get(device["installation_id"], device["name"])
         target = next((item for item in devices if item["status"] == "selected"), None)
         apk = self.apk_status()
+        apk_public = self.apk_status(public=True)
         issues = [issue] if issue else []
         if apk == "failed":
             issues.append("APK build failed. Check the real-fcm-apk.log file and retry.")
+        if apk_public == "failed":
+            issues.append("Public APK build failed. Check the real-fcm-apk.log file and retry.")
         return {"ready": origin is not None, "origin": origin, "apk_url": PREFIX + "/apk" if apk == "ready" else None,
-                "apk_status": apk, "devices": devices, "target": target, "last_test": self.last_test(), "issues": issues}
+                "apk_status": apk, "apk_public_url": PREFIX + "/apk-public" if apk_public == "ready" else None,
+                "apk_public_status": apk_public, "public_origin": PUBLIC_ORIGIN,
+                "devices": devices, "target": target, "last_test": self.last_test(), "issues": issues}
 
-    def pair(self):
+    def pair(self, public=False):
         origin, issue = self.ensure_lan()
         if not origin:
             raise ActionError(503, issue)
         connection = IssuerConnection(self.control_socket)
         try:
-            connection.request("POST", "/pair", body=b"")
+            connection.request("POST", "/pair", body=b'{"public":true}' if public else b"")
             response = connection.getresponse()
             if response.status != 200:
                 raise ActionError(response.status, "Could not generate a fresh QR. Try again.")
@@ -213,19 +232,25 @@ class Dashboard:
         finally:
             connection.close()
 
-    def build_apk(self):
-        if not self.ca.is_file():
+    def build_apk(self, public=False):
+        if not public and not self.ca.is_file():
             origin, issue = self.ensure_lan()
             if not origin:
                 raise ActionError(503, issue)
-        if self.apk_status() == "building":
+        if self.apk_status(public=public) == "building":
             return {"status": "building"}
         dev = self.dev
+        artifact, fingerprint = (self.apk_public, self.apk_public_key) if public else (self.apk, self.apk_ca)
         with (dev.LOGS / "real-fcm-apk.log").open("ab") as log:
-            self.apk_build = subprocess.Popen([
-                sys.executable, str(Path(__file__).with_name("build_real_fcm_apk.py")), str(self.ca), str(self.apk), str(self.apk_ca),
+            build = subprocess.Popen([
+                sys.executable, str(Path(__file__).with_name("build_real_fcm_apk.py")),
+                "public" if public else str(self.ca), str(artifact), str(fingerprint),
                 str(dev.ROOT.parent / "hello-fcm-smoke"),
             ], stdout=log, stderr=log, start_new_session=True)
+        if public:
+            self.apk_public_build = build
+        else:
+            self.apk_build = build
         return {"status": "building"}
 
     @contextlib.contextmanager
@@ -341,13 +366,33 @@ def serve(dev):
                         except (OSError, TimeoutError):
                             pass
                     return
+                if not write and self.path == PREFIX + "/apk-public":
+                    with dashboard.actions:
+                        if dashboard.apk_status(public=True) != "ready":
+                            raise ActionError(404, "Build the public Android test APK before downloading it.")
+                        artifact = dashboard.apk_public.open("rb")
+                    with artifact:
+                        self.send_response(200)
+                        self.send_header("Content-Type", "application/vnd.android.package-archive")
+                        self.send_header("Content-Disposition", 'attachment; filename="hello-fcm-smoke-public.apk"')
+                        self.send_header("Content-Length", str(os.fstat(artifact.fileno()).st_size))
+                        self.end_headers()
+                        try:
+                            shutil.copyfileobj(artifact, self.wfile)
+                        except (OSError, TimeoutError):
+                            pass
+                    return
                 with dashboard.actions:
                     if not write and self.path == PREFIX + "/status":
                         result = dashboard.status()
                     elif write and self.path == PREFIX + "/pair":
                         result = dashboard.pair()
+                    elif write and self.path == PREFIX + "/pair-public":
+                        result = dashboard.pair(public=True)
                     elif write and self.path == PREFIX + "/build-apk":
                         result = dashboard.build_apk()
+                    elif write and self.path == PREFIX + "/build-apk-public":
+                        result = dashboard.build_apk(public=True)
                     elif write and self.path in (PREFIX + "/target", PREFIX + "/forget"):
                         result = dashboard.change_target(payload, self.path.endswith("/forget"))
                     elif write and self.path == PREFIX + "/name":

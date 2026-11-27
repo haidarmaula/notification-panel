@@ -52,6 +52,36 @@ class LocalDevelopmentTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "Expo development launcher"):
                 apk_build.check_standalone_apk(artifact)
 
+    def test_public_apk_must_not_embed_any_custom_ca(self):
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / "hello-fcm-smoke-public.apk"
+            with ZipFile(artifact, "w") as apk:
+                apk.writestr("assets/index.android.bundle", b"bundle")
+                apk.writestr("classes.dex", b"Lcom/example/hellofcmsmoke/MainActivity;")
+            apk_build.check_standalone_apk(artifact, public=True)
+            self.assertEqual(apk_build.public_cache_key(), "standalone-public-v1")
+            with ZipFile(artifact, "a") as apk:
+                apk.writestr("res/raw/hello_lan_ca.crt", b"certificate")
+            with self.assertRaisesRegex(RuntimeError, "must not embed any custom CA"):
+                apk_build.check_standalone_apk(artifact, public=True)
+            apk_build.check_standalone_apk(artifact)
+
+    def test_public_build_overrides_expo_debug_cleartext_manifests(self):
+        with tempfile.TemporaryDirectory() as directory:
+            project = Path(directory)
+            for variant in ("debug", "debugOptimized"):
+                path = project / "android/app/src" / variant / "AndroidManifest.xml"
+                path.parent.mkdir(parents=True)
+                path.write_text('<application android:usesCleartextTraffic="true" tools:replace="android:usesCleartextTraffic" />')
+            apk_build.disable_debug_cleartext(project)
+            for variant in ("debug", "debugOptimized"):
+                text = (project / "android/app/src" / variant / "AndroidManifest.xml").read_text()
+                self.assertIn('usesCleartextTraffic="false"', text)
+                self.assertIn('tools:replace="android:usesCleartextTraffic"', text)
+            (project / "android/app/src/debug/AndroidManifest.xml").unlink()
+            with self.assertRaisesRegex(RuntimeError, "debug Android manifest"):
+                apk_build.disable_debug_cleartext(project)
+
     def test_real_fcm_credentials_require_explicit_project_and_private_regular_file(self):
         with tempfile.TemporaryDirectory() as directory:
             credential = Path(directory) / "account.json"

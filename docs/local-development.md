@@ -285,6 +285,17 @@ data, application credentials, and browser sessions.
    notification on the selected phone. Provider acceptance and device receipt
    are separate. Use staging for the HTTPS receipt-ingestion acceptance test.
 
+**Public app variant.** The **Public app (domain TLS)** section builds a second
+APK that embeds no CA at all: it trusts the Android system store only and
+forbids cleartext. **Create public pairing QR** encodes the public API origin
+(`HELLO_PUBLIC_API_ORIGIN`, default the placeholder
+`https://api.hello-staging.example`, matching the staging gateway
+`PUBLIC_HOST`). This variant is for the real public domain once infra delivers
+a publicly trusted certificate; until then the phone will reject the
+placeholder certificate. Enrollment against staging additionally requires the
+issuer endpoints (`/v1/session`, `/v1/origin`) to be served at the public
+origin, which is separate staging-side work.
+
 The dashboard identifies Wi-Fi and APK problems under **Diagnostics**. On a
 private network where automatic detection chooses the wrong interface, set
 `HELLO_LOCAL_FCM_LAN_HOST` to the Mac's private IPv4 address before running

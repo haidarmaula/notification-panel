@@ -44,12 +44,15 @@ type TestDeviceStatus = {
   origin: string | null;
   apk_url: string | null;
   apk_status: 'ready' | 'missing' | 'building' | 'failed';
+  apk_public_url: string | null;
+  apk_public_status: 'ready' | 'missing' | 'building' | 'failed';
+  public_origin: string;
   devices: Device[];
   target: Device | null;
   last_test: TestResult | null;
   issues: string[];
 };
-type PairingResult = { qr_svg: string; expires_at: string };
+type PairingResult = { qr_svg: string; expires_at: string; origin?: string };
 type SendResult = { campaign_id: string; status: string };
 
 // Issue strings can repeat; suffix duplicates by occurrence so keys derive
@@ -156,14 +159,20 @@ export default function TestDevices() {
       }),
     onSuccess: (result, variables) => {
       setFailure('');
-      if (variables.path === '/__hello_dev/pair') {
+      if (variables.path === '/__hello_dev/pair' || variables.path === '/__hello_dev/pair-public') {
         setPairing(result as PairingResult);
-        setNotice('A new one-use pairing QR is ready.');
+        setNotice(
+          variables.path === '/__hello_dev/pair-public'
+            ? 'A new one-use public pairing QR is ready.'
+            : 'A new one-use pairing QR is ready.',
+        );
       } else if (variables.path === '/__hello_dev/send') {
         const sent = result as SendResult;
         setNotice(`Test campaign ${sent.campaign_id} was accepted with status ${sent.status}.`);
       } else if (variables.path === '/__hello_dev/build-apk') {
         setNotice('APK build requested. This page will update when the build finishes.');
+      } else if (variables.path === '/__hello_dev/build-apk-public') {
+        setNotice('Public APK build requested. This page will update when the build finishes.');
       } else {
         updateStatus(result as TestDeviceStatus);
         if (variables.path === '/__hello_dev/forget') {
@@ -201,11 +210,21 @@ export default function TestDevices() {
       return undefined;
     }
   }, [status.data?.apk_url]);
+  const apkPublicHref = useMemo(() => {
+    const value = status.data?.apk_public_url;
+    if (!value) return undefined;
+    try {
+      const url = new URL(value, window.location.origin);
+      return url.origin === window.location.origin ? url.href : undefined;
+    } catch {
+      return undefined;
+    }
+  }, [status.data?.apk_public_url]);
 
   function run(path: string, requestBody?: unknown) {
     setFailure('');
     setNotice('');
-    if (path === '/__hello_dev/pair') setPairing(null);
+    if (path === '/__hello_dev/pair' || path === '/__hello_dev/pair-public') setPairing(null);
     mutation.mutate({ path, body: requestBody });
   }
 
@@ -337,6 +356,45 @@ export default function TestDevices() {
           </Section>
           <Section padding={6}>
             <Stack gap={4}>
+              <Heading level={2}>Public app (domain TLS)</Heading>
+              <Text>
+                This variant trusts system certificates only — no CA is installed on the phone. It
+                pairs against the public API domain once infra delivers the real certificate.
+              </Text>
+              <Text>
+                Public APK status: <Status value={status.data.apk_public_status.toUpperCase()} />
+              </Text>
+              {status.data.apk_public_status === 'ready' && apkPublicHref && (
+                <Button label="Download public APK" href={apkPublicHref} />
+              )}
+              {status.data.apk_public_status === 'ready' && !apkPublicHref && (
+                <Text>
+                  The public APK is ready, but its same-origin download link is unavailable.
+                </Text>
+              )}
+              <Button
+                label={
+                  status.data.apk_public_status === 'building'
+                    ? 'Building public Android APK…'
+                    : status.data.apk_public_status === 'ready'
+                      ? 'Rebuild public APK'
+                      : 'Build public Android APK'
+                }
+                onClick={() => run('/__hello_dev/build-apk-public')}
+                isDisabled={status.data.apk_public_status === 'building' || mutation.isPending}
+                isLoading={
+                  status.data.apk_public_status === 'building' ||
+                  (mutation.variables?.path === '/__hello_dev/build-apk-public' &&
+                    mutation.isPending)
+                }
+              />
+              <Text type="supporting" color="secondary">
+                Public origin: {status.data.public_origin}
+              </Text>
+            </Stack>
+          </Section>
+          <Section padding={6}>
+            <Stack gap={4}>
               <Heading level={2}>Add device</Heading>
               <Text>
                 Build and install the Android development APK, then create a one-use QR to enroll a
@@ -354,6 +412,18 @@ export default function TestDevices() {
                 isDisabled={!enabled || !status.data.ready || mutation.isPending}
                 isLoading={mutation.isPending && mutation.variables?.path === '/__hello_dev/pair'}
               />
+              <Button
+                label={
+                  mutation.isPending && mutation.variables?.path === '/__hello_dev/pair-public'
+                    ? 'Creating public QR…'
+                    : 'Create public pairing QR'
+                }
+                onClick={() => run('/__hello_dev/pair-public')}
+                isDisabled={!enabled || !status.data.ready || mutation.isPending}
+                isLoading={
+                  mutation.isPending && mutation.variables?.path === '/__hello_dev/pair-public'
+                }
+              />
             </Stack>
           </Section>
           {pairing && (
@@ -370,6 +440,11 @@ export default function TestDevices() {
                 <Text type="supporting" color="secondary">
                   Expires {date(pairing.expires_at)}
                 </Text>
+                {pairing.origin && (
+                  <Text type="supporting" color="secondary">
+                    Server: {pairing.origin}
+                  </Text>
+                )}
               </Stack>
             </Section>
           )}

@@ -68,6 +68,7 @@ func serve(args []string) error {
 	lan := flags.String("lan", "", "private IPv4 address and port for HTTPS pairing")
 	lanTLS := flags.String("lan-tls-dir", "", "private local certificate directory")
 	control := flags.String("control-socket", "", "private local dashboard control socket")
+	publicOrigin := flags.String("public-origin", "", "HTTPS DNS origin encoded in public-variant pairing QRs")
 	if err := flags.Parse(args); err != nil {
 		return errors.New("invalid serve options")
 	}
@@ -83,12 +84,15 @@ func serve(args []string) error {
 	if *control != "" && (*lan == "" || !filepath.IsAbs(*control)) {
 		return errors.New("--control-socket requires a LAN issuer and an absolute path")
 	}
+	if *publicOrigin != "" && *lan == "" {
+		return errors.New("--public-origin requires a LAN issuer")
+	}
 	cfg, err := readConfig(*configPath)
 	if err != nil {
 		return errors.New("local issuer configuration rejected")
 	}
 	if *lan != "" {
-		return runLANServer(cfg, *lan, *lanTLS, *qrAPI, *control)
+		return runLANServer(cfg, *lan, *lanTLS, *qrAPI, *control, *publicOrigin)
 	}
 	if err := runServer(cfg, *listenAddress, *qrAPI); err != nil {
 		return errors.New("local issuer stopped")

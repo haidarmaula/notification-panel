@@ -82,3 +82,30 @@ func TestLANOnlyProxiesScopedMobileRequests(t *testing.T) {
 		}
 	}
 }
+
+func TestPublicPairingOriginValidation(t *testing.T) {
+	for _, tc := range []struct {
+		value string
+		want  bool
+	}{
+		{"https://api.hello-staging.example", true},
+		{"https://api.notifications.example.org:8443", true},
+		{"https://api.hello-staging.example/", true},
+		{"http://api.hello-staging.example", false},
+		{"https://192.168.1.25:8443", false},
+		{"https://8.8.8.8", false},
+		{"https://localhost", false},
+		{"https://api.hello-staging.example/path", false},
+		{"https://user@api.hello-staging.example", false},
+		{"https://api.hello-staging.example?x=1", false},
+		{"https://api.hello-staging.example:0", false},
+		{"https://api.hello-staging.example:70000", false},
+		{"https://-api.hello-staging.example", false},
+		{"https://api..example", false},
+		{"", false},
+	} {
+		if got := publicPairingOrigin(tc.value); got != tc.want {
+			t.Errorf("publicPairingOrigin(%q) = %v, want %v", tc.value, got, tc.want)
+		}
+	}
+}

@@ -336,7 +336,7 @@ func runPairingServer(cfg issuerConfig, address, qrAPI string, lan *lanPairing) 
 		api.managed = true
 		api.sessions = make(map[[sha256.Size]byte]issuerSession)
 		api.pairingUsed = true
-		closeControl, err := api.startDashboardControl(lan.control, issuer)
+		closeControl, err := api.startDashboardControl(lan.control, issuer, lan.publicOrigin)
 		if err != nil {
 			return err
 		}

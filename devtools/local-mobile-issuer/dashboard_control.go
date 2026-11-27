@@ -4,7 +4,9 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -16,7 +18,7 @@ import (
 
 // The control socket lives in the owner-only checkout state directory. The LAN
 // listener never registers the operation that generates pairing codes.
-func (s *issuerServer) startDashboardControl(path, origin string) (func(), error) {
+func (s *issuerServer) startDashboardControl(path, origin, publicOrigin string) (func(), error) {
 	listener, err := net.Listen("unix", path)
 	if err != nil {
 		return nil, err
@@ -26,14 +28,36 @@ func (s *issuerServer) startDashboardControl(path, origin string) (func(), error
 		return nil, err
 	}
 	mux := http.NewServeMux()
-	mux.HandleFunc("POST /pair", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("POST /pair", func(w http.ResponseWriter, r *http.Request) {
+		var request struct {
+			Public bool `json:"public"`
+		}
+		body, err := io.ReadAll(io.LimitReader(r.Body, 64))
+		if err != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		if len(body) > 0 {
+			if err := json.Unmarshal(body, &request); err != nil {
+				w.WriteHeader(http.StatusBadRequest)
+				return
+			}
+		}
+		linkOrigin := origin
+		if request.Public {
+			if publicOrigin == "" {
+				writeJSON(w, http.StatusBadRequest, apiEnvelope{Success: false, Message: "public pairing origin is not configured"})
+				return
+			}
+			linkOrigin = publicOrigin
+		}
 		code := make([]byte, 32)
 		if _, err := rand.Read(code); err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 		encoded := base64.RawURLEncoding.EncodeToString(code)
-		svg, err := pairingSVG(pairingLink(origin, origin, s.cfg.AppID, encoded))
+		svg, err := pairingSVG(pairingLink(linkOrigin, linkOrigin, s.cfg.AppID, encoded))
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
@@ -55,7 +79,7 @@ func (s *issuerServer) startDashboardControl(path, origin string) (func(), error
 		s.pairingUsed, s.failedAttempts = false, 0
 		s.mu.Unlock()
 		writeJSON(w, http.StatusOK, apiEnvelope{Success: true, Data: map[string]any{
-			"qr_svg": svg, "expires_at": expires.UTC(),
+			"qr_svg": svg, "expires_at": expires.UTC(), "origin": linkOrigin,
 		}})
 	})
 	server := &http.Server{Handler: mux, ReadHeaderTimeout: 2 * time.Second, WriteTimeout: 5 * time.Second}

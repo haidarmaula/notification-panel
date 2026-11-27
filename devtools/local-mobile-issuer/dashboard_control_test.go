@@ -21,7 +21,7 @@ func TestDashboardNewQRDoesNotRevokePairedDeviceSession(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.RemoveAll(directory) })
 	path := filepath.Join(directory, "pair.sock")
-	closeControl, err := s.startDashboardControl(path, "https://192.168.1.15:8443")
+	closeControl, err := s.startDashboardControl(path, "https://192.168.1.15:8443", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -82,5 +82,74 @@ func TestDashboardNewQRDoesNotRevokePairedDeviceSession(t *testing.T) {
 	handler.ServeHTTP(response, httptest.NewRequest("POST", "/pair", nil))
 	if response.Code != http.StatusNotFound {
 		t.Fatal("LAN handler must not expose QR issuance")
+	}
+}
+
+func TestDashboardPublicQRUsesConfiguredPublicOrigin(t *testing.T) {
+	s := &issuerServer{cfg: testConfig(t), managed: true, sessions: make(map[[sha256.Size]byte]issuerSession)}
+	directory, err := os.MkdirTemp("/tmp", "hello-public-pair-")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(directory) })
+	path := filepath.Join(directory, "pair.sock")
+	closeControl, err := s.startDashboardControl(path, "https://192.168.1.15:8443", "https://api.hello-staging.example")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeControl()
+	transport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", path)
+	}}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport}
+	pair := func(body string, want int) map[string]string {
+		t.Helper()
+		response, err := client.Post("http://localhost/pair", "application/json", strings.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer response.Body.Close()
+		if response.StatusCode != want {
+			t.Fatalf("pair status %d, want %d", response.StatusCode, want)
+		}
+		if want != http.StatusOK {
+			return nil
+		}
+		var envelope struct{ Data map[string]string }
+		if err := json.NewDecoder(response.Body).Decode(&envelope); err != nil {
+			t.Fatal(err)
+		}
+		return envelope.Data
+	}
+	public := pair(`{"public":true}`, http.StatusOK)
+	if public["origin"] != "https://api.hello-staging.example" || !strings.HasPrefix(public["qr_svg"], "<svg") {
+		t.Fatal("public QR must carry the configured public origin")
+	}
+	lan := pair(``, http.StatusOK)
+	if lan["origin"] != "https://192.168.1.15:8443" {
+		t.Fatal("default QR must keep the LAN origin")
+	}
+	pair(`{bad`, http.StatusBadRequest)
+
+	unconfigured := &issuerServer{cfg: testConfig(t), managed: true, sessions: make(map[[sha256.Size]byte]issuerSession)}
+	other := filepath.Join(directory, "other.sock")
+	closeOther, err := unconfigured.startDashboardControl(other, "https://192.168.1.15:8443", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer closeOther()
+	otherTransport := &http.Transport{DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {
+		return (&net.Dialer{}).DialContext(ctx, "unix", other)
+	}}
+	defer otherTransport.CloseIdleConnections()
+	otherClient := &http.Client{Transport: otherTransport}
+	response, err := otherClient.Post("http://localhost/pair", "application/json", strings.NewReader(`{"public":true}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer response.Body.Close()
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatal("public QR must be refused when no public origin is configured")
 	}
 }

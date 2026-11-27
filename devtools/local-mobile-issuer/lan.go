@@ -19,24 +19,66 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 )
 
 const lanCAName = "hello-lan-ca.crt"
 
 type lanPairing struct {
-	tls     *tls.Config
-	backend *url.URL
-	control string
+	tls          *tls.Config
+	backend      *url.URL
+	control      string
+	publicOrigin string
 }
 
-func runLANServer(cfg issuerConfig, address, directory, backend, control string) error {
+// publicPairingOrigin accepts only HTTPS DNS origins; the public APK variant
+// trusts system CAs, so IP literals and cleartext are never pairable there.
+func publicPairingOrigin(value string) bool {
+	origin, err := url.Parse(value)
+	if err != nil || origin.Scheme != "https" || origin.User != nil || origin.RawQuery != "" || origin.Fragment != "" {
+		return false
+	}
+	host := origin.Hostname()
+	if host == "" || !strings.Contains(host, ".") || strings.Trim(host, ".") != host {
+		return false
+	}
+	if _, err := netip.ParseAddr(host); err == nil {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, character := range label {
+			if !(character >= 'a' && character <= 'z' || character >= 'A' && character <= 'Z' || character >= '0' && character <= '9' || character == '-') {
+				return false
+			}
+		}
+	}
+	if origin.Path != "" && origin.Path != "/" {
+		return false
+	}
+	if port := origin.Port(); port != "" {
+		number, err := strconv.ParseUint(port, 10, 16)
+		if err != nil || number == 0 {
+			return false
+		}
+	}
+	return true
+}
+
+func runLANServer(cfg issuerConfig, address, directory, backend, control, publicOrigin string) error {
 	endpoint, err := netip.ParseAddrPort(address)
 	if err != nil || !endpoint.Addr().Is4() || !endpoint.Addr().IsPrivate() || endpoint.Port() == 0 {
 		return errors.New("LAN pairing requires a private IPv4 address assigned to this Mac and an explicit port")
 	}
 	if !loopbackHTTPOrigin(backend) {
 		return errors.New("LAN pairing requires a loopback mobile API upstream")
+	}
+	if publicOrigin != "" && !publicPairingOrigin(publicOrigin) {
+		return errors.New("public pairing origin must be an HTTPS DNS origin without a path")
 	}
 	upstream, err := url.Parse(backend)
 	if err != nil {
@@ -47,7 +89,7 @@ func runLANServer(cfg issuerConfig, address, directory, backend, control string)
 		return fmt.Errorf("prepare LAN pairing certificate: %w", err)
 	}
 	fmt.Fprintln(os.Stdout, "Android CA certificate:", filepath.Join(directory, lanCAName))
-	lan := &lanPairing{tls: &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}}, backend: upstream, control: control}
+	lan := &lanPairing{tls: &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{certificate}}, backend: upstream, control: control, publicOrigin: publicOrigin}
 	if err := runPairingServer(cfg, endpoint.String(), "", lan); err != nil {
 		return fmt.Errorf("serve LAN pairing on %s: %w", endpoint, err)
 	}

@@ -16,6 +16,10 @@ def apk_cache_key(ca):
     return "standalone-v2:" + hashlib.sha256(ca.read_bytes()).hexdigest()
 
 
+def public_cache_key():
+    return "standalone-public-v1"
+
+
 def configure_standalone_android(project):
     package = project / "package.json"
     manifest = json.loads(package.read_text())
@@ -38,7 +42,22 @@ def disable_metro(project):
     application.write_text(source.replace(host, host + "      useDevSupport = false,\n"))
 
 
-def check_standalone_apk(path):
+def disable_debug_cleartext(project):
+    # Expo's debug manifests force cleartext with tools:replace after plugin mods.
+    manifest = '''<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application android:usesCleartextTraffic="false" tools:replace="android:usesCleartextTraffic" />
+</manifest>
+'''
+    for variant in ("debug", "debugOptimized"):
+        path = project / "android/app/src" / variant / "AndroidManifest.xml"
+        if not path.is_file():
+            raise RuntimeError(f"Could not locate the generated {variant} Android manifest.")
+        path.write_text(manifest)
+
+
+def check_standalone_apk(path, public=False):
     with zipfile.ZipFile(path) as apk:
         bundle = "assets/index.android.bundle"
         if bundle not in apk.namelist() or apk.getinfo(bundle).file_size == 0:
@@ -46,17 +65,20 @@ def check_standalone_apk(path):
         dex = [name for name in apk.namelist() if name.startswith("classes") and name.endswith(".dex")]
         if not dex or any(b"Lexpo/modules/devlauncher/DevLauncherController;" in apk.read(name) for name in dex):
             raise RuntimeError("The LAN APK must contain Android app code without the Expo development launcher.")
+        if public and any(name.startswith("res/raw/") and "hello_lan_ca" in name for name in apk.namelist()):
+            raise RuntimeError("The public APK must not embed any custom CA.")
 
 
 def main(ca, artifact, fingerprint, mobile):
+    public = str(ca) == "public"
     google_services = mobile / "secrets/google-services.json"
     if not google_services.is_file():
         raise RuntimeError("Place the Firebase test Android config in hello-fcm-smoke/secrets/google-services.json first.")
-    if not ca.is_file():
+    if not public and not ca.is_file():
         raise RuntimeError("The LAN pairing CA has not been initialized yet.")
     env = os.environ.copy()
     for key in list(env):
-        if key.startswith("EXPO_PUBLIC_HELLO_"):
+        if key.startswith("EXPO_PUBLIC_HELLO_") or key in ("HELLO_LAN_CA_FILE", "HELLO_STANDALONE_LAN", "HELLO_STANDALONE_PUBLIC"):
             env.pop(key)
     node = sorted((Path.home() / ".nvm/versions/node").glob("v26.*/bin/node"),
                   key=lambda path: tuple(map(int, path.parts[-3][1:].split("."))))
@@ -80,25 +102,31 @@ def main(ca, artifact, fingerprint, mobile):
                 shutil.copy2(source, target)
         (build / "secrets").mkdir(mode=0o700)
         shutil.copy2(google_services, build / "secrets/google-services.json")
-        copied_ca = build / "hello-lan-ca.crt"
-        shutil.copy2(ca, copied_ca)
-        env.update(HELLO_LAN_CA_FILE=str(copied_ca), HELLO_STANDALONE_LAN="1",
-                   EXPO_PUBLIC_HELLO_STANDALONE="1", HELLO_STAGING_BUILD="0")
+        if public:
+            env.update(HELLO_STANDALONE_PUBLIC="1", EXPO_PUBLIC_HELLO_PUBLIC="1",
+                       EXPO_PUBLIC_HELLO_STANDALONE="0", HELLO_STAGING_BUILD="0")
+        else:
+            copied_ca = build / "hello-lan-ca.crt"
+            shutil.copy2(ca, copied_ca)
+            env.update(HELLO_LAN_CA_FILE=str(copied_ca), HELLO_STANDALONE_LAN="1",
+                       EXPO_PUBLIC_HELLO_STANDALONE="1", HELLO_STAGING_BUILD="0")
         subprocess.run(["npm", "ci", "--no-audit", "--no-fund"], cwd=build, env=env, check=True, timeout=300)
         configure_standalone_android(build)
         subprocess.run(["npx", "--no-install", "expo", "prebuild", "--platform", "android", "--no-install"],
                        cwd=build, env=env, check=True, timeout=300)
         disable_metro(build)
+        if public:
+            disable_debug_cleartext(build)
         subprocess.run(["./android/gradlew", "-p", "android", ":app:assembleDebug"],
                        cwd=build, env=env, check=True, timeout=1200)
         built_apk = build / "android/app/build/outputs/apk/debug/app-debug.apk"
-        check_standalone_apk(built_apk)
+        check_standalone_apk(built_apk, public=public)
         temporary = artifact.with_suffix(".new")
         shutil.copyfile(built_apk, temporary)
         temporary.chmod(0o600)
         temporary.replace(artifact)
         temporary = fingerprint.with_suffix(".new")
-        temporary.write_text(apk_cache_key(copied_ca) + "\n")
+        temporary.write_text((public_cache_key() if public else apk_cache_key(build / "hello-lan-ca.crt")) + "\n")
         temporary.replace(fingerprint)
 
 
